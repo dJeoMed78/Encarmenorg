@@ -1,0 +1,2306 @@
+[
+  {
+    "id": 3828,
+    "name": "Unitamp Uniformes de Tampico",
+    "oldCategories": [
+      "Bordados",
+      "Personalización de productos"
+    ],
+    "newParent": "Salud, Bienestar y Educación",
+    "newParentId": 412,
+    "newSub": "Clínicas, Especialidades Médicas y Ópticas",
+    "newSubId": 413
+  },
+  {
+    "id": 3664,
+    "name": "PRUEBA",
+    "oldCategories": [
+      "Sin categoría"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Regalos, Florerías y Novedades",
+    "newSubId": 410
+  },
+  {
+    "id": 3543,
+    "name": "FLETES Y MUDANZAS LOCALES Y FORANEOS FARO DE ATALAYA",
+    "oldCategories": [
+      "Fletes y Mudanzas"
+    ],
+    "newParent": "Renta de Inmuebles, Espacios y Mascotas",
+    "newParentId": 416,
+    "newSub": "Locales Comerciales, Bodegas y Terrenos",
+    "newSubId": 418
+  },
+  {
+    "id": 3534,
+    "name": "HAPPY PETS",
+    "oldCategories": [
+      "Mascotas"
+    ],
+    "newParent": "Renta de Inmuebles, Espacios y Mascotas",
+    "newParentId": 416,
+    "newSub": "Clínicas Veterinarias y Servicios para Mascotas",
+    "newSubId": 420
+  },
+  {
+    "id": 3532,
+    "name": "La bendición de Dios",
+    "oldCategories": [
+      "Antojitos"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 3530,
+    "name": "Kanji Nails Art Studio and Shop",
+    "oldCategories": [
+      "Aplicación de Uñas",
+      "Belleza",
+      "Belleza femenina"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Aplicación de Uñas y Pestañas",
+    "newSubId": 377
+  },
+  {
+    "id": 3526,
+    "name": "Manteles Artesanales",
+    "oldCategories": [
+      "Artesanias",
+      "Bordados"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 3519,
+    "name": "Cardu",
+    "oldCategories": [
+      "Herramientas",
+      "Mangueras y Conexiones",
+      "Seguridad Industrial"
+    ],
+    "newParent": "Sector Industrial, Petrolero y Construcción",
+    "newParentId": 390,
+    "newSub": "Seguridad Industrial y Equipo de Protección (EPP)",
+    "newSubId": 392
+  },
+  {
+    "id": 3515,
+    "name": "Suministros Aysa",
+    "oldCategories": [
+      "Herramientas",
+      "Mangueras y Conexiones"
+    ],
+    "newParent": "Sector Industrial, Petrolero y Construcción",
+    "newParentId": 390,
+    "newSub": "Proveeduría Marítima y Mantenimiento Industrial",
+    "newSubId": 391
+  },
+  {
+    "id": 3351,
+    "name": "Mitsubishi Sucursal Ciudad del Carmen",
+    "oldCategories": [
+      "Agencias automotrices",
+      "Automotriz",
+      "Transporte privado"
+    ],
+    "newParent": "Renta de Inmuebles, Espacios y Mascotas",
+    "newParentId": 416,
+    "newSub": "Clínicas Veterinarias y Servicios para Mascotas",
+    "newSubId": 420
+  },
+  {
+    "id": 3284,
+    "name": "Fletes Erick",
+    "oldCategories": [
+      "Fletes y Mudanzas"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Fletes, Mudanzas y Grúas",
+    "newSubId": 398
+  },
+  {
+    "id": 3283,
+    "name": "Fletes Erick",
+    "oldCategories": [],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Fletes, Mudanzas y Grúas",
+    "newSubId": 398
+  },
+  {
+    "id": 3280,
+    "name": "Mangueras Industriales y Rodamientos S.A. de C.V.",
+    "oldCategories": [
+      "Mangueras y Conexiones"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 3278,
+    "name": "YM Consultores",
+    "oldCategories": [
+      "Financieras"
+    ],
+    "newParent": "Servicios Profesionales, Legales y Financieros",
+    "newParentId": 386,
+    "newSub": "Financieras, Préstamos y Empeños",
+    "newSubId": 388
+  },
+  {
+    "id": 3276,
+    "name": "Rednatura es Salud",
+    "oldCategories": [
+      "suplementos nutrición"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 3274,
+    "name": "Mudanzas Cerezas",
+    "oldCategories": [
+      "Fletes y Mudanzas",
+      "Servicios Logísticos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Fletes, Mudanzas y Grúas",
+    "newSubId": 398
+  },
+  {
+    "id": 3250,
+    "name": "Taller eléctrico Rodríguez",
+    "oldCategories": [
+      "Eléctricos"
+    ],
+    "newParent": "Automotriz y Motocicletas",
+    "newParentId": 401,
+    "newSub": "Talleres Mecánicos y Eléctricos (Autos y Motos)",
+    "newSubId": 402
+  },
+  {
+    "id": 3247,
+    "name": "Ropa Americana La cochera",
+    "oldCategories": [
+      "ropa",
+      "Ropa y Zapatos"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 3241,
+    "name": "Neftis Spa",
+    "oldCategories": [
+      "Belleza",
+      "Masajes",
+      "Spa"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Masajes, Spa y Tratamientos",
+    "newSubId": 379
+  },
+  {
+    "id": 3239,
+    "name": "MC brilla bonito",
+    "oldCategories": [
+      "Belleza femenina",
+      "Cosméticos",
+      "Joyería",
+      "Perfumería"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Cosméticos, Perfumería y Joyería",
+    "newSubId": 378
+  },
+  {
+    "id": 3238,
+    "name": "Enhery Boutique",
+    "oldCategories": [
+      "Regalos y Novedades",
+      "Ropa y Zapatos"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Cosméticos, Perfumería y Joyería",
+    "newSubId": 378
+  },
+  {
+    "id": 3235,
+    "name": "Enhery Boutique",
+    "oldCategories": [],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Boutiques, Ropa y Calzado",
+    "newSubId": 409
+  },
+  {
+    "id": 3231,
+    "name": "Grace Mosqueda Planificadora de Eventos",
+    "oldCategories": [
+      "Planificación de Eventos"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 3227,
+    "name": "Go4 Fletes MotoCarguero",
+    "oldCategories": [
+      "Fletes y Mudanzas",
+      "Servicios Logísticos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Fletes, Mudanzas y Grúas",
+    "newSubId": 398
+  },
+  {
+    "id": 3225,
+    "name": "La Flaka, Remolque, Eventos & Más.",
+    "oldCategories": [
+      "Antojitos",
+      "Restaurantes"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 3024,
+    "name": "Pizzas Balam",
+    "oldCategories": [
+      "Pizzerias"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 3016,
+    "name": "GEMISES Mantenimiento Residencial",
+    "oldCategories": [
+      "Albañilería",
+      "Eléctricos",
+      "Mantenimiento en Casas",
+      "Mantto. a Climas",
+      "Plomería"
+    ],
+    "newParent": "Automotriz y Motocicletas",
+    "newParentId": 401,
+    "newSub": "Talleres Mecánicos y Eléctricos (Autos y Motos)",
+    "newSubId": 402
+  },
+  {
+    "id": 3014,
+    "name": "BROKERMAS Financimiento",
+    "oldCategories": [
+      "Financieras"
+    ],
+    "newParent": "Servicios Profesionales, Legales y Financieros",
+    "newParentId": 386,
+    "newSub": "Financieras, Préstamos y Empeños",
+    "newSubId": 388
+  },
+  {
+    "id": 2997,
+    "name": "Carnicería HOREB",
+    "oldCategories": [
+      "Carnicerías"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2906,
+    "name": "FRAPPE MARU",
+    "oldCategories": [
+      "Antojitos",
+      "Postres"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2903,
+    "name": "MARTVERT",
+    "oldCategories": [
+      "Postres",
+      "Productos Artesanales"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2897,
+    "name": "GRUPO ENDYCC",
+    "oldCategories": [
+      "Herrería",
+      "Seguridad Industrial"
+    ],
+    "newParent": "Renta de Inmuebles, Espacios y Mascotas",
+    "newParentId": 416,
+    "newSub": "Clínicas Veterinarias y Servicios para Mascotas",
+    "newSubId": 420
+  },
+  {
+    "id": 2892,
+    "name": "CLIMATIK SYSTEMS",
+    "oldCategories": [
+      "Aires acondicionados",
+      "Mantto. a Climas"
+    ],
+    "newParent": "Servicios del Hogar y Oficios",
+    "newParentId": 380,
+    "newSub": "Mantenimiento y Reparación de Climas",
+    "newSubId": 381
+  },
+  {
+    "id": 2868,
+    "name": "Shelo Nabel",
+    "oldCategories": [
+      "Salud y bienestar"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2860,
+    "name": "Moto Entregas Azur",
+    "oldCategories": [
+      "Mandaditos a Domicilio"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2852,
+    "name": "AGENCIA DE VIAJES ATARA",
+    "oldCategories": [
+      "Viajes"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Viajes y Agencias de Turismo",
+    "newSubId": 400
+  },
+  {
+    "id": 2846,
+    "name": "Divina Gula Frapería",
+    "oldCategories": [
+      "Postres"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2833,
+    "name": "Berakah store",
+    "oldCategories": [
+      "Accesorios",
+      "Ropa y Zapatos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2830,
+    "name": "Isar Ingeniería",
+    "oldCategories": [
+      "Aires acondicionados",
+      "Paneles solares y energía"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2822,
+    "name": "Indrive Servicio de Transporte Privado",
+    "oldCategories": [
+      "Choferes",
+      "Transporte privado",
+      "Transporte público"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Choferes, Taxis y Transporte Privado",
+    "newSubId": 399
+  },
+  {
+    "id": 2817,
+    "name": "Machetes Crayola",
+    "oldCategories": [
+      "Antojitos",
+      "Comida a Domicilio",
+      "Restaurantes"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2788,
+    "name": "Helados, Quesos y Café “Sampayo”",
+    "oldCategories": [
+      "Cafetería"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2783,
+    "name": "Mandaditos Ethel",
+    "oldCategories": [
+      "Mandaditos a Domicilio",
+      "Servicios Logísticos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2774,
+    "name": "MCL BOUTIQUE",
+    "oldCategories": [
+      "ropa",
+      "Ropa y Zapatos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2772,
+    "name": "Autoclimas Ramzet",
+    "oldCategories": [
+      "Mantto. a Climas"
+    ],
+    "newParent": "Servicios del Hogar y Oficios",
+    "newParentId": 380,
+    "newSub": "Mantenimiento y Reparación de Climas",
+    "newSubId": 381
+  },
+  {
+    "id": 2764,
+    "name": "Arquitectura en madera y cocinas integrales BET-EL",
+    "oldCategories": [
+      "Artesanias",
+      "Carpintería",
+      "Muebles"
+    ],
+    "newParent": "Sector Industrial, Petrolero y Construcción",
+    "newParentId": 390,
+    "newSub": "Servicios de Ingeniería, Arquitectura y Talleres de Torno",
+    "newSubId": 393
+  },
+  {
+    "id": 2753,
+    "name": "Yurii Nails",
+    "oldCategories": [
+      "Aplicación de Uñas",
+      "Belleza femenina",
+      "Microblading",
+      "Pestañas"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Aplicación de Uñas y Pestañas",
+    "newSubId": 377
+  },
+  {
+    "id": 2750,
+    "name": "Cocina Económica La Esmeralda",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Antojitos",
+      "Cocina económica",
+      "Comida a Domicilio",
+      "Pescados y mariscos"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2744,
+    "name": "Multiservicios TM",
+    "oldCategories": [
+      "Aires acondicionados",
+      "Albañilería",
+      "Eléctricos",
+      "Mantenimiento en Casas",
+      "Mantto. a Climas",
+      "Plomería"
+    ],
+    "newParent": "Servicios del Hogar y Oficios",
+    "newParentId": 380,
+    "newSub": "Mantenimiento y Reparación de Climas",
+    "newSubId": 381
+  },
+  {
+    "id": 2716,
+    "name": "Black Nazar Decant Ropa y Bisuteria",
+    "oldCategories": [
+      "Joyería",
+      "Perfumería",
+      "Ropa y Zapatos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2705,
+    "name": "Suprema Cárnicos de selección",
+    "oldCategories": [
+      "Carnicerías"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2684,
+    "name": "Reposteria Tadari",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Postres"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2666,
+    "name": "ECO SOLUCION",
+    "oldCategories": [
+      "Aires acondicionados",
+      "Mantto. a Climas"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2659,
+    "name": "Bisutería JM",
+    "oldCategories": [
+      "Accesorios",
+      "Joyería",
+      "Regalos y Novedades"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2649,
+    "name": "Toppings Bar",
+    "oldCategories": [
+      "Vinos y Licores"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2643,
+    "name": "Escuela John Dewey",
+    "oldCategories": [
+      "Educación"
+    ],
+    "newParent": "Salud, Bienestar y Educación",
+    "newParentId": 412,
+    "newSub": "Psicología, Desarrollo Personal y Escuelas",
+    "newSubId": 414
+  },
+  {
+    "id": 2633,
+    "name": "Novedades Luna",
+    "oldCategories": [
+      "Accesorios",
+      "Regalos y Novedades"
+    ],
+    "newParent": "Renta de Inmuebles, Espacios y Mascotas",
+    "newParentId": 416,
+    "newSub": "Clínicas Veterinarias y Servicios para Mascotas",
+    "newSubId": 420
+  },
+  {
+    "id": 2623,
+    "name": "Distribuidor Ismerely",
+    "oldCategories": [
+      "Herbolaria",
+      "Salud y bienestar"
+    ],
+    "newParent": "Salud, Bienestar y Educación",
+    "newParentId": 412,
+    "newSub": "Herbolaria, Farmacias y Tiendas Naturistas",
+    "newSubId": 415
+  },
+  {
+    "id": 2617,
+    "name": "Geriamed Miguel Ángel Salas Hernández",
+    "oldCategories": [
+      "Especialidades Médicas"
+    ],
+    "newParent": "Salud, Bienestar y Educación",
+    "newParentId": 412,
+    "newSub": "Clínicas, Especialidades Médicas y Ópticas",
+    "newSubId": 413
+  },
+  {
+    "id": 2612,
+    "name": "Shedry Multiventas",
+    "oldCategories": [
+      "Chips de telefonía"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2607,
+    "name": "MULTISERVICIOS INTEGRALES",
+    "oldCategories": [
+      "Albañilería",
+      "Eléctricos",
+      "Herrería",
+      "Mantenimiento en Casas",
+      "Mantto. a Climas",
+      "Plomería"
+    ],
+    "newParent": "Servicios del Hogar y Oficios",
+    "newParentId": 380,
+    "newSub": "Mantenimiento y Reparación de Climas",
+    "newSubId": 381
+  },
+  {
+    "id": 2595,
+    "name": "Pizzas Rosa Vargas",
+    "oldCategories": [
+      "Comida a Domicilio",
+      "Pizzerias",
+      "Restaurantes"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2594,
+    "name": "Pizzas Rosa Vargas",
+    "oldCategories": [
+      "Sin categoría"
+    ],
+    "newParent": "Alimentos y Bebidas",
+    "newParentId": 62,
+    "newSub": "Antojitos y Comida Rápida",
+    "newSubId": 370
+  },
+  {
+    "id": 2586,
+    "name": "Tatis More Fashion",
+    "oldCategories": [
+      "Regalos y Novedades",
+      "ropa",
+      "Ropa y Zapatos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2580,
+    "name": "Barbacoa de res la Morena",
+    "oldCategories": [
+      "Comida a Domicilio"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2562,
+    "name": "Moshi Papas",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Bufette",
+      "Comida a Domicilio",
+      "Restaurantes"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2530,
+    "name": "Lavandería de la 31",
+    "oldCategories": [
+      "Lavandería"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2521,
+    "name": "La Vitrina",
+    "oldCategories": [
+      "Belleza",
+      "Belleza femenina",
+      "ropa",
+      "Ropa y Zapatos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2495,
+    "name": "+QSagni",
+    "oldCategories": [
+      "Antojitos",
+      "Cocina económica",
+      "Comida a Domicilio"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2481,
+    "name": "Suministro y Mantenimiento en General HAEL",
+    "oldCategories": [
+      "Eléctricos",
+      "Mantenimiento en Casas",
+      "Mantto. a Climas",
+      "Plomería",
+      "Servicios"
+    ],
+    "newParent": "Servicios Profesionales, Legales y Financieros",
+    "newParentId": 386,
+    "newSub": "Consultorías, Notarías y Oficinas",
+    "newSubId": 389
+  },
+  {
+    "id": 2476,
+    "name": "Kuma-Ru Comida Italiana, Postrería & Panadería.",
+    "oldCategories": [
+      "Comida a Domicilio"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Masajes, Spa y Tratamientos",
+    "newSubId": 379
+  },
+  {
+    "id": 2468,
+    "name": "Afrodita love store",
+    "oldCategories": [
+      "Sex Shop"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2466,
+    "name": "DELFINA QUEEN",
+    "oldCategories": [
+      "Joyería"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2463,
+    "name": "Garza textiles y mas",
+    "oldCategories": [
+      "Impresiones",
+      "Personalización de productos",
+      "Serigrafía"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2453,
+    "name": "Tamalería El Monito Jr.",
+    "oldCategories": [
+      "Comida a Domicilio",
+      "Tamales"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2446,
+    "name": "Gloria García Coach de Vida",
+    "oldCategories": [
+      "Desarrollo Personal"
+    ],
+    "newParent": "Salud, Bienestar y Educación",
+    "newParentId": 412,
+    "newSub": "Psicología, Desarrollo Personal y Escuelas",
+    "newSubId": 414
+  },
+  {
+    "id": 2440,
+    "name": "Eternal Angel's",
+    "oldCategories": [
+      "Plantas"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2434,
+    "name": "Amaras Distribuidora",
+    "oldCategories": [
+      "Aplicación de Uñas",
+      "Belleza femenina",
+      "Pestañas"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2427,
+    "name": "Peniel Traconis Studio",
+    "oldCategories": [
+      "Aplicación de Uñas",
+      "Barbería",
+      "Belleza femenina",
+      "Masajes terapéuticos",
+      "Tratamientos capilares"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Aplicación de Uñas y Pestañas",
+    "newSubId": 377
+  },
+  {
+    "id": 2415,
+    "name": "Maicitos MX",
+    "oldCategories": [
+      "Botanas",
+      "Productos Artesanales"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2413,
+    "name": "Multitous Servicios Múltiples",
+    "oldCategories": [
+      "Equipos de Computo",
+      "Impresiones",
+      "Reparación de equipos",
+      "Reparación de laptops"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2410,
+    "name": "Accesorios Tciscar",
+    "oldCategories": [
+      "Accesorios de Celular",
+      "Chips de telefonía",
+      "Venta de Celulares"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2404,
+    "name": "Tech House",
+    "oldCategories": [
+      "Reparación de celulares"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2401,
+    "name": "Multiservicios Zetina",
+    "oldCategories": [
+      "Eléctricos",
+      "Mantenimiento en Casas",
+      "Mantto. a Climas",
+      "Plomería"
+    ],
+    "newParent": "Servicios del Hogar y Oficios",
+    "newParentId": 380,
+    "newSub": "Mantenimiento y Reparación de Climas",
+    "newSubId": 381
+  },
+  {
+    "id": 2395,
+    "name": "Alex & Kary Diamond",
+    "oldCategories": [
+      "Accesorios",
+      "Joyería",
+      "Regalos y Novedades"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2387,
+    "name": "Dojo Asunaro",
+    "oldCategories": [
+      "Artistas Marciales",
+      "Deportista"
+    ],
+    "newParent": "Salud, Bienestar y Educación",
+    "newParentId": 412,
+    "newSub": "Psicología, Desarrollo Personal y Escuelas",
+    "newSubId": 414
+  },
+  {
+    "id": 2381,
+    "name": "Karina Figueroa con Terramar",
+    "oldCategories": [
+      "Belleza femenina",
+      "Cosméticos",
+      "Perfumería"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2374,
+    "name": "Peluquería Montero",
+    "oldCategories": [
+      "Barbería",
+      "Peluquería"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Barberías y Peluquerías",
+    "newSubId": 376
+  },
+  {
+    "id": 2362,
+    "name": "Mandaditos Leo",
+    "oldCategories": [
+      "Mandaditos a Domicilio"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2354,
+    "name": "Factor sorpresa",
+    "oldCategories": [
+      "Lugares para fiestas",
+      "Piscinas",
+      "Renta de Locales"
+    ],
+    "newParent": "Renta de Inmuebles, Espacios y Mascotas",
+    "newParentId": 416,
+    "newSub": "Palapas, Albercas y Lugares para Fiestas",
+    "newSubId": 419
+  },
+  {
+    "id": 2345,
+    "name": "NATURAL QUEEN'S",
+    "oldCategories": [
+      "Postres"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2342,
+    "name": "New evolution delivery",
+    "oldCategories": [
+      "Mandaditos a Domicilio"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2329,
+    "name": "Juanito Abdul",
+    "oldCategories": [
+      "Comida a Domicilio",
+      "Restaurantes"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2315,
+    "name": "Pretty Rose",
+    "oldCategories": [
+      "Florerias"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2309,
+    "name": "Jugos verdes Vero",
+    "oldCategories": [
+      "Jugos y licuados"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2301,
+    "name": "Bom Bonis Paladar Dulce",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Postres"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2280,
+    "name": "Joyería Mary Nice",
+    "oldCategories": [
+      "Joyería"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2272,
+    "name": "ArteHans",
+    "oldCategories": [
+      "Artesanias",
+      "Para el hogar",
+      "Plantas"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2266,
+    "name": "La Campechanita",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Champotón",
+      "Comercio y Distribución de alimentos",
+      "Emprendedores",
+      "Frituras",
+      "Otras ubicaciones",
+      "Productos Artesanales"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2239,
+    "name": "Pizza Hut PH Carmen",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Comida a Domicilio",
+      "Pizzerias",
+      "Restaurantes"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2231,
+    "name": "Los Trompos - Cd. Carmen",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Comida a Domicilio",
+      "Pizzerias",
+      "Restaurantes"
+    ],
+    "newParent": "Servicios del Hogar y Oficios",
+    "newParentId": 380,
+    "newSub": "Mantenimiento y Reparación de Climas",
+    "newSubId": 381
+  },
+  {
+    "id": 2222,
+    "name": "La Perra Pizza",
+    "oldCategories": [
+      "Comida a Domicilio",
+      "Pizzerias",
+      "Restaurantes"
+    ],
+    "newParent": "Renta de Inmuebles, Espacios y Mascotas",
+    "newParentId": 416,
+    "newSub": "Clínicas Veterinarias y Servicios para Mascotas",
+    "newSubId": 420
+  },
+  {
+    "id": 2211,
+    "name": "LUVI Nail’s Salón",
+    "oldCategories": [
+      "Aplicación de Uñas",
+      "Belleza femenina",
+      "Cuidado y Belleza"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Aplicación de Uñas y Pestañas",
+    "newSubId": 377
+  },
+  {
+    "id": 2175,
+    "name": "Vidrios y Aluminio Martínez",
+    "oldCategories": [
+      "Aluminios",
+      "Servicios",
+      "Vidrios"
+    ],
+    "newParent": "Sector Industrial, Petrolero y Construcción",
+    "newParentId": 390,
+    "newSub": "Servicios de Ingeniería, Arquitectura y Talleres de Torno",
+    "newSubId": 393
+  },
+  {
+    "id": 2165,
+    "name": "Enerkin",
+    "oldCategories": [
+      "Paneles solares y energía"
+    ],
+    "newParent": "Servicios Profesionales, Legales y Financieros",
+    "newParentId": 386,
+    "newSub": "Consultorías, Notarías y Oficinas",
+    "newSubId": 389
+  },
+  {
+    "id": 2152,
+    "name": "Sinergia Ciudad del Carmen",
+    "oldCategories": [
+      "artículos del hogar",
+      "Belleza",
+      "café",
+      "canasta básica del hogar",
+      "Emprendedores",
+      "productos de limpieza orgánicos",
+      "suplementos nutrición"
+    ],
+    "newParent": "Renta de Inmuebles, Espacios y Mascotas",
+    "newParentId": 416,
+    "newSub": "Clínicas Veterinarias y Servicios para Mascotas",
+    "newSubId": 420
+  },
+  {
+    "id": 2134,
+    "name": "Hiroshi Roll Sushi",
+    "oldCategories": [
+      "Comida a Domicilio",
+      "Pescados y mariscos",
+      "Restaurantes"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2123,
+    "name": "Labrasa Bivalvo",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Comida a Domicilio"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Masajes, Spa y Tratamientos",
+    "newSubId": 379
+  },
+  {
+    "id": 2093,
+    "name": "Sarai Tadeo Montero Catering",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Banquetes",
+      "Bufette",
+      "Catering"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2082,
+    "name": "Papas Locas",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Comida a Domicilio",
+      "Restaurantes"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2070,
+    "name": "Ay que birria",
+    "oldCategories": [
+      "Comida a Domicilio",
+      "Restaurantes"
+    ],
+    "newParent": "Salud, Bienestar y Educación",
+    "newParentId": 412,
+    "newSub": "Psicología, Desarrollo Personal y Escuelas",
+    "newSubId": 414
+  },
+  {
+    "id": 2064,
+    "name": "Birreria Daniel´s",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Comida a Domicilio"
+    ],
+    "newParent": "Renta de Inmuebles, Espacios y Mascotas",
+    "newParentId": 416,
+    "newSub": "Locales Comerciales, Bodegas y Terrenos",
+    "newSubId": 418
+  },
+  {
+    "id": 2060,
+    "name": "ADO Sucursal Isla de Tris",
+    "oldCategories": [
+      "Viajes"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2054,
+    "name": "Don Cangrejo y Familia",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Pescados y mariscos",
+      "Restaurantes"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Masajes, Spa y Tratamientos",
+    "newSubId": 379
+  },
+  {
+    "id": 2042,
+    "name": "Carnes San Javier",
+    "oldCategories": [
+      "Carnicerías",
+      "Comida a Domicilio"
+    ],
+    "newParent": "Alimentos y Bebidas",
+    "newParentId": 62,
+    "newSub": "Cafeterías, Jugos y Postres",
+    "newSubId": 372
+  },
+  {
+    "id": 2023,
+    "name": "Ultra Hogar",
+    "oldCategories": [
+      "Muebles",
+      "Para el hogar"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 2015,
+    "name": "Fonda Doña Carmen",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Antojitos",
+      "Comida a Domicilio"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 2006,
+    "name": "Taquería el tío Toño Barbacoa y consome",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Comida a Domicilio",
+      "Restaurantes"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1996,
+    "name": "El botanero de poza rica",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Antojitos",
+      "Restaurantes"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 1985,
+    "name": "Barbacoa el Patrón",
+    "oldCategories": [
+      "Comida a Domicilio",
+      "Restaurantes"
+    ],
+    "newParent": "Renta de Inmuebles, Espacios y Mascotas",
+    "newParentId": 416,
+    "newSub": "Locales Comerciales, Bodegas y Terrenos",
+    "newSubId": 418
+  },
+  {
+    "id": 1980,
+    "name": "Piñatas Pana",
+    "oldCategories": [
+      "Artículos para fiestas"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1969,
+    "name": "Tortas Quintero´s",
+    "oldCategories": [
+      "Comida a Domicilio"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1957,
+    "name": "Santo Guisado",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Bufette",
+      "Comida a Domicilio",
+      "Restaurantes"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1951,
+    "name": "Carniceria el Ranchito",
+    "oldCategories": [
+      "Carnicerías",
+      "Comercio y Distribución de alimentos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1927,
+    "name": "Wings fast",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Comida a Domicilio"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1920,
+    "name": "Christian Castillo Puga - Cirujana y Coloproctóloga",
+    "oldCategories": [
+      "Especialidades Médicas",
+      "Salud y bienestar"
+    ],
+    "newParent": "Salud, Bienestar y Educación",
+    "newParentId": 412,
+    "newSub": "Clínicas, Especialidades Médicas y Ópticas",
+    "newSubId": 413
+  },
+  {
+    "id": 1916,
+    "name": "FixCell Reparación",
+    "oldCategories": [
+      "Chips de telefonía",
+      "Reparación de celulares",
+      "Reparación de laptops",
+      "Reparación de televisores",
+      "Tecnología y Electrónica"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1904,
+    "name": "Mantel rojo",
+    "oldCategories": [
+      "Antojitos",
+      "Comida a Domicilio"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1783,
+    "name": "Esencia",
+    "oldCategories": [
+      "Masajes terapéuticos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1749,
+    "name": "Rose Positive",
+    "oldCategories": [
+      "Accesorios",
+      "Regalos y Novedades",
+      "Venta al menudeo"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1721,
+    "name": "Los postrecitos",
+    "oldCategories": [
+      "Postres"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 1716,
+    "name": "Blen herbolaria",
+    "oldCategories": [
+      "Herbolaria"
+    ],
+    "newParent": "Salud, Bienestar y Educación",
+    "newParentId": 412,
+    "newSub": "Herbolaria, Farmacias y Tiendas Naturistas",
+    "newSubId": 415
+  },
+  {
+    "id": 1709,
+    "name": "Dulces momentos Yuyis",
+    "oldCategories": [
+      "Postres"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 1701,
+    "name": "Happy Fiesta Carmen",
+    "oldCategories": [
+      "Artículos para fiestas"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1640,
+    "name": "Jemay´s",
+    "oldCategories": [
+      "Accesorios",
+      "Perfumería",
+      "Regalos y Novedades"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Cosméticos, Perfumería y Joyería",
+    "newSubId": 378
+  },
+  {
+    "id": 1634,
+    "name": "Bordados Mark VerSan",
+    "oldCategories": [
+      "Bordados",
+      "Lonas",
+      "Marketing",
+      "Personalización de productos",
+      "Serigrafía",
+      "Transfers"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1628,
+    "name": "La Boutique del Tequeño",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Antojitos",
+      "Comida a Domicilio"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 1622,
+    "name": "La Parrillada",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Comida a Domicilio",
+      "Restaurantes"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 1608,
+    "name": "Outlet SHOP CARMEN",
+    "oldCategories": [
+      "Accesorios",
+      "Ropa y Zapatos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1599,
+    "name": "Mini hotcakes VAN",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Postres"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1588,
+    "name": "Grupo Jarochos Carnicería",
+    "oldCategories": [
+      "Carnicerías",
+      "Comercio y Distribución de alimentos"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 1585,
+    "name": "The Manic Electronic Yanes",
+    "oldCategories": [
+      "Mecánicos"
+    ],
+    "newParent": "Automotriz y Motocicletas",
+    "newParentId": 401,
+    "newSub": "Talleres Mecánicos y Eléctricos (Autos y Motos)",
+    "newSubId": 402
+  },
+  {
+    "id": 1582,
+    "name": "Súper Cocina Juanita",
+    "oldCategories": [
+      "Antojitos",
+      "Cocina económica",
+      "Comida a Domicilio",
+      "Restaurantes"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1578,
+    "name": "Mandaditos Pato",
+    "oldCategories": [
+      "Mandaditos a Domicilio"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1514,
+    "name": "Saden V Store",
+    "oldCategories": [
+      "Sex Shop"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1507,
+    "name": "Keratina Cd. Del carmen - RH Studio",
+    "oldCategories": [
+      "Belleza femenina",
+      "Cuidado y Belleza",
+      "Pestañas",
+      "Tratamientos capilares"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Aplicación de Uñas y Pestañas",
+    "newSubId": 377
+  },
+  {
+    "id": 1505,
+    "name": "Moto taxi",
+    "oldCategories": [
+      "Moto Taxi",
+      "Servicios Logísticos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Choferes, Taxis y Transporte Privado",
+    "newSubId": 399
+  },
+  {
+    "id": 1503,
+    "name": "Fragancias y más",
+    "oldCategories": [
+      "Cuidado y Belleza",
+      "Perfumería"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1501,
+    "name": "ASOCIACIÓN DE MANDADITOS DE CD DEL CARMEN",
+    "oldCategories": [
+      "Mandaditos a Domicilio"
+    ],
+    "newParent": "Salud, Bienestar y Educación",
+    "newParentId": 412,
+    "newSub": "Herbolaria, Farmacias y Tiendas Naturistas",
+    "newSubId": 415
+  },
+  {
+    "id": 1499,
+    "name": "Transportes y traslados Bello",
+    "oldCategories": [
+      "Choferes",
+      "Servicios Logísticos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Choferes, Taxis y Transporte Privado",
+    "newSubId": 399
+  },
+  {
+    "id": 1497,
+    "name": "Mandadito Ahí voy",
+    "oldCategories": [
+      "Mandaditos a Domicilio"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1490,
+    "name": "ADAPTA SERVICE",
+    "oldCategories": [
+      "Seguridad Industrial",
+      "Venta de Plasticos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1483,
+    "name": "Oscar mantenimiento y reparaciones",
+    "oldCategories": [
+      "Eléctricos",
+      "Relojería",
+      "Servicios"
+    ],
+    "newParent": "Servicios del Hogar y Oficios",
+    "newParentId": 380,
+    "newSub": "Plomería y Servicios Eléctricos",
+    "newSubId": 382
+  },
+  {
+    "id": 1475,
+    "name": "Berenice LH",
+    "oldCategories": [
+      "Arte y Cultura",
+      "Artistas plásticos",
+      "Promocionales"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1463,
+    "name": "Hair palace keratin",
+    "oldCategories": [
+      "Belleza femenina",
+      "Cuidado y Belleza",
+      "Pestañas",
+      "Tratamientos capilares"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1455,
+    "name": "Meraki Nails Room y Distribuidora",
+    "oldCategories": [
+      "Aplicación de Uñas",
+      "Belleza femenina",
+      "Cuidado y Belleza"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1441,
+    "name": "Sr Panque",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Postres",
+      "Productos Artesanales"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1429,
+    "name": "Ilustan accesorios",
+    "oldCategories": [
+      "Accesorios"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1424,
+    "name": "Herramientas Castillo",
+    "oldCategories": [
+      "Herramientas"
+    ],
+    "newParent": "Renta de Inmuebles, Espacios y Mascotas",
+    "newParentId": 416,
+    "newSub": "Clínicas Veterinarias y Servicios para Mascotas",
+    "newSubId": 420
+  },
+  {
+    "id": 1417,
+    "name": "Creativa Studios",
+    "oldCategories": [
+      "Imprentas y productos promocionales",
+      "Marketing",
+      "Personalización de productos",
+      "Promocionales"
+    ],
+    "newParent": "Servicios Profesionales, Legales y Financieros",
+    "newParentId": 386,
+    "newSub": "Consultorías, Notarías y Oficinas",
+    "newSubId": 389
+  },
+  {
+    "id": 1399,
+    "name": "4 Elementos Casa Tostadora de Café",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Cafetería",
+      "Comercio y Distribución de alimentos",
+      "Productos Artesanales"
+    ],
+    "newParent": "Servicios del Hogar y Oficios",
+    "newParentId": 380,
+    "newSub": "Lavanderías y Fumigaciones",
+    "newSubId": 385
+  },
+  {
+    "id": 1392,
+    "name": "Fletes Dany, Makirent",
+    "oldCategories": [
+      "Fletes y Mudanzas",
+      "Servicios Logísticos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Fletes, Mudanzas y Grúas",
+    "newSubId": 398
+  },
+  {
+    "id": 1390,
+    "name": "Fletes Hermanos López",
+    "oldCategories": [
+      "Fletes y Mudanzas",
+      "Servicios Logísticos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Fletes, Mudanzas y Grúas",
+    "newSubId": 398
+  },
+  {
+    "id": 1380,
+    "name": "AV BISTRO COCINA ORIENTAL",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Comida a Domicilio"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 1362,
+    "name": "JEI venta de tenis y accesorios",
+    "oldCategories": [
+      "Regalos y Novedades",
+      "Ropa y Zapatos",
+      "Venta al menudeo"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1342,
+    "name": "Diseños Autocad",
+    "oldCategories": [
+      "Levantamientos",
+      "Servicios"
+    ],
+    "newParent": "Sector Industrial, Petrolero y Construcción",
+    "newParentId": 390,
+    "newSub": "Servicios de Ingeniería, Arquitectura y Talleres de Torno",
+    "newSubId": 393
+  },
+  {
+    "id": 1339,
+    "name": "Print Center Digital",
+    "oldCategories": [
+      "Imprentas y productos promocionales",
+      "Impresiones",
+      "Personalización de productos",
+      "Promocionales"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1333,
+    "name": "Masajes y Terapias Serenidad Zen",
+    "oldCategories": [
+      "Cuidado y Belleza",
+      "Masajes terapéuticos"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Masajes, Spa y Tratamientos",
+    "newSubId": 379
+  },
+  {
+    "id": 1311,
+    "name": "Welding tatto",
+    "oldCategories": [
+      "Microblading",
+      "Tatuajes"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Aplicación de Uñas y Pestañas",
+    "newSubId": 377
+  },
+  {
+    "id": 1302,
+    "name": "PHIStudio Cd. del Carmen",
+    "oldCategories": [
+      "Aplicación de Uñas",
+      "Belleza femenina",
+      "Cuidado y Belleza",
+      "Pestañas"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Aplicación de Uñas y Pestañas",
+    "newSubId": 377
+  },
+  {
+    "id": 1298,
+    "name": "Servimotos Minions",
+    "oldCategories": [
+      "Mandaditos a Domicilio",
+      "Servicios Logísticos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1267,
+    "name": "Brisa del Sabor",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Antojitos",
+      "Comida a Domicilio"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 1257,
+    "name": "Shagui la vaca Lola",
+    "oldCategories": [
+      "Ropa y Zapatos",
+      "Seguridad y monitoreo",
+      "Tecnología y Electrónica",
+      "Venta al menudeo"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1250,
+    "name": "VERDE🍏 NARANJA 🍊",
+    "oldCategories": [
+      "Comida a Domicilio",
+      "Comida Saludable",
+      "Restaurantes"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1242,
+    "name": "El toro mareado",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Campeche",
+      "Otras ubicaciones",
+      "Productos Artesanales",
+      "Vinos y Licores"
+    ],
+    "newParent": "Renta de Inmuebles, Espacios y Mascotas",
+    "newParentId": 416,
+    "newSub": "Clínicas Veterinarias y Servicios para Mascotas",
+    "newSubId": 420
+  },
+  {
+    "id": 1237,
+    "name": "DS CONSUMIBLES",
+    "oldCategories": [
+      "Equipos de Computo",
+      "Reparación de equipos",
+      "Tecnología y Electrónica",
+      "Venta y recarga de Consumibles"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Venta y Reparación de Celulares y Cómputo",
+    "newSubId": 406
+  },
+  {
+    "id": 1233,
+    "name": "Novedades y Regalos JM",
+    "oldCategories": [
+      "Florerias",
+      "Regalos y Novedades",
+      "Venta al menudeo"
+    ],
+    "newParent": "Renta de Inmuebles, Espacios y Mascotas",
+    "newParentId": 416,
+    "newSub": "Clínicas Veterinarias y Servicios para Mascotas",
+    "newSubId": 420
+  },
+  {
+    "id": 1208,
+    "name": "Yo primitivo",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Comercio y Distribución de alimentos",
+      "Comida a Domicilio"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1187,
+    "name": "Chicken or Chicken",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Comida a Domicilio",
+      "Restaurantes"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 1184,
+    "name": "Mandaditos Homero’s",
+    "oldCategories": [
+      "Mandaditos a Domicilio",
+      "Servicios Logísticos"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1181,
+    "name": "ARAM Frappes y más",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Postres"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 1173,
+    "name": "Deliciosos Antojitos",
+    "oldCategories": [
+      "Alimentos y Bebidas",
+      "Antojitos",
+      "Comida a Domicilio"
+    ],
+    "newParent": "Sector Industrial, Petrolero y Construcción",
+    "newParentId": 390,
+    "newSub": "Servicios de Ingeniería, Arquitectura y Talleres de Torno",
+    "newSubId": 393
+  },
+  {
+    "id": 1169,
+    "name": "Trabajo De Electricidad,Plomería Y Climatización, Ciudad Del Carmen",
+    "oldCategories": [
+      "Eléctricos",
+      "Mantenimiento en Casas",
+      "Mantto. a Climas",
+      "Plomería",
+      "Servicios"
+    ],
+    "newParent": "Renta de Inmuebles, Espacios y Mascotas",
+    "newParentId": 416,
+    "newSub": "Clínicas Veterinarias y Servicios para Mascotas",
+    "newSubId": 420
+  },
+  {
+    "id": 1161,
+    "name": "La Talegona",
+    "oldCategories": [
+      "Comida a Domicilio"
+    ],
+    "newParent": "Tecnología, Imprentas y Comercio al Menudeo",
+    "newParentId": 405,
+    "newSub": "Imprentas, Publicidad y Rotulación",
+    "newSubId": 408
+  },
+  {
+    "id": 1148,
+    "name": "Mandaditos Mary Jane",
+    "oldCategories": [
+      "Mandaditos a Domicilio"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  },
+  {
+    "id": 1081,
+    "name": "Yuss Nails Beautiful Hands",
+    "oldCategories": [
+      "Aplicación de Uñas",
+      "Cuidado y Belleza"
+    ],
+    "newParent": "Cuidado y Belleza Personal",
+    "newParentId": 374,
+    "newSub": "Aplicación de Uñas y Pestañas",
+    "newSubId": 377
+  },
+  {
+    "id": 966,
+    "name": "Productos Artesanales Rosalsa",
+    "oldCategories": [
+      "Salsas"
+    ],
+    "newParent": "Servicios Logísticos y Transporte",
+    "newParentId": 396,
+    "newSub": "Mandaditos y Entregas a Domicilio",
+    "newSubId": 397
+  }
+]

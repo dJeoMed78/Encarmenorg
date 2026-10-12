@@ -1,0 +1,416 @@
+[
+  {
+    "id": 62,
+    "name": "Alimentos y Bebidas",
+    "slug": "alimentos-y-bebidas",
+    "parent": 0,
+    "count": 62,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 370,
+    "name": "Antojitos y Comida Rápida",
+    "slug": "antojitos-y-comida-rapida",
+    "parent": 62,
+    "count": 20,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 372,
+    "name": "Cafeterías, Jugos y Postres",
+    "slug": "cafeterias-jugos-y-postres",
+    "parent": 62,
+    "count": 15,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 89,
+    "name": "Comercio y Distribución de alimentos",
+    "slug": "comercio-y-distribucion-de-alimentos",
+    "parent": 62,
+    "count": 9,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 371,
+    "name": "Restaurantes y Cocinas Económicas",
+    "slug": "restaurantes-y-cocinas-economicas",
+    "parent": 62,
+    "count": 19,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 401,
+    "name": "Automotriz y Motocicletas",
+    "slug": "automotriz-y-motocicletas",
+    "parent": 0,
+    "count": 4,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 404,
+    "name": "Agencias, Lotes de Autos y Autolavados",
+    "slug": "agencias-lotes-de-autos-y-autolavados",
+    "parent": 401,
+    "count": 1,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 402,
+    "name": "Talleres Mecánicos y Eléctricos (Autos y Motos)",
+    "slug": "talleres-mecanicos-y-electricos-autos-y-motos",
+    "parent": 401,
+    "count": 2,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 374,
+    "name": "Cuidado y Belleza Personal",
+    "slug": "cuidado-y-belleza-personal",
+    "parent": 0,
+    "count": 25,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 377,
+    "name": "Aplicación de Uñas y Pestañas",
+    "slug": "aplicacion-de-unas-y-pestanas",
+    "parent": 374,
+    "count": 10,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 376,
+    "name": "Barberías y Peluquerías",
+    "slug": "barberias-y-peluquerias",
+    "parent": 374,
+    "count": 1,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 378,
+    "name": "Cosméticos, Perfumería y Joyería",
+    "slug": "cosmeticos-perfumeria-y-joyeria",
+    "parent": 374,
+    "count": 10,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 375,
+    "name": "Estéticas y Belleza Femenina",
+    "slug": "esteticas-y-belleza-femenina",
+    "parent": 374,
+    "count": 2,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 379,
+    "name": "Masajes, Spa y Tratamientos",
+    "slug": "masajes-spa-y-tratamientos",
+    "parent": 374,
+    "count": 3,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 416,
+    "name": "Renta de Inmuebles, Espacios y Mascotas",
+    "slug": "renta-de-inmuebles-espacios-y-mascotas",
+    "parent": 0,
+    "count": 2,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 420,
+    "name": "Clínicas Veterinarias y Servicios para Mascotas",
+    "slug": "clinicas-veterinarias-y-servicios-para-mascotas",
+    "parent": 416,
+    "count": 1,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 419,
+    "name": "Palapas, Albercas y Lugares para Fiestas",
+    "slug": "palapas-albercas-y-lugares-para-fiestas",
+    "parent": 416,
+    "count": 1,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 412,
+    "name": "Salud, Bienestar y Educación",
+    "slug": "salud-bienestar-y-educacion",
+    "parent": 0,
+    "count": 12,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 413,
+    "name": "Clínicas, Especialidades Médicas y Ópticas",
+    "slug": "clinicas-especialidades-medicas-y-opticas",
+    "parent": 412,
+    "count": 2,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 415,
+    "name": "Herbolaria, Farmacias y Tiendas Naturistas",
+    "slug": "herbolaria-farmacias-y-tiendas-naturistas",
+    "parent": 412,
+    "count": 5,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 414,
+    "name": "Psicología, Desarrollo Personal y Escuelas",
+    "slug": "psicologia-desarrollo-personal-y-escuelas",
+    "parent": 412,
+    "count": 5,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 99227,
+    "name": "Educación, Cursos y Escuelas",
+    "slug": "educacion-cursos-y-escuelas",
+    "parent": 412,
+    "count": 1,
+    "description": "Empresas y servicios de Educación, Cursos y Escuelas en Ciudad del Carmen.",
+    "image": null
+  },
+  {
+    "id": 390,
+    "name": "Sector Industrial, Petrolero y Construcción",
+    "slug": "sector-industrial-petrolero-y-construccion",
+    "parent": 0,
+    "count": 11,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 394,
+    "name": "Ferreterías y Materiales de Construcción",
+    "slug": "ferreterias-y-materiales-de-construccion",
+    "parent": 390,
+    "count": 1,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 391,
+    "name": "Proveeduría Marítima y Mantenimiento Industrial",
+    "slug": "proveeduria-maritima-y-mantenimiento-industrial",
+    "parent": 390,
+    "count": 2,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 392,
+    "name": "Seguridad Industrial y Equipo de Protección (EPP)",
+    "slug": "seguridad-industrial-y-equipo-de-proteccion-epp",
+    "parent": 390,
+    "count": 5,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 393,
+    "name": "Servicios de Ingeniería, Arquitectura y Talleres de Torno",
+    "slug": "servicios-de-ingenieria-arquitectura-y-talleres-de-torno",
+    "parent": 390,
+    "count": 3,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 99873,
+    "name": "Gas y Combustibles",
+    "slug": "gas-y-combustibles",
+    "parent": 390,
+    "count": 1,
+    "description": "Empresas y servicios de Gas y Combustibles en Ciudad del Carmen.",
+    "image": null
+  },
+  {
+    "id": 380,
+    "name": "Servicios del Hogar y Oficios",
+    "slug": "servicios-del-hogar-y-oficios",
+    "parent": 0,
+    "count": 12,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 384,
+    "name": "Aluminio, Vidrios y Cerrajería",
+    "slug": "aluminio-vidrios-y-cerrajeria",
+    "parent": 380,
+    "count": 1,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 385,
+    "name": "Lavanderías y Fumigaciones",
+    "slug": "lavanderias-y-fumigaciones",
+    "parent": 380,
+    "count": 2,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 381,
+    "name": "Mantenimiento y Reparación de Climas",
+    "slug": "mantenimiento-y-reparacion-de-climas",
+    "parent": 380,
+    "count": 11,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 382,
+    "name": "Plomería y Servicios Eléctricos",
+    "slug": "plomeria-y-servicios-electricos",
+    "parent": 380,
+    "count": 2,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 99287,
+    "name": "Limpieza y Lavado de Muebles",
+    "slug": "limpieza-y-lavado-de-muebles",
+    "parent": 380,
+    "count": 1,
+    "description": "Empresas y servicios de Limpieza y Lavado de Muebles en Ciudad del Carmen.",
+    "image": null
+  },
+  {
+    "id": 396,
+    "name": "Servicios Logísticos y Transporte",
+    "slug": "servicios-logisticos-y-transporte",
+    "parent": 0,
+    "count": 19,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 399,
+    "name": "Choferes, Taxis y Transporte Privado",
+    "slug": "choferes-taxis-y-transporte-privado",
+    "parent": 396,
+    "count": 3,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 398,
+    "name": "Fletes, Mudanzas y Grúas",
+    "slug": "fletes-mudanzas-y-gruas",
+    "parent": 396,
+    "count": 7,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 397,
+    "name": "Mandaditos y Entregas a Domicilio",
+    "slug": "mandaditos-y-entregas-a-domicilio",
+    "parent": 396,
+    "count": 10,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 386,
+    "name": "Servicios Profesionales, Legales y Financieros",
+    "slug": "servicios-profesionales-legales-y-financieros",
+    "parent": 0,
+    "count": 3,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 389,
+    "name": "Consultorías, Notarías y Oficinas",
+    "slug": "consultorias-notarias-y-oficinas",
+    "parent": 386,
+    "count": 2,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 387,
+    "name": "Despachos Contables, Fiscales y Jurídicos",
+    "slug": "despachos-contables-fiscales-y-juridicos",
+    "parent": 386,
+    "count": 1,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 405,
+    "name": "Tecnología, Imprentas y Comercio al Menudeo",
+    "slug": "tecnologia-imprentas-y-comercio-al-menudeo",
+    "parent": 0,
+    "count": 38,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 409,
+    "name": "Boutiques, Ropa y Calzado",
+    "slug": "boutiques-ropa-y-calzado",
+    "parent": 405,
+    "count": 9,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 408,
+    "name": "Imprentas, Publicidad y Rotulación",
+    "slug": "imprentas-publicidad-y-rotulacion",
+    "parent": 405,
+    "count": 4,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 410,
+    "name": "Regalos, Florerías y Novedades",
+    "slug": "regalos-florerias-y-novedades",
+    "parent": 405,
+    "count": 20,
+    "description": "",
+    "image": null
+  },
+  {
+    "id": 406,
+    "name": "Venta y Reparación de Celulares y Cómputo",
+    "slug": "venta-y-reparacion-de-celulares-y-computo",
+    "parent": 405,
+    "count": 5,
+    "description": "",
+    "image": null
+  }
+]

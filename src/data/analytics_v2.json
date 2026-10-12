@@ -1,0 +1,293 @@
+{
+  "totalVisits": 177,
+  "uniqueVisitors": {
+    "test_vis_1": {
+      "firstSeen": "2026-09-30T20:54:05.670Z",
+      "lastSeen": "2026-09-30T20:54:05.670Z",
+      "visitsCount": 1,
+      "device": "mobile",
+      "os": "Android",
+      "browser": "Chrome",
+      "referrer": "WhatsApp",
+      "isAdmin": false,
+      "lastVisitTimestamp": 1790801645670
+    },
+    "v_muol4b3z_9ktoc5z": {
+      "firstSeen": "2026-10-01T17:48:44.524Z",
+      "lastSeen": "2026-10-01T17:48:44.524Z",
+      "visitsCount": 1,
+      "device": "desktop",
+      "os": "Windows",
+      "browser": "Chrome",
+      "referrer": "Búsqueda Google",
+      "isAdmin": false,
+      "lastVisitTimestamp": 1790876924524
+    }
+  },
+  "daily": {
+    "2026-09-30": {
+      "date": "2026-09-30",
+      "uniqueVisitors": [
+        "test_vis_1"
+      ],
+      "totalVisits": 1,
+      "pageViews": 1,
+      "whatsappClicks": 0,
+      "phoneClicks": 0,
+      "mapsClicks": 0,
+      "devices": {
+        "mobile": 1,
+        "desktop": 0,
+        "tablet": 0
+      },
+      "hours": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "2026-10-01": {
+      "date": "2026-10-01",
+      "uniqueVisitors": [
+        "v_muol4b3z_9ktoc5z"
+      ],
+      "totalVisits": 0,
+      "pageViews": 1,
+      "whatsappClicks": 0,
+      "phoneClicks": 0,
+      "mapsClicks": 0,
+      "devices": {
+        "mobile": 0,
+        "desktop": 1,
+        "tablet": 0
+      },
+      "hours": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "businesses": {
+    "1081": {
+      "businessId": 1081,
+      "businessName": "Yuss Nails Beautiful Hands",
+      "views": 1,
+      "whatsappClicks": 0,
+      "phoneClicks": 0,
+      "mapsClicks": 0,
+      "lastInteraction": "2026-10-01T17:48:44.524Z"
+    },
+    "3922": {
+      "businessId": 3922,
+      "businessName": "Top - Notch Mecánica Automotriz",
+      "views": 3,
+      "whatsappClicks": 0,
+      "phoneClicks": 0,
+      "mapsClicks": 0,
+      "lastInteraction": "2026-09-30T17:52:13.913Z"
+    }
+  },
+  "devices": {
+    "mobile": 143,
+    "desktop": 32,
+    "tablet": 3
+  },
+  "operatingSystems": {
+    "Android": 99,
+    "iOS (iPhone/iPad)": 44,
+    "Windows": 29,
+    "macOS": 3,
+    "Otro": 3
+  },
+  "browsers": {
+    "Chrome": 120,
+    "Safari": 44,
+    "Edge": 10,
+    "Firefox": 4
+  },
+  "trafficSources": {
+    "Directo / Acceso Directo": 112,
+    "WhatsApp": 33,
+    "Facebook": 21,
+    "Búsqueda Google": 12
+  },
+  "topSearches": {
+    "climas": 14,
+    "restaurantes": 12,
+    "pasteleria": 9,
+    "mecanica": 8,
+    "gas": 6,
+    "dentista": 5,
+    "grua": 4
+  },
+  "recentEvents": [
+    {
+      "id": "evt_1790876924588_zg3b",
+      "type": "view",
+      "businessName": "Yuss Nails Beautiful Hands",
+      "device": "desktop",
+      "browser": "Chrome",
+      "os": "Windows",
+      "referrerSource": "Búsqueda Google",
+      "isAdmin": false,
+      "timestamp": "2026-10-01T17:48:44.524Z"
+    },
+    {
+      "id": "evt_1790801645670_kkxv",
+      "type": "visit",
+      "businessName": "Página Principal",
+      "device": "mobile",
+      "browser": "Chrome",
+      "os": "Android",
+      "referrerSource": "WhatsApp",
+      "isAdmin": false,
+      "timestamp": "2026-09-30T20:54:05.670Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T18:36:40.677Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T18:36:40.656Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T18:34:19.061Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T18:34:19.060Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T18:15:46.224Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T18:15:46.211Z"
+    },
+    {
+      "type": "view",
+      "businessName": "Top - Notch Mecánica Automotriz",
+      "timestamp": "2026-09-30T17:52:13.913Z"
+    },
+    {
+      "type": "view",
+      "businessName": "Top - Notch Mecánica Automotriz",
+      "timestamp": "2026-09-30T17:35:39.703Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T17:33:06.294Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T17:33:06.292Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T17:16:31.073Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T17:16:31.070Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T17:15:20.159Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T17:15:20.158Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T17:14:40.734Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T17:14:40.733Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T17:01:17.921Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T17:01:17.918Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T16:33:10.102Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T16:33:10.100Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T16:31:27.356Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T16:31:27.354Z"
+    },
+    {
+      "type": "view",
+      "businessName": "Top - Notch Mecánica Automotriz",
+      "timestamp": "2026-09-30T16:28:40.113Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T16:26:12.910Z"
+    },
+    {
+      "type": "visit",
+      "timestamp": "2026-09-30T16:26:12.901Z"
+    }
+  ]
+}

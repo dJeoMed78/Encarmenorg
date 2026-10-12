@@ -1,0 +1,24 @@
+[
+  {
+    "id": "promo-hair-palace-1463",
+    "businessSlug": "hair-palace-keratin",
+    "expiresAt": "2026-10-31T23:59:59.000Z",
+    "businessWhatsapp": "9381458462",
+    "terms": "Válido para las primeras personas en presentar su cupón oficial en salón.",
+    "maxClaims": 5,
+    "isActive": true,
+    "ownerEmail": "ruiz.80juani@gmail.com",
+    "description": "Balayage «Morena Iluminada» (diseñado para aportar luminosidad, resaltar el tono natural y brindar un look fresco y moderno con luz y movimiento). Precio de promoción: ,300 MXN (precio normal ,600 MXN). Condición de largo: Válido para un largo máximo «hasta la altura del bra»",
+    "validUntil": "31 de Octubre, 2026",
+    "title": "Descuento Especial en Balayage",
+    "businessImage": "https://empresasencarmen.com/wp-content/uploads/2024/08/edhp.jpg",
+    "businessId": 1463,
+    "totalCoupons": 5,
+    "createdAt": "2026-09-29T01:44:35.235Z",
+    "couponCode": "BALAYAGE18",
+    "discount": "+18% OFF",
+    "businessPhone": "9381458462",
+    "claimedCount": 0,
+    "businessName": "Hair palace keratin"
+  }
+]
