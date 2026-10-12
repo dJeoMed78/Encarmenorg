@@ -142,12 +142,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={onOpenSyncModal}
-              title="Panel de Administración (Ajustes, sincronización y contenido)"
-              aria-label="Panel de Administración"
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-600 hover:text-stone-900 text-xs font-medium transition-all cursor-pointer shadow-2xs"
+              title="π"
+              aria-label="Administración (π)"
+              className="flex items-center justify-center w-8 h-8 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-600 hover:text-stone-900 transition-all cursor-pointer shadow-2xs"
             >
-              <span className="font-serif font-bold text-sm leading-none">π</span>
-              <span className="hidden xl:inline text-[11px] font-semibold">Admin</span>
+              <span className="font-serif font-bold text-base leading-none">π</span>
             </button>
 
             <a
