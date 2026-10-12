@@ -29,6 +29,7 @@ import {
   BusinessEditPinInfo
 } from '../services/api';
 import { formatPhoneNumber } from '../utils/phone';
+import { AdminAutoBusinessesModal } from './AdminAutoBusinessesModal';
 
 interface AdminBusinessesTabProps {
   businesses: Business[];
@@ -40,6 +41,7 @@ interface AdminBusinessesTabProps {
   onDeleteBusiness?: (b: Business) => void;
   onOpenBusiness?: (b: Business) => void;
   onAddNewBusiness?: () => void;
+  onBusinessApproved?: (b: Business) => void;
 }
 
 export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
@@ -51,8 +53,10 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
   onToggleRecommended,
   onDeleteBusiness,
   onOpenBusiness,
-  onAddNewBusiness
+  onAddNewBusiness,
+  onBusinessApproved
 }) => {
+  const [isAutoSearchModalOpen, setIsAutoSearchModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCat, setSelectedCat] = useState('all');
   const [selectedCol, setSelectedCol] = useState('all');
@@ -308,6 +312,16 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
               <span className="hidden sm:inline">Descargar Proyecto (.ZIP)</span>
               <span className="sm:hidden">ZIP</span>
             </a>
+
+            <button
+              type="button"
+              onClick={() => setIsAutoSearchModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-black text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              title="Búsqueda Automática de Empresas en Ciudad del Carmen (Sin IA)"
+            >
+              <Globe className="w-4 h-4 text-sky-200" />
+              <span>Busqueda Automática Empresas</span>
+            </button>
 
             {onAddNewBusiness && (
               <button
@@ -655,6 +669,17 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
           </table>
         </div>
       )}
+
+      {/* Modal de Búsqueda Automática de Empresas Carmelitas */}
+      <AdminAutoBusinessesModal
+        isOpen={isAutoSearchModalOpen}
+        onClose={() => setIsAutoSearchModalOpen(false)}
+        onBusinessApproved={(newBiz) => {
+          if (onBusinessApproved) {
+            onBusinessApproved(newBiz);
+          }
+        }}
+      />
     </div>
   );
 };

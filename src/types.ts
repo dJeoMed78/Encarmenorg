@@ -269,3 +269,26 @@ export interface EventItem {
   aiDetected?: boolean;
   updatedAt?: string;
 }
+
+export interface AutoBusinessCandidate {
+  id: string;
+  name: string;
+  category: string;
+  categories?: string[];
+  categorySlugs?: string[];
+  delivery: string;
+  hasDelivery?: boolean;
+  description: string;
+  phone: string;
+  whatsapp: string;
+  address?: string;
+  colonia?: string;
+  schedule?: string;
+  payment?: string;
+  image: string;
+  source: string;
+  sourceUrl: string;
+  alreadyRegistered?: boolean;
+  matchedExistingName?: string;
+  status?: 'pending' | 'accepted' | 'rejected' | 'modified';
+}

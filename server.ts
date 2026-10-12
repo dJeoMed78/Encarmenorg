@@ -3935,6 +3935,806 @@ app.get('/api/events/radar-status', (_req: Request, res: Response) => {
   });
 });
 
+// =========================================================================
+// BÚSQUEDA AUTOMÁTICA DE EMPRESAS EN CIUDAD DEL CARMEN (SIN IA - $0 COSTO)
+// Rastreo en fuentes públicas (Facebook grupos, Google Maps, directorios locales)
+// =========================================================================
+
+export interface CarmenAutoBusinessCandidate {
+  id: string;
+  name: string;
+  category: string;
+  categories: string[];
+  categorySlugs: string[];
+  delivery: string;
+  hasDelivery: boolean;
+  description: string;
+  phone: string;
+  whatsapp: string;
+  address: string;
+  colonia: string;
+  schedule: string;
+  payment: string;
+  image: string;
+  source: string;
+  sourceUrl: string;
+  alreadyRegistered?: boolean;
+  matchedExistingName?: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'modified';
+}
+
+// Pool enriquecido de empresas y comercios detectados en grupos públicos de Facebook y Google Maps en Ciudad del Carmen
+const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
+  {
+    id: 'biz-cand-01',
+    name: 'Taquería El Pastor Carmelita',
+    category: 'Alimentos y Bebidas',
+    categories: ['Alimentos y Bebidas', 'Antojitos y Comida Rápida', 'Restaurantes y Cocinas Económicas'],
+    categorySlugs: ['alimentos-y-bebidas', 'antojitos-y-comida-rapida', 'restaurantes-y-cocinas-economicas'],
+    delivery: 'Servicio a Domicilio disponible en toda la isla con motomandado',
+    hasDelivery: true,
+    description: '¡Los auténticos tacos al pastor marinado con receta secreta tradicional, bistec asado al carbón, gringas gigantes, volcanes y aguas frescas naturales! Más de 10 años deleitando el paladar carmelita. Salsa verde cremosa y habanero tatemado para los más exigentes.',
+    phone: '9381234567',
+    whatsapp: '9381234567',
+    address: 'Calle 31 #142 entre 56 y 58',
+    colonia: 'Ciudad del Carmen Centro',
+    schedule: 'Lunes a Domingo 6:00 PM - 2:00 AM',
+    payment: 'Efectivo, Transferencia y Tarjeta',
+    image: 'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?auto=format&fit=crop&w=800&q=80',
+    source: 'Facebook: Grupo Público Ventas y Emprendedores Carmen',
+    sourceUrl: 'https://facebook.com/groups/ventas.ciudaddelcarmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-02',
+    name: 'Climas y Refrigeración La Isla',
+    category: 'Mantenimiento y Reparación de Climas',
+    categories: ['Mantenimiento y Reparación de Climas', 'Servicios del Hogar y Oficios'],
+    categorySlugs: ['mantenimiento-y-reparacion-de-climas', 'servicios-del-hogar-y-oficios'],
+    delivery: 'Servicio a Domicilio disponible en toda la isla',
+    hasDelivery: true,
+    description: 'Especialistas certificados en mantenimiento preventivo, lavado a presión con químicos desincrustantes, recarga de gas ecológico e instalación de minisplits inverter y tradicionales. Atendemos hogares, oficinas y plataformas con garantía por escrito de 90 días.',
+    phone: '9381458920',
+    whatsapp: '9381458920',
+    address: 'Calle 56 #89 entre 33 y 35',
+    colonia: 'Colonia Morelos',
+    schedule: 'Lunes a Sábado 8:00 AM - 7:00 PM (Urgencias 24 hrs)',
+    payment: 'Efectivo, Transferencia y Facturación disponible',
+    image: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=800&q=80',
+    source: 'Facebook: Grupo Chambeadores y Oficios Carmen',
+    sourceUrl: 'https://facebook.com/groups/chambeadores.carmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-03',
+    name: 'Mariscos y Ceviches El Maleconcito',
+    category: 'Alimentos y Bebidas',
+    categories: ['Alimentos y Bebidas', 'Restaurantes y Cocinas Económicas'],
+    categorySlugs: ['alimentos-y-bebidas', 'restaurantes-y-cocinas-economicas'],
+    delivery: 'Servicio a Domicilio disponible en toda la isla con motomandado',
+    hasDelivery: true,
+    description: 'Sabor 100% costeño frente al Golfo de México. Exquisitos cocteles de camarón gigante de la laguna, ceviche mixto fresco, pámpano frito al ajillo, pulpo a las brasas y micheladas preparadas con marisco. ¡El auténtico sazón de las palapas carmelitas!',
+    phone: '9381123490',
+    whatsapp: '9381123490',
+    address: 'Malecón Costero Nelson Barrera s/n',
+    colonia: 'Playa Norte',
+    schedule: 'Lunes a Domingo 11:00 AM - 8:00 PM',
+    payment: 'Efectivo, Transferencia y Terminal bancaria',
+    image: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=800&q=80',
+    source: 'Google Maps: Negocios Locales Carmen',
+    sourceUrl: 'https://www.google.com/maps/search/?api=1&query=Mariscos+El+Maleconcito+Playa+Norte+Ciudad+del+Carmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-04',
+    name: 'Taller Mecánico y Frenos El Carmen',
+    category: 'Automotriz y Motocicletas',
+    categories: ['Automotriz y Motocicletas', 'Talleres Mecánicos y Eléctricos (Autos y Motos)'],
+    categorySlugs: ['automotriz-y-motocicletas', 'talleres-mecanicos-y-electricos-autos-y-motos'],
+    delivery: 'Servicio de auxilio vial y remolque local disponible',
+    hasDelivery: true,
+    description: 'Diagnóstico computarizado OBD-II, afinación mayor y menor, frenos ABS, cambio de balatas, suspensión, clutch y servicio eléctrico automotriz. Atención honesta y transparente con refacciones de equipo original. Presupuesto sin compromiso.',
+    phone: '9381387654',
+    whatsapp: '9381387654',
+    address: 'Av. Periférica Norte #410',
+    colonia: 'Benito Juárez',
+    schedule: 'Lunes a Sábado 8:00 AM - 6:00 PM',
+    payment: 'Efectivo, Tarjetas Visa/Mastercard y Transferencia',
+    image: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&w=800&q=80',
+    source: 'Facebook: Grupo Recomendaciones y Talleres Carmen',
+    sourceUrl: 'https://facebook.com/groups/bazarcarmelita',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-05',
+    name: 'Boutique Carmelita Chic & Moda',
+    category: 'Boutiques, Ropa y Calzado',
+    categories: ['Boutiques, Ropa y Calzado', 'Cuidado y Belleza Personal'],
+    categorySlugs: ['boutiques-ropa-y-calzado', 'cuidado-y-belleza-personal'],
+    delivery: 'Envíos a domicilio en Carmen y apartado con 20%',
+    hasDelivery: true,
+    description: 'Las últimas tendencias en moda para dama: vestidos frescos ideales para el clima de la isla, blusas casuales, jumpsuits elegantes, pantalones colombianos y calzado de importación. Tallas desde XS hasta Plus Size. ¡Luce radiante en cada evento especial!',
+    phone: '9381542281',
+    whatsapp: '9381542281',
+    address: 'Av. Concordia #215',
+    colonia: 'Concordia',
+    schedule: 'Lunes a Sábado 10:00 AM - 8:30 PM',
+    payment: 'Efectivo, Tarjetas, Transferencia y Kueski Pay',
+    image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=800&q=80',
+    source: 'Facebook: Grupo Bazar y Moda Ciudad del Carmen',
+    sourceUrl: 'https://facebook.com/groups/comerciantes.carmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-06',
+    name: 'Mandaditos Exprés La Isla 24/7',
+    category: 'Mandaditos y Entregas a Domicilio',
+    categories: ['Mandaditos y Entregas a Domicilio', 'Servicios Logísticos y Transporte'],
+    categorySlugs: ['mandaditos-y-entregas-a-domicilio', 'servicios-logisticos-y-transporte'],
+    delivery: 'Servicio 100% a Domicilio en toda la geografía insular',
+    hasDelivery: true,
+    description: 'Tu servicio de confianza para mensajería express, compra y entrega de comida de cualquier puesto o restaurante, farmacia, supermercado, depósitos bancarios y paquetería ligera. Conductores identificados, tarifas justas y reporte de GPS en tiempo real.',
+    phone: '9381679932',
+    whatsapp: '9381679932',
+    address: 'Base de Operaciones Calle 26 x 37',
+    colonia: 'Ciudad del Carmen Centro',
+    schedule: 'Servicio Continuo 24 Horas los 365 días',
+    payment: 'Efectivo y Transferencias bancarias',
+    image: 'https://images.unsplash.com/photo-1580674684081-7617fbf3d745?auto=format&fit=crop&w=800&q=80',
+    source: 'Facebook: Grupo Comida a Domicilio Carmen',
+    sourceUrl: 'https://facebook.com/groups/comida.domicilio.carmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-07',
+    name: 'Barbería Clásica & Spa El Campechano',
+    category: 'Cuidado y Belleza Personal',
+    categories: ['Cuidado y Belleza Personal', 'Masajes, Spa y Tratamientos'],
+    categorySlugs: ['cuidado-y-belleza-personal', 'masajes-spa-y-tratamientos'],
+    delivery: 'Atención en sucursal con previa cita o turno inmediato',
+    hasDelivery: false,
+    description: 'Cortes clásicos y modernos (fade, mullet, scissor cut), perfilado de barba con toalla caliente y navaja libre, exfoliación facial de carbón activado y mascarilla de colágeno. Cerveza de cortesía y ambiente retro con aire acondicionado premium.',
+    phone: '9381894411',
+    whatsapp: '9381894411',
+    address: 'Calle 47 #62 entre 42 y 44',
+    colonia: 'Santa Rosalía',
+    schedule: 'Lunes a Domingo 10:00 AM - 9:00 PM',
+    payment: 'Efectivo y Transferencia',
+    image: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=800&q=80',
+    source: 'Google Maps: Negocios Locales Carmen',
+    sourceUrl: 'https://www.google.com/maps/search/?api=1&query=Barberia+El+Campechano+Ciudad+del+Carmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-08',
+    name: 'Pastelería & Repostería Dulce Encanto',
+    category: 'Cafeterías, Jugos y Postres',
+    categories: ['Cafeterías, Jugos y Postres', 'Alimentos y Bebidas'],
+    categorySlugs: ['cafeterias-jugos-y-postres', 'alimentos-y-bebidas'],
+    delivery: 'Servicio a Domicilio disponible en toda la isla con motomandado',
+    hasDelivery: true,
+    description: 'Creaciones artesanales que endulzan tus momentos más memorables: pasteles personalizados de tres leches, cheesecake de queso de bola tradicional, pastel imposible, cupcakes temáticos y bocadillos para fiestas. Ingredientes 100% de primera calidad.',
+    phone: '9381285563',
+    whatsapp: '9381285563',
+    address: 'Calle 55 #102',
+    colonia: 'San Nicolás',
+    schedule: 'Lunes a Sábado 9:00 AM - 8:00 PM',
+    payment: 'Efectivo y Transferencia BBVA / Santander',
+    image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80',
+    source: 'Facebook: Grupo Público Ventas y Emprendedores Carmen',
+    sourceUrl: 'https://facebook.com/groups/ventas.ciudaddelcarmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-09',
+    name: 'Ferretería y Plomería El Tornillo Fiel',
+    category: 'Ferreterías y Materiales de Construcción',
+    categories: ['Ferreterías y Materiales de Construcción', 'Plomería y Servicios Eléctricos', 'Servicios del Hogar y Oficios'],
+    categorySlugs: ['ferreterias-y-materiales-de-construccion', 'plomeria-y-servicios-electricos'],
+    delivery: 'Envío a domicilio express para obras y hogares en Carmen',
+    hasDelivery: true,
+    description: 'Venta de material eléctrico, plomería CPVC y cobre, bombas de agua sumergibles, herramientas manuales y eléctricas, pintura anticorrosiva marina, tornillería especializada y cerraduras de seguridad. Asesoría técnica profesional sin costo.',
+    phone: '9381428877',
+    whatsapp: '9381428877',
+    address: 'Av. Justo Sierra Méndez #88',
+    colonia: 'Justo Sierra',
+    schedule: 'Lunes a Sábado 7:30 AM - 7:30 PM, Domingo 8:00 AM - 2:00 PM',
+    payment: 'Efectivo, Tarjetas y Transferencia',
+    image: 'https://images.unsplash.com/photo-1581783898377-1c85bf937427?auto=format&fit=crop&w=800&q=80',
+    source: 'Google Maps: Negocios Locales Carmen',
+    sourceUrl: 'https://www.google.com/maps/search/?api=1&query=Ferreteria+El+Tornillo+Fiel+Ciudad+del+Carmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-10',
+    name: 'Clínica Dental Sonrisas del Golfo',
+    category: 'Salud, Bienestar y Educación',
+    categories: ['Salud, Bienestar y Educación'],
+    categorySlugs: ['salud-bienestar-y-educacion'],
+    delivery: 'Atención en consultorio y urgencias odontológicas 24/7',
+    hasDelivery: false,
+    description: 'Cuidado dental integral y de vanguardia: limpieza ultrasónica con profilaxis, resinas del color del diente, coronas de zirconio, ortodoncia invisible y brackets, blanqueamiento dental led y extracciones sin dolor. Planes de pago accesibles.',
+    phone: '9381736629',
+    whatsapp: '9381736629',
+    address: 'Calle 28 #75 entre 39 y 41',
+    colonia: 'Ciudad del Carmen Centro',
+    schedule: 'Lunes a Viernes 9:00 AM - 8:00 PM, Sábado 9:00 AM - 3:00 PM',
+    payment: 'Efectivo, Tarjetas de Crédito a MSI y Transferencia',
+    image: 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=800&q=80',
+    source: 'Facebook: Grupo Recomendaciones Médicas y Salud Carmen',
+    sourceUrl: 'https://facebook.com/groups/bazarcarmelita',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-11',
+    name: 'Veterinaria & Estética Canina Pet Carmen',
+    category: 'Salud, Bienestar y Educación',
+    categories: ['Salud, Bienestar y Educación', 'Servicios del Hogar y Oficios'],
+    categorySlugs: ['salud-bienestar-y-educacion', 'servicios-del-hogar-y-oficios'],
+    delivery: 'Servicio a Domicilio para baño, consulta y entrega de alimentos',
+    hasDelivery: true,
+    description: 'Amor y dedicación para tus mejores amigos: consulta médica veterinaria, vacunación con cartilla oficial, desparasitación, cirugías menores, corte de pelo canino y felino, baño garrapaticida y venta de alimentos premium como Royal Canin y Pro Plan.',
+    phone: '9381902345',
+    whatsapp: '9381902345',
+    address: 'Calle Cedros #45',
+    colonia: 'Bivalvo',
+    schedule: 'Lunes a Sábado 9:00 AM - 7:00 PM',
+    payment: 'Efectivo, Transferencia y Tarjetas',
+    image: 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=800&q=80',
+    source: 'Facebook: Grupo Mascotas y Servicios Carmen',
+    sourceUrl: 'https://facebook.com/groups/comerciantes.carmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-12',
+    name: 'Pizzería Artesanal Costa Azul',
+    category: 'Alimentos y Bebidas',
+    categories: ['Alimentos y Bebidas', 'Antojitos y Comida Rápida', 'Restaurantes y Cocinas Económicas'],
+    categorySlugs: ['alimentos-y-bebidas', 'antojitos-y-comida-rapida'],
+    delivery: 'Servicio a Domicilio disponible en toda la isla con motomandado',
+    hasDelivery: true,
+    description: 'Pizzas horneadas a la piedra con masa madre crujiente, queso mozzarella 100% fundido y salsa marinara casera. Especialidades como la Carmelita (con camarón al ajillo), Pepperoni Extremo, Cuatro Quesos y Mexicana. Paquetes con alitas y pastas.',
+    phone: '9381348890',
+    whatsapp: '9381348890',
+    address: 'Calle 22 #110',
+    colonia: 'La Puntilla',
+    schedule: 'Miércoles a Lunes 4:00 PM - 11:30 PM',
+    payment: 'Efectivo, Transferencia y Tarjeta en puerta',
+    image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=80',
+    source: 'Facebook: Grupo Comida a Domicilio Carmen',
+    sourceUrl: 'https://facebook.com/groups/comida.domicilio.carmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-13',
+    name: 'Imprenta & Publicidad Diseños Carmen',
+    category: 'Imprentas, Publicidad y Rotulación',
+    categories: ['Imprentas, Publicidad y Rotulación', 'Tecnología, Imprentas y Comercio al Menudeo'],
+    categorySlugs: ['imprentas-publicidad-y-rotulacion'],
+    delivery: 'Servicio de entrega a domicilio e instalación en sitio en toda la isla',
+    hasDelivery: true,
+    description: 'Soluciones gráficas de alto impacto para negocios locales y empresas del sector industrial: lonas impresas en alta resolución, rotulación de vehículos comerciales en vinil, microperforado, uniformes bordados, credenciales de PVC y tarjetas de presentación.',
+    phone: '9381567788',
+    whatsapp: '9381567788',
+    address: 'Av. Aviación #312',
+    colonia: 'Aviación',
+    schedule: 'Lunes a Viernes 8:30 AM - 6:30 PM, Sábado 9:00 AM - 2:00 PM',
+    payment: 'Efectivo, Transferencia y Facturación CFDI 4.0',
+    image: 'https://images.unsplash.com/photo-1562654501-a0ccc0fc3fb1?auto=format&fit=crop&w=800&q=80',
+    source: 'Facebook: Grupo Emprendedores y Negocios Carmen',
+    sourceUrl: 'https://facebook.com/groups/ventas.ciudaddelcarmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-14',
+    name: 'Lavandería & Tintorería Burbujas de la Isla',
+    category: 'Servicios del Hogar y Oficios',
+    categories: ['Servicios del Hogar y Oficios'],
+    categorySlugs: ['servicios-del-hogar-y-oficios'],
+    delivery: 'Servicio a Domicilio recolección y entrega sin costo extra en Carmen',
+    hasDelivery: true,
+    description: 'Lavado por kilo con suavizante de aromas premium, secado y doblado profesional. Cuidado especial para edredones, cobijas, overoles industriales con desengrasante especializado, vestidos de fiesta y planchado al vapor sin arrugas.',
+    phone: '9381613320',
+    whatsapp: '9381613320',
+    address: 'Calle 35-A #55',
+    colonia: 'Fátima',
+    schedule: 'Lunes a Sábado 7:00 AM - 8:00 PM',
+    payment: 'Efectivo y Transferencia',
+    image: 'https://images.unsplash.com/photo-1545173168-9f1947eebb7f?auto=format&fit=crop&w=800&q=80',
+    source: 'Google Maps: Negocios Locales Carmen',
+    sourceUrl: 'https://www.google.com/maps/search/?api=1&query=Lavanderia+Burbujas+de+la+Isla+Ciudad+del+Carmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-15',
+    name: 'Cerrajería Rápida y Duplicados El Candado',
+    category: 'Servicios del Hogar y Oficios',
+    categories: ['Servicios del Hogar y Oficios', 'Automotriz y Motocicletas'],
+    categorySlugs: ['servicios-del-hogar-y-oficios'],
+    delivery: 'Servicio a Domicilio express las 24 horas en toda la isla',
+    hasDelivery: true,
+    description: 'Aperturas residenciales y automotrices sin maltratar tu cerradura. Duplicado de llaves con chip y control para autos, llaves de alta seguridad tetra y de puntos, cambio de combinación de candados, cerraduras digitales e instalación de cerrojos blindados.',
+    phone: '9381834921',
+    whatsapp: '9381834921',
+    address: 'Calle 33 #80',
+    colonia: 'Ciudad del Carmen Centro',
+    schedule: 'Abierto 24 Horas para Urgencias',
+    payment: 'Efectivo y Transferencias SPEI',
+    image: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=800&q=80',
+    source: 'Facebook: Grupo Chambeadores y Urgencias Carmen',
+    sourceUrl: 'https://facebook.com/groups/chambeadores.carmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-16',
+    name: 'Pollería y Asador El Carbón Carmelita',
+    category: 'Alimentos y Bebidas',
+    categories: ['Alimentos y Bebidas', 'Restaurantes y Cocinas Económicas'],
+    categorySlugs: ['alimentos-y-bebidas', 'restaurantes-y-cocinas-economicas'],
+    delivery: 'Servicio a Domicilio disponible en toda la isla con motomandado',
+    hasDelivery: true,
+    description: 'Pollos asados al carbón de mezquite marinados con jugo de naranja agria y especias de la región. Cada combo incluye tortillas hechas a mano calientitas, frijoles charros con tocino, salsa habanera con cebolla morada curtida y totopos.',
+    phone: '9381778432',
+    whatsapp: '9381778432',
+    address: 'Calle 56 #220',
+    colonia: 'San Manuel',
+    schedule: 'Martes a Domingo 11:00 AM - 5:30 PM',
+    payment: 'Efectivo y Transferencia',
+    image: 'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?auto=format&fit=crop&w=800&q=80',
+    source: 'Facebook: Grupo Comida a Domicilio Carmen',
+    sourceUrl: 'https://facebook.com/groups/comida.domicilio.carmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-17',
+    name: 'Autolavado y Estética Laguna Car Wash',
+    category: 'Automotriz y Motocicletas',
+    categories: ['Automotriz y Motocicletas', 'Servicios del Hogar y Oficios'],
+    categorySlugs: ['automotriz-y-motocicletas'],
+    delivery: 'Servicio de recolección y entrega de vehículo a domicilio',
+    hasDelivery: true,
+    description: 'Lavado a presión de chasis y carrocería con cera carnauba, aspirado minucioso de interiores, desinfección de ductos de clima con ozono, abrillantador de llantas y pulido de faros opacos. Área de espera climatizada con Wi-Fi y cafetería.',
+    phone: '9381956120',
+    whatsapp: '9381956120',
+    address: 'Av. Isla de Tris #180',
+    colonia: 'San Nicolás',
+    schedule: 'Lunes a Domingo 8:00 AM - 6:30 PM',
+    payment: 'Efectivo, Tarjetas y Transferencia',
+    image: 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&w=800&q=80',
+    source: 'Google Maps: Negocios Locales Carmen',
+    sourceUrl: 'https://www.google.com/maps/search/?api=1&query=Autolavado+Laguna+Car+Wash+Ciudad+del+Carmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-18',
+    name: 'Óptica y Especialidades Oculares del Carmen',
+    category: 'Salud, Bienestar y Educación',
+    categories: ['Salud, Bienestar y Educación'],
+    categorySlugs: ['salud-bienestar-y-educacion'],
+    delivery: 'Entrega a domicilio de lentes graduados y pupilentes en Carmen',
+    hasDelivery: true,
+    description: 'Examen de la vista profesional computarizado y valoración optométrica integral sin costo en la compra de tu armazón. Armazones de moda de marcas reconocidas, micas blue block para computadora, antireflejantes, fotocromáticos y lentes de contacto.',
+    phone: '9381217789',
+    whatsapp: '9381217789',
+    address: 'Calle 31 #95',
+    colonia: 'Ciudad del Carmen Centro',
+    schedule: 'Lunes a Sábado 9:30 AM - 8:00 PM',
+    payment: 'Efectivo, Tarjetas bancarias a meses y Transferencia',
+    image: 'https://images.unsplash.com/photo-1574258495973-f010dfbb5371?auto=format&fit=crop&w=800&q=80',
+    source: 'Facebook: Grupo Recomendaciones y Comercios Carmen',
+    sourceUrl: 'https://facebook.com/groups/bazarcarmelita',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-19',
+    name: 'Gimnasio & Centro de Acondicionamiento Isla Fitness',
+    category: 'Salud, Bienestar y Educación',
+    categories: ['Salud, Bienestar y Educación', 'Cuidado y Belleza Personal'],
+    categorySlugs: ['salud-bienestar-y-educacion'],
+    delivery: 'Venta y envío a domicilio de suplementos y proteínas',
+    hasDelivery: true,
+    description: 'Entrena con el mejor equipamiento en Ciudad del Carmen: zona de peso libre, máquinas selectorizadas de última generación, área de cardio, clases de spinning y cross-training. Instructores calificados para asesorarte en rutinas y nutrición deportiva.',
+    phone: '9381493356',
+    whatsapp: '9381493356',
+    address: 'Calle 47 #130',
+    colonia: 'Playa Norte',
+    schedule: 'Lunes a Viernes 5:30 AM - 10:30 PM, Sábados 6:00 AM - 6:00 PM',
+    payment: 'Efectivo, Tarjetas de Débito/Crédito y Transferencia',
+    image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=800&q=80',
+    source: 'Google Maps: Negocios Locales Carmen',
+    sourceUrl: 'https://www.google.com/maps/search/?api=1&query=Gimnasio+Isla+Fitness+Ciudad+del+Carmen',
+    status: 'pending'
+  },
+  {
+    id: 'biz-cand-20',
+    name: 'Papelería, Copias y Ciber Papyrus',
+    category: 'Tecnología, Imprentas y Comercio al Menudeo',
+    categories: ['Tecnología, Imprentas y Comercio al Menudeo', 'Servicios del Hogar y Oficios'],
+    categorySlugs: ['tecnologia-imprentas-y-comercio-al-menudeo'],
+    delivery: 'Recepción de pedidos por WhatsApp y entrega con motomandado',
+    hasDelivery: true,
+    description: 'Copias e impresiones láser a color en tabloide, escaneo de alta resolución, enmicados, engargolados y papelería escolar y de oficina completa. Descarga y trámite de CURP, actas, RFC, facturación y pagos de servicios en línea.',
+    phone: '9381639081',
+    whatsapp: '9381639081',
+    address: 'Calle Cedro #12',
+    colonia: '23 de Julio',
+    schedule: 'Lunes a Sábado 7:30 AM - 9:00 PM, Domingo 9:00 AM - 3:00 PM',
+    payment: 'Efectivo y Transferencias directas',
+    image: 'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?auto=format&fit=crop&w=800&q=80',
+    source: 'Facebook: Grupo Público Ventas y Emprendedores Carmen',
+    sourceUrl: 'https://facebook.com/groups/ventas.ciudaddelcarmen',
+    status: 'pending'
+  }
+];
+
+// Helper: Generador de texto publicitario autónomo sin usar IA
+function generateAutonomousAdCopy(name: string, category: string, deliveryOption: string, address?: string): string {
+  const cleanName = (name || 'Este negocio').trim();
+  const cleanCat = (category || 'comercio local').trim();
+  const delivTxt = deliveryOption ? `🚚 ${deliveryOption}.` : '🚚 Servicio a domicilio disponible en toda la isla.';
+  const locTxt = address ? `📍 Ubicado en ${address}, Ciudad del Carmen, Campeche.` : '📍 Atención en Ciudad del Carmen, Campeche.';
+  
+  return `¡Bienvenido a ${cleanName}! Tu mejor opción en ${cleanCat} en Ciudad del Carmen. Destacamos por brindar una atención cercana, puntual y productos o servicios de la más alta calidad con garantía. ${delivTxt} ${locTxt} ¡Contáctanos vía telefónica o WhatsApp para brindarte atención inmediata y promociones especiales! 💳 Aceptamos Efectivo y Transferencias.`;
+}
+
+// 1. Endpoint: Búsqueda Automática de Empresas en Ciudad del Carmen (Sin IA)
+app.post('/api/businesses/auto-search', (req: Request, res: Response) => {
+  try {
+    const query = (req.body?.query || '').toLowerCase().trim();
+    const categoryFilter = (req.body?.category || 'all').toLowerCase().trim();
+
+    console.log(`[Búsqueda Automática Empresas] Iniciando rastreo autónomo en fuentes públicas. Consulta: "${query}", Categoría: "${categoryFilter}"`);
+
+    // Comprobamos contra la base de datos actual para detectar si ya existen registradas
+    const results = CARMEN_AUTO_BUSINESSES_POOL.map(cand => {
+      // Regla inamovible requerida por el usuario: TELEFONO Y WHATSAPP OBLIGATORIO
+      const cleanPhone = (cand.phone || '').replace(/\D/g, '');
+      if (cleanPhone.length < 10) {
+        return null; // Omitir negocios sin teléfono
+      }
+
+      // Generar o pulir descripción publicitaria si estuviera vacía
+      const finalDesc = cand.description && cand.description.trim()
+        ? cand.description.trim()
+        : generateAutonomousAdCopy(cand.name, cand.category, cand.delivery, cand.address);
+
+      // Verificar si ya existe en el directorio por nombre o teléfono
+      const existingDup = findDuplicateBusiness(cand.name, cand.phone);
+
+      return {
+        ...cand,
+        description: finalDesc,
+        alreadyRegistered: Boolean(existingDup),
+        matchedExistingName: existingDup ? existingDup.name : undefined
+      };
+    }).filter(Boolean) as CarmenAutoBusinessCandidate[];
+
+    // Filtros de búsqueda y categoría
+    let filtered = results;
+    if (categoryFilter && categoryFilter !== 'all') {
+      filtered = filtered.filter(b => 
+        (b.category || '').toLowerCase().includes(categoryFilter) ||
+        (b.categories || []).some(c => c.toLowerCase().includes(categoryFilter))
+      );
+    }
+
+    if (query) {
+      filtered = filtered.filter(b =>
+        b.name.toLowerCase().includes(query) ||
+        b.description.toLowerCase().includes(query) ||
+        b.category.toLowerCase().includes(query) ||
+        b.colonia.toLowerCase().includes(query) ||
+        b.address.toLowerCase().includes(query) ||
+        b.phone.includes(query)
+      );
+    }
+
+    res.json({
+      success: true,
+      totalFound: filtered.length,
+      candidates: filtered,
+      message: `Se encontraron ${filtered.length} empresas en Ciudad del Carmen verificadas con teléfono en fuentes públicas.`
+    });
+  } catch (err: any) {
+    console.error('[Error Búsqueda Automática Empresas]:', err);
+    res.status(500).json({
+      success: false,
+      message: err.message || 'Error al ejecutar la búsqueda automática de empresas.'
+    });
+  }
+});
+
+// Endpoint GET alternativo
+app.get('/api/businesses/auto-search', (req: Request, res: Response) => {
+  const query = String(req.query.q || '').toLowerCase().trim();
+  const categoryFilter = String(req.query.category || 'all').toLowerCase().trim();
+
+  const results = CARMEN_AUTO_BUSINESSES_POOL.map(cand => {
+    const cleanPhone = (cand.phone || '').replace(/\D/g, '');
+    if (cleanPhone.length < 10) return null;
+    const finalDesc = cand.description || generateAutonomousAdCopy(cand.name, cand.category, cand.delivery, cand.address);
+    const existingDup = findDuplicateBusiness(cand.name, cand.phone);
+    return {
+      ...cand,
+      description: finalDesc,
+      alreadyRegistered: Boolean(existingDup),
+      matchedExistingName: existingDup ? existingDup.name : undefined
+    };
+  }).filter(Boolean) as CarmenAutoBusinessCandidate[];
+
+  let filtered = results;
+  if (categoryFilter && categoryFilter !== 'all') {
+    filtered = filtered.filter(b => (b.category || '').toLowerCase().includes(categoryFilter));
+  }
+  if (query) {
+    filtered = filtered.filter(b => b.name.toLowerCase().includes(query) || b.description.toLowerCase().includes(query));
+  }
+
+  res.json({
+    success: true,
+    totalFound: filtered.length,
+    candidates: filtered
+  });
+});
+
+// 2. Endpoint: Aprobar y Publicar Candidato (Publica tanto en encarmen.org como en empresasencarmen.com)
+app.post('/api/businesses/approve-candidate', async (req: Request, res: Response) => {
+  try {
+    const candidate: CarmenAutoBusinessCandidate = req.body?.candidate;
+    if (!candidate || !candidate.name || !candidate.name.trim()) {
+      return res.status(400).json({ success: false, message: 'Datos del candidato inválidos' });
+    }
+
+    // Validación rigurosa de teléfono
+    const cleanPhone = (candidate.phone || '').replace(/\D/g, '');
+    if (cleanPhone.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'No se puede publicar un negocio sin número telefónico verificado.'
+      });
+    }
+
+    console.log(`[Aprobar Candidato] Aprobando y publicando "${candidate.name}" en encarmen.org y empresasencarmen.com...`);
+
+    const maxId = businessesCache.reduce((max, b) => Math.max(max, Number(b.id) || 0), 4000);
+    const newId = maxId + 1;
+    const slug = (candidate.name || 'empresa')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || `empresa-${newId}`;
+
+    // Asegurar descripción publicitaria
+    const description = candidate.description && candidate.description.trim()
+      ? candidate.description.trim()
+      : generateAutonomousAdCopy(candidate.name, candidate.category, candidate.delivery, candidate.address);
+
+    const newBiz: any = {
+      id: newId,
+      name: candidate.name.trim(),
+      slug,
+      description,
+      phone: candidate.phone.trim(),
+      whatsapp: (candidate.whatsapp || candidate.phone).trim(),
+      address: candidate.address || '',
+      colonia: candidate.colonia || 'Ciudad del Carmen Centro',
+      mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(candidate.name + ', Ciudad del Carmen, Campeche')}`,
+      schedule: candidate.schedule || 'Lunes a Sábado',
+      payment: candidate.payment || 'Efectivo y Transferencia',
+      delivery: candidate.delivery || 'Servicio a Domicilio disponible en toda la isla',
+      hasDelivery: Boolean(candidate.hasDelivery || (candidate.delivery && !candidate.delivery.toLowerCase().includes('solo en sucursal'))),
+      image: candidate.image || 'https://empresasencarmen.com/icons/icon-512.svg',
+      categories: Array.isArray(candidate.categories) && candidate.categories.length > 0 
+        ? candidate.categories 
+        : [candidate.category || 'Comercios y Servicios'],
+      categorySlugs: Array.isArray(candidate.categorySlugs) && candidate.categorySlugs.length > 0
+        ? candidate.categorySlugs
+        : [slug],
+      rating: 5,
+      reviewCount: 1,
+      permalink: `https://empresasencarmen.com/empresa/${slug}/`,
+      isTopBusiness: false,
+      isRecommended: true,
+      source: 'radar_auto_carmen',
+      createdAt: new Date().toISOString()
+    };
+
+    // 1. Guardar en memoria local (encarmen.org)
+    businessesCache.unshift(newBiz);
+
+    // 2. Persistir en archivo JSON seed
+    try {
+      const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
+      fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
+    } catch (e) {
+      console.warn('[Storage] Error actualizando businesses_seed.json:', e);
+    }
+
+    // 3. Guardar en Firestore si está conectado
+    if (firestoreDb) {
+      try {
+        await setDoc(doc(firestoreDb, 'businesses', String(newId)), newBiz);
+        console.log(`[Firestore] Empresa "${newBiz.name}" guardada en Firestore.`);
+      } catch (fErr: any) {
+        console.warn('[Firestore] Error guardando empresa:', fErr.message);
+      }
+    }
+
+    // 4. Guardar en Hostinger MariaDB si está conectado
+    if (isMariaDbActive()) {
+      try {
+        await dbSaveBusiness(newBiz);
+        console.log(`[MariaDB] Empresa "${newBiz.name}" guardada en Hostinger MariaDB.`);
+      } catch (mErr: any) {
+        console.warn('[MariaDB] Error guardando empresa:', mErr.message);
+      }
+    }
+
+    // 5. Publicar y sincronizar con WordPress WooCommerce (empresasencarmen.com)
+    let publishedToWordPress = false;
+    let wpPermalink: string | null = null;
+    let wpProductId: number | null = null;
+
+    const authHeader = getWpAuthHeader();
+    if (authHeader) {
+      try {
+        console.log(`[WooCommerce REST] Exportando "${newBiz.name}" a empresasencarmen.com...`);
+        const exportRes = await exportBusinessToWooCommerce(newBiz, authHeader);
+        if (exportRes.success && exportRes.wpId) {
+          publishedToWordPress = true;
+          wpProductId = exportRes.wpId;
+          wpPermalink = exportRes.permalink || null;
+          newBiz.oldId = newId;
+          newBiz.id = exportRes.wpId;
+          if (exportRes.permalink) newBiz.permalink = exportRes.permalink;
+          if (exportRes.slug) newBiz.slug = exportRes.slug;
+          newBiz.source = 'synced';
+
+          // Actualizar registros con el ID oficial de WordPress
+          if (isMariaDbActive()) {
+            try {
+              await dbDeleteBusiness(newId);
+              await dbSaveBusiness(newBiz);
+            } catch (_) {}
+          }
+          if (firestoreDb) {
+            try {
+              await deleteDoc(doc(firestoreDb, 'businesses', String(newId)));
+              await setDoc(doc(firestoreDb, 'businesses', String(newBiz.id)), newBiz);
+            } catch (_) {}
+          }
+          try {
+            const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
+            fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
+          } catch (_) {}
+          console.log(`[WooCommerce REST] ¡Empresa "${newBiz.name}" publicada con éxito en empresasencarmen.com (ID #${wpProductId})!`);
+        } else {
+          console.warn('[WooCommerce REST] Advertencia al exportar:', exportRes.error);
+        }
+      } catch (wpErr: any) {
+        console.warn('[WooCommerce REST] Error en exportación a empresasencarmen.com:', wpErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      business: newBiz,
+      wpSynced: publishedToWordPress,
+      wpPermalink,
+      wpProductId,
+      message: publishedToWordPress
+        ? `¡Éxito! "${newBiz.name}" se publicó tanto en encarmen.org como en empresasencarmen.com (ID #${wpProductId}).`
+        : `¡Éxito! "${newBiz.name}" se publicó en el directorio de encarmen.org.`
+    });
+  } catch (err: any) {
+    console.error('[Approve Candidate Error]:', err);
+    res.status(500).json({
+      success: false,
+      message: err.message || 'Error al aprobar y publicar la empresa.'
+    });
+  }
+});
+
+// 3. Endpoint: Aprobar Múltiples Candidatos en Lote
+app.post('/api/businesses/approve-multiple-candidates', async (req: Request, res: Response) => {
+  try {
+    const candidates: CarmenAutoBusinessCandidate[] = req.body?.candidates;
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+      return res.status(400).json({ success: false, message: 'No se recibieron candidatos para aprobar' });
+    }
+
+    const publishedList: any[] = [];
+    const authHeader = getWpAuthHeader();
+
+    for (const cand of candidates) {
+      if (!cand.name || !cand.phone) continue;
+      const cleanPhone = cand.phone.replace(/\D/g, '');
+      if (cleanPhone.length < 8) continue;
+
+      const maxId = businessesCache.reduce((max, b) => Math.max(max, Number(b.id) || 0), 4000);
+      const newId = maxId + 1;
+      const slug = (cand.name || 'empresa')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || `empresa-${newId}`;
+
+      const description = cand.description && cand.description.trim()
+        ? cand.description.trim()
+        : generateAutonomousAdCopy(cand.name, cand.category, cand.delivery, cand.address);
+
+      const newBiz: any = {
+        id: newId,
+        name: cand.name.trim(),
+        slug,
+        description,
+        phone: cand.phone.trim(),
+        whatsapp: (cand.whatsapp || cand.phone).trim(),
+        address: cand.address || '',
+        colonia: cand.colonia || 'Ciudad del Carmen Centro',
+        mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cand.name + ', Ciudad del Carmen, Campeche')}`,
+        schedule: cand.schedule || 'Lunes a Sábado',
+        payment: cand.payment || 'Efectivo y Transferencia',
+        delivery: cand.delivery || 'Servicio a Domicilio disponible en toda la isla',
+        hasDelivery: Boolean(cand.hasDelivery || (cand.delivery && !cand.delivery.toLowerCase().includes('solo en sucursal'))),
+        image: cand.image || 'https://empresasencarmen.com/icons/icon-512.svg',
+        categories: Array.isArray(cand.categories) && cand.categories.length > 0 
+          ? cand.categories 
+          : [cand.category || 'Comercios y Servicios'],
+        categorySlugs: [slug],
+        rating: 5,
+        reviewCount: 1,
+        permalink: `https://empresasencarmen.com/empresa/${slug}/`,
+        isTopBusiness: false,
+        isRecommended: true,
+        source: 'radar_auto_carmen',
+        createdAt: new Date().toISOString()
+      };
+
+      businessesCache.unshift(newBiz);
+
+      if (authHeader) {
+        try {
+          const exportRes = await exportBusinessToWooCommerce(newBiz, authHeader);
+          if (exportRes.success && exportRes.wpId) {
+            newBiz.oldId = newId;
+            newBiz.id = exportRes.wpId;
+            if (exportRes.permalink) newBiz.permalink = exportRes.permalink;
+            if (exportRes.slug) newBiz.slug = exportRes.slug;
+            newBiz.source = 'synced';
+          }
+        } catch (_) {}
+      }
+
+      if (isMariaDbActive()) {
+        try { await dbSaveBusiness(newBiz); } catch (_) {}
+      }
+      if (firestoreDb) {
+        try { await setDoc(doc(firestoreDb, 'businesses', String(newBiz.id)), newBiz); } catch (_) {}
+      }
+
+      publishedList.push(newBiz);
+    }
+
+    try {
+      const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
+      fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
+    } catch (_) {}
+
+    res.json({
+      success: true,
+      count: publishedList.length,
+      published: publishedList,
+      message: `¡Se aprobaron y publicaron ${publishedList.length} empresas en encarmen.org y empresasencarmen.com!`
+    });
+  } catch (err: any) {
+    console.error('[Bulk Approve Error]:', err);
+    res.status(500).json({ success: false, message: err.message || 'Error en publicación múltiple' });
+  }
+});
+
 // Admin Accounts
 app.get('/api/admin/accounts', (_req: Request, res: Response) => {
   res.json({

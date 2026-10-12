@@ -1,4 +1,4 @@
-import { Business, Category, DirectoryStats, WpHealth } from '../types';
+import { Business, Category, DirectoryStats, WpHealth, AutoBusinessCandidate } from '../types';
 import seedBusinesses from '../data/businesses_seed.json';
 import seedCategories from '../data/categories_seed.json';
 
@@ -896,6 +896,79 @@ export async function ownerUpdateBusiness(
     return await res.json();
   } catch (err: any) {
     return { success: false, message: err.message || 'Error al guardar cambios' };
+  }
+}
+
+// =========================================================================
+// BÚSQUEDA AUTOMÁTICA DE EMPRESAS (SIN IA)
+// =========================================================================
+
+export async function fetchAutoBusinessCandidates(
+  query?: string,
+  category?: string
+): Promise<{ success: boolean; candidates: AutoBusinessCandidate[]; totalFound: number; message?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/businesses/auto-search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: query || '', category: category || 'all' })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Error del servidor' }));
+      throw new Error(err.message || 'Error al buscar empresas');
+    }
+    return await res.json();
+  } catch (err: any) {
+    return {
+      success: false,
+      candidates: [],
+      totalFound: 0,
+      message: err.message || 'Error de conexión con el radar de empresas'
+    };
+  }
+}
+
+export async function approveAutoBusinessCandidate(
+  candidate: AutoBusinessCandidate
+): Promise<{ success: boolean; message: string; business?: Business; wpSynced?: boolean; wpPermalink?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/businesses/approve-candidate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ candidate })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Error al aprobar negocio');
+    }
+    return data;
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || 'Error al aprobar la empresa'
+    };
+  }
+}
+
+export async function approveMultipleAutoBusinessCandidates(
+  candidates: AutoBusinessCandidate[]
+): Promise<{ success: boolean; message: string; count?: number; published?: Business[] }> {
+  try {
+    const res = await fetch(`${API_BASE}/businesses/approve-multiple-candidates`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ candidates })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Error al aprobar los negocios');
+    }
+    return data;
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || 'Error en publicación por lotes'
+    };
   }
 }
 

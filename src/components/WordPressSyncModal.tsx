@@ -1194,6 +1194,16 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 }
               }}
               onAddNewBusiness={() => setActiveTab('new_business')}
+              onBusinessApproved={(newBiz) => {
+                if (onBusinessAdded) {
+                  onBusinessAdded(newBiz);
+                }
+                if (onBusinessUpdated) {
+                  onBusinessUpdated();
+                }
+                setActionSuccessMsg(`¡Empresa "${newBiz.name}" autorizada y publicada tanto en encarmen.org como en empresasencarmen.com!`);
+                setTimeout(() => setActionSuccessMsg(null), 7000);
+              }}
             />
           ) : activeTab === 'analytics' ? (
             <AdminDetailedAnalytics
