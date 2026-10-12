@@ -33,12 +33,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs">
       <div className="max-w-[1560px] mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between min-h-[72px] sm:min-h-[88px] py-1.5 gap-2 sm:gap-4">
+        <div className="flex items-center justify-between min-h-[108px] sm:min-h-[114px] py-1.5 gap-2 sm:gap-4">
           {/* Logo Oficial 300x100 */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
               onClick={() => setActiveTab('directory')}
-              className="flex items-center text-left group cursor-pointer focus:outline-hidden"
+              className="flex items-center text-left group cursor-pointer focus:outline-hidden shrink-0"
               title="Empresas en Carmen - Directorio Empresarial"
             >
               <BrandLogo />

@@ -70,6 +70,14 @@ export const AdminBrandMediaTab: React.FC = () => {
       const data = await res.json();
       if (data.success) {
         setSuccessMsg('¡Imágenes actualizadas y desplegadas en producción (encarmen.org) con éxito!');
+        if (bannerPreview) {
+          localStorage.setItem('portal_custom_banner', bannerPreview);
+          setCurrentBannerUrl(bannerPreview);
+        }
+        if (logoPreview) {
+          localStorage.setItem('portal_custom_logo', logoPreview);
+          setCurrentLogoUrl(logoPreview);
+        }
         setBannerPreview(null);
         setLogoPreview(null);
         setCacheBuster(Date.now());
@@ -131,22 +139,26 @@ export const AdminBrandMediaTab: React.FC = () => {
                 <ImageIcon className="w-4 h-4 text-sky-600" />
                 <span>1. Banner Panorámico del Buscador</span>
               </h4>
-              <span className="text-[10px] text-stone-400 font-mono">100% responsivo</span>
+              <span className="text-[10px] text-sky-700 bg-sky-50 border border-sky-200 font-mono font-bold px-2 py-0.5 rounded">
+                1586 x 250 px
+              </span>
             </div>
 
             <p className="text-xs text-stone-600">
-              Ajustado automáticamente al ancho de la pantalla para que todo el texto y el delfín sean completamente legibles.
+              Formato panorámico oficial (1586x250 px). Ajustado al ancho de pantalla con alta definición para que todo el texto y el emblema del delfín sean 100% legibles.
             </p>
 
             {/* Current vs New Preview */}
             <div className="space-y-2">
               <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider block">
-                {bannerPreview ? 'Nueva imagen seleccionada (Previa):' : 'Banner actual activo:'}
+                {bannerPreview ? 'Nueva imagen seleccionada (Previa 1586x250):' : 'Banner actual activo en el portal:'}
               </span>
               <div className="w-full bg-[#07111e] rounded-xl overflow-hidden border border-stone-300 p-2 flex items-center justify-center min-h-[120px]">
                 <img
                   src={bannerPreview || `${currentBannerUrl}?v=${cacheBuster}`}
                   alt="Banner"
+                  width={1586}
+                  height={250}
                   className="w-full h-auto max-h-[140px] object-contain block rounded-lg shadow-xs"
                 />
               </div>
@@ -180,23 +192,36 @@ export const AdminBrandMediaTab: React.FC = () => {
                 <Sparkles className="w-4 h-4 text-amber-500" />
                 <span>2. Logo Oficial Original</span>
               </h4>
-              <span className="text-[10px] text-stone-400 font-mono">Barra de navegación</span>
+              <span className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 font-mono font-bold px-2 py-0.5 rounded">
+                Exacto: 300 x 100 px
+              </span>
             </div>
 
             <p className="text-xs text-stone-600">
-              Logo auténtico de Empresas en Carmen con el emblema circular del delfín y tipografía oficial.
+              Logo auténtico de Empresas en Carmen. Se ajusta exactamente al tamaño especificado (300 x 100 px) sin minimizarse ni maximizarse, tanto en la barra superior como en el pie de página.
             </p>
 
             {/* Current vs New Preview */}
             <div className="space-y-2">
               <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider block">
-                {logoPreview ? 'Nuevo logo seleccionado (Previa):' : 'Logo actual activo:'}
+                {logoPreview ? 'Nuevo logo seleccionado (Previa 300x100 px):' : 'Logo actual activo (300x100 px):'}
               </span>
-              <div className="w-full bg-stone-50 rounded-xl overflow-hidden border border-stone-300 p-4 flex items-center justify-center min-h-[120px]">
+              <div className="w-full bg-stone-50 rounded-xl overflow-hidden border border-stone-300 p-4 flex items-center justify-center min-h-[130px]">
                 <img
                   src={logoPreview || `${currentLogoUrl}?v=${cacheBuster}`}
-                  alt="Logo"
-                  className="h-14 sm:h-16 w-auto object-contain block drop-shadow-xs"
+                  alt="Logo Oficial"
+                  width={300}
+                  height={100}
+                  style={{
+                    width: '300px',
+                    height: '100px',
+                    minWidth: '300px',
+                    minHeight: '100px',
+                    maxWidth: '300px',
+                    maxHeight: '100px',
+                    objectFit: 'contain'
+                  }}
+                  className="w-[300px] h-[100px] object-contain block drop-shadow-xs"
                 />
               </div>
             </div>
@@ -216,7 +241,7 @@ export const AdminBrandMediaTab: React.FC = () => {
               className="w-full py-2.5 px-4 rounded-xl border border-amber-600/40 hover:border-amber-600 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs"
             >
               <Upload className="w-4 h-4 text-amber-700" />
-              <span>{logoPreview ? 'Cambiar archivo de Logo' : 'Seleccionar Logo Original'}</span>
+              <span>{logoPreview ? 'Cambiar archivo de Logo' : 'Seleccionar Logo Original (300x100)'}</span>
             </button>
           </div>
         </div>

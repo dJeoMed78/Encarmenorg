@@ -4051,7 +4051,7 @@ app.post('/api/admin/banner-and-logo', async (req: Request, res: Response) => {
 
     // Helper to decode base64
     const decodeB64 = (raw: string) => {
-      const clean = raw.replace(/^data:image\/\w+;base64,/, '');
+      const clean = raw.replace(/^data:[^;]+;base64,/, '');
       return Buffer.from(clean, 'base64');
     };
 
@@ -4059,6 +4059,7 @@ app.post('/api/admin/banner-and-logo', async (req: Request, res: Response) => {
       const bannerBuffer = decodeB64(bannerBase64);
       const paths = [
         path.resolve(__dirname, 'public/images/banner-empresas-en-carmen.png'),
+        path.resolve(__dirname, 'public/images/BANNER-NUEVO-EMPRESAS-EN-CARMEN.png'),
         path.resolve(__dirname, 'public/images/empresas.png'),
         path.resolve(__dirname, 'public/empresas.png'),
         path.resolve(__dirname, 'public/uploads/banner-oficial.png')
@@ -4071,6 +4072,7 @@ app.post('/api/admin/banner-and-logo', async (req: Request, res: Response) => {
       const distBanner = path.resolve(__dirname, 'dist/images/banner-empresas-en-carmen.png');
       if (fs.existsSync(path.resolve(__dirname, 'dist/images'))) {
         fs.writeFileSync(distBanner, bannerBuffer);
+        fs.writeFileSync(path.resolve(__dirname, 'dist/images/BANNER-NUEVO-EMPRESAS-EN-CARMEN.png'), bannerBuffer);
         fs.writeFileSync(path.resolve(__dirname, 'dist/images/empresas.png'), bannerBuffer);
         fs.writeFileSync(path.resolve(__dirname, 'dist/empresas.png'), bannerBuffer);
       }
@@ -4235,7 +4237,11 @@ app.use(express.static(path.resolve(__dirname, 'public'), {
   maxAge: oneDayMs,
   setHeaders: (res, filePath) => {
     if (/\.(jpg|jpeg|png|webp|svg|gif|ico|woff2?|ttf)$/i.test(filePath)) {
-      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+      if (/banner|logo/i.test(filePath)) {
+        res.setHeader('Cache-Control', 'public, max-age=60, must-revalidate');
+      } else {
+        res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+      }
     }
   }
 }));
@@ -4294,7 +4300,11 @@ if (!isProduction) {
     index: false,
     setHeaders: (res, filePath) => {
       if (/\.(js|css|woff2?|png|jpg|svg|webp)$/i.test(filePath)) {
-        res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+        if (/banner|logo/i.test(filePath)) {
+          res.setHeader('Cache-Control', 'public, max-age=60, must-revalidate');
+        } else {
+          res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+        }
       }
     }
   }));

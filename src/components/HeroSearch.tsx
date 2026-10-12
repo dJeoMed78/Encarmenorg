@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, X, MapPin, MessageSquare, Truck, Phone, SlidersHorizontal, RotateCcw, PlusCircle, ArrowDown, AlertCircle, Mic, MicOff, Volume2, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
+import { APP_VERSION } from '../constants/version';
 
 interface HeroSearchProps {
   query: string;
@@ -52,6 +53,23 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
   const [isSocialSectionCollapsed, setIsSocialSectionCollapsed] = useState(true);
   const [isComunidadesCollapsed, setIsComunidadesCollapsed] = useState(true);
   const recognitionRef = useRef<any>(null);
+
+  const [bannerVersion, setBannerVersion] = useState(APP_VERSION);
+  const [customBannerUrl, setCustomBannerUrl] = useState<string | null>(() => {
+    return typeof window !== 'undefined' ? localStorage.getItem('portal_custom_banner') : null;
+  });
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setBannerVersion(`${APP_VERSION}_${Date.now()}`);
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('portal_custom_banner');
+        if (saved) setCustomBannerUrl(saved);
+      }
+    };
+    window.addEventListener('brand-media-updated', handleUpdate);
+    return () => window.removeEventListener('brand-media-updated', handleUpdate);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -332,16 +350,20 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
                 title="¡Publicita tu negocio gratis en Empresas en Carmen!"
               >
                 <img
-                  src="/images/banner-empresas-en-carmen.png"
+                  src={customBannerUrl || `/images/banner-empresas-en-carmen.png?v=${bannerVersion}`}
                   alt="Directorio Empresarial - Empresas en Carmen - ¡Publicita tu negocio gratis!"
+                  width={1586}
+                  height={250}
                   className="w-full h-auto object-contain block group-hover:scale-[1.01] transition-transform duration-300"
                   loading="eager"
                   onError={(e) => {
                     const target = e.currentTarget;
                     if (target.src.includes('banner-empresas-en-carmen.png')) {
-                      target.src = '/images/empresas.png';
+                      target.src = `/images/BANNER-NUEVO-EMPRESAS-EN-CARMEN.png?v=${bannerVersion}`;
+                    } else if (target.src.includes('BANNER-NUEVO-EMPRESAS-EN-CARMEN.png')) {
+                      target.src = `/images/empresas.png?v=${bannerVersion}`;
                     } else if (target.src.includes('empresas.png')) {
-                      target.src = '/images/banner-empresas-en-carmen.svg';
+                      target.src = `/images/banner-empresas-en-carmen.svg?v=${bannerVersion}`;
                     }
                   }}
                 />

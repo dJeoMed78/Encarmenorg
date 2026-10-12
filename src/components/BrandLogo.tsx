@@ -9,7 +9,7 @@ interface BrandLogoProps {
 }
 
 export const BrandLogo: React.FC<BrandLogoProps> = ({
-  className = 'w-[240px] sm:w-[280px] md:w-[300px] h-auto max-h-[85px] sm:max-h-[100px]',
+  className = '',
   width = 300,
   height = 100
 }) => {
@@ -39,10 +39,13 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
       style={{
         width: typeof width === 'number' ? `${width}px` : width,
         height: typeof height === 'number' ? `${height}px` : height,
-        maxWidth: '100%',
+        minWidth: typeof width === 'number' ? `${width}px` : width,
+        minHeight: typeof height === 'number' ? `${height}px` : height,
+        maxWidth: typeof width === 'number' ? `${width}px` : width,
+        maxHeight: typeof height === 'number' ? `${height}px` : height,
         objectFit: 'contain'
       }}
-      className={`${className} object-contain select-none cursor-pointer`}
+      className={`shrink-0 select-none cursor-pointer object-contain ${className}`}
       loading="eager"
       onError={(e) => {
         const target = e.target as HTMLImageElement;
