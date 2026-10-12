@@ -631,13 +631,13 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4">
-              {filteredCandidates.map(candidate => {
+              {filteredCandidates.map((candidate, idx) => {
                 const isAccepted = candidate.status === 'accepted';
                 const isApprovingThis = approvingId === candidate.id;
 
                 return (
                   <div
-                    key={candidate.id}
+                    key={`${candidate.id || 'cand'}-${idx}`}
                     className={`p-4 sm:p-5 rounded-2xl border transition-all duration-200 ${
                       isAccepted
                         ? 'bg-emerald-950/20 border-emerald-500/40 shadow-sm'

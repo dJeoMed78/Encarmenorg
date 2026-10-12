@@ -1,0 +1,8 @@
+{
+  "name": "Directorio Empresas en Carmen",
+  "description": "Directorio empresarial interactivo de Ciudad del Carmen conectado a encarmen.org y empresasencarmen.com. Encuentra comercios, restaurantes, servicios y profesionales locales.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ],
+  "permissions": []
+}

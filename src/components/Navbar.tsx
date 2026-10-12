@@ -34,8 +34,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs">
       <div className="max-w-[1560px] mx-auto px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between min-h-[108px] sm:min-h-[114px] py-1.5 gap-2 sm:gap-4">
-          {/* Logo Oficial 300x100 y Acceso π Directo */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Logo Oficial 300x100 y Acceso π Discreto */}
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => setActiveTab('directory')}
               className="flex items-center text-left group cursor-pointer focus:outline-hidden shrink-0"
@@ -44,19 +44,20 @@ export const Navbar: React.FC<NavbarProps> = ({
               <BrandLogo />
             </button>
 
-            {/* Acceso π ubicado exactamente junto al logotipo (visible en iPad, tablets y todas las resoluciones) */}
+            {/* Acceso π discreto (no parece botón, símbolo sutil estilo The Net visible en iPad y todas las pantallas) */}
             <button
+              type="button"
               onClick={onOpenSyncModal}
               title="π"
               aria-label="Administración (π)"
-              className="flex items-center justify-center w-8 h-8 rounded-xl border border-stone-200/90 bg-stone-50/90 hover:bg-amber-50 hover:border-amber-300 text-stone-600 hover:text-amber-700 transition-all cursor-pointer shadow-2xs shrink-0 select-none"
+              className="text-stone-400/70 hover:text-stone-700 active:text-amber-600 font-serif text-sm cursor-pointer select-none transition-colors p-1 leading-none bg-transparent border-0 outline-hidden focus:outline-hidden shrink-0"
             >
-              <span className="font-serif font-bold text-base leading-none">π</span>
+              π
             </button>
           </div>
 
-          {/* Desktop Navigation - responsive para no desbordar en iPad */}
-          <nav className="hidden xl:flex items-center p-1 bg-stone-100 rounded-xl border border-stone-200/60 text-xs font-medium shrink-0">
+          {/* Desktop Navigation - Visible en todas las pantallas medianas y grandes */}
+          <nav className="hidden md:flex items-center p-1 bg-stone-100 rounded-xl border border-stone-200/60 text-xs font-medium shrink-0">
             <button
               onClick={() => setActiveTab('directory')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
@@ -135,8 +136,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </nav>
 
-          {/* Right Action Icons */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Right Action Icons - Solo en pantallas muy amplias para no competir por espacio */}
+          <div className="hidden xl:flex items-center gap-1.5 sm:gap-2 shrink-0">
             {onOpenEmergencyGuide && (
               <button
                 type="button"
@@ -149,15 +150,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="sm:hidden text-[11px]">24/7</span>
               </button>
             )}
-
-            <button
-              onClick={onOpenSyncModal}
-              title="π"
-              aria-label="Administración (π)"
-              className="flex items-center justify-center w-8 h-8 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-600 hover:text-stone-900 transition-all cursor-pointer shadow-2xs"
-            >
-              <span className="font-serif font-bold text-base leading-none">π</span>
-            </button>
 
             <a
               href="https://encarmen.org"
@@ -253,15 +245,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="text-[11px] sm:text-xs">Subir</span>
           </button>
 
-          {/* Acceso π en barra inferior móvil */}
+          {/* Acceso π discreto en barra móvil */}
           <button
+            type="button"
             onClick={onOpenSyncModal}
             title="π"
             aria-label="Administración (π)"
-            className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 py-1.5 px-2 rounded-lg transition-colors min-h-[44px] text-stone-500 hover:text-stone-900 active:bg-stone-100 cursor-pointer shrink-0"
+            className="flex items-center justify-center py-1.5 px-2 rounded-lg transition-colors min-h-[44px] text-stone-400 hover:text-stone-700 active:text-amber-600 cursor-pointer shrink-0 bg-transparent border-0 outline-hidden select-none"
           >
-            <span className="font-serif font-bold text-base leading-none">π</span>
-            <span className="text-[10px] sm:text-xs">π</span>
+            <span className="font-serif text-sm leading-none">π</span>
           </button>
         </div>
       </div>

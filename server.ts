@@ -1114,13 +1114,17 @@ app.get('/api/businesses', (req: Request, res: Response) => {
 });
 
 // Single Business
-app.get('/api/businesses/:id', (req: Request, res: Response) => {
+app.get('/api/businesses/:id', (req: Request, res: Response, next: NextFunction) => {
+  const idOrSlug = req.params.id;
+  if (idOrSlug === 'auto-search' || idOrSlug === 'parse-whatsapp-group' || idOrSlug === 'approve-candidate' || idOrSlug === 'approve-multiple-candidates') {
+    return next();
+  }
+
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.setHeader('Surrogate-Control', 'no-store');
 
-  const idOrSlug = req.params.id;
   const cleanQuery = idOrSlug.toLowerCase().trim();
   const biz = businessesCache.find(b =>
     String(b.id) === idOrSlug ||
@@ -4712,7 +4716,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-04',
+    id: 'biz-cand-27',
     name: 'Taller Mecánico y Frenos El Carmen',
     category: 'Automotriz y Motocicletas',
     categories: ['Automotriz y Motocicletas', 'Talleres Mecánicos y Eléctricos (Autos y Motos)'],
@@ -4732,7 +4736,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-05',
+    id: 'biz-cand-28',
     name: 'Boutique Carmelita Chic & Moda',
     category: 'Boutiques, Ropa y Calzado',
     categories: ['Boutiques, Ropa y Calzado', 'Cuidado y Belleza Personal'],
@@ -4752,7 +4756,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-06',
+    id: 'biz-cand-29',
     name: 'Mandaditos Exprés La Isla 24/7',
     category: 'Mandaditos y Entregas a Domicilio',
     categories: ['Mandaditos y Entregas a Domicilio', 'Servicios Logísticos y Transporte'],
@@ -4772,7 +4776,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-07',
+    id: 'biz-cand-30',
     name: 'Barbería Clásica & Spa El Campechano',
     category: 'Cuidado y Belleza Personal',
     categories: ['Cuidado y Belleza Personal', 'Masajes, Spa y Tratamientos'],
@@ -4792,7 +4796,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-08',
+    id: 'biz-cand-31',
     name: 'Pastelería & Repostería Dulce Encanto',
     category: 'Cafeterías, Jugos y Postres',
     categories: ['Cafeterías, Jugos y Postres', 'Alimentos y Bebidas'],
@@ -4812,7 +4816,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-09',
+    id: 'biz-cand-32',
     name: 'Ferretería y Plomería El Tornillo Fiel',
     category: 'Ferreterías y Materiales de Construcción',
     categories: ['Ferreterías y Materiales de Construcción', 'Plomería y Servicios Eléctricos', 'Servicios del Hogar y Oficios'],
@@ -4832,7 +4836,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-10',
+    id: 'biz-cand-33',
     name: 'Clínica Dental Sonrisas del Golfo',
     category: 'Salud, Bienestar y Educación',
     categories: ['Salud, Bienestar y Educación'],
@@ -4852,7 +4856,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-11',
+    id: 'biz-cand-34',
     name: 'Veterinaria & Estética Canina Pet Carmen',
     category: 'Salud, Bienestar y Educación',
     categories: ['Salud, Bienestar y Educación', 'Servicios del Hogar y Oficios'],
@@ -4872,7 +4876,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-12',
+    id: 'biz-cand-35',
     name: 'Pizzería Artesanal Costa Azul',
     category: 'Alimentos y Bebidas',
     categories: ['Alimentos y Bebidas', 'Antojitos y Comida Rápida', 'Restaurantes y Cocinas Económicas'],
@@ -4892,7 +4896,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-13',
+    id: 'biz-cand-36',
     name: 'Imprenta & Publicidad Diseños Carmen',
     category: 'Imprentas, Publicidad y Rotulación',
     categories: ['Imprentas, Publicidad y Rotulación', 'Tecnología, Imprentas y Comercio al Menudeo'],
@@ -4912,7 +4916,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-14',
+    id: 'biz-cand-37',
     name: 'Lavandería & Tintorería Burbujas de la Isla',
     category: 'Servicios del Hogar y Oficios',
     categories: ['Servicios del Hogar y Oficios'],
@@ -4932,7 +4936,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-15',
+    id: 'biz-cand-38',
     name: 'Cerrajería Rápida y Duplicados El Candado',
     category: 'Servicios del Hogar y Oficios',
     categories: ['Servicios del Hogar y Oficios', 'Automotriz y Motocicletas'],
@@ -4952,7 +4956,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-16',
+    id: 'biz-cand-39',
     name: 'Pollería y Asador El Carbón Carmelita',
     category: 'Alimentos y Bebidas',
     categories: ['Alimentos y Bebidas', 'Restaurantes y Cocinas Económicas'],
@@ -4972,7 +4976,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-17',
+    id: 'biz-cand-40',
     name: 'Autolavado y Estética Laguna Car Wash',
     category: 'Automotriz y Motocicletas',
     categories: ['Automotriz y Motocicletas', 'Servicios del Hogar y Oficios'],
@@ -4992,7 +4996,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-18',
+    id: 'biz-cand-41',
     name: 'Óptica y Especialidades Oculares del Carmen',
     category: 'Salud, Bienestar y Educación',
     categories: ['Salud, Bienestar y Educación'],
@@ -5012,7 +5016,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-19',
+    id: 'biz-cand-42',
     name: 'Gimnasio & Centro de Acondicionamiento Isla Fitness',
     category: 'Salud, Bienestar y Educación',
     categories: ['Salud, Bienestar y Educación', 'Cuidado y Belleza Personal'],
@@ -5032,7 +5036,7 @@ const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [
     status: 'pending'
   },
   {
-    id: 'biz-cand-20',
+    id: 'biz-cand-43',
     name: 'Papelería, Copias y Ciber Papyrus',
     category: 'Tecnología, Imprentas y Comercio al Menudeo',
     categories: ['Tecnología, Imprentas y Comercio al Menudeo', 'Servicios del Hogar y Oficios'],
