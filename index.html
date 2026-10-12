@@ -10,52 +10,76 @@
     <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg" />
     <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
     <meta name="theme-color" content="#d97706" />
-    <meta name="referrer" content="no-referrer" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Empresas Carmen" />
     <title>Directorio Empresas en Carmen | Ciudad del Carmen, Campeche</title>
-    <meta name="description" content="Directorio empresarial interactivo de Ciudad del Carmen conectado a empresasencarmen.com. Encuentra comercios, restaurantes, servicios y profesionales locales." />
+    <meta name="description" content="Directorio empresarial interactivo de Ciudad del Carmen conectado a encarmen.org y empresasencarmen.com. Encuentra comercios, restaurantes, servicios y profesionales locales." />
+    <link rel="canonical" href="https://encarmen.org/" />
     <meta property="og:title" content="Directorio Empresas en Carmen | Ciudad del Carmen, Campeche" />
-    <meta property="og:description" content="Directorio empresarial interactivo de Ciudad del Carmen conectado a empresasencarmen.com. Encuentra comercios, restaurantes, servicios y profesionales locales." />
+    <meta property="og:description" content="Directorio empresarial interactivo de Ciudad del Carmen conectado a encarmen.org y empresasencarmen.com. Encuentra comercios, restaurantes, servicios y profesionales locales." />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://encarmen.org/" />
+    <meta property="og:site_name" content="Empresas en Carmen" />
+    <meta property="og:image" content="https://encarmen.org/icons/icon-512.svg" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Directorio Empresas en Carmen | Ciudad del Carmen, Campeche" />
+    <meta name="twitter:description" content="Directorio empresarial y comercial interactivo de Ciudad del Carmen, Campeche." />
+    <meta name="twitter:image" content="https://encarmen.org/icons/icon-512.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
     
-    <!-- Schema.org Structured Data (JSON-LD) para Google Search Console, Fichas de Comerciantes y Fragmentos de Productos -->
+    <!-- Schema.org Structured Data (JSON-LD) para Google Search Console y Rich Snippets -->
     <script type="application/ld+json" id="global-schema-ld-json">
     {
       "@context": "https://schema.org",
       "@graph": [
         {
           "@type": "WebSite",
-          "@id": "https://empresasencarmen.com/#website",
-          "url": "https://empresasencarmen.com",
+          "@id": "https://encarmen.org/#website",
+          "url": "https://encarmen.org",
           "name": "Directorio Empresas en Carmen",
           "description": "Directorio empresarial y comercial de Ciudad del Carmen, Campeche.",
           "inLanguage": "es-MX",
           "potentialAction": {
             "@type": "SearchAction",
-            "target": "https://empresasencarmen.com/?buscar={search_term_string}",
+            "target": "https://encarmen.org/?buscar={search_term_string}",
             "query-input": "required name=search_term_string"
           }
         },
         {
+          "@type": "WebApplication",
+          "@id": "https://encarmen.org/#app",
+          "name": "Directorio Empresas en Carmen PWA",
+          "url": "https://encarmen.org",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "All",
+          "description": "Directorio comercial interactivo y catálogo de empresas con servicio a domicilio en Ciudad del Carmen.",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "MXN"
+          }
+        },
+        {
           "@type": "LocalBusiness",
-          "@id": "https://empresasencarmen.com/#organization",
+          "@id": "https://encarmen.org/#organization",
           "name": "Empresas en Carmen",
           "alternateName": ["En Carmen", "Directorio En Carmen", "encarmen.org", "empresasencarmen.com"],
-          "url": "https://empresasencarmen.com",
+          "url": "https://encarmen.org",
           "sameAs": [
             "https://encarmen.org",
             "https://www.encarmen.org",
             "https://empresasencarmen.com",
-            "https://www.empresasencarmen.com"
+            "https://www.empresasencarmen.com",
+            "https://facebook.com/empresasencarmen",
+            "https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr"
           ],
-          "logo": "https://empresasencarmen.com/icons/icon-192.svg",
-          "image": "https://empresasencarmen.com/icons/icon-512.svg",
+          "logo": "https://encarmen.org/icons/icon-192.svg",
+          "image": "https://encarmen.org/icons/icon-512.svg",
           "description": "Plataforma y directorio comercial oficial de negocios, talleres, servicios y restaurantes de Ciudad del Carmen, Campeche.",
           "telephone": "+529383895009",
           "priceRange": "$$",
@@ -84,101 +108,6 @@
             "worstRating": "1",
             "ratingCount": "3920",
             "reviewCount": "3920"
-          },
-          "review": [
-            {
-              "@type": "Review",
-              "reviewRating": {
-                "@type": "Rating",
-                "ratingValue": "5",
-                "bestRating": "5"
-              },
-              "author": {
-                "@type": "Person",
-                "name": "Ciudadanía de Carmen"
-              },
-              "datePublished": "2026-01-15",
-              "reviewBody": "La plataforma más completa para contactar comercios, pedir servicio a domicilio y encontrar técnicos locales en Ciudad del Carmen."
-            }
-          ]
-        },
-        {
-          "@type": "Product",
-          "@id": "https://empresasencarmen.com/#directorio-membership",
-          "name": "Ficha y Registro en Directorio Empresas en Carmen",
-          "description": "Registro, visualización y catálogo interactivo para empresas y comercios de Ciudad del Carmen.",
-          "image": "https://empresasencarmen.com/icons/icon-512.svg",
-          "brand": {
-            "@type": "Brand",
-            "name": "Empresas en Carmen"
-          },
-          "aggregateRating": {
-            "@type": "AggregateRating",
-            "ratingValue": "4.9",
-            "bestRating": "5",
-            "worstRating": "1",
-            "ratingCount": "3920",
-            "reviewCount": "3920"
-          },
-          "review": [
-            {
-              "@type": "Review",
-              "reviewRating": {
-                "@type": "Rating",
-                "ratingValue": "5",
-                "bestRating": "5"
-              },
-              "author": {
-                "@type": "Person",
-                "name": "Comercio Afiliado de Carmen"
-              },
-              "datePublished": "2026-02-01",
-              "reviewBody": "Excelente servicio de posicionamiento comercial para empresas locales."
-            }
-          ],
-          "offers": {
-            "@type": "Offer",
-            "url": "https://empresasencarmen.com",
-            "priceCurrency": "MXN",
-            "price": "0.00",
-            "priceValidUntil": "2027-12-31",
-            "validFrom": "2026-01-01T00:00:00Z",
-            "availability": "https://schema.org/InStock",
-            "itemCondition": "https://schema.org/NewCondition",
-            "hasMerchantReturnPolicy": {
-              "@type": "MerchantReturnPolicy",
-              "applicableCountry": "MX",
-              "returnPolicyCategory": "https://schema.org/MerchantReturnNotPermitted",
-              "merchantReturnDays": 0
-            },
-            "shippingDetails": {
-              "@type": "OfferShippingDetails",
-              "shippingRate": {
-                "@type": "MonetaryAmount",
-                "value": "0.00",
-                "currency": "MXN"
-              },
-              "shippingDestination": {
-                "@type": "DefinedRegion",
-                "addressCountry": "MX",
-                "addressRegion": "CAM"
-              },
-              "deliveryTime": {
-                "@type": "ShippingDeliveryTime",
-                "handlingTime": {
-                  "@type": "QuantitativeValue",
-                  "minValue": 0,
-                  "maxValue": 0,
-                  "unitCode": "DAY"
-                },
-                "transitTime": {
-                  "@type": "QuantitativeValue",
-                  "minValue": 0,
-                  "maxValue": 0,
-                  "unitCode": "DAY"
-                }
-              }
-            }
           }
         }
       ]

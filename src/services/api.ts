@@ -905,13 +905,14 @@ export async function ownerUpdateBusiness(
 
 export async function fetchAutoBusinessCandidates(
   query?: string,
-  category?: string
+  category?: string,
+  source?: string
 ): Promise<{ success: boolean; candidates: AutoBusinessCandidate[]; totalFound: number; message?: string }> {
   try {
     const res = await fetch(`${API_BASE}/businesses/auto-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: query || '', category: category || 'all' })
+      body: JSON.stringify({ query: query || '', category: category || 'all', source: source || 'all' })
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: 'Error del servidor' }));
@@ -924,6 +925,32 @@ export async function fetchAutoBusinessCandidates(
       candidates: [],
       totalFound: 0,
       message: err.message || 'Error de conexión con el radar de empresas'
+    };
+  }
+}
+
+export async function parseWhatsAppGroupBusinesses(
+  rawText: string,
+  groupName?: string,
+  sourceUrl?: string
+): Promise<{ success: boolean; count: number; candidates: AutoBusinessCandidate[]; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/businesses/parse-whatsapp-group`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rawText, groupName, sourceUrl })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Error al procesar texto de WhatsApp');
+    }
+    return data;
+  } catch (err: any) {
+    return {
+      success: false,
+      count: 0,
+      candidates: [],
+      message: err.message || 'Error de comunicación al extraer mensajes de WhatsApp'
     };
   }
 }

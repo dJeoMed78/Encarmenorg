@@ -34,7 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs">
       <div className="max-w-[1560px] mx-auto px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between min-h-[108px] sm:min-h-[114px] py-1.5 gap-2 sm:gap-4">
-          {/* Logo Oficial 300x100 */}
+          {/* Logo Oficial 300x100 y Acceso π Directo */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
               onClick={() => setActiveTab('directory')}
@@ -43,10 +43,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <BrandLogo />
             </button>
+
+            {/* Acceso π ubicado exactamente junto al logotipo (visible en iPad, tablets y todas las resoluciones) */}
+            <button
+              onClick={onOpenSyncModal}
+              title="π"
+              aria-label="Administración (π)"
+              className="flex items-center justify-center w-8 h-8 rounded-xl border border-stone-200/90 bg-stone-50/90 hover:bg-amber-50 hover:border-amber-300 text-stone-600 hover:text-amber-700 transition-all cursor-pointer shadow-2xs shrink-0 select-none"
+            >
+              <span className="font-serif font-bold text-base leading-none">π</span>
+            </button>
           </div>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center p-1 bg-stone-100 rounded-xl border border-stone-200/60 text-xs font-medium">
+          {/* Desktop Navigation - responsive para no desbordar en iPad */}
+          <nav className="hidden xl:flex items-center p-1 bg-stone-100 rounded-xl border border-stone-200/60 text-xs font-medium shrink-0">
             <button
               onClick={() => setActiveTab('directory')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
@@ -241,6 +251,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <PlusCircle className="w-4 h-4 text-amber-600" />
             <span className="text-[11px] sm:text-xs">Subir</span>
+          </button>
+
+          {/* Acceso π en barra inferior móvil */}
+          <button
+            onClick={onOpenSyncModal}
+            title="π"
+            aria-label="Administración (π)"
+            className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 py-1.5 px-2 rounded-lg transition-colors min-h-[44px] text-stone-500 hover:text-stone-900 active:bg-stone-100 cursor-pointer shrink-0"
+          >
+            <span className="font-serif font-bold text-base leading-none">π</span>
+            <span className="text-[10px] sm:text-xs">π</span>
           </button>
         </div>
       </div>

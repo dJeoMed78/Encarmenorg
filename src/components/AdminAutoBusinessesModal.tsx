@@ -22,13 +22,16 @@ import {
   Share2,
   ChevronRight,
   Layers,
-  Sparkles
+  Sparkles,
+  UploadCloud,
+  FileText
 } from 'lucide-react';
 import { AutoBusinessCandidate, Business } from '../types';
 import {
   fetchAutoBusinessCandidates,
   approveAutoBusinessCandidate,
-  approveMultipleAutoBusinessCandidates
+  approveMultipleAutoBusinessCandidates,
+  parseWhatsAppGroupBusinesses
 } from '../services/api';
 import { formatPhoneNumber } from '../utils/phone';
 
@@ -47,6 +50,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedSource, setSelectedSource] = useState<'all' | 'official_group' | 'official_page' | 'whatsapp' | 'community'>('all');
   const [notice, setNotice] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Candidate being edited in "Modificar" sub-modal
@@ -60,6 +64,12 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [isApprovingAll, setIsApprovingAll] = useState(false);
 
+  // WhatsApp Group Chat Parser state
+  const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
+  const [whatsAppRawText, setWhatsAppRawText] = useState('');
+  const [whatsAppGroupName, setWhatsAppGroupName] = useState('Empresas en Carmen - WhatsApp Oficial');
+  const [isParsingWhatsApp, setIsParsingWhatsApp] = useState(false);
+
   // Load candidates on modal open
   useEffect(() => {
     if (isOpen) {
@@ -71,11 +81,11 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
     setIsLoading(true);
     setNotice(null);
     try {
-      const res = await fetchAutoBusinessCandidates();
+      const res = await fetchAutoBusinessCandidates('', 'all', selectedSource);
       if (res.success && Array.isArray(res.candidates)) {
         setCandidates(res.candidates);
         setNotice({
-          text: `Se detectaron ${res.candidates.length} negocios locales en Ciudad del Carmen listos para revisión y autorización.`,
+          text: `Se detectaron ${res.candidates.length} negocios locales verificados en Ciudad del Carmen listos para revisión y autorización.`,
           type: 'info'
         });
       } else {
@@ -91,6 +101,44 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Procesar e importar texto exportado de grupos de WhatsApp
+  const handleParseWhatsApp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!whatsAppRawText.trim()) {
+      alert('Por favor pega el texto exportado del chat de WhatsApp.');
+      return;
+    }
+
+    setIsParsingWhatsApp(true);
+    try {
+      const res = await parseWhatsAppGroupBusinesses(whatsAppRawText, whatsAppGroupName);
+      if (res.success && Array.isArray(res.candidates) && res.candidates.length > 0) {
+        setCandidates(prev => {
+          const combined = [...res.candidates, ...prev];
+          // Eliminar duplicados por id o teléfono
+          const seen = new Set<string>();
+          return combined.filter(c => {
+            if (seen.has(c.phone)) return false;
+            seen.add(c.phone);
+            return true;
+          });
+        });
+        setNotice({
+          text: `¡Éxito! Se extrajeron y agregaron ${res.count} prospectos desde "${whatsAppGroupName}".`,
+          type: 'success'
+        });
+        setIsWhatsAppModalOpen(false);
+        setWhatsAppRawText('');
+      } else {
+        alert(res.message || 'No se detectaron negocios con teléfono de 10 dígitos.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error al procesar el texto de WhatsApp.');
+    } finally {
+      setIsParsingWhatsApp(false);
     }
   };
 
@@ -247,13 +295,41 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
     return Array.from(set).sort();
   }, [candidates]);
 
-  // Filtered candidate list
+  // Source counts
+  const officialGroupCount = useMemo(
+    () => candidates.filter(c => c.sourceUrl?.includes('18WwRY3pKB') || c.source?.toLowerCase().includes('grupo oficial')).length,
+    [candidates]
+  );
+  const officialPageCount = useMemo(
+    () => candidates.filter(c => c.sourceUrl?.includes('facebook.com/empresasencarmen') || c.source?.toLowerCase().includes('fanpage')).length,
+    [candidates]
+  );
+  const whatsAppCount = useMemo(
+    () => candidates.filter(c => c.source?.toLowerCase().includes('whatsapp')).length,
+    [candidates]
+  );
+  const communityCount = useMemo(
+    () => candidates.filter(c => !c.isOfficialSource && !c.source?.toLowerCase().includes('whatsapp')).length,
+    [candidates]
+  );
+
+  // Filtered candidate list with source filtering and official priority
   const filteredCandidates = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return candidates.filter(c => {
+    let list = candidates.filter(c => {
       if (selectedCategory !== 'all' && c.category !== selectedCategory) {
         return false;
       }
+      if (selectedSource === 'official_group') {
+        if (!c.sourceUrl?.includes('18WwRY3pKB') && !c.source?.toLowerCase().includes('grupo oficial')) return false;
+      } else if (selectedSource === 'official_page') {
+        if (!c.sourceUrl?.includes('facebook.com/empresasencarmen') && !c.source?.toLowerCase().includes('fanpage')) return false;
+      } else if (selectedSource === 'whatsapp') {
+        if (!c.source?.toLowerCase().includes('whatsapp')) return false;
+      } else if (selectedSource === 'community') {
+        if (c.isOfficialSource || c.source?.toLowerCase().includes('whatsapp')) return false;
+      }
+
       if (!q) return true;
       return (
         c.name.toLowerCase().includes(q) ||
@@ -264,7 +340,16 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
         c.phone.includes(q)
       );
     });
-  }, [candidates, searchQuery, selectedCategory]);
+
+    // Prioridad absoluta: Páginas y grupos oficiales primero
+    list.sort((a, b) => {
+      if (a.isOfficialSource && !b.isOfficialSource) return -1;
+      if (!a.isOfficialSource && b.isOfficialSource) return 1;
+      return 0;
+    });
+
+    return list;
+  }, [candidates, searchQuery, selectedCategory, selectedSource]);
 
   const acceptedCount = candidates.filter(c => c.status === 'accepted').length;
   const pendingCount = candidates.length - acceptedCount;
@@ -290,13 +375,24 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                   </span>
                 </h2>
                 <p className="text-xs text-stone-400">
-                  Rastreo autónomo en grupos públicos de Facebook, Google y directorios de Ciudad del Carmen.
+                  Rastreo autónomo con prioridad en las páginas oficiales de Empresas en Carmen, Google y WhatsApp.
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {/* Botón Importar WhatsApp */}
+            <button
+              type="button"
+              onClick={() => setIsWhatsAppModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-600/60 text-emerald-300 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Importar y extraer negocios de grupos de WhatsApp donde eres administrador"
+            >
+              <MessageSquare className="w-4 h-4 text-emerald-400" />
+              <span>Importar de WhatsApp</span>
+            </button>
+
             <button
               type="button"
               onClick={loadCandidates}
@@ -332,6 +428,37 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
           </div>
         </div>
 
+        {/* BARRA DE FUENTES OFICIALES Y ENLACES DIRECTOS */}
+        <div className="px-4 py-2.5 bg-stone-950/90 border-b border-stone-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-stone-400 font-medium">Fuentes Prioritarias:</span>
+            <a
+              href="https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-950/60 hover:bg-sky-900 border border-sky-800/80 text-sky-300 font-bold hover:underline"
+              title="Abrir Grupo Oficial de Facebook Empresas en Carmen"
+            >
+              <ExternalLink className="w-3 h-3" />
+              <span>👑 Grupo Oficial Facebook</span>
+            </a>
+            <a
+              href="https://facebook.com/empresasencarmen"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-950/60 hover:bg-amber-900 border border-amber-800/80 text-amber-300 font-bold hover:underline"
+              title="Abrir FanPage Oficial de Facebook @empresasencarmen"
+            >
+              <ExternalLink className="w-3 h-3" />
+              <span>👑 FanPage Oficial (@empresasencarmen)</span>
+            </a>
+          </div>
+
+          <div className="text-[11px] text-stone-400">
+            <span>Se detectaron <strong className="text-white">{candidates.length}</strong> negocios verificados</span>
+          </div>
+        </div>
+
         {/* NOTIFICATION BANNER */}
         {notice && (
           <div
@@ -363,7 +490,66 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
           </div>
         )}
 
-        {/* CONTROLS & FILTER BAR */}
+        {/* FILTROS POR FUENTE (TABS) */}
+        <div className="px-4 py-2 bg-stone-900/60 border-b border-stone-800 flex flex-wrap items-center gap-1.5 text-xs">
+          <button
+            type="button"
+            onClick={() => setSelectedSource('all')}
+            className={`px-3 py-1 rounded-lg font-bold transition-all ${
+              selectedSource === 'all'
+                ? 'bg-sky-600 text-white shadow-xs'
+                : 'bg-stone-800/80 hover:bg-stone-800 text-stone-300'
+            }`}
+          >
+            Todas las fuentes ({candidates.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedSource('official_group')}
+            className={`px-3 py-1 rounded-lg font-bold transition-all ${
+              selectedSource === 'official_group'
+                ? 'bg-sky-600 text-white shadow-xs'
+                : 'bg-stone-800/80 hover:bg-stone-800 text-sky-300'
+            }`}
+          >
+            👑 Grupo Oficial FB ({officialGroupCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedSource('official_page')}
+            className={`px-3 py-1 rounded-lg font-bold transition-all ${
+              selectedSource === 'official_page'
+                ? 'bg-sky-600 text-white shadow-xs'
+                : 'bg-stone-800/80 hover:bg-stone-800 text-amber-300'
+            }`}
+          >
+            👑 FanPage Oficial ({officialPageCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedSource('whatsapp')}
+            className={`px-3 py-1 rounded-lg font-bold transition-all ${
+              selectedSource === 'whatsapp'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-stone-800/80 hover:bg-stone-800 text-emerald-300'
+            }`}
+          >
+            📲 WhatsApp ({whatsAppCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedSource('community')}
+            className={`px-3 py-1 rounded-lg font-bold transition-all ${
+              selectedSource === 'community'
+                ? 'bg-stone-700 text-white shadow-xs'
+                : 'bg-stone-800/80 hover:bg-stone-800 text-stone-400'
+            }`}
+          >
+            📍 Google Maps & Local ({communityCount})
+          </button>
+        </div>
+
+        {/* CONTROLS & SEARCH BAR */}
         <div className="p-3 sm:p-4 bg-stone-900/90 border-b border-stone-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -371,7 +557,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Filtrar por nombre, giro, teléfono, colonia o servicio..."
+              placeholder="Buscar por nombre, giro, teléfono, colonia o servicio..."
               className="w-full pl-9 pr-8 py-2 rounded-xl bg-stone-950 border border-stone-800 text-xs sm:text-sm text-stone-200 placeholder:text-stone-500 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
             />
             {searchQuery && (
@@ -488,6 +674,13 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                             <h3 className="text-base sm:text-lg font-black text-white leading-tight">
                               {candidate.name}
                             </h3>
+
+                            {/* Badge Prioritario: Fuente Oficial */}
+                            {candidate.isOfficialSource && (
+                              <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 via-sky-500/20 to-amber-500/20 border border-amber-400/70 text-amber-300 text-[11px] font-black flex items-center gap-1 shadow-xs animate-pulse">
+                                <Sparkles className="w-3.5 h-3.5 text-amber-400" /> 👑 Fuente Oficial Empresas en Carmen
+                              </span>
+                            )}
 
                             {/* Category badge */}
                             <span className="px-2.5 py-0.5 rounded-full bg-sky-500/10 border border-sky-500/30 text-sky-300 text-[11px] font-bold">
@@ -962,6 +1155,112 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                 Entendido
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          SUB-MODAL: IMPORTAR DESDE GRUPOS DE WHATSAPP (ADMINISTRADOR)
+          ========================================================================= */}
+      {isWhatsAppModalOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="bg-stone-900 border border-stone-700 rounded-3xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden text-stone-100">
+            
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-stone-900 via-emerald-950/60 to-stone-900 border-b border-stone-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white flex items-center gap-2">
+                    Importar desde Grupos de WhatsApp
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">
+                      Extracción Sin IA
+                    </span>
+                  </h3>
+                  <p className="text-xs text-stone-400">
+                    Como administrador, puedes importar automáticamente todas las publicaciones y teléfonos de tus grupos.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWhatsAppModalOpen(false)}
+                className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-stone-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleParseWhatsApp} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+              {/* Instrucciones sencillas */}
+              <div className="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-800/60 text-xs text-stone-300 space-y-2">
+                <h4 className="font-bold text-emerald-300 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4" /> ¿Cómo darle acceso y extraer las empresas de tu grupo?
+                </h4>
+                <ol className="list-decimal list-inside space-y-1 text-stone-300 leading-relaxed">
+                  <li>Abre WhatsApp en tu teléfono y entra al grupo donde eres administrador.</li>
+                  <li>Toca el nombre del grupo arriba o los 3 puntos y ve a <strong>"Más" &gt; "Exportar chat"</strong>.</li>
+                  <li>Elige la opción <strong>"Sin archivos"</strong> para generar el archivo de texto plano.</li>
+                  <li>Copia todo el contenido del chat o pégalo directamente en el recuadro de abajo.</li>
+                  <li>El sistema analizará autónomamente cada mensaje, extraerá los números de teléfono (+52 938...), detectará el giro y los preparará para tu revisión.</li>
+                </ol>
+              </div>
+
+              {/* Nombre del Grupo */}
+              <div>
+                <label className="block text-xs font-bold text-stone-300 mb-1">
+                  Nombre del Grupo de WhatsApp *
+                </label>
+                <input
+                  type="text"
+                  value={whatsAppGroupName}
+                  onChange={e => setWhatsAppGroupName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-stone-950 border border-stone-700 text-sm text-white focus:border-emerald-500 outline-none"
+                  placeholder="Ej: Empresas y Emprendedores en Carmen (Grupo 1)"
+                  required
+                />
+              </div>
+
+              {/* Contenido del Chat */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-stone-300">
+                    Texto del Chat Exportado *
+                  </label>
+                  <span className="text-[11px] text-stone-500 font-mono">
+                    {whatsAppRawText.length > 0 ? `${whatsAppRawText.length} caracteres` : 'Pega el texto aquí'}
+                  </span>
+                </div>
+                <textarea
+                  rows={8}
+                  value={whatsAppRawText}
+                  onChange={e => setWhatsAppRawText(e.target.value)}
+                  className="w-full p-3.5 rounded-xl bg-stone-950 border border-stone-700 text-xs text-stone-200 font-mono focus:border-emerald-500 outline-none resize-none leading-relaxed"
+                  placeholder="[10/10/26, 10:15:30 AM] Juan Pérez: Vendo tacos al pastor y empanadas, pedidos al 9381234567 con servicio a domicilio en toda la isla...&#10;[10/10/26, 10:20:12 AM] Climas Carmen: Mantenimiento e instalación de minisplits 9381458920..."
+                  required
+                />
+              </div>
+
+              <div className="p-4 bg-stone-950 border-t border-stone-800 flex items-center justify-end gap-2.5 -mx-4 -mb-4 sm:-mx-6 sm:-mb-6 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsWhatsAppModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isParsingWhatsApp || !whatsAppRawText.trim()}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  <span>{isParsingWhatsApp ? 'Procesando Chat...' : 'Extraer Negocios Automáticamente'}</span>
+                </button>
+              </div>
+            </form>
+
           </div>
         </div>
       )}

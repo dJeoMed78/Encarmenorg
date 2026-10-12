@@ -1,5 +1,7 @@
 User-agent: *
 Allow: /
 Disallow: /api/
+Disallow: /admin/
 
+Sitemap: https://encarmen.org/sitemap.xml
 Sitemap: https://empresasencarmen.com/sitemap.xml

@@ -288,6 +288,8 @@ export interface AutoBusinessCandidate {
   image: string;
   source: string;
   sourceUrl: string;
+  isOfficialSource?: boolean;
+  priority?: boolean;
   alreadyRegistered?: boolean;
   matchedExistingName?: string;
   status?: 'pending' | 'accepted' | 'rejected' | 'modified';
