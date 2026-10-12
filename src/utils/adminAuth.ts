@@ -13,13 +13,13 @@ export const ADMIN_SALT = 'carmen_admin_secure_salt_2026_';
 
 export const DEFAULT_ADMIN_ACCOUNTS: AdminAccountInfo[] = [
   {
-    username: 'Yuss',
+    username: 'Y',
     role: 'Administrador',
     avatarColor: 'from-sky-500 to-indigo-600',
     initial: 'Y'
   },
   {
-    username: 'Jeo',
+    username: 'J',
     role: 'Administrador',
     avatarColor: 'from-amber-500 to-rose-600',
     initial: 'J'
@@ -28,6 +28,8 @@ export const DEFAULT_ADMIN_ACCOUNTS: AdminAccountInfo[] = [
 
 // Fallback password hashes (SHA-256 with ADMIN_SALT)
 export const FALLBACK_ADMIN_HASHES: Record<string, string> = {
+  Y: 'b69ffa80dbc7db6ceabd2cc84876c3e029f1d5fde303764fb71748c3725fc459',
+  J: '4aeec421356673b4cb9f15faf8bfe7ea9ad23b373c9ac69363321e8265ecf9ae',
   Yuss: 'b69ffa80dbc7db6ceabd2cc84876c3e029f1d5fde303764fb71748c3725fc459',
   Jeo: '4aeec421356673b4cb9f15faf8bfe7ea9ad23b373c9ac69363321e8265ecf9ae'
 };
@@ -159,27 +161,29 @@ export async function loginAdminUser(
     }
 
     // Fallback to client-side hash check
+    const normKey = username.toLowerCase() === 'yuss' ? 'Y' : (username.toLowerCase() === 'jeo' ? 'J' : username);
     const hashed = await hashPassword(passwordInput);
-    const expectedHash = FALLBACK_ADMIN_HASHES[username];
+    const expectedHash = FALLBACK_ADMIN_HASHES[normKey] || FALLBACK_ADMIN_HASHES[username];
     if (expectedHash && hashed === expectedHash) {
       const user =
-        DEFAULT_ADMIN_ACCOUNTS.find(a => a.username === username) || {
-          username,
+        DEFAULT_ADMIN_ACCOUNTS.find(a => a.username === normKey) || {
+          username: normKey,
           role: 'Administrador',
-          avatarColor: 'from-sky-500 to-indigo-600',
-          initial: username.charAt(0)
+          avatarColor: normKey === 'Y' ? 'from-sky-500 to-indigo-600' : 'from-amber-500 to-rose-600',
+          initial: normKey.charAt(0)
         };
-      saveAdminAuth(username);
+      saveAdminAuth(normKey);
       return { success: true, user };
     }
 
     return { success: false, error: 'Contraseña incorrecta' };
   } catch (err: any) {
+    const normKey = username.toLowerCase() === 'yuss' ? 'Y' : (username.toLowerCase() === 'jeo' ? 'J' : username);
     const hashed = await hashPassword(passwordInput);
-    const expectedHash = FALLBACK_ADMIN_HASHES[username];
+    const expectedHash = FALLBACK_ADMIN_HASHES[normKey] || FALLBACK_ADMIN_HASHES[username];
     if (expectedHash && hashed === expectedHash) {
-      saveAdminAuth(username);
-      return { success: true, user: DEFAULT_ADMIN_ACCOUNTS.find(a => a.username === username) };
+      saveAdminAuth(normKey);
+      return { success: true, user: DEFAULT_ADMIN_ACCOUNTS.find(a => a.username === normKey) };
     }
     return { success: false, error: err.message || 'Error al autenticar' };
   }

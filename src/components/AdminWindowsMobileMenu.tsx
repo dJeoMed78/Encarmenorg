@@ -500,7 +500,7 @@ export const AdminWindowsMobileMenu: React.FC<AdminWindowsMobileMenuProps> = ({
               <div className="text-xl sm:text-2xl font-light text-white tracking-tight leading-tight">
                 Administradores
               </div>
-              <p className="text-[11px] text-purple-100 font-medium">Yuss & Jeo</p>
+              <p className="text-[11px] text-purple-100 font-medium">Y & J</p>
               <p className="text-[10px] text-purple-200/80">
                 Cambiar claves cifradas
               </p>

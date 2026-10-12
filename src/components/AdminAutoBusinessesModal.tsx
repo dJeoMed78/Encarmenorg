@@ -84,10 +84,12 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
       const res = await fetchAutoBusinessCandidates('', 'all', selectedSource);
       if (res.success && Array.isArray(res.candidates)) {
         setCandidates(res.candidates);
-        setNotice({
-          text: `Se detectaron ${res.candidates.length} negocios locales verificados en Ciudad del Carmen listos para revisión y autorización.`,
-          type: 'info'
-        });
+        if (res.candidates.length > 0) {
+          setNotice({
+            text: `Se detectaron ${res.candidates.length} negocios locales verificados en Ciudad del Carmen listos para revisión y autorización.`,
+            type: 'info'
+          });
+        }
       } else {
         setNotice({
           text: res.message || 'No se pudieron recuperar empresas candidatas.',
@@ -609,6 +611,20 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                 </p>
                 <p className="text-xs text-stone-400 max-w-md">
                   Consultando grupos de Facebook, Google Maps y directorios locales sin IA. Verificando que cada negocio tenga teléfono de contacto válido.
+                </p>
+              </div>
+            </div>
+          ) : candidates.length === 0 ? (
+            <div className="py-20 text-center space-y-4 px-4">
+              <div className="w-14 h-14 rounded-2xl bg-stone-800/80 border border-stone-700/80 flex items-center justify-center mx-auto text-emerald-400">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+              <div className="space-y-1.5 max-w-md mx-auto">
+                <p className="text-base font-bold text-white">
+                  Bandeja Limpia · Cero Datos Simulados
+                </p>
+                <p className="text-xs text-stone-400 leading-relaxed">
+                  No hay candidatos de prueba ni información simulada. Para procesar comercios reales comprobables, utiliza la opción superior de <strong>Importar desde WhatsApp / Texto Real</strong> con datos y enlaces exactos verificados.
                 </p>
               </div>
             </div>

@@ -20,7 +20,7 @@ import {
 
 export const AdminAccountsManagerTab: React.FC = () => {
   const [accounts, setAccounts] = useState<AdminAccountInfo[]>(DEFAULT_ADMIN_ACCOUNTS);
-  const [selectedUser, setSelectedUser] = useState<string>('Yuss');
+  const [selectedUser, setSelectedUser] = useState<string>('Y');
   const [newPassword, setNewPassword] = useState<string>('');
   const [confirmPassword, setConfirmPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);

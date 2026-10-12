@@ -776,7 +776,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
           {/* Windows-style Multi-Admin Lock Screen */}
           {selectedAdminUser === null ? (
-            /* User selection cards (Yuss and Jeo) */
+            /* User selection cards (Y and J) */
             <div className="w-full max-w-lg mx-auto my-auto p-4 sm:p-8 space-y-6 text-center">
               <div className="space-y-1">
                 <h3 className="text-2xl sm:text-3xl font-light text-white tracking-tight">
