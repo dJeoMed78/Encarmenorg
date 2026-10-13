@@ -247,8 +247,15 @@ export default function App() {
     const handleAuthChange = () => {
       setIsAdminAuthenticated(isSessionAdminAuthenticated());
     };
+    handleAuthChange();
     window.addEventListener('admin-auth-changed', handleAuthChange);
-    return () => window.removeEventListener('admin-auth-changed', handleAuthChange);
+    window.addEventListener('storage', handleAuthChange);
+    const interval = setInterval(handleAuthChange, 2000);
+    return () => {
+      window.removeEventListener('admin-auth-changed', handleAuthChange);
+      window.removeEventListener('storage', handleAuthChange);
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {

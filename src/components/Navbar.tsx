@@ -8,13 +8,10 @@ import {
   PlusCircle,
   ShieldAlert,
   ExternalLink,
-  Image as ImageIcon,
-  Download
+  Image as ImageIcon
 } from 'lucide-react';
 import { useBrandConfig } from '../utils/brand';
 import { BrandLogo } from './BrandLogo';
-import { isSessionAdminAuthenticated } from '../utils/adminAuth';
-import { APP_VERSION } from '../constants/version';
 
 interface NavbarProps {
   activeTab: string;
@@ -32,22 +29,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenEmergencyGuide
 }) => {
   const { brand } = useBrandConfig();
-  const [isAdmin, setIsAdmin] = React.useState<boolean>(isSessionAdminAuthenticated);
-
-  React.useEffect(() => {
-    const checkAdmin = () => {
-      setIsAdmin(isSessionAdminAuthenticated());
-    };
-    checkAdmin();
-    window.addEventListener('storage', checkAdmin);
-    window.addEventListener('admin-auth-changed', checkAdmin);
-    const interval = setInterval(checkAdmin, 3000);
-    return () => {
-      window.removeEventListener('storage', checkAdmin);
-      window.removeEventListener('admin-auth-changed', checkAdmin);
-      clearInterval(interval);
-    };
-  }, []);
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs">
@@ -73,20 +54,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               π
             </button>
-
-            {/* Botón Descargar ZIP Oficial (Solo Administrador Autenticado) */}
-            {isAdmin && (
-              <a
-                href="/api/admin/download-source-zip"
-                download={`codigo-fuente-empresasencarmen-${APP_VERSION.replace(/[:/]/g, '-')}.zip`}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-black text-xs shadow-md shadow-amber-500/25 transition-all cursor-pointer border border-amber-400/40 active:scale-95 shrink-0 ml-1 sm:ml-2"
-                title={`Descargar archivo ZIP con todo el código fuente y cambios actualizados (v${APP_VERSION})`}
-              >
-                <Download className="w-4 h-4 text-stone-950" />
-                <span className="hidden sm:inline">Descargar ZIP (v{APP_VERSION})</span>
-                <span className="sm:hidden font-mono text-[10px]">ZIP</span>
-              </a>
-            )}
           </div>
 
           {/* Desktop Navigation - Visible en todas las pantallas medianas y grandes */}
