@@ -198,6 +198,19 @@ async function createTablesIfNotExist() {
       \`is_urgent\` TINYINT(1) DEFAULT 0,
       \`raw_data\` LONGTEXT,
       \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`portal_settings\` (
+      \`config_key\` VARCHAR(64) PRIMARY KEY,
+      \`config_value\` LONGTEXT,
+      \`updated_at\` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`portal_notes\` (
+      \`id\` INT PRIMARY KEY DEFAULT 1,
+      \`cambios_al_portal\` LONGTEXT,
+      \`fallas_del_portal\` LONGTEXT,
+      \`updated_at\` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
   ];
 
@@ -760,3 +773,76 @@ export async function dbDeleteEmergencyService(id: string): Promise<boolean> {
     return false;
   }
 }
+
+// ----------------------------------------------------
+// Configuración Persistente del Portal y Cambios Deseados
+// ----------------------------------------------------
+
+export async function dbLoadPortalConfig(): Promise<any | null> {
+  if (!pool) return null;
+  try {
+    const [rows]: any = await pool.query("SELECT config_value FROM portal_settings WHERE config_key = 'main_config' LIMIT 1");
+    if (rows && rows.length > 0 && rows[0].config_value) {
+      return JSON.parse(rows[0].config_value);
+    }
+    return null;
+  } catch (err: any) {
+    console.warn('[MariaDB] Error cargando portal config:', err.message);
+    return null;
+  }
+}
+
+export async function dbSavePortalConfig(config: any): Promise<boolean> {
+  if (!pool) return false;
+  try {
+    const val = JSON.stringify(config);
+    const query = `
+      INSERT INTO portal_settings (config_key, config_value)
+      VALUES ('main_config', ?)
+      ON DUPLICATE KEY UPDATE config_value = VALUES(config_value), updated_at = NOW()
+    `;
+    await pool.query(query, [val]);
+    return true;
+  } catch (err: any) {
+    console.warn('[MariaDB] Error guardando portal config:', err.message);
+    return false;
+  }
+}
+
+export async function dbLoadPortalNotes(): Promise<{ cambios_al_portal: string; fallas_del_portal: string; updated_at?: string } | null> {
+  if (!pool) return null;
+  try {
+    const [rows]: any = await pool.query('SELECT cambios_al_portal, fallas_del_portal, updated_at FROM portal_notes WHERE id = 1 LIMIT 1');
+    if (rows && rows.length > 0) {
+      return {
+        cambios_al_portal: rows[0].cambios_al_portal || '',
+        fallas_del_portal: rows[0].fallas_del_portal || '',
+        updated_at: rows[0].updated_at ? new Date(rows[0].updated_at).toISOString() : undefined
+      };
+    }
+    return null;
+  } catch (err: any) {
+    console.warn('[MariaDB] Error cargando portal notes:', err.message);
+    return null;
+  }
+}
+
+export async function dbSavePortalNotes(notes: { cambios_al_portal: string; fallas_del_portal: string }): Promise<boolean> {
+  if (!pool) return false;
+  try {
+    const query = `
+      INSERT INTO portal_notes (id, cambios_al_portal, fallas_del_portal)
+      VALUES (1, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        cambios_al_portal = VALUES(cambios_al_portal),
+        fallas_del_portal = VALUES(fallas_del_portal),
+        updated_at = NOW()
+    `;
+    await pool.query(query, [notes.cambios_al_portal || '', notes.fallas_del_portal || '']);
+    return true;
+  } catch (err: any) {
+    console.warn('[MariaDB] Error guardando portal notes:', err.message);
+    return false;
+  }
+}
+

@@ -27,7 +27,9 @@ import {
   ShieldAlert,
   Calendar,
   KeyRound,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Bug,
+  FileCode
 } from 'lucide-react';
 import { SiteAnalytics } from '../types';
 
@@ -39,7 +41,7 @@ interface AdminWindowsMobileMenuProps {
   promotionsCount: number;
   isSyncing: boolean;
   onTriggerSync: () => Promise<void>;
-  onSelectTab: (tab: 'businesses' | 'analytics' | 'reports' | 'classifieds' | 'new_business' | 'promotions' | 'status' | 'emergency' | 'events' | 'admins' | 'brand_media') => void;
+  onSelectTab: (tab: 'businesses' | 'analytics' | 'reports' | 'classifieds' | 'new_business' | 'promotions' | 'status' | 'emergency' | 'events' | 'admins' | 'brand_media' | 'desired_changes' | 'config_editor') => void;
   onClose: () => void;
   onLogout: () => void;
   currentTime: string;
@@ -569,6 +571,64 @@ export const AdminWindowsMobileMenu: React.FC<AdminWindowsMobileMenuProps> = ({
 
             <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider pt-1 border-t border-white/15">
               ver portal
+            </div>
+          </button>
+
+          {/* TILE 9: CAMBIOS DESEADOS Y FALLAS (Wide Tile, Metro Crimson / Amber #D13438) */}
+          <button
+            type="button"
+            onClick={() => onSelectTab('desired_changes')}
+            className="col-span-1 sm:col-span-1 p-3.5 sm:p-4 bg-gradient-to-br from-rose-950 to-amber-950/80 hover:from-rose-900 hover:to-amber-900 border border-amber-500/30 text-left flex flex-col justify-between h-44 sm:h-48 relative overflow-hidden transition-all duration-150 cursor-pointer shadow-lg active:scale-[0.98] group"
+          >
+            <div className="flex items-start justify-between">
+              <Bug className="w-7 h-7 text-amber-400 group-hover:scale-110 transition-transform" />
+              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">
+                MariaDB
+              </span>
+            </div>
+
+            <div className="space-y-0.5">
+              <div className="text-lg sm:text-xl font-light text-white tracking-tight leading-tight">
+                Cambios Deseados
+              </div>
+              <p className="text-[11px] text-amber-200 font-medium">Fallas y Sugerencias</p>
+              <p className="text-[10px] text-stone-300/80">
+                Prioridad al iniciar sesión
+              </p>
+            </div>
+
+            <div className="text-[11px] font-medium text-amber-300 uppercase tracking-wider pt-1 border-t border-white/15 flex items-center justify-between">
+              <span>abrir notas</span>
+              <ChevronRight className="w-3.5 h-3.5 text-amber-300 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </button>
+
+          {/* TILE 10: ARCHIVO DE CONFIGURACIÓN (Square Tile, Metro Cyan/Blue #0078D7) */}
+          <button
+            type="button"
+            onClick={() => onSelectTab('config_editor')}
+            className="col-span-1 sm:col-span-1 p-3.5 sm:p-4 bg-[#0078D7] hover:bg-[#0063B1] border border-sky-400/30 text-left flex flex-col justify-between h-44 sm:h-48 relative overflow-hidden transition-all duration-150 cursor-pointer shadow-lg active:scale-[0.98] group"
+          >
+            <div className="flex items-start justify-between">
+              <FileCode className="w-7 h-7 text-sky-200 group-hover:scale-110 transition-transform" />
+              <span className="px-1.5 py-0.5 rounded bg-black/30 text-white font-mono text-[10px]">
+                .json
+              </span>
+            </div>
+
+            <div className="space-y-0.5">
+              <div className="text-lg sm:text-xl font-light text-white tracking-tight leading-tight">
+                Configuración
+              </div>
+              <p className="text-[11px] text-sky-100 font-medium">portal_config.json</p>
+              <p className="text-[10px] text-sky-200/80">
+                Editor en vivo persistente
+              </p>
+            </div>
+
+            <div className="text-[11px] font-medium text-sky-200 uppercase tracking-wider pt-1 border-t border-white/15 flex items-center justify-between">
+              <span>editar config</span>
+              <ChevronRight className="w-3.5 h-3.5 text-sky-100 group-hover:translate-x-1 transition-transform" />
             </div>
           </button>
         </div>

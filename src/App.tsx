@@ -1379,9 +1379,14 @@ export default function App() {
               </button>
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-stone-800/60 flex items-center justify-between text-[11px] text-stone-500 font-mono">
-            <span className="text-stone-400">versión {liveVersion || APP_VERSION}</span>
-            <span className="text-[10px] text-stone-600">Plataforma PWA · Ciudad del Carmen</span>
+          <div className="mt-3 pt-3 border-t border-stone-800/60 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-stone-500 font-mono">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="text-stone-300 font-bold">
+                Versión del archivo ZIP instalado: <span className="text-amber-400 font-mono">{liveVersion || APP_VERSION}</span>
+              </span>
+            </div>
+            <span className="text-[10px] text-stone-500">Plataforma PWA Oficial · Ciudad del Carmen, Campeche</span>
           </div>
         </div>
       </footer>

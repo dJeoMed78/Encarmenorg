@@ -48,7 +48,9 @@ import {
   Calendar,
   ShieldAlert,
   Download,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Bug,
+  FileCode
 } from 'lucide-react';
 import {
   isSessionAdminAuthenticated,
@@ -71,6 +73,8 @@ import { AdminEmergencyTab } from './AdminEmergencyTab';
 import { AdminEventsTab } from './AdminEventsTab';
 import { AdminAccountsManagerTab } from './AdminAccountsManagerTab';
 import { AdminBrandMediaTab } from './AdminBrandMediaTab';
+import { AdminDesiredChangesTab } from './AdminDesiredChangesTab';
+import { AdminConfigEditorTab } from './AdminConfigEditorTab';
 import ALL_COLONIAS_CARMEN from '../data/colonias_carmen.json';
 import { cleanPhoneNumber } from '../utils/phone';
 import { DELIVERY_OPTIONS, normalizeDeliveryOption } from '../constants/delivery';
@@ -149,7 +153,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
   const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showAdminPassword, setShowAdminPassword] = useState(false);
-  const [activeTab, setActiveTab] = useState<'start' | 'businesses' | 'ai_assistant' | 'analytics' | 'reports' | 'classifieds' | 'new_business' | 'promotions' | 'status' | 'emergency' | 'events' | 'admins' | 'brand_media'>('start');
+  const [activeTab, setActiveTab] = useState<'start' | 'businesses' | 'ai_assistant' | 'analytics' | 'reports' | 'classifieds' | 'new_business' | 'promotions' | 'status' | 'emergency' | 'events' | 'admins' | 'brand_media' | 'desired_changes' | 'config_editor'>('start');
   const [currentTime, setCurrentTime] = useState(() => {
     const d = new Date();
     return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
@@ -359,6 +363,8 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
       case 'events': return 'Cartelera Carmelita de Eventos';
       case 'brand_media': return 'Banner Panorámico y Logo Oficial';
       case 'admins': return 'Administradores & Claves de Acceso';
+      case 'desired_changes': return 'Cambios Deseados y Fallas del Portal';
+      case 'config_editor': return 'Archivo de Configuración en Vivo';
       case 'status': return 'Conexión & Sincronización';
       default: return 'Inicio';
     }
@@ -1152,6 +1158,32 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
                   <button
                     type="button"
+                    onClick={() => setActiveTab('desired_changes')}
+                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                      activeTab === 'desired_changes'
+                        ? 'bg-amber-600 text-stone-950 font-black'
+                        : 'text-amber-300 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <Bug className="w-3.5 h-3.5" />
+                    <span>Cambios Deseados</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('config_editor')}
+                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                      activeTab === 'config_editor'
+                        ? 'bg-[#0078D7] text-white font-bold'
+                        : 'text-sky-300 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <FileCode className="w-3.5 h-3.5" />
+                    <span>Configuración</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setActiveTab('status')}
                     className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                       activeTab === 'status'
@@ -1641,6 +1673,14 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
           ) : activeTab === 'brand_media' ? (
             <div className="p-4 sm:p-6">
               <AdminBrandMediaTab />
+            </div>
+          ) : activeTab === 'desired_changes' ? (
+            <div className="p-4 sm:p-6">
+              <AdminDesiredChangesTab />
+            </div>
+          ) : activeTab === 'config_editor' ? (
+            <div className="p-4 sm:p-6">
+              <AdminConfigEditorTab />
             </div>
           ) : activeTab === 'status' ? (
             <div className="space-y-6">

@@ -6,8 +6,6 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { ZipArchive } from 'archiver';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
@@ -37,7 +35,11 @@ import {
   dbSaveEmergencyService,
   dbDeleteEmergencyService,
   getMariaDbConfig,
-  getLastDbError
+  getLastDbError,
+  dbLoadPortalConfig,
+  dbSavePortalConfig,
+  dbLoadPortalNotes,
+  dbSavePortalNotes
 } from './src/db/mariadb.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -170,18 +172,37 @@ app.get('/media/*', (req: Request, res: Response) => {
   return res.redirect(301, `/wp-content/uploads/${subpath}`);
 });
 
-// Firebase Firestore Integration (Persistencia centralizada en la nube)
-let firestoreDb: any = null;
+// Archivo de Configuración Persistente (portal_config.json & MariaDB)
+const portalConfigPath = path.resolve(__dirname, 'portal_config.json');
+let portalConfig: any = {
+  siteName: 'Empresas en Carmen',
+  domain: 'empresasencarmen.com',
+  tagline: 'Directorio empresarial interactivo de Ciudad del Carmen, Campeche.',
+  logoUrl: '/images/logo-oficial.png',
+  bannerUrl: '/images/banner-empresas-en-carmen.png',
+  portal_notes: {
+    cambios_al_portal: '',
+    fallas_del_portal: ''
+  },
+  contact: {
+    whatsapp: '9381522623',
+    phone: '9381522623',
+    email: 'contacto@empresasencarmen.com',
+    facebookGroup: 'https://facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    facebookPage: 'https://facebook.com/empresasencarmen'
+  },
+  lastUpdated: new Date().toISOString()
+};
+
 try {
-  const firebaseConfigPath = path.resolve(__dirname, 'firebase-applet-config.json');
-  if (fs.existsSync(firebaseConfigPath)) {
-    const config = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
-    const firebaseApp = getApps().length === 0 ? initializeApp(config) : getApps()[0];
-    firestoreDb = getFirestore(firebaseApp, config.firestoreDatabaseId);
-    console.log('[Firebase Firestore] Conectado exitosamente a base de datos:', config.firestoreDatabaseId);
+  if (fs.existsSync(portalConfigPath)) {
+    const loaded = JSON.parse(fs.readFileSync(portalConfigPath, 'utf8'));
+    portalConfig = { ...portalConfig, ...loaded };
+  } else {
+    fs.writeFileSync(portalConfigPath, JSON.stringify(portalConfig, null, 2), 'utf8');
   }
-} catch (fErr: any) {
-  console.warn('[Firebase Firestore] Error de inicialización:', fErr.message);
+} catch (cErr: any) {
+  console.warn('[Portal Config] Error leyendo portal_config.json:', cErr.message);
 }
 
 // Memory caches
@@ -735,71 +756,31 @@ function getRequestBaseUrl(req: Request): string {
   return `${proto}://${domain}`;
 }
 
-// Sync Firestore on startup in background (solo si USE_FIREBASE=true)
-if (firestoreDb && process.env.USE_FIREBASE === 'true') {
-  // Sync Events from Firestore
-  getDocs(collection(firestoreDb, 'events')).then(snap => {
-    if (!snap.empty) {
-      const fbEvents: any[] = [];
-      snap.forEach(d => fbEvents.push({ id: d.id, ...d.data() }));
-      if (fbEvents.length > 0) {
-        eventsCache = fbEvents.map((e: any) => {
-          const resolvedImg = getEventRepresentativeImageServer(e);
-          return {
-            ...e,
-            image: resolvedImg
-          };
-        });
-        fs.writeFileSync(path.resolve(__dirname, 'events_db.json'), JSON.stringify(eventsCache, null, 2), 'utf8');
-      }
-    }
-  }).catch(() => {});
 
-  // Sync Businesses from Firestore
-  getDocs(collection(firestoreDb, 'businesses')).then(snap => {
-    if (!snap.empty) {
-      const fbBizMap = new Map<string, any>();
-      for (const b of businessesCache) {
-        fbBizMap.set(String(b.id), b);
-      }
-      snap.forEach(d => {
-        const data = d.data();
-        const bizId = String(data.id || d.id);
-        const existing = fbBizMap.get(bizId) || {};
-        fbBizMap.set(bizId, { ...existing, ...data, id: isNaN(Number(bizId)) ? bizId : Number(bizId) });
-      });
-      businessesCache = Array.from(fbBizMap.values());
-    }
-  }).catch(() => {});
-
-  // Sync Promotions from Firestore
-  getDocs(collection(firestoreDb, 'promotions')).then(snap => {
-    if (!snap.empty) {
-      const fbPromos: any[] = [];
-      snap.forEach(d => fbPromos.push({ id: d.id, ...d.data() }));
-      if (fbPromos.length > 0) {
-        promotionsCache = fbPromos;
-        fs.writeFileSync(path.resolve(__dirname, 'promotions_db.json'), JSON.stringify(promotionsCache, null, 2), 'utf8');
-      }
-    }
-  }).catch(() => {});
-
-  // Sync Admins from Firestore
-  getDoc(doc(firestoreDb, 'system', 'admins')).then(snap => {
-    if (snap.exists() && snap.data()?.accounts) {
-      adminAccounts = snap.data().accounts.map((a: any) => ({
-        ...a,
-        username: a.username.toLowerCase() === 'yuss' ? 'Y' : (a.username.toLowerCase() === 'jeo' ? 'J' : a.username),
-        initial: a.username.toLowerCase() === 'yuss' ? 'Y' : (a.username.toLowerCase() === 'jeo' ? 'J' : a.initial)
-      }));
-    }
-  }).catch(() => {});
-}
 
 // Initialize Hostinger MariaDB if configured
 initMariaDb().then(async (active) => {
   if (active) {
     console.log('[MariaDB] Conexión establecida con Hostinger MariaDB.');
+
+    // 0. Cargar y sincronizar configuración persistente del portal
+    try {
+      const dbConfig = await dbLoadPortalConfig();
+      if (dbConfig) {
+        portalConfig = { ...portalConfig, ...dbConfig };
+        fs.writeFileSync(portalConfigPath, JSON.stringify(portalConfig, null, 2), 'utf8');
+        console.log('[MariaDB] Configuración del portal sincronizada desde la base de datos.');
+      }
+      const dbNotes = await dbLoadPortalNotes();
+      if (dbNotes) {
+        portalConfig.portal_notes = {
+          cambios_al_portal: dbNotes.cambios_al_portal || '',
+          fallas_del_portal: dbNotes.fallas_del_portal || ''
+        };
+      }
+    } catch (e: any) {
+      console.warn('[MariaDB] Error al cargar configuración del portal:', e.message);
+    }
 
     // 1. Businesses
     const dbBusinesses = await dbLoadAllBusinesses();
@@ -892,7 +873,7 @@ app.get('/api/database-status', (_req: Request, res: Response) => {
   const mariadbConfig = getMariaDbConfig();
   res.json({
     success: true,
-    activeEngine: isMariaDbActive() ? 'mariadb_hostinger' : (firestoreDb ? 'google_firestore' : 'local_json'),
+    activeEngine: isMariaDbActive() ? 'mariadb_hostinger' : 'local_json',
     mariadb: {
       connected: isMariaDbActive(),
       configured: Boolean(mariadbConfig),
@@ -901,9 +882,7 @@ app.get('/api/database-status', (_req: Request, res: Response) => {
       user: mariadbConfig?.user || null,
       lastError: getLastDbError()
     },
-    firestore: {
-      connected: Boolean(firestoreDb)
-    },
+    portalConfig: { loaded: true, file: 'portal_config.json' },
     businessesCount: businessesCache.length,
     downloadSqlUrl: '/hostinger_mariadb_setup.sql'
   });
@@ -989,6 +968,145 @@ app.get('/api/download-hostinger-sql', (_req: Request, res: Response) => {
 });
 
 
+// =========================================================================
+// ENDPOINTS DE CONFIGURACIÓN PERSISTENTE DEL PORTAL Y CAMBIOS DESEADOS
+// =========================================================================
+
+// Obtener configuración pública del portal
+app.get('/api/portal-config', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    config: portalConfig
+  });
+});
+
+// Guardar configuración del portal (Admin)
+app.post('/api/admin/portal-config', async (req: Request, res: Response) => {
+  try {
+    const newConfig = req.body;
+    if (!newConfig || typeof newConfig !== 'object') {
+      return res.status(400).json({ success: false, message: 'Datos de configuración inválidos.' });
+    }
+
+    portalConfig = {
+      ...portalConfig,
+      ...newConfig,
+      lastUpdated: new Date().toISOString()
+    };
+
+    fs.writeFileSync(portalConfigPath, JSON.stringify(portalConfig, null, 2), 'utf8');
+
+    if (isMariaDbActive()) {
+      await dbSavePortalConfig(portalConfig);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Configuración del portal guardada con éxito.',
+      config: portalConfig
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message || 'Error al guardar configuración.' });
+  }
+});
+
+// Obtener contenido raw de portal_config.json para editor en vivo
+app.get('/api/admin/portal-config/raw', (_req: Request, res: Response) => {
+  try {
+    let rawContent = '{}';
+    if (fs.existsSync(portalConfigPath)) {
+      rawContent = fs.readFileSync(portalConfigPath, 'utf8');
+    } else {
+      rawContent = JSON.stringify(portalConfig, null, 2);
+    }
+    res.json({ success: true, raw: rawContent });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Guardar contenido raw editado en vivo (Admin)
+app.post('/api/admin/portal-config/raw', async (req: Request, res: Response) => {
+  try {
+    const { raw } = req.body;
+    if (!raw || typeof raw !== 'string') {
+      return res.status(400).json({ success: false, message: 'Se requiere el contenido raw en JSON.' });
+    }
+
+    const parsed = JSON.parse(raw);
+    parsed.lastUpdated = new Date().toISOString();
+    portalConfig = parsed;
+
+    fs.writeFileSync(portalConfigPath, JSON.stringify(portalConfig, null, 2), 'utf8');
+
+    if (isMariaDbActive()) {
+      await dbSavePortalConfig(portalConfig);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Archivo portal_config.json actualizado y persistido en MariaDB.',
+      config: portalConfig
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, message: 'Error de sintaxis JSON: ' + err.message });
+  }
+});
+
+// Obtener "Cambios Deseados" y "Fallas del Portal"
+app.get('/api/admin/portal-notes', async (_req: Request, res: Response) => {
+  try {
+    if (isMariaDbActive()) {
+      const dbNotes = await dbLoadPortalNotes();
+      if (dbNotes) {
+        portalConfig.portal_notes = {
+          cambios_al_portal: dbNotes.cambios_al_portal || '',
+          fallas_del_portal: dbNotes.fallas_del_portal || ''
+        };
+      }
+    }
+    res.json({
+      success: true,
+      notes: portalConfig.portal_notes || { cambios_al_portal: '', fallas_del_portal: '' }
+    });
+  } catch (err: any) {
+    res.json({
+      success: true,
+      notes: portalConfig.portal_notes || { cambios_al_portal: '', fallas_del_portal: '' }
+    });
+  }
+});
+
+// Guardar "Cambios Deseados" y "Fallas del Portal"
+app.post('/api/admin/portal-notes', async (req: Request, res: Response) => {
+  try {
+    const { cambios_al_portal, fallas_del_portal } = req.body;
+
+    portalConfig.portal_notes = {
+      cambios_al_portal: String(cambios_al_portal || ''),
+      fallas_del_portal: String(fallas_del_portal || '')
+    };
+    portalConfig.lastUpdated = new Date().toISOString();
+
+    fs.writeFileSync(portalConfigPath, JSON.stringify(portalConfig, null, 2), 'utf8');
+
+    let dbSaved = false;
+    if (isMariaDbActive()) {
+      dbSaved = await dbSavePortalNotes(portalConfig.portal_notes);
+      await dbSavePortalConfig(portalConfig);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Notas de fallas y cambios deseadas guardadas exitosamente en MariaDB y portal_config.json.',
+      dbSaved,
+      notes: portalConfig.portal_notes
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message || 'Error al guardar notas.' });
+  }
+});
+
 // Version
 app.get('/api/version', (_req: Request, res: Response) => {
   let version = '061026:0915';
@@ -1002,8 +1120,8 @@ app.get('/api/version', (_req: Request, res: Response) => {
   res.json({ success: true, version, serverTime: new Date().toISOString() });
 });
 
-// Download complete project ZIP backup for Google Cloud Shell deployment
-app.get(['/api/download-backup', '/codigo-fuente-empresasencarmen.zip'], (req: Request, res: Response) => {
+// Download complete project ZIP backup for Google Cloud Shell deployment & Admin Download
+app.get(['/api/admin/download-source-zip', '/api/download-backup', '/codigo-fuente-empresasencarmen.zip'], (req: Request, res: Response) => {
   try {
     let version = '061026-0915';
     try {
@@ -1793,12 +1911,7 @@ async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: 
               await dbSaveBusiness(b);
             } catch (_) {}
           }
-          if (firestoreDb) {
-            try {
-              if (oldId !== b.id) await deleteDoc(doc(firestoreDb, 'businesses', String(oldId)));
-              await setDoc(doc(firestoreDb, 'businesses', String(b.id)), b);
-            } catch (_) {}
-          }
+          
           console.log(`[WooCommerce Sync] ¡Empresa "${b.name}" exportada y creada exitosamente en WordPress WooCommerce ID #${exportRes.wpId}!`);
         } else {
           console.warn(`[WooCommerce Sync] No se pudo exportar "${b.name}" a WooCommerce:`, exportRes.error);
@@ -1815,12 +1928,7 @@ async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: 
       fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
     } catch (_) {}
 
-    // Save to Firestore
-    if (firestoreDb) {
-      for (const b of businessesCache) {
-        setDoc(doc(firestoreDb, 'businesses', String(b.id)), b).catch(() => {});
-      }
-    }
+
 
     // Save to Hostinger MariaDB
     if (isMariaDbActive()) {
@@ -1946,15 +2054,7 @@ app.post('/api/submit-business', async (req: Request, res: Response) => {
       console.warn('[Storage] Error actualizando businesses_seed.json:', e);
     }
 
-    // Save to Firestore if connected
-    if (firestoreDb) {
-      try {
-        await setDoc(doc(firestoreDb, 'businesses', String(newId)), newBiz);
-        console.log(`[Firestore] Empresa "${newBiz.name}" guardada en Firestore.`);
-      } catch (fErr: any) {
-        console.warn('[Firestore] Error guardando empresa:', fErr.message);
-      }
-    }
+
 
     // Save to Hostinger MariaDB if connected
     if (isMariaDbActive()) {
@@ -1996,12 +2096,7 @@ app.post('/api/submit-business', async (req: Request, res: Response) => {
             } catch (_) {}
           }
 
-          if (firestoreDb) {
-            try {
-              await deleteDoc(doc(firestoreDb, 'businesses', String(newId)));
-              await setDoc(doc(firestoreDb, 'businesses', String(newBiz.id)), newBiz);
-            } catch (_) {}
-          }
+          
 
           try {
             const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
@@ -2075,17 +2170,7 @@ app.patch('/api/businesses/:id', async (req: Request, res: Response) => {
       fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
     } catch (_) {}
 
-    if (firestoreDb) {
-      try {
-        await updateDoc(doc(firestoreDb, 'businesses', String(id)), {
-          ...req.body,
-          isLocallyEdited: true,
-          previousSlugs: Array.from(prevSlugs),
-          previousNames: Array.from(prevNames),
-          updatedAt: updated.updatedAt
-        });
-      } catch (_) {}
-    }
+    
 
     if (isMariaDbActive()) {
       try {
@@ -2376,11 +2461,7 @@ app.delete('/api/businesses/:id', async (req: Request, res: Response) => {
       fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
     } catch (_) {}
 
-    if (firestoreDb) {
-      try {
-        await deleteDoc(doc(firestoreDb, 'businesses', String(id)));
-      } catch (_) {}
-    }
+    
 
     if (isMariaDbActive()) {
       try {
@@ -2521,11 +2602,7 @@ app.post('/api/reports', async (req: Request, res: Response) => {
       fs.writeFileSync(path.resolve(__dirname, 'reports_db.json'), JSON.stringify(reportsCache, null, 2), 'utf8');
     } catch (_) {}
 
-    if (firestoreDb) {
-      try {
-        await setDoc(doc(firestoreDb, 'reports', reportData.id), reportData);
-      } catch (_) {}
-    }
+    
 
     if (isMariaDbActive()) {
       try {
@@ -2547,11 +2624,7 @@ app.patch('/api/reports/:id', async (req: Request, res: Response) => {
     try {
       fs.writeFileSync(path.resolve(__dirname, 'reports_db.json'), JSON.stringify(reportsCache, null, 2), 'utf8');
     } catch (_) {}
-    if (firestoreDb) {
-      try {
-        await updateDoc(doc(firestoreDb, 'reports', id), { status: rep.status });
-      } catch (_) {}
-    }
+    
     if (isMariaDbActive()) {
       try {
         await dbSaveReport(rep);
@@ -2570,11 +2643,7 @@ app.delete('/api/reports/:id', async (req: Request, res: Response) => {
     try {
       fs.writeFileSync(path.resolve(__dirname, 'reports_db.json'), JSON.stringify(reportsCache, null, 2), 'utf8');
     } catch (_) {}
-    if (firestoreDb) {
-      try {
-        await deleteDoc(doc(firestoreDb, 'reports', id));
-      } catch (_) {}
-    }
+    
     if (isMariaDbActive()) {
       try {
         await dbDeleteReport(id);
@@ -2636,13 +2705,7 @@ app.post('/api/events', async (req: Request, res: Response) => {
     eventsCache = [newEvent, ...eventsCache.filter(e => e.id !== newEvent.id)];
     fs.writeFileSync(path.resolve(__dirname, 'events_db.json'), JSON.stringify(eventsCache, null, 2), 'utf8');
 
-    if (firestoreDb) {
-      try {
-        await setDoc(doc(firestoreDb, 'events', newEvent.id), newEvent);
-      } catch (fErr) {
-        console.warn('Error saving event to Firestore:', fErr);
-      }
-    }
+    
 
     if (isMariaDbActive()) {
       try {
@@ -2675,13 +2738,7 @@ app.put('/api/events/:id', async (req: Request, res: Response) => {
     eventsCache[idx] = updated;
     fs.writeFileSync(path.resolve(__dirname, 'events_db.json'), JSON.stringify(eventsCache, null, 2), 'utf8');
 
-    if (firestoreDb) {
-      try {
-        await setDoc(doc(firestoreDb, 'events', id), updated);
-      } catch (fErr) {
-        console.warn('Error updating event in Firestore:', fErr);
-      }
-    }
+    
 
     if (isMariaDbActive()) {
       try {
@@ -2703,13 +2760,7 @@ app.delete('/api/events/:id', async (req: Request, res: Response) => {
     eventsCache = eventsCache.filter(e => e.id !== id);
     fs.writeFileSync(path.resolve(__dirname, 'events_db.json'), JSON.stringify(eventsCache, null, 2), 'utf8');
 
-    if (firestoreDb) {
-      try {
-        await deleteDoc(doc(firestoreDb, 'events', id));
-      } catch (fErr) {
-        console.warn('Error deleting event from Firestore:', fErr);
-      }
-    }
+    
 
     if (isMariaDbActive()) {
       try {
@@ -2783,14 +2834,7 @@ app.post('/api/promotions/:promotionId/claim', async (req: Request, res: Respons
     fs.writeFileSync(path.resolve(__dirname, 'promotions_db.json'), JSON.stringify(promotionsCache, null, 2), 'utf8');
     fs.writeFileSync(path.resolve(__dirname, 'coupons_db.json'), JSON.stringify(claimedCouponsCache, null, 2), 'utf8');
 
-    if (firestoreDb) {
-      try {
-        await setDoc(doc(firestoreDb, 'claimed_coupons', newCoupon.id), newCoupon);
-        await setDoc(doc(firestoreDb, 'promotions', promo.id), promo);
-      } catch (fErr) {
-        console.warn('Error saving claimed coupon to Firestore:', fErr);
-      }
-    }
+    
 
     if (isMariaDbActive()) {
       try {
@@ -2845,13 +2889,7 @@ app.post('/api/admin/promotions', async (req: Request, res: Response) => {
 
     fs.writeFileSync(path.resolve(__dirname, 'promotions_db.json'), JSON.stringify(promotionsCache, null, 2), 'utf8');
 
-    if (firestoreDb) {
-      try {
-        await setDoc(doc(firestoreDb, 'promotions', id), savedPromo);
-      } catch (fErr) {
-        console.warn('Error saving admin promo to Firestore:', fErr);
-      }
-    }
+    
 
     if (isMariaDbActive()) {
       try {
@@ -2878,13 +2916,7 @@ app.delete('/api/admin/promotions/:id', async (req: Request, res: Response) => {
     promotionsCache = promotionsCache.filter(p => p.id !== id);
     fs.writeFileSync(path.resolve(__dirname, 'promotions_db.json'), JSON.stringify(promotionsCache, null, 2), 'utf8');
 
-    if (firestoreDb) {
-      try {
-        await deleteDoc(doc(firestoreDb, 'promotions', id));
-      } catch (fErr) {
-        console.warn('Error deleting promo from Firestore:', fErr);
-      }
-    }
+    
 
     if (isMariaDbActive()) {
       try {
@@ -2924,13 +2956,7 @@ app.post('/api/admin/coupons/:couponId/status', async (req: Request, res: Respon
     claimedCouponsCache[idx].status = status;
     fs.writeFileSync(path.resolve(__dirname, 'coupons_db.json'), JSON.stringify(claimedCouponsCache, null, 2), 'utf8');
 
-    if (firestoreDb) {
-      try {
-        await updateDoc(doc(firestoreDb, 'claimed_coupons', claimedCouponsCache[idx].id), { status });
-      } catch (fErr) {
-        console.warn('Error updating coupon in Firestore:', fErr);
-      }
-    }
+    
 
     if (isMariaDbActive()) {
       try {
@@ -2958,13 +2984,7 @@ app.post('/api/admin/coupons/:code/redeem', async (req: Request, res: Response) 
     claimedCouponsCache[idx].status = 'redeemed';
     fs.writeFileSync(path.resolve(__dirname, 'coupons_db.json'), JSON.stringify(claimedCouponsCache, null, 2), 'utf8');
 
-    if (firestoreDb) {
-      try {
-        await updateDoc(doc(firestoreDb, 'claimed_coupons', claimedCouponsCache[idx].id), { status: 'redeemed' });
-      } catch (fErr) {
-        console.warn('Error redeeming coupon in Firestore:', fErr);
-      }
-    }
+    
 
     if (isMariaDbActive()) {
       try {
@@ -2987,13 +3007,7 @@ app.delete('/api/admin/coupons/:couponId', async (req: Request, res: Response) =
     claimedCouponsCache = claimedCouponsCache.filter(c => c.id !== couponId && c.code !== couponId);
     fs.writeFileSync(path.resolve(__dirname, 'coupons_db.json'), JSON.stringify(claimedCouponsCache, null, 2), 'utf8');
 
-    if (firestoreDb) {
-      try {
-        await deleteDoc(doc(firestoreDb, 'claimed_coupons', couponId));
-      } catch (fErr) {
-        console.warn('Error deleting coupon from Firestore:', fErr);
-      }
-    }
+    
 
     if (isMariaDbActive()) {
       try {
@@ -3466,12 +3480,7 @@ async function runAIRadarScan(): Promise<{
       }
     }
 
-    // Guardar en Firestore si está disponible
-    if (firestoreDb) {
-      try {
-        await setDoc(doc(firestoreDb, 'events', newId), newEvent);
-      } catch (_) {}
-    }
+
   }
 
   if (newlyAdded.length > 0) {
@@ -3886,13 +3895,7 @@ app.post('/api/events/publish-candidates', async (req: Request, res: Response) =
         }
       }
 
-      if (firestoreDb) {
-        try {
-          await setDoc(doc(firestoreDb, 'events', newId), newEvent);
-        } catch (fErr: any) {
-          console.warn('[Firestore] Error guardando evento publicado:', fErr.message);
-        }
-      }
+      
     }
 
     if (newlyAdded.length > 0) {
@@ -5787,15 +5790,7 @@ app.post('/api/businesses/approve-candidate', async (req: Request, res: Response
       console.warn('[Storage] Error actualizando businesses_seed.json:', e);
     }
 
-    // 3. Guardar en Firestore si está conectado
-    if (firestoreDb) {
-      try {
-        await setDoc(doc(firestoreDb, 'businesses', String(newId)), newBiz);
-        console.log(`[Firestore] Empresa "${newBiz.name}" guardada en Firestore.`);
-      } catch (fErr: any) {
-        console.warn('[Firestore] Error guardando empresa:', fErr.message);
-      }
-    }
+
 
     // 4. Guardar en Hostinger MariaDB si está conectado
     if (isMariaDbActive()) {
@@ -5834,12 +5829,7 @@ app.post('/api/businesses/approve-candidate', async (req: Request, res: Response
               await dbSaveBusiness(newBiz);
             } catch (_) {}
           }
-          if (firestoreDb) {
-            try {
-              await deleteDoc(doc(firestoreDb, 'businesses', String(newId)));
-              await setDoc(doc(firestoreDb, 'businesses', String(newBiz.id)), newBiz);
-            } catch (_) {}
-          }
+          
           try {
             const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
             fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
@@ -5947,9 +5937,7 @@ app.post('/api/businesses/approve-multiple-candidates', async (req: Request, res
       if (isMariaDbActive()) {
         try { await dbSaveBusiness(newBiz); } catch (_) {}
       }
-      if (firestoreDb) {
-        try { await setDoc(doc(firestoreDb, 'businesses', String(newBiz.id)), newBiz); } catch (_) {}
-      }
+      
 
       publishedList.push(newBiz);
     }
@@ -6023,16 +6011,7 @@ app.post('/api/admin/change-password', async (req: Request, res: Response) => {
 
   adminAccounts[userIdx].passwordHash = hashPassword(newPassword.trim());
 
-  if (firestoreDb) {
-    try {
-      await setDoc(doc(firestoreDb, 'system', 'admins'), {
-        accounts: adminAccounts,
-        updatedAt: new Date().toISOString()
-      });
-    } catch (fErr) {
-      console.warn('Error saving admin passwords to Firestore:', fErr);
-    }
-  }
+  
 
   res.json({ success: true, message: `Contraseña de ${username} actualizada con éxito` });
 });
@@ -6066,18 +6045,7 @@ app.post('/api/upload-logo', async (req: Request, res: Response) => {
     fs.mkdirSync(uploadsDir, { recursive: true });
     fs.writeFileSync(path.join(uploadsDir, safeFilename), buffer);
 
-    if (firestoreDb) {
-      try {
-        await setDoc(doc(firestoreDb, 'uploaded_images', safeFilename), {
-          data: base64Data,
-          mimeType,
-          filename: safeFilename,
-          updatedAt: new Date().toISOString()
-        });
-      } catch (fErr) {
-        console.warn('Error saving image to Firestore uploaded_images:', fErr);
-      }
-    }
+    
 
     res.json({ success: true, url: `/uploads/${safeFilename}`, filename: safeFilename });
   } catch (err: any) {
@@ -6120,6 +6088,10 @@ app.post('/api/admin/banner-and-logo', async (req: Request, res: Response) => {
         fs.writeFileSync(path.resolve(__dirname, 'dist/empresas.png'), bannerBuffer);
       }
       bannerUpdated = true;
+      portalConfig.bannerUrl = '/images/banner-empresas-en-carmen.png?v=' + Date.now();
+      portalConfig.lastUpdated = new Date().toISOString();
+      fs.writeFileSync(portalConfigPath, JSON.stringify(portalConfig, null, 2), 'utf8');
+      if (isMariaDbActive()) { dbSavePortalConfig(portalConfig).catch(() => {}); }
     }
 
     if (logoBase64 && typeof logoBase64 === 'string') {
@@ -6139,6 +6111,10 @@ app.post('/api/admin/banner-and-logo', async (req: Request, res: Response) => {
         fs.writeFileSync(path.resolve(__dirname, 'dist/images/logo-empresasencarmen.png'), logoBuffer);
       }
       logoUpdated = true;
+      portalConfig.logoUrl = '/images/logo-oficial.png?v=' + Date.now();
+      portalConfig.lastUpdated = new Date().toISOString();
+      fs.writeFileSync(portalConfigPath, JSON.stringify(portalConfig, null, 2), 'utf8');
+      if (isMariaDbActive()) { dbSavePortalConfig(portalConfig).catch(() => {}); }
     }
 
     let gitPushed = false;
@@ -6200,20 +6176,7 @@ app.get('/uploads/:filename', async (req: Request, res: Response) => {
     return res.sendFile(localFile);
   }
 
-  if (firestoreDb) {
-    try {
-      const imgDoc = await getDoc(doc(firestoreDb, 'uploaded_images', filename));
-      if (imgDoc.exists() && imgDoc.data()?.data) {
-        const data = imgDoc.data();
-        const buffer = Buffer.from(data.data, 'base64');
-        const uploadsDir = path.resolve(__dirname, 'public/uploads');
-        fs.mkdirSync(uploadsDir, { recursive: true });
-        fs.writeFileSync(localFile, buffer);
-        res.setHeader('Content-Type', data.mimeType || 'image/jpeg');
-        return res.send(buffer);
-      }
-    } catch (_) {}
-  }
+  
 
   // Live production fallback (encarmen.org)
   try {

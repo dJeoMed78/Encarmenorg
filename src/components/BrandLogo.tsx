@@ -19,12 +19,27 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   });
 
   useEffect(() => {
+    fetch('/api/portal-config')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.config?.logoUrl) {
+          setCustomLogoUrl(data.config.logoUrl);
+        }
+      })
+      .catch(() => {});
+
     const handleUpdate = () => {
       setLogoVersion(`${APP_VERSION}_${Date.now()}`);
       if (typeof window !== 'undefined') {
         const saved = localStorage.getItem('portal_custom_logo');
         if (saved) setCustomLogoUrl(saved);
       }
+      fetch('/api/portal-config')
+        .then(res => res.json())
+        .then(data => {
+          if (data?.config?.logoUrl) setCustomLogoUrl(data.config.logoUrl);
+        })
+        .catch(() => {});
     };
     window.addEventListener('brand-media-updated', handleUpdate);
     return () => window.removeEventListener('brand-media-updated', handleUpdate);

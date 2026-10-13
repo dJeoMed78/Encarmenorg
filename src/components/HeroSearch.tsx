@@ -60,12 +60,27 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
   });
 
   useEffect(() => {
+    fetch('/api/portal-config')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.config?.bannerUrl) {
+          setCustomBannerUrl(data.config.bannerUrl);
+        }
+      })
+      .catch(() => {});
+
     const handleUpdate = () => {
       setBannerVersion(`${APP_VERSION}_${Date.now()}`);
       if (typeof window !== 'undefined') {
         const saved = localStorage.getItem('portal_custom_banner');
         if (saved) setCustomBannerUrl(saved);
       }
+      fetch('/api/portal-config')
+        .then(res => res.json())
+        .then(data => {
+          if (data?.config?.bannerUrl) setCustomBannerUrl(data.config.bannerUrl);
+        })
+        .catch(() => {});
     };
     window.addEventListener('brand-media-updated', handleUpdate);
     return () => window.removeEventListener('brand-media-updated', handleUpdate);

@@ -417,63 +417,42 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-stone-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-stone-900 border border-stone-800 rounded-3xl w-full max-w-6xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden text-stone-100">
+    <div className="fixed inset-0 z-50 flex flex-col sm:items-center sm:justify-center p-0 sm:p-4 bg-stone-950/85 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-stone-900 border-0 sm:border sm:border-stone-800 sm:rounded-3xl w-full sm:max-w-6xl h-full sm:h-auto sm:max-h-[92vh] flex flex-col shadow-2xl overflow-hidden text-stone-100">
         
-        {/* HEADER */}
-        <div className="p-4 sm:p-6 bg-gradient-to-r from-stone-900 via-sky-950/40 to-stone-900 border-b border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400">
-                <Globe className="w-5 h-5" />
-              </span>
-              <div>
-                <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-                  Búsqueda Automática de Empresas
-                  <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-sky-500/20 text-amber-300 text-xs font-bold border border-amber-500/30">
-                    IA + Fuentes Oficiales
-                  </span>
+        {/* COMPACT STICKY HEADER */}
+        <div className="p-3 sm:p-5 bg-gradient-to-r from-stone-900 via-sky-950/40 to-stone-900 border-b border-stone-800 flex items-center justify-between gap-2 shrink-0 z-10">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="p-1.5 sm:p-2 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 shrink-0">
+              <Globe className="w-4 h-4 sm:w-5 sm:h-5" />
+            </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-xl font-black text-white truncate">
+                  Búsqueda Automática
                 </h2>
-                <p className="text-xs text-stone-400">
-                  Rastreo autónomo y con IA en fuentes oficiales de Empresas en Carmen, Google y WhatsApp (30 empresas por pulsación).
-                </p>
+                <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-sky-500/20 text-amber-300 text-[10px] sm:text-xs font-bold border border-amber-500/30 shrink-0">
+                  IA + Fuentes Oficiales
+                </span>
               </div>
+              <p className="text-[11px] text-stone-400 hidden sm:block truncate">
+                Rastreo autónomo y con IA en fuentes oficiales de Empresas en Carmen, Google y WhatsApp.
+              </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {/* Botón Búsqueda con IA (30 Negocios por pulsación) */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Botón Búsqueda con IA */}
             <button
               type="button"
               onClick={handleScanWithAi}
               disabled={isLoading || isAiScanning}
-              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-black text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
+              className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-black text-[11px] sm:text-xs flex items-center gap-1 sm:gap-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50 active:scale-95"
               title="Detección con IA: localiza 30 negocios reales de Ciudad del Carmen con teléfono por pulsación"
             >
-              <Sparkles className={`w-4 h-4 text-stone-950 ${isAiScanning ? 'animate-spin' : ''}`} />
-              <span>{isAiScanning ? 'Buscando 30 con IA...' : 'Búsqueda con IA (30 Negocios)'}</span>
-            </button>
-
-            {/* Botón Importar WhatsApp */}
-            <button
-              type="button"
-              onClick={() => setIsWhatsAppModalOpen(true)}
-              className="px-3.5 py-2 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-600/60 text-emerald-300 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Importar y extraer negocios de grupos de WhatsApp donde eres administrador"
-            >
-              <MessageSquare className="w-4 h-4 text-emerald-400" />
-              <span>Importar de WhatsApp</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={loadCandidates}
-              disabled={isLoading}
-              className="px-3.5 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs flex items-center gap-2 border border-stone-700 transition-colors cursor-pointer disabled:opacity-50"
-              title="Refrescar búsqueda y volver a escanear"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-sky-400 ${isLoading ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">{isLoading ? 'Rastreando...' : 'Volver a Escanear'}</span>
+              <Sparkles className={`w-3.5 h-3.5 text-stone-950 ${isAiScanning ? 'animate-spin' : ''}`} />
+              <span className="hidden xs:inline">{isAiScanning ? 'Buscando...' : '30 con IA'}</span>
+              <span className="xs:hidden">{isAiScanning ? '...' : 'IA'}</span>
             </button>
 
             {pendingCount > 0 && (
@@ -481,205 +460,230 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                 type="button"
                 onClick={handleAcceptAllPending}
                 disabled={isApprovingAll || isLoading}
-                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md transition-colors cursor-pointer disabled:opacity-50"
+                className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] sm:text-xs flex items-center gap-1 sm:gap-1.5 shadow-md transition-colors cursor-pointer disabled:opacity-50 active:scale-95"
                 title="Aprobar y publicar todos los candidatos pendientes"
               >
-                <Check className="w-4 h-4 text-emerald-200" />
-                <span>{isApprovingAll ? 'Publicando...' : `Aceptar Todos (${pendingCount})`}</span>
+                <Check className="w-3.5 h-3.5 text-emerald-200" />
+                <span className="hidden sm:inline">{isApprovingAll ? 'Publicando...' : `Aceptar Todos (${pendingCount})`}</span>
+                <span className="sm:hidden">({pendingCount})</span>
               </button>
             )}
 
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-400 hover:text-white transition-colors cursor-pointer border border-stone-700"
+              className="p-1.5 sm:p-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-400 hover:text-white transition-colors cursor-pointer border border-stone-700"
               aria-label="Cerrar modal"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
 
-        {/* BARRA DE FUENTES OFICIALES Y ENLACES DIRECTOS */}
-        <div className="px-4 py-2.5 bg-stone-950/90 border-b border-stone-800 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-stone-400 font-medium">Fuentes Prioritarias:</span>
-            <a
-              href="https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-950/60 hover:bg-sky-900 border border-sky-800/80 text-sky-300 font-bold hover:underline"
-              title="Abrir Grupo Oficial de Facebook Empresas en Carmen"
-            >
-              <ExternalLink className="w-3 h-3" />
-              <span>👑 Grupo Oficial Facebook</span>
-            </a>
-            <a
-              href="https://facebook.com/empresasencarmen"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-950/60 hover:bg-amber-900 border border-amber-800/80 text-amber-300 font-bold hover:underline"
-              title="Abrir FanPage Oficial de Facebook @empresasencarmen"
-            >
-              <ExternalLink className="w-3 h-3" />
-              <span>👑 FanPage Oficial (@empresasencarmen)</span>
-            </a>
-          </div>
-
-          <div className="text-[11px] text-stone-400">
-            <span>Se detectaron <strong className="text-white">{candidates.length}</strong> negocios verificados</span>
-          </div>
-        </div>
-
-        {/* NOTIFICATION BANNER */}
-        {notice && (
-          <div
-            className={`px-4 py-3 text-xs font-medium flex items-center justify-between gap-3 border-b ${
-              notice.type === 'success'
-                ? 'bg-emerald-950/70 border-emerald-800 text-emerald-200'
-                : notice.type === 'error'
-                ? 'bg-rose-950/70 border-rose-800 text-rose-200'
-                : 'bg-sky-950/70 border-sky-800 text-sky-200'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              {notice.type === 'success' ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              ) : notice.type === 'error' ? (
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-              ) : (
-                <Sparkles className="w-4 h-4 text-sky-400 shrink-0" />
-              )}
-              <span>{notice.text}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setNotice(null)}
-              className="p-1 text-stone-400 hover:text-white"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
-
-        {/* FILTROS POR FUENTE (TABS) */}
-        <div className="px-4 py-2 bg-stone-900/60 border-b border-stone-800 flex flex-wrap items-center gap-1.5 text-xs">
-          <button
-            type="button"
-            onClick={() => setSelectedSource('all')}
-            className={`px-3 py-1 rounded-lg font-bold transition-all ${
-              selectedSource === 'all'
-                ? 'bg-sky-600 text-white shadow-xs'
-                : 'bg-stone-800/80 hover:bg-stone-800 text-stone-300'
-            }`}
-          >
-            Todas las fuentes ({candidates.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedSource('official_group')}
-            className={`px-3 py-1 rounded-lg font-bold transition-all ${
-              selectedSource === 'official_group'
-                ? 'bg-sky-600 text-white shadow-xs'
-                : 'bg-stone-800/80 hover:bg-stone-800 text-sky-300'
-            }`}
-          >
-            👑 Grupo Oficial FB ({officialGroupCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedSource('official_page')}
-            className={`px-3 py-1 rounded-lg font-bold transition-all ${
-              selectedSource === 'official_page'
-                ? 'bg-sky-600 text-white shadow-xs'
-                : 'bg-stone-800/80 hover:bg-stone-800 text-amber-300'
-            }`}
-          >
-            👑 FanPage Oficial ({officialPageCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedSource('whatsapp')}
-            className={`px-3 py-1 rounded-lg font-bold transition-all ${
-              selectedSource === 'whatsapp'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-stone-800/80 hover:bg-stone-800 text-emerald-300'
-            }`}
-          >
-            📲 WhatsApp ({whatsAppCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedSource('community')}
-            className={`px-3 py-1 rounded-lg font-bold transition-all ${
-              selectedSource === 'community'
-                ? 'bg-stone-700 text-white shadow-xs'
-                : 'bg-stone-800/80 hover:bg-stone-800 text-stone-400'
-            }`}
-          >
-            📍 Google Maps & Local ({communityCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedSource('ai')}
-            className={`px-3 py-1 rounded-lg font-bold transition-all ${
-              selectedSource === 'ai'
-                ? 'bg-amber-500 text-stone-950 shadow-xs'
-                : 'bg-stone-800/80 hover:bg-stone-800 text-amber-300'
-            }`}
-          >
-            ✨ Detección con IA ({aiCount})
-          </button>
-        </div>
-
-        {/* CONTROLS & SEARCH BAR */}
-        <div className="p-3 sm:p-4 bg-stone-900/90 border-b border-stone-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Buscar por nombre, giro, teléfono, colonia o servicio..."
-              className="w-full pl-9 pr-8 py-2 rounded-xl bg-stone-950 border border-stone-800 text-xs sm:text-sm text-stone-200 placeholder:text-stone-500 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
-            />
-            {searchQuery && (
+        {/* CONTENEDOR DESPLAZABLE PRINCIPAL (OPTIMIZADO PARA TOUCH EN MÓVIL) */}
+        <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y min-h-0 bg-stone-900 divide-y divide-stone-800/80">
+          
+          {/* ACCIONES SECUNDARIAS Y FUENTES EN MÓVIL/DESKTOP */}
+          <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-stone-950/70 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-500 hover:text-stone-300"
+                onClick={() => setIsWhatsAppModalOpen(true)}
+                className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-600/60 text-emerald-300 font-bold text-[11px] sm:text-xs flex items-center gap-1 cursor-pointer"
+                title="Importar y extraer negocios de grupos de WhatsApp"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                <span>WhatsApp</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={loadCandidates}
+                disabled={isLoading}
+                className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-[11px] sm:text-xs flex items-center gap-1 border border-stone-700 cursor-pointer disabled:opacity-50"
+                title="Refrescar búsqueda y volver a escanear"
+              >
+                <RefreshCw className={`w-3 h-3 text-sky-400 ${isLoading ? 'animate-spin' : ''}`} />
+                <span>Refrescar</span>
+              </button>
+
+              <a
+                href="https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-950/60 hover:bg-sky-900 border border-sky-800/80 text-sky-300 font-bold text-[11px] hover:underline"
+                title="Abrir Grupo Oficial de Facebook Empresas en Carmen"
+              >
+                <ExternalLink className="w-3 h-3" />
+                <span>Grupo FB</span>
+              </a>
+
+              <a
+                href="https://facebook.com/empresasencarmen"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-950/60 hover:bg-amber-900 border border-amber-800/80 text-amber-300 font-bold text-[11px] hover:underline"
+                title="Abrir FanPage Oficial de Facebook @empresasencarmen"
+              >
+                <ExternalLink className="w-3 h-3" />
+                <span>FanPage FB</span>
+              </a>
+            </div>
+
+            <div className="text-[11px] text-stone-400 ml-auto font-mono">
+              <span>Total: <strong className="text-white">{candidates.length}</strong></span>
+            </div>
+          </div>
+
+          {/* NOTIFICATION BANNER */}
+          {notice && (
+            <div
+              className={`px-3 sm:px-4 py-2 sm:py-2.5 text-xs font-medium flex items-center justify-between gap-2 ${
+                notice.type === 'success'
+                  ? 'bg-emerald-950/70 text-emerald-200'
+                  : notice.type === 'error'
+                  ? 'bg-rose-950/70 text-rose-200'
+                  : 'bg-sky-950/70 text-sky-200'
+              }`}
+            >
+              <div className="flex items-center gap-2 text-[11px] sm:text-xs">
+                {notice.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : notice.type === 'error' ? (
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                ) : (
+                  <Sparkles className="w-4 h-4 text-sky-400 shrink-0" />
+                )}
+                <span>{notice.text}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNotice(null)}
+                className="p-1 text-stone-400 hover:text-white"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
-            )}
+            </div>
+          )}
+
+          {/* FILTROS POR FUENTE (SCROLL HORIZONTAL EN DISPOSITIVOS MÓVILES) */}
+          <div className="px-3 sm:px-4 py-2 bg-stone-900/90 overflow-x-auto whitespace-nowrap scrollbar-none flex items-center gap-1.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setSelectedSource('all')}
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs shrink-0 ${
+                selectedSource === 'all'
+                  ? 'bg-sky-600 text-white shadow-xs'
+                  : 'bg-stone-800/80 hover:bg-stone-800 text-stone-300'
+              }`}
+            >
+              Todas ({candidates.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedSource('official_group')}
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs shrink-0 ${
+                selectedSource === 'official_group'
+                  ? 'bg-sky-600 text-white shadow-xs'
+                  : 'bg-stone-800/80 hover:bg-stone-800 text-sky-300'
+              }`}
+            >
+              👑 Grupo FB ({officialGroupCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedSource('official_page')}
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs shrink-0 ${
+                selectedSource === 'official_page'
+                  ? 'bg-sky-600 text-white shadow-xs'
+                  : 'bg-stone-800/80 hover:bg-stone-800 text-amber-300'
+              }`}
+            >
+              👑 FanPage ({officialPageCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedSource('whatsapp')}
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs shrink-0 ${
+                selectedSource === 'whatsapp'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-stone-800/80 hover:bg-stone-800 text-emerald-300'
+              }`}
+            >
+              📲 WhatsApp ({whatsAppCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedSource('community')}
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs shrink-0 ${
+                selectedSource === 'community'
+                  ? 'bg-stone-700 text-white shadow-xs'
+                  : 'bg-stone-800/80 hover:bg-stone-800 text-stone-400'
+              }`}
+            >
+              📍 Maps & Local ({communityCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedSource('ai')}
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs shrink-0 ${
+                selectedSource === 'ai'
+                  ? 'bg-amber-500 text-stone-950 shadow-xs'
+                  : 'bg-stone-800/80 hover:bg-stone-800 text-amber-300'
+              }`}
+            >
+              ✨ IA ({aiCount})
+            </button>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="relative">
-              <select
-                value={selectedCategory}
-                onChange={e => setSelectedCategory(e.target.value)}
-                className="pl-3 pr-8 py-2 rounded-xl bg-stone-950 border border-stone-800 text-xs text-stone-300 font-medium focus:border-sky-500 outline-none cursor-pointer appearance-none"
-              >
-                <option value="all">Todas las categorías ({candidates.length})</option>
-                {categoriesList.map(cat => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-              <Filter className="w-3.5 h-3.5 text-stone-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          {/* CONTROLS & SEARCH BAR */}
+          <div className="p-3 sm:p-4 bg-stone-900/95 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Buscar por nombre, giro, teléfono, colonia..."
+                className="w-full pl-8 sm:pl-9 pr-7 py-2 rounded-xl bg-stone-950 border border-stone-800 text-xs sm:text-sm text-stone-200 placeholder:text-stone-500 focus:border-sky-500 outline-none"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-500 hover:text-stone-300"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
-            <div className="px-3 py-1.5 rounded-xl bg-stone-800 border border-stone-700 text-xs font-mono text-stone-300">
-              <span className="text-emerald-400 font-bold">{acceptedCount}</span> autorizadas /{' '}
-              <span className="text-amber-400 font-bold">{pendingCount}</span> pendientes
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 sm:flex-initial">
+                <select
+                  value={selectedCategory}
+                  onChange={e => setSelectedCategory(e.target.value)}
+                  className="w-full pl-2.5 pr-7 py-2 rounded-xl bg-stone-950 border border-stone-800 text-xs text-stone-300 font-medium focus:border-sky-500 outline-none cursor-pointer appearance-none"
+                >
+                  <option value="all">Todas las categorías ({candidates.length})</option>
+                  {categoriesList.map(cat => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+                <Filter className="w-3 h-3 text-stone-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+
+              <div className="px-2.5 py-1.5 rounded-xl bg-stone-800 border border-stone-700 text-[11px] sm:text-xs font-mono text-stone-300 shrink-0">
+                <span className="text-emerald-400 font-bold">{acceptedCount}</span> ok /{' '}
+                <span className="text-amber-400 font-bold">{pendingCount}</span> pend
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* CANDIDATES LIST */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+          {/* CANDIDATES LIST CONTAINER */}
+          <div className="p-3 sm:p-6 space-y-4">
           {isAiScanning ? (
             <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
               <div className="relative">
@@ -981,8 +985,9 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
             </div>
           )}
         </div>
+      </div>
 
-        {/* FOOTER */}
+      {/* FOOTER */}
         <div className="p-4 bg-stone-950 border-t border-stone-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-stone-400">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
