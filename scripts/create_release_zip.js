@@ -30,29 +30,22 @@ output.on('close', () => {
   const sizeMb = (archive.pointer() / (1024 * 1024)).toFixed(2);
   console.log(`¡ZIP generado con éxito! Tamaño: ${sizeMb} MB (${archive.pointer()} bytes)`);
 
-  // Duplicar con nombres alternativos para garantizar que cualquier URL o botón descargue esta versión actualizada
+  // Mantener solo el zip oficial y backup para descarga directa sin duplicar espacio
   const aliases = [
     'public/codigo-fuente-empresasencarmen.zip',
-    'public/backup.zip',
-    'public/codigo-fuente-empresasencarmen-061026-0915.zip',
-    'public/codigo-fuente-empresasencarmen-051026-1324.zip'
+    'public/backup.zip'
   ];
 
   for (const alias of aliases) {
     const aliasPath = path.resolve(rootDir, alias);
     fs.copyFileSync(targetZipPath, aliasPath);
-    console.log(`Copiado alias: ${alias}`);
   }
 
   // Copiar también a dist/ si existe
   const distDir = path.resolve(rootDir, 'dist');
   if (fs.existsSync(distDir)) {
-    fs.copyFileSync(targetZipPath, path.resolve(distDir, `codigo-fuente-empresasencarmen-${version}.zip`));
     fs.copyFileSync(targetZipPath, path.resolve(distDir, 'codigo-fuente-empresasencarmen.zip'));
     fs.copyFileSync(targetZipPath, path.resolve(distDir, 'backup.zip'));
-    fs.copyFileSync(targetZipPath, path.resolve(distDir, 'codigo-fuente-empresasencarmen-061026-0915.zip'));
-    fs.copyFileSync(targetZipPath, path.resolve(distDir, 'codigo-fuente-empresasencarmen-051026-1324.zip'));
-    console.log('Copiado a dist/ para servicio web estático instantáneo.');
   }
 
   process.exit(0);
