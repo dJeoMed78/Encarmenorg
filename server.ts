@@ -4001,21 +4001,21 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
   },
   {
     id: 'biz-real-02',
-    name: 'Bendita Carmelita Restaurante Familiar',
-    category: 'Restaurantes y Cocinas Económicas',
-    categories: ['Restaurantes y Cocinas Económicas', 'Alimentos y Bebidas'],
+    name: 'Bendita Carmelita',
+    category: 'Bares, Cervecerías y Restaurantes',
+    categories: ['Bares, Cervecerías y Restaurantes', 'Alimentos y Bebidas'],
     phone: '9381573307',
     whatsapp: '9381573307',
-    address: 'Av. Adolfo López Mateos #140',
-    colonia: 'Playa Norte',
-    description: 'Restaurante de comida mexicana y especialidades carmelitas. Desayunos tradicionales, mariscos frescos, cortes, café de olla y ambiente 100% familiar.',
-    delivery: 'Servicio a domicilio y consumo en restaurante',
+    address: 'Calle 20 x 27-A #102',
+    colonia: 'Centro',
+    description: 'Cervecería artesanal, pizzas, hamburguesas y botanas en el Centro de Ciudad del Carmen.',
+    delivery: 'Consumo en restaurante y pedidos para llevar',
     hasDelivery: true,
-    schedule: 'Lunes a Domingo 8:00 AM - 10:00 PM',
-    payment: 'Efectivo, Tarjetas Visa/Mastercard y Transferencia',
+    schedule: 'Martes a Domingo 4:00 PM - 1:00 AM',
+    payment: 'Efectivo, Tarjetas y Transferencia',
     image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
     source: '👑 FanPage Oficial (@empresasencarmen)',
-    sourceUrl: 'https://facebook.com/empresasencarmen',
+    sourceUrl: 'https://www.facebook.com/empresasencarmen/search/?q=Bendita+Carmelita',
     isOfficialSource: true,
     priority: true,
     status: 'pending'
@@ -4036,7 +4036,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencias',
     image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Los%20Chiquis%20Tacos%20%26%20Antojitos',
     isOfficialSource: true,
     priority: true,
     status: 'pending'
@@ -4057,7 +4057,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia SPEI',
     image: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=T%C3%A9cnicos%20en%20Aires%20Acondicionados%20del%20Golfo',
     isOfficialSource: true,
     priority: true,
     status: 'pending'
@@ -4078,7 +4078,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Transferencia, Efectivo y Facturación CFDI',
     image: 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Suministros%20Industriales%20Alpha',
     isOfficialSource: true,
     priority: true,
     status: 'pending'
@@ -4099,7 +4099,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1561758033-d89a9ad46330?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=La%20Esquina%20De%20Chetos',
     isOfficialSource: true,
     priority: true,
     status: 'pending'
@@ -4139,7 +4139,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=800&q=80',
     source: '👑 FanPage Oficial (@empresasencarmen)',
-    sourceUrl: 'https://facebook.com/empresasencarmen',
+    sourceUrl: 'https://www.facebook.com/empresasencarmen/search/?q=Servi-Aire%20Acondicionado%20Carmen',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4159,7 +4159,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Transferencia y Factura',
     image: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=DOCER%20Multiservicios%20y%20Construcci%C3%B3n',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4179,7 +4179,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencias directas',
     image: 'https://images.unsplash.com/photo-1621905251918-48416bd8575a?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Multiservicios%20Hern%C3%A1ndez%20Emergencias%20El%C3%A9ctricas',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4218,7 +4218,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas y Transferencia',
     image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Los%20Trompudos%20Taquer%C3%ADa',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4257,7 +4257,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas Visa/Mastercard',
     image: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80',
     source: '👑 FanPage Oficial (@empresasencarmen)',
-    sourceUrl: 'https://facebook.com/empresasencarmen',
+    sourceUrl: 'https://www.facebook.com/empresasencarmen/search/?q=Smoke%20Icaco%20Cortes%20y%20Parrilla',
     isOfficialSource: true,
     priority: true,
     status: 'pending'
@@ -4430,7 +4430,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1545173168-9f1947eebb7f?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Lavander%C3%ADa%20Cd%20Del%20Carmen',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4469,7 +4469,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Transferencia y Tarjeta al repartidor',
     image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Monkeys%20Pizza%20Artesanal',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4584,7 +4584,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencias directas',
     image: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Cerrajer%C3%ADa%20Lucas%2024%20Horas',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4661,7 +4661,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Taquer%C3%ADa%20La%20Hormiga%20Carmelita',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4681,7 +4681,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas Visa/Mastercard y Transferencia',
     image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
     source: '👑 FanPage Oficial (@empresasencarmen)',
-    sourceUrl: 'https://facebook.com/empresasencarmen',
+    sourceUrl: 'https://www.facebook.com/empresasencarmen/search/?q=Mariscos%20El%20Tim%C3%B3n%20del%20Golfo',
     isOfficialSource: true,
     priority: true,
     status: 'pending'
@@ -4702,7 +4702,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia SPEI',
     image: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Pescader%C3%ADa%20y%20Marisquer%C3%ADa%20Puerto%20Real',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4722,7 +4722,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?auto=format&fit=crop&w=800&q=80',
     source: '👑 FanPage Oficial (@empresasencarmen)',
-    sourceUrl: 'https://facebook.com/empresasencarmen',
+    sourceUrl: 'https://www.facebook.com/empresasencarmen/search/?q=Marquesitas%20y%20Frapp%C3%A9s%20El%20Chavo',
     isOfficialSource: true,
     priority: true,
     status: 'pending'
@@ -4762,7 +4762,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas y Transferencia',
     image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Panader%C3%ADa%20y%20Pasteler%C3%ADa%20Suspiros%20del%20Carmen',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4782,7 +4782,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas y Transferencia',
     image: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Refaccionaria%20del%20Carmen%20Autopartes',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4802,7 +4802,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Transferencia SPEI y Tarjetas',
     image: 'https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=800&q=80',
     source: '👑 FanPage Oficial (@empresasencarmen)',
-    sourceUrl: 'https://facebook.com/empresasencarmen',
+    sourceUrl: 'https://www.facebook.com/empresasencarmen/search/?q=Taller%20Mec%C3%A1nico%20y%20Alineaci%C3%B3n%20San%20Rom%C3%A1n',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4822,7 +4822,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1578844251758-2f71da64c96f?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Vulcanizadora%20y%20Llantas%20El%20Parche%20Veloz',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4842,7 +4842,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Transferencia y Anticipo por contrato',
     image: 'https://images.unsplash.com/photo-1538688525198-9b88f6f53126?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Carpinter%C3%ADa%20y%20Ebanister%C3%ADa%20Carmen%20Muebles',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4862,7 +4862,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencias',
     image: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=80',
     source: '👑 FanPage Oficial (@empresasencarmen)',
-    sourceUrl: 'https://facebook.com/empresasencarmen',
+    sourceUrl: 'https://www.facebook.com/empresasencarmen/search/?q=Vidrier%C3%ADa%20y%20Aluminios%20del%20Sureste',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4901,7 +4901,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1585704032915-c3400ca199e7?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Plomer%C3%ADa%20y%20Destapes%20El%20Tibur%C3%B3n%2024%20Horas',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4940,7 +4940,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas y Transferencia',
     image: 'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Ferreter%C3%ADa%20y%20Herramientas%20Fix%20del%20Carmen',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4979,7 +4979,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas a meses y Transferencia',
     image: 'https://images.unsplash.com/photo-1591076482161-42ce6da69f67?auto=format&fit=crop&w=800&q=80',
     source: '👑 FanPage Oficial (@empresasencarmen)',
-    sourceUrl: 'https://facebook.com/empresasencarmen',
+    sourceUrl: 'https://www.facebook.com/empresasencarmen/search/?q=%C3%93ptica%20Carmelita%20Visi%C3%B3n%20Integral',
     isOfficialSource: true,
     priority: true,
     status: 'pending'
@@ -5019,7 +5019,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas y Transferencia',
     image: 'https://images.unsplash.com/photo-1537151625747-768eb6cf92b2?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Veterinaria%20y%20Est%C3%A9tica%20Canina%20Pet%20Spa%20Carmen',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -5039,7 +5039,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas y Transferencias SPEI',
     image: 'https://images.unsplash.com/photo-1526047932273-341f2a7631f9?auto=format&fit=crop&w=800&q=80',
     source: '👑 FanPage Oficial (@empresasencarmen)',
-    sourceUrl: 'https://facebook.com/empresasencarmen',
+    sourceUrl: 'https://www.facebook.com/empresasencarmen/search/?q=Boutique%20y%20Florer%C3%ADa%20La%20Orqu%C3%ADdea%20Carmelita',
     isOfficialSource: true,
     priority: true,
     status: 'pending'
@@ -5060,7 +5060,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Transferencia y Facturación CFDI',
     image: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Imprenta%20y%20Publicidad%20Dise%C3%B1os%20del%20Carmen',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -5099,7 +5099,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas y Transferencia',
     image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Pizzer%C3%ADa%20Bambinos%20Isla',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -5119,7 +5119,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=800&q=80',
     source: '👑 FanPage Oficial (@empresasencarmen)',
-    sourceUrl: 'https://facebook.com/empresasencarmen',
+    sourceUrl: 'https://www.facebook.com/empresasencarmen/search/?q=Taquer%C3%ADa%20El%20Trompo%20de%20Oro',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -5139,7 +5139,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Cocina%20Econ%C3%B3mica%20Do%C3%B1a%20Mary%20Carmen',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -5178,7 +5178,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Cerrajer%C3%ADa%20y%20Duplicados%20El%20Inge',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -5198,7 +5198,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas y Transferencia',
     image: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=800&q=80',
     source: '👑 FanPage Oficial (@empresasencarmen)',
-    sourceUrl: 'https://facebook.com/empresasencarmen',
+    sourceUrl: 'https://www.facebook.com/empresasencarmen/search/?q=Est%C3%A9tica%20y%20Barber%C3%ADa%20The%20Carmen%20Barbershop',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -5237,7 +5237,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Transferencia y Factura CFDI',
     image: 'https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?auto=format&fit=crop&w=800&q=80',
     source: '👑 FanPage Oficial (@empresasencarmen)',
-    sourceUrl: 'https://facebook.com/empresasencarmen',
+    sourceUrl: 'https://www.facebook.com/empresasencarmen/search/?q=Boutique%20y%20Uniformes%20Industriales%20Carmen%20Safety',
     isOfficialSource: true,
     status: 'pending'
   },

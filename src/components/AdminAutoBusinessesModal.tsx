@@ -1270,51 +1270,111 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div>
-                <span className="text-xs text-stone-400 font-bold">Empresa:</span>
-                <p className="text-base font-black text-white">{viewingSourceCandidate.name}</p>
+                <span className="text-xs text-stone-400 font-bold">Empresa Prospecto:</span>
+                <p className="text-lg font-black text-white">{viewingSourceCandidate.name}</p>
+                <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-stone-300">
+                  <span className="font-mono text-emerald-400 font-bold">Tel: {viewingSourceCandidate.phone}</span>
+                  {viewingSourceCandidate.address && (
+                    <span className="text-stone-400">· {viewingSourceCandidate.address} ({viewingSourceCandidate.colonia})</span>
+                  )}
+                </div>
               </div>
 
               <div>
-                <span className="text-xs text-stone-400 font-bold">Origen público:</span>
+                <span className="text-xs text-stone-400 font-bold">Origen público registrado:</span>
                 <p className="text-sm font-semibold text-purple-300">{viewingSourceCandidate.source}</p>
               </div>
 
-              <div className="p-3 bg-stone-950 rounded-xl border border-stone-800 space-y-1">
-                <span className="text-[11px] text-stone-400 font-bold block">Enlace original de la publicación:</span>
+              {/* Botones de Verificación Directa en Fuentes Oficiales */}
+              <div className="space-y-2 pt-1">
+                <span className="text-xs font-bold text-stone-200 block">Comprobación de la Fuente en Tiempo Real:</span>
+                
+                {/* 1. Buscar en Grupo de Facebook */}
                 <a
-                  href={viewingSourceCandidate.sourceUrl}
+                  href={`https://www.facebook.com/groups/18WwRY3pKB/search/?q=${encodeURIComponent(viewingSourceCandidate.name)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-sky-400 hover:text-sky-300 break-all underline flex items-center gap-1 font-mono"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-sky-950/70 hover:bg-sky-900 border border-sky-800 text-sky-200 font-bold text-xs flex items-center justify-between transition-colors shadow-sm cursor-pointer"
                 >
-                  <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                  <span>{viewingSourceCandidate.sourceUrl}</span>
+                  <div className="flex items-center gap-2">
+                    <ExternalLink className="w-4 h-4 text-sky-400 shrink-0" />
+                    <span>Buscar publicaciones en Grupo Oficial FB</span>
+                  </div>
+                  <span className="text-[10px] text-sky-400 font-mono">Abrir Facebook →</span>
+                </a>
+
+                {/* 2. Buscar en FanPage de Facebook */}
+                <a
+                  href={`https://www.facebook.com/empresasencarmen/search/?q=${encodeURIComponent(viewingSourceCandidate.name)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-amber-950/70 hover:bg-amber-900 border border-amber-800 text-amber-200 font-bold text-xs flex items-center justify-between transition-colors shadow-sm cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <ExternalLink className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>Buscar publicaciones en FanPage Oficial (@empresasencarmen)</span>
+                  </div>
+                  <span className="text-[10px] text-amber-400 font-mono">Abrir FanPage →</span>
+                </a>
+
+                {/* 3. Buscar en Google Maps */}
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(viewingSourceCandidate.name + ' ' + (viewingSourceCandidate.address || '') + ' Ciudad del Carmen Campeche')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-800 text-rose-200 font-bold text-xs flex items-center justify-between transition-colors shadow-sm cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>Ver ficha y dirección real en Google Maps</span>
+                  </div>
+                  <span className="text-[10px] text-rose-400 font-mono">Abrir Mapa →</span>
+                </a>
+
+                {/* 4. WhatsApp Directo */}
+                <a
+                  href={`https://wa.me/52${viewingSourceCandidate.phone}?text=${encodeURIComponent('Hola ' + viewingSourceCandidate.name + ', nos comunicamos de Empresas en Carmen para verificar su dirección y giro.')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-800 text-emerald-200 font-bold text-xs flex items-center justify-between transition-colors shadow-sm cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Verificar por WhatsApp directo (+52 {viewingSourceCandidate.phone})</span>
+                  </div>
+                  <span className="text-[10px] text-emerald-400 font-mono">Chatear →</span>
                 </a>
               </div>
 
-              <p className="text-xs text-stone-400 leading-relaxed">
-                Este negocio fue detectado en fuentes públicas de Ciudad del Carmen. Al autorizarlo, se almacena en la base de datos oficial y se exporta a WooCommerce en <strong>empresasencarmen.com</strong> y <strong>encarmen.org</strong>.
-              </p>
+              <div className="p-3 bg-amber-950/40 border border-amber-600/40 rounded-xl text-xs text-amber-200 space-y-1">
+                <p className="font-bold">⚠️ Política de Veracidad de Empresas en Carmen:</p>
+                <p className="text-[11px] text-amber-300/90 leading-relaxed">
+                  Si la dirección, horarios o giro no coinciden exactamente con lo que conoces, usa el botón <strong>"Modificar"</strong> para ajustar los datos reales antes de publicar. Nunca publiques información sin confirmar.
+                </p>
+              </div>
             </div>
 
-            <div className="pt-2 flex items-center justify-end gap-2 border-t border-stone-800">
-              <a
-                href={viewingSourceCandidate.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md"
+            <div className="pt-3 flex items-center justify-end gap-2 border-t border-stone-800">
+              <button
+                type="button"
+                onClick={() => {
+                  const target = viewingSourceCandidate;
+                  setViewingSourceCandidate(null);
+                  handleOpenModify(target);
+                }}
+                className="px-4 py-2 rounded-xl bg-sky-700 hover:bg-sky-600 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
               >
-                <ExternalLink className="w-4 h-4" />
-                <span>Abrir Enlace Externo</span>
-              </a>
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Modificar Datos</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setViewingSourceCandidate(null)}
-                className="px-4 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs"
+                className="px-4 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs cursor-pointer"
               >
-                Entendido
+                Cerrar
               </button>
             </div>
           </div>
