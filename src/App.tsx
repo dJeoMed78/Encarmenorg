@@ -771,56 +771,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-stone-50 text-stone-900 font-sans selection:bg-amber-500 selection:text-white">
-      {/* Top Banner for Admin (Only visible if Admin is logged in) */}
-      {isAdminAuthenticated && !isZipBannerDismissed && (
-        <div className="bg-stone-950 border-b border-amber-500/40 px-3 sm:px-6 py-2 text-stone-200 text-xs flex flex-wrap items-center justify-between gap-2 shadow-md relative z-50">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-bold text-white">ZIP para Google Cloud Shell:</span>
-            <span className="font-mono bg-stone-800 border border-stone-700 text-amber-300 px-2 py-0.5 rounded text-[11px] font-bold">
-              versión {liveVersion}
-            </span>
-            <span className="hidden lg:inline text-stone-400 text-[11px]">
-              (Empaquetado y listo para desplegar)
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleDownloadZip}
-              disabled={isDownloadingZip}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-stone-950 font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer border-none"
-              title="Descargar código fuente directamente a tu computadora"
-            >
-              {isDownloadingZip ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Preparando archivo ZIP...</span>
-                </>
-              ) : (
-                <>
-                  <Download className="w-3.5 h-3.5" />
-                  <span>📥 Descargar Código ZIP Aquí</span>
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setIsZipBannerDismissed(true);
-                try {
-                  sessionStorage.setItem('dismiss_zip_banner', 'true');
-                } catch {}
-              }}
-              className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-stone-800 transition-colors cursor-pointer"
-              title="Cerrar barra"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Top Navbar */}
       <Navbar

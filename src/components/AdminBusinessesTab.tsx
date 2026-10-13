@@ -19,7 +19,8 @@ import {
   X,
   RefreshCw,
   Globe,
-  Sparkles
+  Sparkles,
+  ArrowUpDown
 } from 'lucide-react';
 import { Business, Category } from '../types';
 import {
@@ -64,7 +65,22 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
   const [selectedCat, setSelectedCat] = useState('all');
   const [selectedCol, setSelectedCol] = useState('all');
   const [filterType, setFilterType] = useState('all');
-  const [sortBy, setSortBy] = useState('name-asc');
+  const [sortBy, setSortBy] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('admin_business_sort_by');
+      if (saved) return saved;
+    }
+    return 'date-desc';
+  });
+
+  const handleSortChange = (newSort: string) => {
+    setSortBy(newSort);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('admin_business_sort_by', newSort);
+      } catch (_) {}
+    }
+  };
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -214,12 +230,26 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
   const sortedBusinesses = useMemo(() => {
     const list = [...filteredBusinesses];
     switch (sortBy) {
+      case 'date-desc':
+        return list.sort((a, b) => {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          if (timeA && timeB && timeA !== timeB) return timeB - timeA;
+          return (Number(b.id) || 0) - (Number(a.id) || 0);
+        });
+      case 'date-asc':
+        return list.sort((a, b) => {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          if (timeA && timeB && timeA !== timeB) return timeA - timeB;
+          return (Number(a.id) || 0) - (Number(b.id) || 0);
+        });
       case 'name-asc':
         return list.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es'));
+      case 'name-desc':
+        return list.sort((a, b) => (b.name || '').localeCompare(a.name || '', 'es'));
       case 'colonia-asc':
         return list.sort((a, b) => (a.colonia || '').localeCompare(b.colonia || '', 'es'));
-      case 'date-desc':
-        return list.sort((a, b) => (b.id || 0) - (a.id || 0));
       default:
         return list;
     }
@@ -401,6 +431,24 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
             <option value="whatsapp">Con WhatsApp</option>
             <option value="delivery">Con Servicio a Domicilio</option>
           </select>
+
+          {/* Ordenamiento persistente */}
+          <div className="flex items-center gap-1.5 bg-amber-500/15 border border-amber-300 rounded-lg px-2 py-1 text-xs shadow-2xs">
+            <ArrowUpDown className="w-3.5 h-3.5 text-amber-800 shrink-0" />
+            <span className="font-bold text-amber-950 hidden sm:inline">Ordenar:</span>
+            <select
+              value={sortBy}
+              onChange={e => handleSortChange(e.target.value)}
+              className="bg-transparent text-xs font-bold text-stone-900 outline-none cursor-pointer"
+              title="Criterio de ordenamiento persistente (permanece guardado)"
+            >
+              <option value="date-desc">🕒 Más recientes (Fecha de captura ↓)</option>
+              <option value="date-asc">🕒 Más antiguos (Fecha de captura ↑)</option>
+              <option value="name-asc">🔤 Alfabético (A - Z)</option>
+              <option value="name-desc">🔤 Alfabético (Z - A)</option>
+              <option value="colonia-asc">📍 Colonia (A - Z)</option>
+            </select>
+          </div>
 
           <span className="ml-auto text-xs text-stone-500">
             Total: <strong>{sortedBusinesses.length}</strong> empresas

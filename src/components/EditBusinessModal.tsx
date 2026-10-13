@@ -26,6 +26,13 @@ import {
   CARMEN_POSTAL_CODES_MAP
 } from '../data/carmen_postal_codes';
 
+import {
+  STANDARDIZED_DELIVERY_OPTIONS,
+  STANDARDIZED_PAYMENT_OPTIONS
+} from '../constants/businessOptions';
+
+export { STANDARDIZED_DELIVERY_OPTIONS, STANDARDIZED_PAYMENT_OPTIONS };
+
 interface EditBusinessModalProps {
   business: Business | null;
   isOpen: boolean;
@@ -45,6 +52,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
 }) => {
   const [formData, setFormData] = useState<Partial<Business>>({});
   const [postalCode, setPostalCode] = useState<string>('');
+  const [selectedDeliveryOptions, setSelectedDeliveryOptions] = useState<string[]>([]);
+  const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -55,6 +64,35 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       const initialCol = business.colonia || 'Ciudad del Carmen Centro';
       const initialCp = business.postalCode || getPostalCodeForColonia(initialCol);
       setPostalCode(initialCp);
+
+      // Parse existing delivery into multi-select
+      const rawDel = (business.delivery || '').toLowerCase();
+      const initialDel = STANDARDIZED_DELIVERY_OPTIONS.filter(opt => {
+        const oLow = opt.toLowerCase();
+        if (oLow.includes('local') && rawDel.includes('local')) return true;
+        if (oLow.includes('gratis') && rawDel.includes('gratis')) return true;
+        if (oLow.includes('costo') && (rawDel.includes('costo') || rawDel.includes('domicilio'))) return true;
+        if (oLow.includes('cliente') && (rawDel.includes('cliente') || rawDel.includes('lugar'))) return true;
+        if (oLow.includes('envío') && rawDel.includes('envío')) return true;
+        return false;
+      });
+      const parsedDel = initialDel.length > 0 ? initialDel : ['Atención en el Local de la empresa', 'Servicio a domicilio con costo'];
+      setSelectedDeliveryOptions(parsedDel);
+
+      // Parse existing payments into multi-select
+      const rawPay = (business.payment || '').toLowerCase();
+      const initialPay = STANDARDIZED_PAYMENT_OPTIONS.filter(opt => {
+        const oLow = opt.toLowerCase();
+        if (oLow.includes('efectivo') && rawPay.includes('efectivo')) return true;
+        if (oLow.includes('tarjeta') && rawPay.includes('tarjeta')) return true;
+        if (oLow.includes('transferencia') && (rawPay.includes('transferencia') || rawPay.includes('spei'))) return true;
+        if (oLow.includes('codi') && rawPay.includes('codi')) return true;
+        if (oLow.includes('contra entrega') && rawPay.includes('contra entrega')) return true;
+        return false;
+      });
+      const parsedPay = initialPay.length > 0 ? initialPay : ['Efectivo', 'Transferencia Bancaria (SPEI)'];
+      setSelectedPaymentOptions(parsedPay);
+
       setFormData({
         name: business.name || '',
         category: business.categories?.[0] || 'Servicios',
@@ -66,8 +104,9 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         colonia: initialCol,
         postalCode: initialCp,
         schedule: business.schedule || 'Lunes a Sábado',
-        payment: business.payment || 'Efectivo y Transferencia',
-        delivery: normalizeDeliveryOption(business.delivery),
+        payment: parsedPay.join(', '),
+        delivery: parsedDel.join(', '),
+        hasDelivery: parsedDel.some(d => d.toLowerCase().includes('domicilio') || d.toLowerCase().includes('envío')),
         facebook: business.facebook || '',
         instagram: business.instagram || '',
         website: business.website || '',
@@ -483,33 +522,112 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             </div>
           </div>
 
-          {/* Delivery & Schedule */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-stone-700">Servicio a Domicilio</label>
-              <select
-                value={normalizeDeliveryOption(formData.delivery)}
-                onChange={e => setFormData(prev => ({ ...prev, delivery: e.target.value }))}
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none bg-white font-medium"
-              >
-                {DELIVERY_OPTIONS.map(opt => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
+          {/* Modalidad de Atención y Entrega (Multiselección) */}
+          <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 border border-stone-200">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                <Truck className="w-3.5 h-3.5 text-amber-600" />
+                <span>Modalidad de Atención y Entrega (Selecciona 1 o más) *</span>
+              </label>
+              <span className="text-[11px] text-stone-500 font-medium">
+                {selectedDeliveryOptions.length} seleccionada(s)
+              </span>
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+              {STANDARDIZED_DELIVERY_OPTIONS.map(opt => {
+                const isChecked = selectedDeliveryOptions.includes(opt);
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => {
+                      const next = isChecked
+                        ? selectedDeliveryOptions.filter(o => o !== opt)
+                        : [...selectedDeliveryOptions, opt];
+                      setSelectedDeliveryOptions(next);
+                      setFormData(prev => ({
+                        ...prev,
+                        delivery: next.join(', ') || 'No especificado',
+                        hasDelivery: next.some(o => o.toLowerCase().includes('domicilio') || o.toLowerCase().includes('envío'))
+                      }));
+                    }}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all text-left cursor-pointer ${
+                      isChecked
+                        ? 'bg-amber-500/15 border-amber-500 text-stone-900 shadow-xs'
+                        : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                      isChecked ? 'bg-amber-500 border-amber-600 text-stone-950 font-bold' : 'border-stone-300 bg-white'
+                    }`}>
+                      {isChecked && <Check className="w-3 h-3 text-stone-950" />}
+                    </div>
+                    <span className="leading-tight">{opt}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-stone-700">Horario</label>
-              <input
-                type="text"
-                value={formData.schedule || ''}
-                onChange={e => setFormData(prev => ({ ...prev, schedule: e.target.value }))}
-                placeholder="Ej. Lunes a Sábado 8:00 AM - 8:00 PM"
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none"
-              />
+          {/* Métodos de Pago Aceptados (Multiselección) */}
+          <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 border border-stone-200">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                <CreditCard className="w-3.5 h-3.5 text-purple-600" />
+                <span>Métodos de Pago Aceptados (Selecciona 1 o más) *</span>
+              </label>
+              <span className="text-[11px] text-stone-500 font-medium">
+                {selectedPaymentOptions.length} seleccionado(s)
+              </span>
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+              {STANDARDIZED_PAYMENT_OPTIONS.map(opt => {
+                const isChecked = selectedPaymentOptions.includes(opt);
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => {
+                      const next = isChecked
+                        ? selectedPaymentOptions.filter(o => o !== opt)
+                        : [...selectedPaymentOptions, opt];
+                      setSelectedPaymentOptions(next);
+                      setFormData(prev => ({
+                        ...prev,
+                        payment: next.join(', ') || 'Efectivo'
+                      }));
+                    }}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all text-left cursor-pointer ${
+                      isChecked
+                        ? 'bg-purple-500/15 border-purple-500 text-stone-900 shadow-xs'
+                        : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                      isChecked ? 'bg-purple-600 border-purple-700 text-white font-bold' : 'border-stone-300 bg-white'
+                    }`}>
+                      {isChecked && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                    <span className="leading-tight">{opt}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Horario Comercial */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-sky-600" />
+              <span>Horario de Atención</span>
+            </label>
+            <input
+              type="text"
+              value={formData.schedule || ''}
+              onChange={e => setFormData(prev => ({ ...prev, schedule: e.target.value }))}
+              placeholder="Ej. Lunes a Sábado 8:00 AM - 8:00 PM, Domingos 9:00 AM - 3:00 PM"
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none bg-white"
+            />
           </div>
 
           {/* Redes Sociales y Sitio Web */}

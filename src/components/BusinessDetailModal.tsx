@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   QrCode,
   Edit2,
+  Trash2,
   Check,
   Copy,
   Building2,
@@ -298,27 +299,72 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
             </button>
 
             {isAdmin && (
-              <div className="flex items-center gap-1.5 pt-2 sm:pt-0">
+              <div className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0">
+                {/* 1. Editar Datos */}
+                {onEditBusiness && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onEditBusiness(business);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-black text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                    title="Editar todos los datos, fotos, horarios y teléfonos de la empresa"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>Editar Empresa</span>
+                  </button>
+                )}
+
+                {/* 2. Toggle Recomendada */}
+                {onToggleRecommended && (
+                  <button
+                    type="button"
+                    onClick={() => onToggleRecommended(business)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                      business.isRecommended
+                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm'
+                        : 'bg-white text-stone-700 hover:bg-emerald-50 border-stone-200'
+                    }`}
+                    title={business.isRecommended ? 'Quitar distintivo de recomendada' : 'Marcar como Empresa Recomendada'}
+                  >
+                    <CheckCircle className={`w-3.5 h-3.5 ${business.isRecommended ? 'text-white' : 'text-emerald-600'}`} />
+                    <span>{business.isRecommended ? '✓ Recomendada (Quitar)' : 'Poner Recomendada'}</span>
+                  </button>
+                )}
+
+                {/* 3. Toggle TOP */}
                 {onToggleTop && (
                   <button
                     type="button"
                     onClick={() => onToggleTop(business)}
-                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
                       business.isTopBusiness
-                        ? 'bg-amber-500 text-stone-950 shadow-xs'
-                        : 'bg-white text-stone-700 hover:bg-amber-100 border border-stone-200'
+                        ? 'bg-amber-500 text-stone-950 font-black border-amber-600 shadow-sm'
+                        : 'bg-white text-stone-700 hover:bg-amber-50 border-stone-200'
                     }`}
+                    title={business.isTopBusiness ? 'Quitar condición de Empresa TOP' : 'Marcar como Empresa TOP'}
                   >
-                    <span>{business.isTopBusiness ? '★ TOP Activo' : 'Poner TOP'}</span>
+                    <Star className={`w-3.5 h-3.5 ${business.isTopBusiness ? 'fill-stone-950 text-stone-950' : 'text-amber-500'}`} />
+                    <span>{business.isTopBusiness ? '★ TOP Activo (Quitar)' : 'Poner TOP'}</span>
                   </button>
                 )}
+
+                {/* 4. Eliminar Empresa */}
                 {onDeleteBusiness && (
                   <button
                     type="button"
-                    onClick={() => onDeleteBusiness(business)}
-                    className="px-2.5 py-1.5 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 font-bold text-xs cursor-pointer"
+                    onClick={() => {
+                      if (window.confirm(`¿Estás seguro de que deseas eliminar permanentemente a "${business.name}" del directorio?`)) {
+                        onClose();
+                        onDeleteBusiness(business);
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Dar de baja y eliminar esta empresa"
                   >
-                    Eliminar
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Eliminar</span>
                   </button>
                 )}
               </div>

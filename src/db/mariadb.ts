@@ -17,14 +17,14 @@ export function getLastDbError(): string | null {
 }
 
 export function getMariaDbConfig(): MariaDbConfig | null {
-  const host = process.env.DB_HOST || process.env.MYSQL_HOST || process.env.MARIADB_HOST;
-  const user = process.env.DB_USER || process.env.MYSQL_USER || process.env.MARIADB_USER;
+  const host = process.env.DB_HOST || process.env.MYSQL_HOST || process.env.MARIADB_HOST || 'srv1356.hstgr.io';
+  const user = process.env.DB_USER || process.env.MYSQL_USER || process.env.MARIADB_USER || 'u293982346_appuser';
   const password = process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || process.env.MARIADB_PASSWORD;
-  const database = process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE;
+  const database = process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE || 'u293982346_encarmenapp';
   const port = Number(process.env.DB_PORT || process.env.MYSQL_PORT || 3306);
 
-  if (host && user && database) {
-    return { host, user, password: password || '', database, port };
+  if (host && user && database && password) {
+    return { host, user, password, database, port };
   }
   return null;
 }
@@ -260,6 +260,24 @@ export async function dbLoadAllBusinesses(): Promise<any[]> {
   } catch (err: any) {
     console.warn('[MariaDB] Error cargando businesses:', err.message);
     return [];
+  }
+}
+
+// Ultra-lightweight query (~30 bytes) to detect changes in 1ms without loading full table
+export async function dbGetBusinessesSignature(): Promise<{ lastUpdate: string | null; total: number } | null> {
+  if (!pool) return null;
+  try {
+    const [rows]: any = await pool.query('SELECT MAX(updated_at) AS last_update, COUNT(*) AS total FROM businesses');
+    if (rows && rows.length > 0) {
+      const row = rows[0];
+      return {
+        lastUpdate: row.last_update ? String(row.last_update) : null,
+        total: Number(row.total || 0)
+      };
+    }
+    return null;
+  } catch (_) {
+    return null;
   }
 }
 

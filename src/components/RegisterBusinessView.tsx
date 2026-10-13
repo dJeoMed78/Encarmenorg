@@ -17,7 +17,8 @@ import {
   Info,
   Images,
   RefreshCw,
-  Search
+  Search,
+  Check
 } from 'lucide-react';
 import { Category, Business } from '../types';
 import {
@@ -33,6 +34,10 @@ import {
 } from '../services/api';
 import { cleanPhoneNumber } from '../utils/phone';
 import { DELIVERY_OPTIONS, normalizeDeliveryOption } from '../constants/delivery';
+import {
+  STANDARDIZED_DELIVERY_OPTIONS,
+  STANDARDIZED_PAYMENT_OPTIONS
+} from '../constants/businessOptions';
 
 interface RegisterBusinessViewProps {
   categories: Category[];
@@ -51,6 +56,13 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
   const [selectedCp, setSelectedCp] = useState('');
   const [showColoniaDropdown, setShowColoniaDropdown] = useState(false);
 
+  const [selectedDeliveryOptions, setSelectedDeliveryOptions] = useState<string[]>([
+    'Atención en el Local de la empresa'
+  ]);
+  const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<string[]>([
+    'Efectivo'
+  ]);
+
   const [formData, setFormData] = useState({
     name: '',
     category: '',
@@ -61,8 +73,8 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
     colonia: '',
     postalCode: '',
     schedule: '',
-    payment: '',
-    delivery: '',
+    payment: 'Efectivo',
+    delivery: 'Atención en el Local de la empresa',
     facebook: '',
     website: '',
     image: '',
@@ -263,8 +275,9 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
     setIsSubmitting(true);
     try {
       const phoneClean = cleanPhoneNumber(formData.phone);
-      const waClean = cleanPhoneNumber(formData.whatsapp) || phoneClean;
-      const deliveryNorm = normalizeDeliveryOption(formData.delivery);
+      const deliveryStr = selectedDeliveryOptions.join(', ') || 'Atención en el Local de la empresa';
+      const paymentStr = selectedPaymentOptions.join(', ') || 'Efectivo';
+      const hasDel = selectedDeliveryOptions.some(o => o.toLowerCase().includes('domicilio') || o.toLowerCase().includes('envío'));
       let site = (formData.website || '').trim();
       if (site && !site.startsWith('http://') && !site.startsWith('https://')) {
         site = `https://${site}`;
@@ -272,10 +285,13 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
 
       const res = await submitBusinessRegistration({
         ...formData,
+        delivery: deliveryStr,
+        hasDelivery: hasDel,
+        payment: paymentStr,
         website: site,
         phone: phoneClean,
         whatsapp: waClean,
-        deliveryOption: deliveryNorm,
+        deliveryOption: deliveryStr,
         image: formData.image || logoPreview || ''
       });
 
@@ -624,46 +640,117 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
           </div>
         </div>
 
-        {/* Schedule & Payment */}
+        {/* Schedule, Delivery & Payment */}
         <div className="space-y-4 pt-4 border-t border-stone-100">
           <h3 className="font-bold text-base text-stone-900 border-b border-stone-100 pb-2">
-            3. Horarios y Formas de Pago
+            3. Modalidad de Entrega, Métodos de Pago y Horarios
           </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-stone-700">Horario de Atención</label>
-              <input
-                type="text"
-                value={formData.schedule}
-                onChange={e => setFormData({ ...formData, schedule: e.target.value })}
-                placeholder="Ej. Lunes a Sábado de 8:00 AM a 8:00 PM"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm bg-stone-50 focus:bg-white focus:border-amber-500 outline-none"
-              />
+          {/* Modalidad de Atención y Entrega (Multiselección) */}
+          <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 border border-stone-200">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                <Truck className="w-3.5 h-3.5 text-amber-600" />
+                <span>Modalidad de Atención y Entrega (Selecciona 1 o más) *</span>
+              </label>
+              <span className="text-[11px] text-stone-500 font-medium">
+                {selectedDeliveryOptions.length} seleccionada(s)
+              </span>
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+              {STANDARDIZED_DELIVERY_OPTIONS.map(opt => {
+                const isChecked = selectedDeliveryOptions.includes(opt);
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => {
+                      const next = isChecked
+                        ? selectedDeliveryOptions.filter(o => o !== opt)
+                        : [...selectedDeliveryOptions, opt];
+                      setSelectedDeliveryOptions(next);
+                      setFormData(prev => ({
+                        ...prev,
+                        delivery: next.join(', ') || 'Atención en el Local de la empresa'
+                      }));
+                    }}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all text-left cursor-pointer ${
+                      isChecked
+                        ? 'bg-amber-500/15 border-amber-500 text-stone-900 shadow-xs'
+                        : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                      isChecked ? 'bg-amber-500 border-amber-600 text-stone-950 font-bold' : 'border-stone-300 bg-white'
+                    }`}>
+                      {isChecked && <Check className="w-3 h-3 text-stone-950" />}
+                    </div>
+                    <span className="leading-tight">{opt}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-stone-700">Métodos de Pago Aceptados</label>
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {paymentOptions.map(opt => {
-                  const active = formData.payment.includes(opt);
-                  return (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => togglePaymentMethod(opt)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                        active
-                          ? 'bg-amber-500 border-amber-500 text-white font-bold'
-                          : 'bg-stone-50 border-stone-200 text-stone-600 hover:bg-stone-100'
-                      }`}
-                    >
-                      {opt}
-                    </button>
-                  );
-                })}
-              </div>
+          {/* Métodos de Pago Aceptados (Multiselección) */}
+          <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 border border-stone-200">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                <CreditCard className="w-3.5 h-3.5 text-purple-600" />
+                <span>Métodos de Pago Aceptados (Selecciona 1 o más) *</span>
+              </label>
+              <span className="text-[11px] text-stone-500 font-medium">
+                {selectedPaymentOptions.length} seleccionado(s)
+              </span>
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+              {STANDARDIZED_PAYMENT_OPTIONS.map(opt => {
+                const isChecked = selectedPaymentOptions.includes(opt);
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => {
+                      const next = isChecked
+                        ? selectedPaymentOptions.filter(o => o !== opt)
+                        : [...selectedPaymentOptions, opt];
+                      setSelectedPaymentOptions(next);
+                      setFormData(prev => ({
+                        ...prev,
+                        payment: next.join(', ') || 'Efectivo'
+                      }));
+                    }}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all text-left cursor-pointer ${
+                      isChecked
+                        ? 'bg-purple-500/15 border-purple-500 text-stone-900 shadow-xs'
+                        : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                      isChecked ? 'bg-purple-600 border-purple-700 text-white font-bold' : 'border-stone-300 bg-white'
+                    }`}>
+                      {isChecked && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                    <span className="leading-tight">{opt}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Horario de Atención */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-sky-600" />
+              <span>Horario de Atención</span>
+            </label>
+            <input
+              type="text"
+              value={formData.schedule}
+              onChange={e => setFormData({ ...formData, schedule: e.target.value })}
+              placeholder="Ej. Lunes a Sábado de 8:00 AM a 8:00 PM, Domingos de 9:00 AM a 2:00 PM"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm bg-stone-50 focus:bg-white focus:border-amber-500 outline-none"
+            />
           </div>
         </div>
 

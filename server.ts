@@ -39,7 +39,8 @@ import {
   dbLoadPortalConfig,
   dbSavePortalConfig,
   dbLoadPortalNotes,
-  dbSavePortalNotes
+  dbSavePortalNotes,
+  dbGetBusinessesSignature
 } from './src/db/mariadb.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -784,11 +785,22 @@ initMariaDb().then(async (active) => {
 
     // 1. Businesses
     const dbBusinesses = await dbLoadAllBusinesses();
-    if (dbBusinesses.length >= businessesCache.length && dbBusinesses.length > 0) {
-      businessesCache = dbBusinesses;
-      console.log(`[MariaDB] ${businessesCache.length} empresas cargadas desde Hostinger MariaDB.`);
+    if (dbBusinesses.length > 0) {
+      const dbIdSet = new Set(dbBusinesses.map(b => String(b.id)));
+      const missingInDb = businessesCache.filter(b => !dbIdSet.has(String(b.id)));
+      if (missingInDb.length > 0) {
+        console.log(`[MariaDB] Añadiendo ${missingInDb.length} empresas del catálogo local que no existían en Hostinger MariaDB...`);
+        for (const b of missingInDb) {
+          await dbSaveBusiness(b);
+        }
+        const reloaded = await dbLoadAllBusinesses();
+        if (reloaded.length > 0) businessesCache = reloaded;
+      } else {
+        businessesCache = dbBusinesses;
+      }
+      console.log(`[MariaDB] ${businessesCache.length} empresas cargadas autoritativamente desde Hostinger MariaDB.`);
     } else {
-      console.log(`[MariaDB] Sincronizando ${businessesCache.length} empresas completas hacia Hostinger MariaDB...`);
+      console.log(`[MariaDB] Base de datos vacía. Sincronizando ${businessesCache.length} empresas completas hacia Hostinger MariaDB...`);
       for (const b of businessesCache) {
         await dbSaveBusiness(b);
       }
@@ -1181,8 +1193,45 @@ app.get(['/api/admin/download-source-zip', '/api/download-backup', '/codigo-fuen
   }
 });
 
+let lastDbPollTime = 0;
+const DB_POLL_INTERVAL_MS = 20000; // 20 seconds
+let cachedDbSignature: { lastUpdate: string | null; total: number } | null = null;
+
+async function refreshBusinessesFromDbIfNeeded() {
+  if (!isMariaDbActive()) return;
+  const now = Date.now();
+  if (now - lastDbPollTime < DB_POLL_INTERVAL_MS) return;
+  lastDbPollTime = now;
+
+  try {
+    // 1. Ultra-lightweight signature check: only query MAX(updated_at) and COUNT(*) (~30 bytes transferred in <2ms)
+    const currentSig = await dbGetBusinessesSignature();
+    if (!currentSig) return;
+
+    // If signature has NOT changed, skip full query completely (ZERO bandwidth, ZERO overhead!)
+    if (
+      cachedDbSignature &&
+      cachedDbSignature.total === currentSig.total &&
+      cachedDbSignature.lastUpdate === currentSig.lastUpdate
+    ) {
+      return;
+    }
+
+    // 2. Only fetch full table when an actual change was detected
+    const list = await dbLoadAllBusinesses();
+    if (list && list.length > 0) {
+      businessesCache = list;
+      cachedDbSignature = currentSig;
+    }
+  } catch (err: any) {
+    // Keep cached version on transient error
+  }
+}
+
 // Businesses List with search & filters
-app.get('/api/businesses', (req: Request, res: Response) => {
+app.get('/api/businesses', async (req: Request, res: Response) => {
+  await refreshBusinessesFromDbIfNeeded();
+
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
@@ -1237,11 +1286,13 @@ app.get('/api/businesses', (req: Request, res: Response) => {
 });
 
 // Single Business
-app.get('/api/businesses/:id', (req: Request, res: Response, next: NextFunction) => {
+app.get('/api/businesses/:id', async (req: Request, res: Response, next: NextFunction) => {
   const idOrSlug = req.params.id;
   if (idOrSlug === 'auto-search' || idOrSlug === 'auto-search-ai' || idOrSlug === 'parse-whatsapp-group' || idOrSlug === 'approve-candidate' || idOrSlug === 'approve-multiple-candidates') {
     return next();
   }
+
+  await refreshBusinessesFromDbIfNeeded();
 
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
   res.setHeader('Pragma', 'no-cache');
