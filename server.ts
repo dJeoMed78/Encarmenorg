@@ -6296,7 +6296,7 @@ if (!isProduction) {
   // Vite Dev Server middleware for dynamic TypeScript compilation, HMR, and React SPA preview
   console.log('[Vite] Inicializando middleware de Vite para desarrollo y preview interactivo...');
   const vite = await createViteServer({
-    server: { middlewareMode: true },
+    server: { middlewareMode: true, allowedHosts: true },
     appType: 'spa'
   });
   app.use(vite.middlewares);
