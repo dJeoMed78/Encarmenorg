@@ -18,7 +18,8 @@ import {
   Building2,
   X,
   RefreshCw,
-  Globe
+  Globe,
+  Sparkles
 } from 'lucide-react';
 import { Business, Category } from '../types';
 import {
@@ -57,6 +58,8 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
   onBusinessApproved
 }) => {
   const [isAutoSearchModalOpen, setIsAutoSearchModalOpen] = useState(false);
+  const [autoModalSource, setAutoModalSource] = useState<'all' | 'official_group' | 'official_page' | 'whatsapp' | 'community' | 'ai'>('all');
+  const [autoModalTriggerAi, setAutoModalTriggerAi] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCat, setSelectedCat] = useState('all');
   const [selectedCol, setSelectedCol] = useState('all');
@@ -315,12 +318,30 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
 
             <button
               type="button"
-              onClick={() => setIsAutoSearchModalOpen(true)}
+              onClick={() => {
+                setAutoModalSource('all');
+                setAutoModalTriggerAi(false);
+                setIsAutoSearchModalOpen(true);
+              }}
               className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-black text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-              title="Búsqueda Automática de Empresas en Ciudad del Carmen (Sin IA)"
+              title="Búsqueda Automática en Fuentes Públicas de Ciudad del Carmen (FB y Google)"
             >
               <Globe className="w-4 h-4 text-sky-200" />
-              <span>Busqueda Automática Empresas</span>
+              <span>Búsqueda Automática</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setAutoModalSource('ai');
+                setAutoModalTriggerAi(true);
+                setIsAutoSearchModalOpen(true);
+              }}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-black text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/25 transition-all cursor-pointer"
+              title="Búsqueda Automática con IA (Trae 30 empresas reales de Carmen por pulsación)"
+            >
+              <Sparkles className="w-4 h-4 text-stone-950" />
+              <span>Búsqueda con IA (30 Negocios)</span>
             </button>
 
             {onAddNewBusiness && (
@@ -673,7 +694,12 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
       {/* Modal de Búsqueda Automática de Empresas Carmelitas */}
       <AdminAutoBusinessesModal
         isOpen={isAutoSearchModalOpen}
-        onClose={() => setIsAutoSearchModalOpen(false)}
+        onClose={() => {
+          setIsAutoSearchModalOpen(false);
+          setAutoModalTriggerAi(false);
+        }}
+        initialSource={autoModalSource}
+        autoTriggerAiScan={autoModalTriggerAi}
         onBusinessApproved={(newBiz) => {
           if (onBusinessApproved) {
             onBusinessApproved(newBiz);

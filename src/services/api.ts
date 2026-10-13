@@ -929,6 +929,31 @@ export async function fetchAutoBusinessCandidates(
   }
 }
 
+export async function autoSearchBusinessesWithAi(
+  query?: string,
+  category?: string
+): Promise<{ success: boolean; candidates: AutoBusinessCandidate[]; totalFound: number; message?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/businesses/auto-search-ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: query || '', category: category || 'all', count: 30 })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Error del servidor' }));
+      throw new Error(err.message || 'Error al buscar empresas con IA');
+    }
+    return await res.json();
+  } catch (err: any) {
+    return {
+      success: false,
+      candidates: [],
+      totalFound: 0,
+      message: err.message || 'Error al conectar con la búsqueda por IA'
+    };
+  }
+}
+
 export async function parseWhatsAppGroupBusinesses(
   rawText: string,
   groupName?: string,

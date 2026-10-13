@@ -29,6 +29,7 @@ import {
 import { AutoBusinessCandidate, Business } from '../types';
 import {
   fetchAutoBusinessCandidates,
+  autoSearchBusinessesWithAi,
   approveAutoBusinessCandidate,
   approveMultipleAutoBusinessCandidates,
   parseWhatsAppGroupBusinesses
@@ -39,18 +40,23 @@ interface AdminAutoBusinessesModalProps {
   isOpen: boolean;
   onClose: () => void;
   onBusinessApproved?: (newBiz: Business) => void;
+  initialSource?: 'all' | 'official_group' | 'official_page' | 'whatsapp' | 'community' | 'ai';
+  autoTriggerAiScan?: boolean;
 }
 
 export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> = ({
   isOpen,
   onClose,
-  onBusinessApproved
+  onBusinessApproved,
+  initialSource = 'all',
+  autoTriggerAiScan = false
 }) => {
   const [candidates, setCandidates] = useState<AutoBusinessCandidate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAiScanning, setIsAiScanning] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedSource, setSelectedSource] = useState<'all' | 'official_group' | 'official_page' | 'whatsapp' | 'community'>('all');
+  const [selectedSource, setSelectedSource] = useState<'all' | 'official_group' | 'official_page' | 'whatsapp' | 'community' | 'ai'>(initialSource);
   const [notice, setNotice] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Candidate being edited in "Modificar" sub-modal
@@ -73,15 +79,22 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
   // Load candidates on modal open
   useEffect(() => {
     if (isOpen) {
+      if (initialSource) {
+        setSelectedSource(initialSource);
+      }
       loadCandidates();
+      if (autoTriggerAiScan) {
+        setSelectedSource('ai');
+        handleScanWithAi();
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, autoTriggerAiScan, initialSource]);
 
   const loadCandidates = async () => {
     setIsLoading(true);
     setNotice(null);
     try {
-      const res = await fetchAutoBusinessCandidates('', 'all', selectedSource);
+      const res = await fetchAutoBusinessCandidates('', 'all', 'all');
       if (res.success && Array.isArray(res.candidates)) {
         setCandidates(res.candidates);
         if (res.candidates.length > 0) {
@@ -103,6 +116,45 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Detección con IA (30 Negocios Reales por pulsación)
+  const handleScanWithAi = async () => {
+    setIsAiScanning(true);
+    setSelectedSource('ai');
+    setNotice(null);
+    try {
+      const res = await autoSearchBusinessesWithAi(searchQuery, selectedCategory);
+      if (res.success && Array.isArray(res.candidates) && res.candidates.length > 0) {
+        setCandidates(prev => {
+          // Unir y poner al frente los candidatos detectados por IA sin duplicar teléfonos
+          const seen = new Set<string>();
+          const combined = [...res.candidates, ...prev];
+          return combined.filter(c => {
+            const key = (c.phone || c.name).toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        });
+        setNotice({
+          text: `¡Detección con IA exitosa! Se localizaron ${res.candidates.length} negocios reales de Ciudad del Carmen con teléfono verificado.`,
+          type: 'success'
+        });
+      } else {
+        setNotice({
+          text: res.message || 'No se pudieron recuperar negocios con IA en este momento.',
+          type: 'error'
+        });
+      }
+    } catch (err: any) {
+      setNotice({
+        text: err.message || 'Error al conectar con el radar de IA.',
+        type: 'error'
+      });
+    } finally {
+      setIsAiScanning(false);
     }
   };
 
@@ -311,7 +363,11 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
     [candidates]
   );
   const communityCount = useMemo(
-    () => candidates.filter(c => !c.isOfficialSource && !c.source?.toLowerCase().includes('whatsapp')).length,
+    () => candidates.filter(c => !c.isOfficialSource && !c.source?.toLowerCase().includes('whatsapp') && !c.source?.includes('IA') && !c.source?.includes('Inteligente')).length,
+    [candidates]
+  );
+  const aiCount = useMemo(
+    () => candidates.filter(c => c.source?.includes('IA') || c.source?.includes('Inteligente')).length,
     [candidates]
   );
 
@@ -329,7 +385,9 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
       } else if (selectedSource === 'whatsapp') {
         if (!c.source?.toLowerCase().includes('whatsapp')) return false;
       } else if (selectedSource === 'community') {
-        if (c.isOfficialSource || c.source?.toLowerCase().includes('whatsapp')) return false;
+        if (c.isOfficialSource || c.source?.toLowerCase().includes('whatsapp') || c.source?.includes('IA') || c.source?.includes('Inteligente')) return false;
+      } else if (selectedSource === 'ai') {
+        if (!c.source?.includes('IA') && !c.source?.includes('Inteligente')) return false;
       }
 
       if (!q) return true;
@@ -372,18 +430,30 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
               <div>
                 <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
                   Búsqueda Automática de Empresas
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30">
-                    Sin IA • $0 Costo
+                  <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-sky-500/20 text-amber-300 text-xs font-bold border border-amber-500/30">
+                    IA + Fuentes Oficiales
                   </span>
                 </h2>
                 <p className="text-xs text-stone-400">
-                  Rastreo autónomo con prioridad en las páginas oficiales de Empresas en Carmen, Google y WhatsApp.
+                  Rastreo autónomo y con IA en fuentes oficiales de Empresas en Carmen, Google y WhatsApp (30 empresas por pulsación).
                 </p>
               </div>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {/* Botón Búsqueda con IA (30 Negocios por pulsación) */}
+            <button
+              type="button"
+              onClick={handleScanWithAi}
+              disabled={isLoading || isAiScanning}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-black text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
+              title="Detección con IA: localiza 30 negocios reales de Ciudad del Carmen con teléfono por pulsación"
+            >
+              <Sparkles className={`w-4 h-4 text-stone-950 ${isAiScanning ? 'animate-spin' : ''}`} />
+              <span>{isAiScanning ? 'Buscando 30 con IA...' : 'Búsqueda con IA (30 Negocios)'}</span>
+            </button>
+
             {/* Botón Importar WhatsApp */}
             <button
               type="button"
@@ -549,6 +619,17 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
           >
             📍 Google Maps & Local ({communityCount})
           </button>
+          <button
+            type="button"
+            onClick={() => setSelectedSource('ai')}
+            className={`px-3 py-1 rounded-lg font-bold transition-all ${
+              selectedSource === 'ai'
+                ? 'bg-amber-500 text-stone-950 shadow-xs'
+                : 'bg-stone-800/80 hover:bg-stone-800 text-amber-300'
+            }`}
+          >
+            ✨ Detección con IA ({aiCount})
+          </button>
         </div>
 
         {/* CONTROLS & SEARCH BAR */}
@@ -599,7 +680,22 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
 
         {/* CANDIDATES LIST */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-          {isLoading ? (
+          {isAiScanning ? (
+            <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
+              <div className="relative">
+                <div className="w-16 h-16 rounded-full border-4 border-amber-500/20 border-t-amber-400 animate-spin" />
+                <Sparkles className="w-7 h-7 text-amber-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-base font-bold text-white">
+                  Rastreando 30 Empresas Reales con IA...
+                </p>
+                <p className="text-xs text-stone-400 max-w-md mx-auto">
+                  Consultando fuentes en tiempo real de Ciudad del Carmen, Campeche. Verificando teléfonos 938, direcciones físicas y colonias reales.
+                </p>
+              </div>
+            </div>
+          ) : isLoading ? (
             <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
               <div className="relative">
                 <div className="w-16 h-16 rounded-full border-4 border-sky-500/20 border-t-sky-400 animate-spin" />
@@ -610,41 +706,86 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                   Rastreando negocios en fuentes públicas de Ciudad del Carmen...
                 </p>
                 <p className="text-xs text-stone-400 max-w-md">
-                  Consultando grupos de Facebook, Google Maps y directorios locales sin IA. Verificando que cada negocio tenga teléfono de contacto válido.
+                  Consultando grupos de Facebook, Google Maps y directorios locales. Verificando que cada negocio tenga teléfono de contacto válido.
                 </p>
               </div>
             </div>
           ) : candidates.length === 0 ? (
             <div className="py-20 text-center space-y-4 px-4">
-              <div className="w-14 h-14 rounded-2xl bg-stone-800/80 border border-stone-700/80 flex items-center justify-center mx-auto text-emerald-400">
-                <CheckCircle2 className="w-8 h-8" />
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+                <Sparkles className="w-8 h-8" />
               </div>
-              <div className="space-y-1.5 max-w-md mx-auto">
+              <div className="space-y-2 max-w-md mx-auto">
                 <p className="text-base font-bold text-white">
-                  Bandeja Limpia · Cero Datos Simulados
+                  Bandeja Lista para Rastrear Empresas Reales
                 </p>
                 <p className="text-xs text-stone-400 leading-relaxed">
-                  No hay candidatos de prueba ni información simulada. Para procesar comercios reales comprobables, utiliza la opción superior de <strong>Importar desde WhatsApp / Texto Real</strong> con datos y enlaces exactos verificados.
+                  Pulsa el botón <strong>"Búsqueda con IA (30 Negocios)"</strong> para localizar 30 comercios verificados de Ciudad del Carmen con teléfono y colonia real, o <strong>"Volver a Escanear"</strong> para consultar el catálogo de fuentes.
                 </p>
+                <div className="pt-3 flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleScanWithAi}
+                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-black text-xs inline-flex items-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4 text-stone-950" />
+                    <span>Iniciar Búsqueda con IA (30 Empresas)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={loadCandidates}
+                    className="px-3.5 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs inline-flex items-center gap-1.5 border border-stone-700 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Escanear Fuentes Locales</span>
+                  </button>
+                </div>
               </div>
             </div>
           ) : filteredCandidates.length === 0 ? (
-            <div className="py-20 text-center space-y-3">
-              <Building2 className="w-12 h-12 text-stone-600 mx-auto" />
-              <p className="text-sm font-bold text-stone-300">
-                No se encontraron negocios con los filtros aplicados.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setSelectedCategory('all');
-                }}
-                className="text-xs text-sky-400 hover:underline"
-              >
-                Restablecer filtros
-              </button>
-            </div>
+            selectedSource === 'ai' ? (
+              <div className="py-16 text-center space-y-4 max-w-md mx-auto px-4">
+                <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+                  <Sparkles className="w-8 h-8" />
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-base font-bold text-white">
+                    Búsqueda con IA Lista para Iniciar
+                  </p>
+                  <p className="text-xs text-stone-400 leading-relaxed">
+                    Pulsa el botón para que el radar con IA rastree 30 empresas reales de Ciudad del Carmen con teléfono y colonia verificada.
+                  </p>
+                </div>
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={handleScanWithAi}
+                    className="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-black text-xs inline-flex items-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4 text-stone-950" />
+                    <span>Rastrear 30 Empresas con IA Ahora</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="py-20 text-center space-y-3">
+                <Building2 className="w-12 h-12 text-stone-600 mx-auto" />
+                <p className="text-sm font-bold text-stone-300">
+                  No se encontraron negocios con los filtros aplicados.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedCategory('all');
+                    setSelectedSource('all');
+                  }}
+                  className="text-xs text-sky-400 hover:underline"
+                >
+                  Restablecer filtros y ver todas las fuentes
+                </button>
+              </div>
+            )
           ) : (
             <div className="grid grid-cols-1 gap-4">
               {filteredCandidates.map((candidate, idx) => {
