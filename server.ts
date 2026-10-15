@@ -3050,6 +3050,15 @@ app.get('/api/categories', (_req: Request, res: Response) => {
 
 // Events
 app.get('/api/events', async (_req: Request, res: Response) => {
+  if (isMariaDbActive()) {
+    try {
+      const dbEvts = await dbLoadAllEvents();
+      if (dbEvts && dbEvts.length > 0) {
+        eventsCache = dbEvts;
+      }
+    } catch (_) {}
+  }
+
   try {
     await pruneExpiredEvents();
   } catch (_) {}
