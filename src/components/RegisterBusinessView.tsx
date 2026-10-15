@@ -275,6 +275,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
     setIsSubmitting(true);
     try {
       const phoneClean = cleanPhoneNumber(formData.phone);
+      const waClean = cleanPhoneNumber(formData.whatsapp) || phoneClean;
       const deliveryStr = selectedDeliveryOptions.join(', ') || 'Atención en el Local de la empresa';
       const paymentStr = selectedPaymentOptions.join(', ') || 'Efectivo';
       const hasDel = selectedDeliveryOptions.some(o => o.toLowerCase().includes('domicilio') || o.toLowerCase().includes('envío'));

@@ -307,7 +307,7 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
 
                   {/* 2. Facebook Ventas Group */}
                   <a
-                    href="https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr"
+                    href="https://www.facebook.com/groups/506440126097710"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="group flex items-center gap-2.5 p-2.5 rounded-xl bg-gradient-to-r from-blue-600/15 to-blue-500/5 hover:from-blue-600 hover:to-indigo-600 border border-blue-500/40 hover:border-blue-400 text-stone-200 hover:text-white transition-all shadow-xs"
@@ -741,7 +741,7 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
                       <span className="text-[10px] bg-[#1877F2] text-white px-1.5 py-0.5 rounded">Seguir</span>
                     </a>
                     <a
-                      href="https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr"
+                      href="https://www.facebook.com/groups/506440126097710"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-between px-3 py-2 rounded-xl bg-blue-600/15 hover:bg-blue-600 text-stone-200 hover:text-white border border-blue-500/40 transition-colors text-xs font-semibold"

@@ -421,15 +421,27 @@ export default function App() {
   };
 
   const handleSaveEditedBusiness = async (id: number, data: Partial<Business>) => {
+    const isTarget = (b: Business | null | undefined) => Boolean(b && (String(b.id) === String(id) || Number(b.id) === Number(id)));
+
+    // Immediate state update for instant UI feedback on logos, photos and all fields
+    setBusinesses(prev => prev.map(b => isTarget(b) ? { ...b, ...data } : b));
+    if (isTarget(selectedBusiness)) {
+      setSelectedBusiness(prev => prev ? { ...prev, ...data } : null);
+    }
+    if (isTarget(directBusinessView)) {
+      setDirectBusinessView(prev => prev ? { ...prev, ...data } : null);
+    }
+
     const res = await adminUpdateBusiness(id, data);
     if (res.success) {
+      if (res.business) {
+        const finalBiz = res.business;
+        setBusinesses(prev => prev.map(b => isTarget(b) ? { ...b, ...finalBiz } : b));
+        if (isTarget(selectedBusiness)) setSelectedBusiness(finalBiz);
+        if (isTarget(directBusinessView)) setDirectBusinessView(finalBiz);
+        if (isTarget(editingAdminBusiness)) setEditingAdminBusiness(finalBiz);
+      }
       await loadData();
-      if (selectedBusiness && selectedBusiness.id === id) {
-        setSelectedBusiness(prev => prev ? { ...prev, ...data } : null);
-      }
-      if (directBusinessView && directBusinessView.id === id) {
-        setDirectBusinessView(prev => prev ? { ...prev, ...data } : null);
-      }
     }
     return res;
   };
@@ -498,6 +510,12 @@ export default function App() {
       const target = findBusinessFromUrl(bizRes.businesses);
       if (target) {
         setDirectBusinessView(target);
+      } else {
+        setDirectBusinessView(prev => {
+          if (!prev) return null;
+          const updatedDirect = (bizRes.businesses || []).find((b: Business) => String(b.id) === String(prev.id) || b.slug === prev.slug);
+          return updatedDirect || prev;
+        });
       }
     } catch (err) {
       console.error('Error loading initial data:', err);
@@ -1180,7 +1198,7 @@ export default function App() {
       {/* Footer */}
       <footer className="bg-stone-900 text-stone-400 border-t border-stone-800 text-xs mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8 pb-8 border-b border-stone-800">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8 pb-8 border-b border-stone-800">
             {/* Brand column */}
             <div className="space-y-3 md:col-span-2">
               <div className="inline-flex items-center px-4 py-3 rounded-2xl bg-white shadow-sm">
@@ -1199,7 +1217,7 @@ export default function App() {
                   Facebook
                 </a>
                 <a
-                  href="https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr"
+                  href="https://www.facebook.com/groups/506440126097710"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-2.5 py-1 rounded-lg bg-blue-600/15 text-blue-400 hover:bg-blue-600 hover:text-white border border-blue-500/30 text-[11px] font-semibold transition-colors"
@@ -1298,49 +1316,30 @@ export default function App() {
                 </li>
               </ul>
             </div>
-
-            {/* Owner & Administration Panel link */}
-            <div className="space-y-2">
-              <p className="font-semibold text-white text-xs uppercase tracking-wider">
-                Administración
-              </p>
-              <ul className="space-y-1.5">
-                <li>
-                  <button
-                    onClick={() => setIsSyncModalOpen(true)}
-                    className="text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1.5 transition-colors"
-                  >
-                    <Shield className="w-3.5 h-3.5" />
-                    <span>Panel de Control y Administración</span>
-                  </button>
-                </li>
-              </ul>
-            </div>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-stone-500">
             <p>
               © {new Date().getFullYear()} Directorio Empresas en Carmen · Ciudad del Carmen, Campeche, México.
             </p>
-            <div className="flex items-center gap-3">
-              <p>
-                Datos obtenidos en tiempo real de <span className="font-mono text-stone-400">empresasencarmen.com</span>
-              </p>
-              {/* Easter egg π en la esquina inferior tal como en la película The Net */}
-              <button
-                onClick={() => setIsSyncModalOpen(true)}
-                title="π"
-                className="text-stone-600 hover:text-amber-400 font-serif text-xs px-1 cursor-pointer transition-colors select-none"
-              >
-                π
-              </button>
-            </div>
+            <p>
+              Datos obtenidos en tiempo real de <span className="font-mono text-stone-400">empresasencarmen.com</span>
+            </p>
           </div>
           <div className="mt-3 pt-3 border-t border-stone-800/60 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-stone-500 font-mono">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <button
+                type="button"
+                onClick={() => setIsSyncModalOpen(true)}
+                title="Administración (π)"
+                aria-label="Administración (π)"
+                className="text-stone-400 hover:text-amber-400 font-serif text-sm px-1 cursor-pointer transition-colors select-none leading-none"
+              >
+                π
+              </button>
               <span className="text-stone-300 font-bold">
-                Versión del archivo ZIP instalado: <span className="text-amber-400 font-mono">{liveVersion || APP_VERSION}</span>
+                Versión del portal instalado: <span className="text-amber-400 font-mono">{liveVersion || APP_VERSION}</span>
               </span>
             </div>
             <span className="text-[10px] text-stone-500">Plataforma PWA Oficial · Ciudad del Carmen, Campeche</span>

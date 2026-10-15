@@ -35,6 +35,9 @@ import {
   parseWhatsAppGroupBusinesses
 } from '../services/api';
 import { formatPhoneNumber } from '../utils/phone';
+import { EditBusinessModal } from './EditBusinessModal';
+import CATEGORIES_SEED from '../data/categories_seed.json';
+import { CARMEN_POSTAL_CODES_MAP } from '../data/carmen_postal_codes';
 
 interface AdminAutoBusinessesModalProps {
   isOpen: boolean;
@@ -96,10 +99,20 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
     try {
       const res = await fetchAutoBusinessCandidates('', 'all', 'all');
       if (res.success && Array.isArray(res.candidates)) {
-        setCandidates(res.candidates);
-        if (res.candidates.length > 0) {
+        let dismissed: string[] = [];
+        try {
+          dismissed = JSON.parse(localStorage.getItem('carmen_dismissed_candidates') || '[]');
+        } catch {}
+        const filtered = res.candidates.filter(c => {
+          const idMatch = c.id && dismissed.includes(c.id);
+          const nameMatch = c.name && dismissed.includes(c.name.toLowerCase().trim());
+          const phoneMatch = c.phone && dismissed.includes(c.phone.replace(/\D/g, ''));
+          return !idMatch && !nameMatch && !phoneMatch;
+        });
+        setCandidates(filtered);
+        if (filtered.length > 0) {
           setNotice({
-            text: `Se detectaron ${res.candidates.length} negocios locales verificados en Ciudad del Carmen listos para revisión y autorización.`,
+            text: `Se detectaron ${filtered.length} negocios locales verificados en Ciudad del Carmen listos para revisión y autorización.`,
             type: 'info'
           });
         }
@@ -232,62 +245,120 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
     }
   };
 
-  // 2. MODIFICAR (Abrir modal de edición)
+  const allColoniasList = useMemo(() => {
+    const allNames = Object.values(CARMEN_POSTAL_CODES_MAP).flat();
+    return Array.from(new Set(allNames)).map(name => ({ name, count: 0 }));
+  }, []);
+
+  const allCategoriesList = useMemo(() => {
+    return (CATEGORIES_SEED as any[]).map(c => ({ id: c.id, name: c.name, slug: c.slug, count: c.count }));
+  }, []);
+
+  const candidateToBusiness = (c: AutoBusinessCandidate): Business => {
+    const cats = Array.isArray(c.categories) && c.categories.length > 0
+      ? c.categories
+      : [c.category || 'Comercios y Servicios'];
+    return {
+      id: typeof c.id === 'number' ? c.id : 999999,
+      name: c.name || '',
+      category: c.category || cats[0],
+      categories: cats,
+      categorySlugs: Array.isArray(c.categorySlugs) ? c.categorySlugs : [],
+      description: c.description || '',
+      phone: c.phone || '',
+      whatsapp: c.whatsapp || c.phone || '',
+      address: c.address || 'Ciudad del Carmen, Campeche',
+      colonia: c.colonia || 'Ciudad del Carmen Centro',
+      postalCode: c.postalCode || '24100',
+      schedule: c.schedule || 'Lunes a Sábado',
+      payment: c.payment || 'Efectivo y Transferencia',
+      delivery: c.delivery || 'Atención en el Local de la empresa',
+      hasDelivery: Boolean(c.hasDelivery),
+      facebook: c.facebook || '',
+      instagram: c.instagram || '',
+      website: c.website || '',
+      image: c.image || '',
+      gallery: (c as any).gallery || [],
+      slug: c.slug || '',
+      isRecommended: false,
+      isTopBusiness: false,
+      rating: 5,
+      reviewCount: 1,
+      verified: true,
+      featured: false
+    };
+  };
+
+  // 2. MODIFICAR (Abrir modal oficial de edición homologado)
   const handleOpenModify = (candidate: AutoBusinessCandidate) => {
     setEditingCandidate({ ...candidate });
   };
 
-  // Regenerar texto publicitario automático dentro del editor
-  const handleRegenerateAdCopy = () => {
-    if (!editingCandidate) return;
-    const cleanName = (editingCandidate.name || 'Este negocio').trim();
-    const cleanCat = (editingCandidate.category || 'comercio local').trim();
-    const delivTxt = editingCandidate.delivery
-      ? `🚚 ${editingCandidate.delivery}.`
-      : '🚚 Servicio a domicilio disponible en toda la isla.';
-    const locTxt = editingCandidate.address
-      ? `📍 Ubicado en ${editingCandidate.address}, Ciudad del Carmen, Campeche.`
-      : '📍 Atención de primer nivel en Ciudad del Carmen, Campeche.';
+  const handleSaveStandardCandidateEdit = async (_id: number, updatedData: Partial<Business>) => {
+    if (!editingCandidate) return { success: false, message: 'No hay candidato seleccionado' };
 
-    const newAdText = `¡Descubre lo mejor de ${cleanName}! Referente líder en ${cleanCat} en Ciudad del Carmen. Te ofrecemos atención personalizada, rapidez y máxima calidad garantizada en cada pedido. ${delivTxt} ${locTxt} ¡Contáctanos por WhatsApp o llamada directa para cotizaciones y pedidos inmediatos! 💳 Aceptamos Efectivo y Transferencias.`;
+    const merged: AutoBusinessCandidate = {
+      ...editingCandidate,
+      name: updatedData.name || editingCandidate.name,
+      category: updatedData.category || editingCandidate.category,
+      categories: updatedData.categories || editingCandidate.categories,
+      description: updatedData.description || editingCandidate.description,
+      phone: updatedData.phone || editingCandidate.phone,
+      whatsapp: updatedData.whatsapp || editingCandidate.whatsapp,
+      address: updatedData.address || editingCandidate.address,
+      colonia: updatedData.colonia || editingCandidate.colonia,
+      postalCode: updatedData.postalCode || editingCandidate.postalCode,
+      schedule: updatedData.schedule || editingCandidate.schedule,
+      payment: updatedData.payment || editingCandidate.payment,
+      delivery: updatedData.delivery || editingCandidate.delivery,
+      hasDelivery: updatedData.hasDelivery ?? editingCandidate.hasDelivery,
+      facebook: updatedData.facebook || editingCandidate.facebook,
+      instagram: updatedData.instagram || editingCandidate.instagram,
+      website: updatedData.website || editingCandidate.website,
+      image: updatedData.image || editingCandidate.image,
+      gallery: updatedData.gallery || (editingCandidate as any).gallery,
+      slug: updatedData.slug || editingCandidate.slug,
+      status: 'modified'
+    };
 
-    setEditingCandidate(prev => (prev ? { ...prev, description: newAdText } : null));
-  };
-
-  // Guardar cambios de edición
-  const handleSaveModification = (publishNow: boolean = false) => {
-    if (!editingCandidate) return;
-
-    // Strict telephone validation
-    const cleanPhone = (editingCandidate.phone || '').replace(/\D/g, '');
-    if (cleanPhone.length < 8) {
-      alert('¡Importante! El número telefónico es obligatorio y debe tener al menos 8 a 10 dígitos.');
-      return;
-    }
-
-    const updated = { ...editingCandidate, status: 'modified' as const };
-    setCandidates(prev => prev.map(c => (c.id === updated.id ? updated : c)));
+    setCandidates(prev => prev.map(c => (c.id === editingCandidate.id ? merged : c)));
     setEditingCandidate(null);
-
-    if (publishNow) {
-      handleAccept(updated);
-    } else {
-      setNotice({
-        text: `Datos de "${updated.name}" actualizados correctamente en la lista de candidatos.`,
-        type: 'info'
-      });
-    }
+    setNotice({
+      text: `Datos de "${merged.name}" actualizados con el formulario homologado.`,
+      type: 'info'
+    });
+    return { success: true, message: 'Candidato actualizado con éxito' };
   };
 
-  // 3. ELIMINAR (Descartar de la lista de candidatos)
-  const handleDeleteCandidate = (candidateId: string, name: string) => {
-    if (window.confirm(`¿Deseas descartar y eliminar a "${name}" de la lista de prospectos?`)) {
-      setCandidates(prev => prev.filter(c => c.id !== candidateId));
-      setNotice({
-        text: `Empresa "${name}" descartada de la lista.`,
-        type: 'info'
+  // 3. ELIMINAR (Descartar y depurar de forma permanente de la lista de prospectos)
+  const handleDeleteCandidate = async (candidateId: string, name: string, phone?: string) => {
+    if (!window.confirm(`¿Deseas descartar y eliminar a "${name}" de la lista de prospectos? No volverá a aparecer al buscar.`)) return;
+
+    setCandidates(prev => prev.filter(c => c.id !== candidateId));
+
+    try {
+      const stored = JSON.parse(localStorage.getItem('carmen_dismissed_candidates') || '[]');
+      if (!stored.includes(candidateId)) stored.push(candidateId);
+      if (!stored.includes(name.toLowerCase().trim())) stored.push(name.toLowerCase().trim());
+      if (phone) {
+        const cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone && !stored.includes(cleanPhone)) stored.push(cleanPhone);
+      }
+      localStorage.setItem('carmen_dismissed_candidates', JSON.stringify(stored));
+    } catch {}
+
+    try {
+      await fetch('/api/admin/auto-candidates/dismiss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: candidateId, name, phone })
       });
-    }
+    } catch (_) {}
+
+    setNotice({
+      text: `Empresa "${name}" descartada y depurada permanentemente.`,
+      type: 'info'
+    });
   };
 
   // 4. CONSULTAR FUENTE (Abrir modal o enlace externo de origen)
@@ -508,18 +579,18 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
               </button>
 
               <a
-                href="https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr"
+                href="https://www.facebook.com/groups/506440126097710"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-950/60 hover:bg-sky-900 border border-sky-800/80 text-sky-300 font-bold text-[11px] hover:underline"
-                title="Abrir Grupo Oficial de Facebook Empresas en Carmen"
+                title="Abrir Grupo Oficial de Facebook Empresas en Carmen (506440126097710)"
               >
                 <ExternalLink className="w-3 h-3" />
                 <span>Grupo FB</span>
               </a>
 
               <a
-                href="https://facebook.com/empresasencarmen"
+                href="https://www.facebook.com/empresasencarmen/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-950/60 hover:bg-amber-900 border border-amber-800/80 text-amber-300 font-bold text-[11px] hover:underline"
@@ -958,7 +1029,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                         {/* 3. ELIMINAR */}
                         <button
                           type="button"
-                          onClick={() => handleDeleteCandidate(candidate.id, candidate.name)}
+                          onClick={() => handleDeleteCandidate(candidate.id, candidate.name, candidate.phone)}
                           className="w-full sm:w-auto px-3 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-950/80 border border-rose-900/60 text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                           title="Descartar este negocio de la lista de prospectos"
                         >
@@ -966,7 +1037,19 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                           <span>Eliminar</span>
                         </button>
 
-                        {/* 4. CONSULTAR FUENTE */}
+                        {/* 4. VER EN GOOGLE MAPS */}
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(candidate.name + ' Ciudad del Carmen Campeche')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full sm:w-auto px-3 py-2 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/60 text-emerald-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                          title="Buscar este negocio en Google Maps"
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Google Maps</span>
+                        </a>
+
+                        {/* 5. CONSULTAR FUENTE */}
                         <button
                           type="button"
                           onClick={() => handleConsultSource(candidate)}
@@ -1012,240 +1095,18 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
       {/* =========================================================================
           SUB-MODAL: MODIFICAR CANDIDATO
           ========================================================================= */}
+      {/* =========================================================================
+          SUB-MODAL: MODIFICAR CANDIDATO (HOMOLOGADO AL 100% CON LA PANTALLA PRINCIPAL)
+          ========================================================================= */}
       {editingCandidate && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">
-          <div className="bg-stone-900 border border-stone-700 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-stone-100">
-            
-            <div className="p-4 sm:p-5 bg-gradient-to-r from-stone-900 to-sky-950/50 border-b border-stone-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Edit3 className="w-5 h-5 text-sky-400" />
-                <h3 className="text-lg font-black text-white">
-                  Modificar Datos del Negocio
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditingCandidate(null)}
-                className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-stone-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-              {/* Nombre */}
-              <div>
-                <label className="block text-xs font-bold text-stone-300 mb-1">
-                  Nombre del Negocio *
-                </label>
-                <input
-                  type="text"
-                  value={editingCandidate.name}
-                  onChange={e => setEditingCandidate({ ...editingCandidate, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-stone-950 border border-stone-700 text-sm text-white focus:border-sky-500 outline-none"
-                  placeholder="Ej: Taquería El Pastor Carmelita"
-                />
-              </div>
-
-              {/* Categoría / Giro */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-stone-300 mb-1">
-                    Categoría o Giro *
-                  </label>
-                  <input
-                    type="text"
-                    value={editingCandidate.category}
-                    onChange={e => setEditingCandidate({ ...editingCandidate, category: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-950 border border-stone-700 text-sm text-white focus:border-sky-500 outline-none"
-                    placeholder="Ej: Alimentos y Bebidas"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-stone-300 mb-1">
-                    Servicio a Domicilio
-                  </label>
-                  <input
-                    type="text"
-                    value={editingCandidate.delivery}
-                    onChange={e =>
-                      setEditingCandidate({
-                        ...editingCandidate,
-                        delivery: e.target.value,
-                        hasDelivery: !e.target.value.toLowerCase().includes('solo en sucursal')
-                      })
-                    }
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-950 border border-stone-700 text-sm text-white focus:border-sky-500 outline-none"
-                    placeholder="Ej: Servicio a Domicilio disponible en toda la isla"
-                  />
-                </div>
-              </div>
-
-              {/* Teléfono y WhatsApp (OBLIGATORIO) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-emerald-400 mb-1 flex items-center gap-1">
-                    <Phone className="w-3.5 h-3.5" /> Teléfono (OBLIGATORIO 10 dígitos) *
-                  </label>
-                  <input
-                    type="text"
-                    value={editingCandidate.phone}
-                    onChange={e => setEditingCandidate({ ...editingCandidate, phone: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-950 border border-emerald-600/60 text-sm text-emerald-200 font-mono font-bold focus:border-emerald-400 outline-none"
-                    placeholder="9381234567"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-emerald-400 mb-1 flex items-center gap-1">
-                    <MessageSquare className="w-3.5 h-3.5" /> WhatsApp *
-                  </label>
-                  <input
-                    type="text"
-                    value={editingCandidate.whatsapp}
-                    onChange={e => setEditingCandidate({ ...editingCandidate, whatsapp: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-950 border border-emerald-600/60 text-sm text-emerald-200 font-mono font-bold focus:border-emerald-400 outline-none"
-                    placeholder="9381234567"
-                  />
-                </div>
-              </div>
-
-              {/* Descripción o Especialidad (Texto publicitario comercial) */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-stone-300">
-                    Descripción o Especialidad (Texto Publicitario) *
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleRegenerateAdCopy}
-                    className="text-[11px] text-sky-400 hover:text-sky-300 font-bold flex items-center gap-1 cursor-pointer"
-                  >
-                    <Sparkles className="w-3 h-3" /> Regenerar Texto Comercial
-                  </button>
-                </div>
-                <textarea
-                  rows={4}
-                  value={editingCandidate.description}
-                  onChange={e => setEditingCandidate({ ...editingCandidate, description: e.target.value })}
-                  className="w-full p-3 rounded-xl bg-stone-950 border border-stone-700 text-xs sm:text-sm text-white focus:border-sky-500 outline-none resize-none leading-relaxed"
-                  placeholder="Texto comercial atractivo que describa los productos, especialidades y atención..."
-                />
-              </div>
-
-              {/* Dirección y Colonia */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-stone-300 mb-1">
-                    Dirección (Calle y número)
-                  </label>
-                  <input
-                    type="text"
-                    value={editingCandidate.address || ''}
-                    onChange={e => setEditingCandidate({ ...editingCandidate, address: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl bg-stone-950 border border-stone-700 text-xs sm:text-sm text-white focus:border-sky-500 outline-none"
-                    placeholder="Ej: Calle 31 #142 entre 56 y 58"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-stone-300 mb-1">
-                    Colonia en Ciudad del Carmen
-                  </label>
-                  <input
-                    type="text"
-                    value={editingCandidate.colonia || ''}
-                    onChange={e => setEditingCandidate({ ...editingCandidate, colonia: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl bg-stone-950 border border-stone-700 text-xs sm:text-sm text-white focus:border-sky-500 outline-none"
-                    placeholder="Ej: Ciudad del Carmen Centro"
-                  />
-                </div>
-              </div>
-
-              {/* Horario y Métodos de pago */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-stone-300 mb-1">
-                    Horario de Atención
-                  </label>
-                  <input
-                    type="text"
-                    value={editingCandidate.schedule || ''}
-                    onChange={e => setEditingCandidate({ ...editingCandidate, schedule: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl bg-stone-950 border border-stone-700 text-xs sm:text-sm text-white focus:border-sky-500 outline-none"
-                    placeholder="Ej: Lunes a Sábado 9:00 AM - 8:00 PM"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-stone-300 mb-1">
-                    Métodos de Pago
-                  </label>
-                  <input
-                    type="text"
-                    value={editingCandidate.payment || ''}
-                    onChange={e => setEditingCandidate({ ...editingCandidate, payment: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl bg-stone-950 border border-stone-700 text-xs sm:text-sm text-white focus:border-sky-500 outline-none"
-                    placeholder="Ej: Efectivo, Transferencia y Tarjeta"
-                  />
-                </div>
-              </div>
-
-              {/* Logotipo / Imagen del negocio */}
-              <div>
-                <label className="block text-xs font-bold text-stone-300 mb-1">
-                  Logotipo o Imagen del Negocio (URL) *
-                </label>
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-stone-800 border border-stone-700 overflow-hidden shrink-0">
-                    <img
-                      src={editingCandidate.image}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                      onError={e => {
-                        (e.target as HTMLImageElement).src = 'https://empresasencarmen.com/icons/icon-512.svg';
-                      }}
-                    />
-                  </div>
-                  <input
-                    type="text"
-                    value={editingCandidate.image}
-                    onChange={e => setEditingCandidate({ ...editingCandidate, image: e.target.value })}
-                    className="flex-1 px-3.5 py-2 rounded-xl bg-stone-950 border border-stone-700 text-xs text-white focus:border-sky-500 outline-none font-mono"
-                    placeholder="https://images.unsplash.com/..."
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 bg-stone-950 border-t border-stone-800 flex items-center justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => setEditingCandidate(null)}
-                className="px-4 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSaveModification(false)}
-                className="px-4 py-2 rounded-xl bg-sky-700 hover:bg-sky-600 text-white font-bold text-xs cursor-pointer shadow-sm"
-              >
-                Guardar Cambios
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSaveModification(true)}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs cursor-pointer shadow-md flex items-center gap-1.5"
-              >
-                <Check className="w-4 h-4" />
-                <span>Guardar y Publicar Directamente</span>
-              </button>
-            </div>
-
-          </div>
-        </div>
+        <EditBusinessModal
+          business={candidateToBusiness(editingCandidate)}
+          isOpen={Boolean(editingCandidate)}
+          onClose={() => setEditingCandidate(null)}
+          categories={allCategoriesList}
+          coloniasList={allColoniasList}
+          onSave={handleSaveStandardCandidateEdit}
+        />
       )}
 
       {/* =========================================================================
@@ -1287,65 +1148,44 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                 <p className="text-sm font-semibold text-purple-300">{viewingSourceCandidate.source}</p>
               </div>
 
-              {/* Botones de Verificación Directa en Fuentes Oficiales */}
+              {/* Enlace Directo a la Fuente Original Auténtica */}
               <div className="space-y-2 pt-1">
-                <span className="text-xs font-bold text-stone-200 block">Comprobación de la Fuente en Tiempo Real:</span>
+                <span className="text-xs font-bold text-stone-200 block">Enlace de la Fuente Original Registrada:</span>
                 
-                {/* 1. Buscar en Grupo de Facebook */}
-                <a
-                  href={`https://www.facebook.com/groups/18WwRY3pKB/search/?q=${encodeURIComponent(viewingSourceCandidate.name)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-sky-950/70 hover:bg-sky-900 border border-sky-800 text-sky-200 font-bold text-xs flex items-center justify-between transition-colors shadow-sm cursor-pointer"
-                >
-                  <div className="flex items-center gap-2">
-                    <ExternalLink className="w-4 h-4 text-sky-400 shrink-0" />
-                    <span>Buscar publicaciones en Grupo Oficial FB</span>
-                  </div>
-                  <span className="text-[10px] text-sky-400 font-mono">Abrir Facebook →</span>
-                </a>
+                {viewingSourceCandidate.sourceUrl ? (
+                  <a
+                    href={viewingSourceCandidate.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full px-4 py-3 rounded-xl bg-purple-950/80 hover:bg-purple-900 border border-purple-700 text-purple-200 font-bold text-xs flex items-center justify-between transition-colors shadow-sm cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <ExternalLink className="w-4 h-4 text-purple-400 shrink-0" />
+                      <span>Abrir publicación o fuente original verificada</span>
+                    </div>
+                    <span className="text-[11px] text-purple-300 font-mono">Abrir enlace →</span>
+                  </a>
+                ) : (
+                  <p className="text-xs text-stone-400 italic bg-stone-950 p-2.5 rounded-xl border border-stone-800">
+                    Fuente local validada directamente por el directorio comercial de Carmen.
+                  </p>
+                )}
 
-                {/* 2. Buscar en FanPage de Facebook */}
-                <a
-                  href={`https://www.facebook.com/empresasencarmen/search/?q=${encodeURIComponent(viewingSourceCandidate.name)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-amber-950/70 hover:bg-amber-900 border border-amber-800 text-amber-200 font-bold text-xs flex items-center justify-between transition-colors shadow-sm cursor-pointer"
-                >
-                  <div className="flex items-center gap-2">
-                    <ExternalLink className="w-4 h-4 text-amber-400 shrink-0" />
-                    <span>Buscar publicaciones en FanPage Oficial (@empresasencarmen)</span>
-                  </div>
-                  <span className="text-[10px] text-amber-400 font-mono">Abrir FanPage →</span>
-                </a>
-
-                {/* 3. Buscar en Google Maps */}
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(viewingSourceCandidate.name + ' ' + (viewingSourceCandidate.address || '') + ' Ciudad del Carmen Campeche')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-800 text-rose-200 font-bold text-xs flex items-center justify-between transition-colors shadow-sm cursor-pointer"
-                >
-                  <div className="flex items-center gap-2">
-                    <Globe className="w-4 h-4 text-rose-400 shrink-0" />
-                    <span>Ver ficha y dirección real en Google Maps</span>
-                  </div>
-                  <span className="text-[10px] text-rose-400 font-mono">Abrir Mapa →</span>
-                </a>
-
-                {/* 4. WhatsApp Directo */}
-                <a
-                  href={`https://wa.me/52${viewingSourceCandidate.phone}?text=${encodeURIComponent('Hola ' + viewingSourceCandidate.name + ', nos comunicamos de Empresas en Carmen para verificar su dirección y giro.')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-800 text-emerald-200 font-bold text-xs flex items-center justify-between transition-colors shadow-sm cursor-pointer"
-                >
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Verificar por WhatsApp directo (+52 {viewingSourceCandidate.phone})</span>
-                  </div>
-                  <span className="text-[10px] text-emerald-400 font-mono">Chatear →</span>
-                </a>
+                {/* WhatsApp Directo de Verificación */}
+                {viewingSourceCandidate.phone && (
+                  <a
+                    href={`https://wa.me/52${viewingSourceCandidate.phone}?text=${encodeURIComponent('Hola ' + viewingSourceCandidate.name + ', nos comunicamos del Directorio Empresas en Carmen para verificar su información.')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-800 text-emerald-200 font-bold text-xs flex items-center justify-between transition-colors shadow-sm cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Contactar al negocio por WhatsApp (+52 {viewingSourceCandidate.phone})</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-400 font-mono">Chatear →</span>
+                  </a>
+                )}
               </div>
 
               <div className="p-3 bg-amber-950/40 border border-amber-600/40 rounded-xl text-xs text-amber-200 space-y-1">

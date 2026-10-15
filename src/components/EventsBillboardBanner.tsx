@@ -6,6 +6,8 @@ import {
   Tag,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
   Sparkles,
   Music,
@@ -14,6 +16,7 @@ import {
   Flame,
   Info,
   X,
+  Minimize2,
   Maximize2,
   PlusCircle,
   Edit2,
@@ -27,7 +30,9 @@ import {
   Search,
   AlertCircle,
   CheckCircle2,
-  Check
+  Check,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 import {
   EventItem,
@@ -39,6 +44,7 @@ import {
   searchAIRadarCandidates,
   triggerAIRadarScan,
   publishAIRadarCandidates,
+  sortEventsChronologically,
   AIRadarCandidate
 } from '../services/eventsService';
 import { isSessionAdminAuthenticated } from '../utils/adminAuth';
@@ -74,6 +80,61 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
 
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    try {
+      const stored = localStorage.getItem('carmelita_cartelera_collapsed');
+      return stored !== null ? stored === 'true' : true; // Por default minimizado (Falla 14)
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleCollapse = () => {
+    setIsCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('carmelita_cartelera_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 6 * 1024 * 1024) {
+      alert('La imagen no debe exceder los 6MB.');
+      return;
+    }
+    setIsUploadingImage(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result as string;
+      try {
+        const res = await fetch('/api/upload-logo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: base64, filename: file.name })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.url) {
+            setEventForm(prev => ({ ...prev, image: data.url }));
+            setIsUploadingImage(false);
+            return;
+          }
+        }
+      } catch {}
+      setEventForm(prev => ({ ...prev, image: base64 }));
+      setIsUploadingImage(false);
+    };
+    reader.onerror = () => {
+      setIsUploadingImage(false);
+      alert('Error al leer el archivo.');
+    };
+    reader.readAsDataURL(file);
+  };
 
   const isAiStudioEnv = typeof window !== 'undefined' && (
     window.location.hostname.includes('run.app') || 
@@ -180,7 +241,7 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
         (e.organizer && e.organizer.toLowerCase().includes(q))
       );
     }
-    return list;
+    return sortEventsChronologically(list);
   }, [events, selectedCategory, searchQuery]);
 
   const handleAutoRadarScan = async () => {
@@ -509,7 +570,7 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
           </div>
 
           <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
-            {totalPages > 1 && (
+            {totalPages > 1 && !isCollapsed && (
               <div className="flex items-center gap-1.5 bg-stone-800/80 p-1 rounded-xl border border-stone-700">
                 <button
                   type="button"
@@ -532,8 +593,30 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
                 </button>
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={toggleCollapse}
+              className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 hover:text-white transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold shadow-xs active:scale-95"
+              title={isCollapsed ? 'Ver Eventos' : 'Minimizar'}
+            >
+              {isCollapsed ? (
+                <>
+                  <ChevronDown className="w-4 h-4 text-amber-400" />
+                  <span>Ver Eventos</span>
+                </>
+              ) : (
+                <>
+                  <Minimize2 className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Minimizar</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
+
+        {!isCollapsed && (
+          <>
 
         {/* Search Bar */}
         <div className="relative w-full">
@@ -655,25 +738,69 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
               </div>
             )}
 
-            {/* Indicadores de puntos por página */}
+            {/* Discrete Side Arrows on the Carousel for easy navigation */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-1.5 pt-3">
-                {Array.from({ length: totalPages }).map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentPage(idx)}
-                    className={`h-1.5 rounded-full transition-all cursor-pointer ${
-                      currentPage === idx
-                        ? 'w-6 bg-amber-500'
-                        : 'w-1.5 bg-stone-700 hover:bg-stone-500'
-                    }`}
-                    title={`Ir a la página ${idx + 1}`}
-                  />
-                ))}
+              <>
+                <button
+                  type="button"
+                  onClick={handlePrevPage}
+                  className="absolute left-1.5 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-stone-900/85 hover:bg-amber-500 hover:text-stone-950 text-stone-200 border border-stone-700/80 shadow-lg backdrop-blur-xs transition-all cursor-pointer flex items-center justify-center active:scale-90"
+                  title="Página anterior de eventos"
+                  aria-label="Página anterior de eventos"
+                >
+                  <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNextPage}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full bg-stone-900/85 hover:bg-amber-500 hover:text-stone-950 text-stone-200 border border-stone-700/80 shadow-lg backdrop-blur-xs transition-all cursor-pointer flex items-center justify-center active:scale-90"
+                  title="Página siguiente de eventos"
+                  aria-label="Página siguiente de eventos"
+                >
+                  <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
+              </>
+            )}
+
+            {/* Indicadores de puntos por página flanqueados por flechas discretas */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={handlePrevPage}
+                  className="p-1 rounded-lg bg-stone-800/80 hover:bg-stone-700 text-stone-300 hover:text-white border border-stone-700 transition-colors cursor-pointer flex items-center justify-center"
+                  title="Página anterior"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <div className="flex items-center gap-1.5">
+                  {Array.from({ length: totalPages }).map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentPage(idx)}
+                      className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                        currentPage === idx
+                          ? 'w-6 bg-amber-500'
+                          : 'w-1.5 bg-stone-700 hover:bg-stone-500'
+                      }`}
+                      title={`Ir a la página ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleNextPage}
+                  className="p-1 rounded-lg bg-stone-800/80 hover:bg-stone-700 text-stone-300 hover:text-white border border-stone-700 transition-colors cursor-pointer flex items-center justify-center"
+                  title="Página siguiente"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
               </div>
             )}
           </div>
         )}
+        </>
+      )}
       </div>
 
       {/* Detail Modal */}
@@ -866,10 +993,10 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div>
                   <label className="block text-stone-300 font-semibold mb-1">
-                    Categoría
+                    Categoría (Datacombo)
                   </label>
                   <select
                     value={eventForm.category}
@@ -887,10 +1014,63 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
                   >
                     <option value="Cultura & Música">Cultura & Música</option>
                     <option value="Ferias, Exposiciones y Tradición">Ferias, Exposiciones y Tradición</option>
-                    <option value="Deportes">Deportes</option>
+                    <option value="Deportes & Rodadas">Deportes & Rodadas</option>
                     <option value="Bazares y Emprendedores">Bazares y Emprendedores</option>
-                    <option value="Gastronomía">Gastronomía</option>
+                    <option value="Gastronomía & Sabores">Gastronomía & Sabores</option>
+                    <option value="Entretenimiento & Familia">Entretenimiento & Familia</option>
+                    <option value="Infantil & Comunitario">Infantil & Comunitario</option>
                   </select>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-stone-300 font-semibold">
+                      Insignia / Badge
+                    </label>
+                    <span className="text-[10px] text-amber-400">Ver opciones</span>
+                  </div>
+                  <select
+                    value={[
+                      'GRATUITO', 'FAMILIAR', 'DESTACADO', 'IMPERDIBLE',
+                      'TRADICIÓN', 'CULTURA', 'RADAR IA', 'PROMOCIONADO',
+                      'ProEventos', 'Dashport'
+                    ].includes(eventForm.badge || '') ? (eventForm.badge || '') : (eventForm.badge ? '__custom__' : '')}
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val === '__custom__') {
+                        setEventForm(prev => ({ ...prev, badge: '' }));
+                      } else {
+                        setEventForm(prev => ({ ...prev, badge: val }));
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white focus:outline-none focus:border-amber-500 cursor-pointer text-xs"
+                  >
+                    <option value="">▼ Selecciona una insignia oficial...</option>
+                    <option value="GRATUITO">GRATUITO</option>
+                    <option value="FAMILIAR">FAMILIAR</option>
+                    <option value="DESTACADO">DESTACADO</option>
+                    <option value="IMPERDIBLE">IMPERDIBLE</option>
+                    <option value="TRADICIÓN">TRADICIÓN</option>
+                    <option value="CULTURA">CULTURA</option>
+                    <option value="RADAR IA">RADAR IA</option>
+                    <option value="PROMOCIONADO">PROMOCIONADO</option>
+                    <option value="ProEventos">ProEventos</option>
+                    <option value="Dashport">Dashport</option>
+                    <option value="__custom__">➕ Escribir insignia personalizada...</option>
+                  </select>
+                  {(![
+                    'GRATUITO', 'FAMILIAR', 'DESTACADO', 'IMPERDIBLE',
+                    'TRADICIÓN', 'CULTURA', 'RADAR IA', 'PROMOCIONADO',
+                    'ProEventos', 'Dashport'
+                  ].includes(eventForm.badge || '') || eventForm.badge === '') && (
+                    <input
+                      type="text"
+                      value={eventForm.badge || ''}
+                      onChange={e => setEventForm(prev => ({ ...prev, badge: e.target.value }))}
+                      placeholder="Escribe insignia personalizada..."
+                      className="w-full mt-1.5 px-3 py-1.5 bg-stone-850 border border-amber-500/50 rounded-xl text-xs text-white placeholder:text-stone-500 focus:outline-none focus:border-amber-500"
+                    />
+                  )}
                 </div>
 
                 <div>
@@ -977,15 +1157,80 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
 
               <div>
                 <label className="block text-stone-300 font-semibold mb-1">
-                  URL de Imagen del Evento (opcional)
+                  Imagen o Cartel del Evento
                 </label>
-                <input
-                  type="url"
-                  value={eventForm.image}
-                  onChange={e => setEventForm(prev => ({ ...prev, image: e.target.value }))}
-                  className="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white placeholder:text-stone-500 focus:outline-none focus:border-amber-500"
-                  placeholder="https://images.unsplash.com/..."
-                />
+                
+                {/* Upload or Preview Box */}
+                <div className="space-y-2">
+                  {eventForm.image ? (
+                    <div className="relative w-full h-36 rounded-xl overflow-hidden border border-stone-700 bg-stone-900 group">
+                      <img
+                        src={eventForm.image}
+                        alt="Previsualización"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                        <label
+                          className="px-2 py-1 rounded-lg bg-stone-900/90 hover:bg-stone-800 text-amber-300 hover:text-white text-[11px] font-bold border border-amber-500/40 flex items-center gap-1 cursor-pointer shadow-md transition-colors"
+                          title="Cambiar foto o flyer"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Cambiar foto</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageFileUpload}
+                            className="hidden"
+                            disabled={isUploadingImage}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setEventForm(prev => ({ ...prev, image: '' }))}
+                          className="p-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white shadow-md transition-colors cursor-pointer"
+                          title="Eliminar imagen"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-stone-700 hover:border-amber-500 rounded-xl bg-stone-900/60 transition-colors">
+                      <ImageIcon className="w-8 h-8 text-stone-500 mb-1" />
+                      <p className="text-xs text-stone-400 text-center mb-2">
+                        Sube una foto o flyer del evento desde tu equipo (hasta 6MB)
+                      </p>
+                      <label className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm">
+                        {isUploadingImage ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Upload className="w-4 h-4" />
+                        )}
+                        <span>{isUploadingImage ? 'Subiendo imagen...' : 'Seleccionar Archivo'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageFileUpload}
+                          className="hidden"
+                          disabled={isUploadingImage}
+                        />
+                      </label>
+                    </div>
+                  )}
+
+                  <div className="pt-1">
+                    <label className="block text-[11px] text-stone-400 mb-0.5">
+                      O pega una URL directa de imagen externa:
+                    </label>
+                    <input
+                      type="url"
+                      value={eventForm.image}
+                      onChange={e => setEventForm(prev => ({ ...prev, image: e.target.value }))}
+                      className="w-full px-3 py-1.5 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white placeholder:text-stone-500 focus:outline-none focus:border-amber-500"
+                      placeholder="https://ejemplo.com/flyer.jpg"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>

@@ -172,6 +172,7 @@ export interface BusinessSubmission {
   payment?: string;
   delivery?: string;
   deliveryOption?: string;
+  hasDelivery?: boolean;
   image?: string;
   gallery?: string[];
   contactName?: string;
@@ -283,12 +284,20 @@ export interface AutoBusinessCandidate {
   whatsapp: string;
   address?: string;
   colonia?: string;
+  postalCode?: string;
+  facebook?: string;
+  instagram?: string;
+  website?: string;
+  slug?: string;
   schedule?: string;
   payment?: string;
   image: string;
+  gallery?: string[];
   source: string;
   sourceUrl: string;
   isOfficialSource?: boolean;
+  isRecommended?: boolean;
+  isTopBusiness?: boolean;
   priority?: boolean;
   alreadyRegistered?: boolean;
   matchedExistingName?: string;

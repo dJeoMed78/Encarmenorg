@@ -28,7 +28,24 @@ export const PromotionsBanner: React.FC<PromotionsBannerProps> = ({
   onSelectPromotion,
   onSelectBusiness
 }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    try {
+      const stored = localStorage.getItem('carmelita_promotions_collapsed');
+      return stored !== null ? stored === 'true' : true; // Por default minimizado (Falla 14)
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleCollapse = () => {
+    setIsCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('carmelita_promotions_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
   const [currentPage, setCurrentPage] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const [isAllPromosModalOpen, setIsAllPromosModalOpen] = useState(false);
@@ -184,13 +201,13 @@ export const PromotionsBanner: React.FC<PromotionsBannerProps> = ({
               <span>Ver todos ({promotions.length})</span>
             </button>
 
-            {/* Toggle Collapse/Expand Button */}
+            {/* Toggle Collapse/Expand Button (Homologado con Cartelera) */}
             <button
               type="button"
-              onClick={() => setIsCollapsed(!isCollapsed)}
+              onClick={toggleCollapse}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-950 border border-amber-400/40 text-xs font-bold transition-colors cursor-pointer"
             >
-              <span>{isCollapsed ? 'Ver Ofertas' : 'Ocultar'}</span>
+              <span>{isCollapsed ? 'Ver Ofertas' : 'Minimizar'}</span>
               {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
             </button>
           </div>

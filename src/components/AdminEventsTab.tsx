@@ -890,12 +890,16 @@ export const AdminEventsTab: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
-                    Categoría
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-slate-300 font-semibold">
+                      Categoría (Datacombo) *
+                    </label>
+                    <span className="text-[10px] text-amber-400">Ver opciones en lista</span>
+                  </div>
                   <input
                     type="text"
                     required
+                    list="event-category-options"
                     value={formData.category}
                     onChange={e => {
                       const val = e.target.value;
@@ -903,24 +907,97 @@ export const AdminEventsTab: React.FC = () => {
                       if (val.toLowerCase().includes('bazar')) slug = 'bazares';
                       else if (val.toLowerCase().includes('depor') || val.toLowerCase().includes('bici')) slug = 'deportes';
                       else if (val.toLowerCase().includes('gastro') || val.toLowerCase().includes('comida')) slug = 'gastronomia';
+                      else if (val.toLowerCase().includes('feria') || val.toLowerCase().includes('expo')) slug = 'ferias';
                       setFormData({ ...formData, category: val, categorySlug: slug });
                     }}
-                    placeholder="ej. Bazares y Emprendedores"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-amber-500"
+                    placeholder="Elige o escribe categoría..."
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-amber-500 font-medium"
                   />
+                  <datalist id="event-category-options">
+                    <option value="Cultura & Música" />
+                    <option value="Ferias, Exposiciones y Tradición" />
+                    <option value="Deportes & Rodadas" />
+                    <option value="Bazares y Emprendedores" />
+                    <option value="Gastronomía & Sabores" />
+                    <option value="Entretenimiento & Familia" />
+                    <option value="Infantil & Comunitario" />
+                  </datalist>
+                  {/* Select directo alternativo para ver todas las opciones en un clic */}
+                  <select
+                    value={formData.category || ''}
+                    onChange={e => {
+                      if (!e.target.value) return;
+                      const val = e.target.value;
+                      let slug = 'cultura';
+                      if (val.toLowerCase().includes('bazar')) slug = 'bazares';
+                      else if (val.toLowerCase().includes('depor') || val.toLowerCase().includes('bici')) slug = 'deportes';
+                      else if (val.toLowerCase().includes('gastro') || val.toLowerCase().includes('comida')) slug = 'gastronomia';
+                      else if (val.toLowerCase().includes('feria') || val.toLowerCase().includes('expo')) slug = 'ferias';
+                      setFormData({ ...formData, category: val, categorySlug: slug });
+                    }}
+                    className="w-full mt-1 px-2.5 py-1 bg-slate-850 border border-slate-700/80 rounded-lg text-slate-300 text-[11px] outline-none focus:border-amber-500 cursor-pointer"
+                  >
+                    <option value="">▼ O selecciona del listado disponible...</option>
+                    <option value="Cultura & Música">Cultura & Música</option>
+                    <option value="Ferias, Exposiciones y Tradición">Ferias, Exposiciones y Tradición</option>
+                    <option value="Deportes & Rodadas">Deportes & Rodadas</option>
+                    <option value="Bazares y Emprendedores">Bazares y Emprendedores</option>
+                    <option value="Gastronomía & Sabores">Gastronomía & Sabores</option>
+                    <option value="Entretenimiento & Familia">Entretenimiento & Familia</option>
+                    <option value="Infantil & Comunitario">Infantil & Comunitario</option>
+                  </select>
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
-                    Insignia / Badge
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-slate-300 font-semibold">
+                      Insignia / Badge (Datacombo)
+                    </label>
+                    <span className="text-[10px] text-amber-400">Ver distintivos</span>
+                  </div>
                   <input
                     type="text"
+                    list="event-badge-options"
                     value={formData.badge}
                     onChange={e => setFormData({ ...formData, badge: e.target.value })}
-                    placeholder="ej. Ambiente Familiar"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-amber-500"
+                    placeholder="Elige o escribe distintivo..."
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-amber-500 font-medium"
                   />
+                  <datalist id="event-badge-options">
+                    <option value="GRATUITO" />
+                    <option value="FAMILIAR" />
+                    <option value="DESTACADO" />
+                    <option value="IMPERDIBLE" />
+                    <option value="TRADICIÓN" />
+                    <option value="CULTURA" />
+                    <option value="RADAR IA" />
+                    <option value="PROMOCIONADO" />
+                    <option value="NOVEDAD" />
+                    <option value="ProEventos" />
+                    <option value="Dashport" />
+                  </datalist>
+                  {/* Select directo alternativo para ver insignias en un clic */}
+                  <select
+                    value={formData.badge || ''}
+                    onChange={e => {
+                      if (!e.target.value) return;
+                      setFormData({ ...formData, badge: e.target.value });
+                    }}
+                    className="w-full mt-1 px-2.5 py-1 bg-slate-850 border border-slate-700/80 rounded-lg text-slate-300 text-[11px] outline-none focus:border-amber-500 cursor-pointer"
+                  >
+                    <option value="">▼ O selecciona insignia sugerida...</option>
+                    <option value="GRATUITO">GRATUITO (Entrada libre)</option>
+                    <option value="FAMILIAR">FAMILIAR (Para toda la familia)</option>
+                    <option value="DESTACADO">DESTACADO (Evento estelar)</option>
+                    <option value="IMPERDIBLE">IMPERDIBLE (Recomendado)</option>
+                    <option value="TRADICIÓN">TRADICIÓN (Fiestas patronales)</option>
+                    <option value="CULTURA">CULTURA (Música, arte y danza)</option>
+                    <option value="RADAR IA">RADAR IA (Detección automática)</option>
+                    <option value="PROMOCIONADO">PROMOCIONADO</option>
+                    <option value="NOVEDAD">NOVEDAD</option>
+                    <option value="ProEventos">ProEventos Campeche</option>
+                    <option value="Dashport">Dashport Run</option>
+                  </select>
                 </div>
               </div>
 

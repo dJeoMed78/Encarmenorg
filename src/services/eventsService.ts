@@ -22,6 +22,78 @@ export interface EventItem {
 
 const STORAGE_KEY = 'carmen_events_billboard_v5';
 
+export function parseEventStartDate(dateStr?: string, timeStr?: string): number {
+  if (!dateStr || typeof dateStr !== 'string') return new Date(2099, 0, 1).getTime();
+  const clean = dateStr.toLowerCase().trim();
+
+  const months: Record<string, number> = {
+    enero: 0, feb: 1, febrero: 1, mar: 2, marzo: 2, abr: 3, abril: 3,
+    mayo: 4, jun: 5, junio: 5, jul: 6, julio: 6, ago: 7, agosto: 7,
+    sep: 8, sept: 8, septiembre: 8, oct: 9, octubre: 9,
+    nov: 10, noviembre: 10, dic: 11, diciembre: 11
+  };
+
+  let foundMonth: number | null = null;
+  for (const [mName, mIdx] of Object.entries(months)) {
+    const regex = new RegExp(`\\b${mName}\\b`, 'i');
+    if (regex.test(clean)) {
+      foundMonth = mIdx;
+      break;
+    }
+  }
+
+  const yearMatch = clean.match(/\b(202\d)\b/);
+  const currentYear = new Date().getFullYear();
+  const year = yearMatch ? parseInt(yearMatch[1], 10) : currentYear;
+
+  const dayMatches = clean.match(/\b([1-3]?\d)\b/g);
+  let day: number | null = null;
+  if (dayMatches && dayMatches.length > 0) {
+    const validDays = dayMatches
+      .map(d => parseInt(d, 10))
+      .filter(d => d >= 1 && d <= 31 && d !== year);
+    if (validDays.length > 0) {
+      day = validDays[0];
+    }
+  }
+
+  if (foundMonth !== null && day !== null) {
+    let hour = 12;
+    let min = 0;
+    if (timeStr) {
+      const tm = timeStr.match(/(\d{1,2}):(\d{2})/);
+      if (tm) {
+        hour = parseInt(tm[1], 10);
+        min = parseInt(tm[2], 10);
+      }
+    }
+    return new Date(year, foundMonth, day, hour, min).getTime();
+  }
+
+  // Handle recurring like "Sábado y Domingo" or "Domingos"
+  const now = new Date();
+  if (clean.includes('sabado') || clean.includes('sábado')) {
+    const d = new Date(now);
+    const dayOfWeek = d.getDay(); // 0 is Sun, 6 is Sat
+    const diff = (6 - dayOfWeek + 7) % 7;
+    d.setDate(d.getDate() + diff);
+    return d.getTime();
+  }
+  if (clean.includes('domingo')) {
+    const d = new Date(now);
+    const dayOfWeek = d.getDay();
+    const diff = (7 - dayOfWeek) % 7;
+    d.setDate(d.getDate() + (diff === 0 ? 0 : diff));
+    return d.getTime();
+  }
+
+  return new Date(2099, 0, 1).getTime();
+}
+
+export function sortEventsChronologically(events: EventItem[]): EventItem[] {
+  return [...events].sort((a, b) => parseEventStartDate(a.date, a.time) - parseEventStartDate(b.date, b.time));
+}
+
 // In-memory cache
 let inMemoryEvents: EventItem[] = [];
 
@@ -42,7 +114,7 @@ const loadLocalInitial = (): EventItem[] => {
     if (raw !== null) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed.map(ensureEventRepresentativeImage);
+        return sortEventsChronologically(parsed.map(ensureEventRepresentativeImage));
       }
     }
   } catch (e) {
@@ -55,12 +127,12 @@ inMemoryEvents = loadLocalInitial();
 
 // Synchronous getter for immediate render
 export const getEventsData = (): EventItem[] => {
-  return inMemoryEvents.map(ensureEventRepresentativeImage);
+  return sortEventsChronologically(inMemoryEvents.map(ensureEventRepresentativeImage));
 };
 
 // Dispatch change event and persist locally
 const notifyAndPersist = (events: EventItem[]) => {
-  const sanitized = events.map(ensureEventRepresentativeImage);
+  const sanitized = sortEventsChronologically(events.map(ensureEventRepresentativeImage));
   inMemoryEvents = sanitized;
   if (typeof window !== 'undefined') {
     try {

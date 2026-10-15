@@ -211,6 +211,21 @@ async function createTablesIfNotExist() {
       \`cambios_al_portal\` LONGTEXT,
       \`fallas_del_portal\` LONGTEXT,
       \`updated_at\` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`uploaded_files\` (
+      \`filename\` VARCHAR(255) PRIMARY KEY,
+      \`mime_type\` VARCHAR(100) DEFAULT 'image/png',
+      \`data\` LONGBLOB NOT NULL,
+      \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`dismissed_candidates\` (
+      \`id\` VARCHAR(100) PRIMARY KEY,
+      \`name\` VARCHAR(255) NOT NULL,
+      \`phone\` VARCHAR(50) DEFAULT '',
+      \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
   ];
 
@@ -220,6 +235,40 @@ async function createTablesIfNotExist() {
     } catch (e: any) {
       console.warn('[MariaDB/Hostinger] Error creando tabla:', e.message);
     }
+  }
+}
+
+// Uploaded files persistence in MariaDB
+export async function dbSaveUploadedFile(filename: string, mimeType: string, buffer: Buffer): Promise<boolean> {
+  if (!pool) return false;
+  try {
+    const q = `
+      INSERT INTO uploaded_files (filename, mime_type, data)
+      VALUES (?, ?, ?)
+      ON DUPLICATE KEY UPDATE mime_type = VALUES(mime_type), data = VALUES(data);
+    `;
+    await pool.query(q, [filename, mimeType, buffer]);
+    return true;
+  } catch (err: any) {
+    console.warn('[MariaDB] Error guardando archivo subido:', err.message);
+    return false;
+  }
+}
+
+export async function dbGetUploadedFile(filename: string): Promise<{ mimeType: string; data: Buffer } | null> {
+  if (!pool) return null;
+  try {
+    const [rows]: any = await pool.query('SELECT mime_type, data FROM uploaded_files WHERE filename = ?', [filename]);
+    if (rows && rows.length > 0) {
+      return {
+        mimeType: rows[0].mime_type || 'image/png',
+        data: Buffer.isBuffer(rows[0].data) ? rows[0].data : Buffer.from(rows[0].data)
+      };
+    }
+    return null;
+  } catch (err: any) {
+    console.warn('[MariaDB] Error obteniendo archivo subido:', err.message);
+    return null;
   }
 }
 
@@ -236,25 +285,36 @@ export async function dbLoadAllBusinesses(): Promise<any[]> {
       return {
         ...extra,
         id: isNaN(Number(r.id)) ? r.id : Number(r.id),
-        name: r.name,
-        category: r.category,
-        subcategory: r.subcategory,
-        description: r.description,
-        address: r.address,
-        colonia: r.colonia,
-        phone: r.phone,
-        whatsapp: r.whatsapp,
-        email: r.email,
-        website: r.website,
-        facebook: r.facebook,
-        instagram: r.instagram,
-        schedule: r.schedule,
-        image: r.image || extra.image,
-        rating: Number(r.rating || 5.0),
-        reviews_count: Number(r.reviews_count || 0),
-        verified: Boolean(r.verified),
-        featured: Boolean(r.featured),
-        status: r.status || 'published'
+        name: r.name || extra.name || '',
+        category: extra.category || r.category || '',
+        categories: Array.isArray(extra.categories) && extra.categories.length > 0
+          ? extra.categories
+          : (r.category ? [r.category] : ['Servicios']),
+        categorySlugs: Array.isArray(extra.categorySlugs) ? extra.categorySlugs : [],
+        subcategory: extra.subcategory || r.subcategory || '',
+        description: extra.description || r.description || '',
+        address: extra.address || r.address || '',
+        colonia: extra.colonia || r.colonia || '',
+        postalCode: extra.postalCode || '',
+        phone: extra.phone || r.phone || '',
+        whatsapp: extra.whatsapp || r.whatsapp || '',
+        email: extra.email || r.email || '',
+        website: extra.website || r.website || '',
+        facebook: extra.facebook || r.facebook || '',
+        instagram: extra.instagram || r.instagram || '',
+        schedule: extra.schedule || r.schedule || '',
+        image: extra.image || r.image || '',
+        gallery: Array.isArray(extra.gallery) ? extra.gallery : [],
+        delivery: extra.delivery || '',
+        hasDelivery: Boolean(extra.hasDelivery),
+        payment: extra.payment || '',
+        rating: Number(extra.rating || r.rating || 5.0),
+        reviews_count: Number(extra.reviews_count || r.reviews_count || 0),
+        verified: Boolean(extra.verified ?? r.verified ?? true),
+        featured: Boolean(extra.featured ?? r.featured ?? false),
+        isRecommended: Boolean(extra.isRecommended ?? false),
+        isTopBusiness: Boolean(extra.isTopBusiness ?? false),
+        status: extra.status || r.status || 'published'
       };
     });
   } catch (err: any) {
@@ -312,7 +372,8 @@ export async function dbSaveBusiness(biz: any): Promise<boolean> {
         verified = VALUES(verified),
         featured = VALUES(featured),
         status = VALUES(status),
-        raw_data = VALUES(raw_data);
+        raw_data = VALUES(raw_data),
+        updated_at = NOW();
     `;
     await pool.query(query, [
       id,
@@ -341,6 +402,34 @@ export async function dbSaveBusiness(biz: any): Promise<boolean> {
   } catch (err: any) {
     console.warn('[MariaDB] Error guardando empresa:', err.message);
     return false;
+  }
+}
+
+// Dismissed candidate persistence in MariaDB
+export async function dbSaveDismissedCandidate(id: string, name: string, phone: string = ''): Promise<boolean> {
+  if (!pool) return false;
+  try {
+    const q = `
+      INSERT INTO dismissed_candidates (id, name, phone)
+      VALUES (?, ?, ?)
+      ON DUPLICATE KEY UPDATE name = VALUES(name), phone = VALUES(phone);
+    `;
+    await pool.query(q, [id, name, phone]);
+    return true;
+  } catch (err: any) {
+    console.warn('[MariaDB] Error guardando candidato descartado:', err.message);
+    return false;
+  }
+}
+
+export async function dbLoadDismissedCandidates(): Promise<Array<{ id: string; name: string; phone: string }>> {
+  if (!pool) return [];
+  try {
+    const [rows]: any = await pool.query('SELECT id, name, phone FROM dismissed_candidates');
+    return Array.isArray(rows) ? rows : [];
+  } catch (err: any) {
+    console.warn('[MariaDB] Error cargando candidatos descartados:', err.message);
+    return [];
   }
 }
 

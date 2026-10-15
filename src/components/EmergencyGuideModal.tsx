@@ -156,6 +156,10 @@ export const EmergencyGuideModal: React.FC<EmergencyGuideModalProps> = ({
   };
 
   const handleOpenAddNew = () => {
+    if (!isSessionAdminAuthenticated()) {
+      alert('Esta acción requiere privilegios de Administrador.');
+      return;
+    }
     setEditingItem(null);
     setFormData({
       name: '',
@@ -173,6 +177,10 @@ export const EmergencyGuideModal: React.FC<EmergencyGuideModalProps> = ({
   };
 
   const handleOpenEdit = (item: EmergencyServiceItem) => {
+    if (!isSessionAdminAuthenticated()) {
+      alert('Esta acción requiere privilegios de Administrador.');
+      return;
+    }
     setEditingItem(item);
     setFormData({
       name: item.name,
@@ -190,12 +198,20 @@ export const EmergencyGuideModal: React.FC<EmergencyGuideModalProps> = ({
   };
 
   const handleDeleteItem = (id: string, name: string) => {
+    if (!isSessionAdminAuthenticated()) {
+      alert('Esta acción requiere privilegios de Administrador.');
+      return;
+    }
     if (!window.confirm(`¿Estás seguro de que deseas eliminar a "${name}" de la guía de emergencias?`)) return;
     deleteEmergencyService(id);
   };
 
   const handleSaveForm = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isSessionAdminAuthenticated()) {
+      alert('Esta acción requiere privilegios de Administrador.');
+      return;
+    }
     if (!formData.name.trim() || !formData.phone.trim()) {
       alert('El nombre y el teléfono son requeridos.');
       return;
@@ -292,14 +308,16 @@ export const EmergencyGuideModal: React.FC<EmergencyGuideModalProps> = ({
                 className="w-full pl-10 pr-4 py-2 bg-white border border-stone-200 rounded-xl text-xs sm:text-sm text-stone-900 placeholder:text-stone-400 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
               />
             </div>
-            <button
-              type="button"
-              onClick={handleOpenAddNew}
-              className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Agregar</span>
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handleOpenAddNew}
+                className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Agregar</span>
+              </button>
+            )}
           </div>
 
           {/* Category Filter Pills */}
@@ -361,24 +379,26 @@ export const EmergencyGuideModal: React.FC<EmergencyGuideModalProps> = ({
                       </div>
 
                       {/* Admin inline edit actions */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEdit(service)}
-                          className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 transition-colors"
-                          title="Modificar datos del servicio"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteItem(service.id, service.name)}
-                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors"
-                          title="Eliminar de la guía"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {isAdmin && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(service)}
+                            className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 transition-colors"
+                            title="Modificar datos del servicio"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteItem(service.id, service.name)}
+                            className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors"
+                            title="Eliminar de la guía"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <p className="text-xs text-stone-600 line-clamp-2">
@@ -437,15 +457,17 @@ export const EmergencyGuideModal: React.FC<EmergencyGuideModalProps> = ({
 
         {/* Footer info */}
         <div className="p-3.5 bg-stone-50 border-t border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-stone-500 shrink-0">
-          <span>Directorio de auxilio permanente de Ciudad del Carmen, Campeche · Información 100% editable</span>
-          <button
-            type="button"
-            onClick={handleOpenAddNew}
-            className="text-rose-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            <Plus className="w-3 h-3" />
-            <span>Agregar servicio no listado</span>
-          </button>
+          <span>Directorio de auxilio permanente de Ciudad del Carmen, Campeche</span>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleOpenAddNew}
+              className="text-rose-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Agregar servicio no listado</span>
+            </button>
+          )}
         </div>
       </div>
 

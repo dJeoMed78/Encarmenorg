@@ -34,7 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs">
       <div className="max-w-[1560px] mx-auto px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between min-h-[108px] sm:min-h-[114px] py-1.5 gap-2 sm:gap-4">
-          {/* Logo Oficial 300x100 y Acceso π Discreto */}
+          {/* Logo Oficial 300x100 */}
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => setActiveTab('directory')}
@@ -42,17 +42,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               title="Empresas en Carmen - Directorio Empresarial"
             >
               <BrandLogo />
-            </button>
-
-            {/* Acceso π discreto (no parece botón, símbolo sutil estilo The Net visible en iPad y todas las pantallas) */}
-            <button
-              type="button"
-              onClick={onOpenSyncModal}
-              title="π"
-              aria-label="Administración (π)"
-              className="text-stone-400/70 hover:text-stone-700 active:text-amber-600 font-serif text-sm cursor-pointer select-none transition-colors p-1 leading-none bg-transparent border-0 outline-hidden focus:outline-hidden shrink-0"
-            >
-              π
             </button>
           </div>
 
@@ -243,17 +232,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <PlusCircle className="w-4 h-4 text-amber-600" />
             <span className="text-[11px] sm:text-xs">Subir</span>
-          </button>
-
-          {/* Acceso π discreto en barra móvil */}
-          <button
-            type="button"
-            onClick={onOpenSyncModal}
-            title="π"
-            aria-label="Administración (π)"
-            className="flex items-center justify-center py-1.5 px-2 rounded-lg transition-colors min-h-[44px] text-stone-400 hover:text-stone-700 active:text-amber-600 cursor-pointer shrink-0 bg-transparent border-0 outline-hidden select-none"
-          >
-            <span className="font-serif text-sm leading-none">π</span>
           </button>
         </div>
       </div>

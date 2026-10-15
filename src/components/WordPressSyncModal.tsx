@@ -657,6 +657,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     setAdminLoginError(null);
     setSelectedAdminUser(null);
     setEditingBizId(null);
+    onClose();
   };
 
   // Acción 1: Cambiar WhatsApp o Dirección de un negocio directamente
@@ -970,11 +971,11 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                     <button
                       type="button"
                       onClick={handleLogout}
-                      className="px-2.5 py-1 text-xs bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/40 text-rose-300 flex items-center gap-1.5 cursor-pointer transition-colors"
-                      title="Bloquear sesión de administrador"
+                      className="px-3 py-1.5 text-xs bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center gap-1.5 cursor-pointer rounded-md shadow-xs transition-colors"
+                      title="Cerrar sesión de administrador y regresar al portal"
                     >
-                      <LogOut className="w-3.5 h-3.5 text-rose-400" />
-                      <span className="hidden sm:inline">Bloquear</span>
+                      <LogOut className="w-3.5 h-3.5 text-white" />
+                      <span>Cerrar Sesión</span>
                     </button>
 
                     <button

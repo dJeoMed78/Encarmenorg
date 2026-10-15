@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   MapPin,
   Phone,
@@ -65,6 +65,10 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({
   const waLink = getWhatsAppLink(business);
   const displayCategory = getBusinessPrimaryCategory(business);
   const displayImage = getBusinessImageUrl(business);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [displayImage]);
 
   return (
     <article className="group bg-white rounded-2xl border border-stone-200/80 hover:border-amber-400/80 hover:shadow-lg transition-all duration-200 flex flex-col justify-between overflow-hidden">

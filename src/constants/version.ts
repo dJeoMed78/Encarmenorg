@@ -1,4 +1,4 @@
 // Automatic dynamic version control stamp for Empresas en Carmen
 // Updated automatically on every build (Format: DDMMYY:HHMM - Hora de Carmen / Campeche)
-export const APP_VERSION = '131026:1410';
-export const APP_BUILD_TIMESTAMP = '2026-10-13T20:10:56.165Z';
+export const APP_VERSION = '151026:0945';
+export const APP_BUILD_TIMESTAMP = '2026-10-15T15:45:58.589Z';

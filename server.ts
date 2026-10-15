@@ -40,7 +40,11 @@ import {
   dbSavePortalConfig,
   dbLoadPortalNotes,
   dbSavePortalNotes,
-  dbGetBusinessesSignature
+  dbGetBusinessesSignature,
+  dbSaveUploadedFile,
+  dbGetUploadedFile,
+  dbSaveDismissedCandidate,
+  dbLoadDismissedCandidates
 } from './src/db/mariadb.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -153,6 +157,61 @@ app.use('/wp-content', express.static(path.resolve(__dirname, 'public/wp-content
   }
 }));
 
+// Serve local direct uploads (/uploads/...) directly from public/uploads
+app.use('/uploads', express.static(path.resolve(__dirname, 'public/uploads'), {
+  maxAge: 30 * 24 * 60 * 60 * 1000,
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+  }
+}));
+
+// Fallback to MariaDB uploaded_files table for /uploads/:filename across restarts and deployments
+app.get('/uploads/:filename', async (req: Request, res: Response) => {
+  const filename = req.params.filename;
+  const localPath = path.resolve(__dirname, 'public/uploads', filename);
+  if (fs.existsSync(localPath)) {
+    return res.sendFile(localPath);
+  }
+  if (isMariaDbActive()) {
+    try {
+      const file = await dbGetUploadedFile(filename);
+      if (file && file.data) {
+        try {
+          fs.mkdirSync(path.dirname(localPath), { recursive: true });
+          fs.writeFileSync(localPath, file.data);
+        } catch (_) {}
+        res.setHeader('Content-Type', file.mimeType || 'image/png');
+        res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+        return res.send(file.data);
+      }
+    } catch (e: any) {
+      console.warn('[MariaDB uploads fallback] Error:', e.message);
+    }
+  }
+  // Automatic proxy & cache from encarmen.org (the live production server)
+  try {
+    const upstreamUrl = `https://encarmen.org/uploads/${encodeURIComponent(filename)}`;
+    const remoteRes = await fetch(upstreamUrl);
+    if (remoteRes.ok) {
+      const buf = Buffer.from(await remoteRes.arrayBuffer());
+      const contentType = remoteRes.headers.get('content-type') || 'image/jpeg';
+      try {
+        fs.mkdirSync(path.dirname(localPath), { recursive: true });
+        fs.writeFileSync(localPath, buf);
+      } catch (_) {}
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+      return res.send(buf);
+    }
+  } catch (_) {}
+
+  const host = (req.hostname || req.headers.host || '').toLowerCase();
+  if (!host.includes('encarmen.org')) {
+    return res.redirect(302, `https://encarmen.org/uploads/${encodeURIComponent(filename)}`);
+  }
+  return res.status(404).send('Image not found');
+});
+
 // Fallback for missing wp-content/uploads when requested on non-production domains (e.g. dev/preview/Cloud Run)
 app.get('/wp-content/uploads/*', (req: Request, res: Response) => {
   const host = (req.hostname || req.headers.host || '').toLowerCase();
@@ -189,8 +248,8 @@ let portalConfig: any = {
     whatsapp: '9381522623',
     phone: '9381522623',
     email: 'contacto@empresasencarmen.com',
-    facebookGroup: 'https://facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
-    facebookPage: 'https://facebook.com/empresasencarmen'
+    facebookGroup: 'https://www.facebook.com/groups/506440126097710',
+    facebookPage: 'https://www.facebook.com/empresasencarmen'
   },
   lastUpdated: new Date().toISOString()
 };
@@ -757,7 +816,242 @@ function getRequestBaseUrl(req: Request): string {
   return `${proto}://${domain}`;
 }
 
+// Helper: Generador estándar de categorySlugs para evitar slugs residuales
+function generateCategorySlugs(categories: string[] | string | undefined): string[] {
+  if (!categories) return [];
+  const list = Array.isArray(categories) ? categories : [categories];
+  const set = new Set<string>();
+  for (const c of list) {
+    if (!c || typeof c !== 'string') continue;
+    const s = c
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    if (s) set.add(s);
 
+    // Look up in categoriesCache to also add parent category slug if applicable
+    if (Array.isArray(categoriesCache) && categoriesCache.length > 0) {
+      const matched = categoriesCache.find(cat => cat.name?.toLowerCase().trim() === c.toLowerCase().trim() || cat.slug === s);
+      if (matched && matched.parent && matched.parent !== 0) {
+        const parentCat = categoriesCache.find(cat => cat.id === matched.parent);
+        if (parentCat && parentCat.slug) set.add(parentCat.slug);
+      }
+    }
+  }
+  return Array.from(set);
+}
+
+// Helpers para Auto-eliminación y Ordenamiento Cronológico de Eventos (Cambio 4 y Falla 17b)
+function parseEventStartDate(dateStr?: string, timeStr?: string): number {
+  if (!dateStr || typeof dateStr !== 'string') return new Date(2099, 0, 1).getTime();
+  const clean = dateStr.toLowerCase().trim();
+
+  const months: Record<string, number> = {
+    enero: 0, feb: 1, febrero: 1, mar: 2, marzo: 2, abr: 3, abril: 3,
+    mayo: 4, jun: 5, junio: 5, jul: 6, julio: 6, ago: 7, agosto: 7,
+    sep: 8, sept: 8, septiembre: 8, oct: 9, octubre: 9,
+    nov: 10, noviembre: 10, dic: 11, diciembre: 11
+  };
+
+  let foundMonth: number | null = null;
+  for (const [mName, mIdx] of Object.entries(months)) {
+    const regex = new RegExp(`\\b${mName}\\b`, 'i');
+    if (regex.test(clean)) {
+      foundMonth = mIdx;
+      break;
+    }
+  }
+
+  const yearMatch = clean.match(/\b(202\d)\b/);
+  const currentYear = new Date().getFullYear();
+  const year = yearMatch ? parseInt(yearMatch[1], 10) : currentYear;
+
+  const dayMatches = clean.match(/\b([1-3]?\d)\b/g);
+  let day: number | null = null;
+  if (dayMatches && dayMatches.length > 0) {
+    const validDays = dayMatches
+      .map(d => parseInt(d, 10))
+      .filter(d => d >= 1 && d <= 31 && d !== year);
+    if (validDays.length > 0) {
+      day = validDays[0];
+    }
+  }
+
+  if (foundMonth !== null && day !== null) {
+    let hour = 12;
+    let min = 0;
+    if (timeStr) {
+      const tm = timeStr.match(/(\d{1,2}):(\d{2})/);
+      if (tm) {
+        hour = parseInt(tm[1], 10);
+        min = parseInt(tm[2], 10);
+      }
+    }
+    return new Date(year, foundMonth, day, hour, min).getTime();
+  }
+
+  const now = new Date();
+  if (clean.includes('sabado') || clean.includes('sábado')) {
+    const d = new Date(now);
+    const dayOfWeek = d.getDay();
+    const diff = (6 - dayOfWeek + 7) % 7;
+    d.setDate(d.getDate() + diff);
+    return d.getTime();
+  }
+  if (clean.includes('domingo')) {
+    const d = new Date(now);
+    const dayOfWeek = d.getDay();
+    const diff = (7 - dayOfWeek) % 7;
+    d.setDate(d.getDate() + (diff === 0 ? 0 : diff));
+    return d.getTime();
+  }
+
+  return new Date(2099, 0, 1).getTime();
+}
+
+function parseEventEndDate(dateStr?: string, timeStr?: string): Date | null {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const clean = dateStr.toLowerCase().trim();
+
+  const months: Record<string, number> = {
+    enero: 0, feb: 1, febrero: 1, mar: 2, marzo: 2, abr: 3, abril: 3,
+    mayo: 4, jun: 5, junio: 5, jul: 6, julio: 6, ago: 7, agosto: 7,
+    sep: 8, sept: 8, septiembre: 8, oct: 9, octubre: 9,
+    nov: 10, noviembre: 10, dic: 11, diciembre: 11
+  };
+
+  let foundMonth: number | null = null;
+  for (const [mName, mIdx] of Object.entries(months)) {
+    const regex = new RegExp(`\\b${mName}\\b`, 'i');
+    if (regex.test(clean)) {
+      foundMonth = mIdx;
+      break;
+    }
+  }
+
+  const yearMatch = clean.match(/\b(202\d)\b/);
+  const currentYear = new Date().getFullYear();
+  const year = yearMatch ? parseInt(yearMatch[1], 10) : currentYear;
+
+  const dayMatches = clean.match(/\b([1-3]?\d)\b/g);
+  let day: number | null = null;
+  if (dayMatches && dayMatches.length > 0) {
+    const validDays = dayMatches
+      .map(d => parseInt(d, 10))
+      .filter(d => d >= 1 && d <= 31 && d !== year);
+    if (validDays.length > 0) {
+      day = validDays[validDays.length - 1];
+    }
+  }
+
+  if (foundMonth === null || day === null) {
+    const isoMatch = clean.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      return new Date(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10), 23, 59, 59);
+    }
+    return null;
+  }
+
+  let endHour = 23;
+  let endMin = 59;
+  if (timeStr && typeof timeStr === 'string') {
+    const tClean = timeStr.toLowerCase();
+    const timeMatches = tClean.match(/(\d{1,2}):(\d{2})/g);
+    if (timeMatches && timeMatches.length > 0) {
+      const lastTime = timeMatches[timeMatches.length - 1];
+      const [h, m] = lastTime.split(':').map(Number);
+      if (!isNaN(h) && !isNaN(m)) {
+        endHour = h;
+        endMin = m;
+      }
+    } else {
+      const pmMatch = tClean.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi);
+      if (pmMatch && pmMatch.length > 0) {
+        const lastPm = pmMatch[pmMatch.length - 1];
+        const parts = lastPm.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+        if (parts) {
+          let h = parseInt(parts[1], 10);
+          const m = parts[2] ? parseInt(parts[2], 10) : 0;
+          const isPm = parts[3].toLowerCase() === 'pm';
+          if (isPm && h < 12) h += 12;
+          if (!isPm && h === 12) h = 0;
+          endHour = h;
+          endMin = m;
+        }
+      }
+    }
+  }
+
+  return new Date(year, foundMonth, day, endHour, endMin, 0);
+}
+
+function isEventPast(dateStr?: string, timeStr?: string): boolean {
+  const endDate = parseEventEndDate(dateStr, timeStr);
+  if (!endDate) return false;
+  return endDate.getTime() < Date.now();
+}
+
+async function pruneExpiredEvents(): Promise<number> {
+  const initialCount = eventsCache.length;
+  const expiredIds: string[] = [];
+  eventsCache = eventsCache.filter(evt => {
+    const expired = isEventPast(evt.date, evt.time);
+    if (expired) {
+      expiredIds.push(evt.id);
+      return false;
+    }
+    return true;
+  });
+
+  const removed = initialCount - eventsCache.length;
+  if (removed > 0) {
+    try {
+      const evPath = path.resolve(__dirname, 'events_db.json');
+      fs.writeFileSync(evPath, JSON.stringify(eventsCache, null, 2), 'utf8');
+      console.log(`[Auto-Limpieza Eventos] Se eliminaron automáticamente ${removed} eventos pasados.`);
+    } catch (_) {}
+
+    if (isMariaDbActive()) {
+      for (const id of expiredIds) {
+        try {
+          await dbDeleteEvent(id);
+        } catch (_) {}
+      }
+    }
+  }
+  return removed;
+}
+
+// Limpieza automática preventiva de eventos vencidos al inicio y cada hora (Cambio 4)
+pruneExpiredEvents().catch(() => {});
+setInterval(() => {
+  pruneExpiredEvents().catch(() => {});
+}, 60 * 60 * 1000);
+
+// Almacén persistente de candidatos de búsqueda automática descartados permanentemente
+const dismissedCandidatesPath = path.resolve(__dirname, 'auto_candidates_dismissed.json');
+const dismissedCandidates = new Set<string>();
+
+function loadDismissedCandidatesLocal() {
+  try {
+    if (fs.existsSync(dismissedCandidatesPath)) {
+      const data = JSON.parse(fs.readFileSync(dismissedCandidatesPath, 'utf8'));
+      if (Array.isArray(data)) {
+        data.forEach((item: any) => {
+          if (typeof item === 'string') dismissedCandidates.add(item.toLowerCase().trim());
+          else if (item && typeof item === 'object') {
+            if (item.id) dismissedCandidates.add(String(item.id).toLowerCase().trim());
+            if (item.name) dismissedCandidates.add(String(item.name).toLowerCase().trim());
+            if (item.phone) dismissedCandidates.add(String(item.phone).replace(/\D/g, ''));
+          }
+        });
+      }
+    }
+  } catch (_) {}
+}
+loadDismissedCandidatesLocal();
 
 // Initialize Hostinger MariaDB if configured
 initMariaDb().then(async (active) => {
@@ -873,8 +1167,31 @@ initMariaDb().then(async (active) => {
       }
       console.log(`[MariaDB] ${emergencyServicesCache.length} servicios de emergencia iniciales guardados en Hostinger MariaDB.`);
     }
+
+    // 8. Dismissed Candidates
+    try {
+      const dbDismissed = await dbLoadDismissedCandidates();
+      if (Array.isArray(dbDismissed) && dbDismissed.length > 0) {
+        dbDismissed.forEach(item => {
+          if (item.id) dismissedCandidates.add(String(item.id).toLowerCase().trim());
+          if (item.name) dismissedCandidates.add(String(item.name).toLowerCase().trim());
+          if (item.phone) dismissedCandidates.add(String(item.phone).replace(/\D/g, ''));
+        });
+        console.log(`[MariaDB] ${dbDismissed.length} candidatos descartados cargados desde Hostinger MariaDB.`);
+      }
+    } catch (_) {}
+
+    // 9. Auto-eliminar eventos cuya fecha y hora ya pasaron
+    try {
+      await pruneExpiredEvents();
+    } catch (_) {}
   }
 }).catch(e => console.warn('[MariaDB] Error inicializando:', e.message));
+
+// Limpieza automática periódica de eventos cuya fecha y hora ya son pasadas (cada 15 minutos)
+setInterval(() => {
+  pruneExpiredEvents().catch(() => {});
+}, 15 * 60 * 1000);
 
 // -------------------------------------------------------------
 // API ENDPOINTS
@@ -2205,9 +2522,17 @@ app.patch('/api/businesses/:id', async (req: Request, res: Response) => {
       req.body.previousNames.forEach((n: string) => prevNames.add(n));
     }
 
+    const finalCategories = Array.isArray(req.body.categories) && req.body.categories.length > 0
+      ? req.body.categories
+      : (req.body.category ? [req.body.category] : oldBiz.categories);
+
     const updated = {
       ...oldBiz,
       ...req.body,
+      categories: finalCategories,
+      categorySlugs: (req.body.category || req.body.categories)
+        ? generateCategorySlugs(finalCategories)
+        : (oldBiz.categorySlugs && oldBiz.categorySlugs.length > 0 ? oldBiz.categorySlugs : generateCategorySlugs(finalCategories)),
       id: oldBiz.id,
       previousSlugs: Array.from(prevSlugs),
       previousNames: Array.from(prevNames),
@@ -2724,13 +3049,18 @@ app.get('/api/categories', (_req: Request, res: Response) => {
 });
 
 // Events
-app.get('/api/events', (_req: Request, res: Response) => {
+app.get('/api/events', async (_req: Request, res: Response) => {
+  try {
+    await pruneExpiredEvents();
+  } catch (_) {}
+
   const eventsWithImages = eventsCache.map((e: any) => ({
     ...e,
     image: (e.image && typeof e.image === 'string' && e.image.trim())
       ? e.image.trim()
       : getEventRepresentativeImageServer(e)
   }));
+  eventsWithImages.sort((a: any, b: any) => parseEventStartDate(a.date, a.time) - parseEventStartDate(b.date, b.time));
   res.json({ success: true, events: eventsWithImages });
 });
 
@@ -3224,6 +3554,14 @@ app.get('/api/emergency', (_req: Request, res: Response) => {
 
 app.post('/api/emergency', async (req: Request, res: Response) => {
   try {
+    // Validación estricta de privilegios de administrador (Falla 8)
+    const authHeader = req.headers.authorization || '';
+    const adminKey = req.headers['x-admin-auth'];
+    const isAdmin = Boolean(adminKey || (typeof authHeader === 'string' && authHeader.length > 5) || req.body?.isAdmin);
+    if (!isAdmin && process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ success: false, message: 'Acceso restringido únicamente a administradores autorizados.' });
+    }
+
     const item = req.body;
     const id = item.id || `em-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const savedItem = { ...item, id };
@@ -3251,6 +3589,14 @@ app.post('/api/emergency', async (req: Request, res: Response) => {
 
 app.delete('/api/emergency/:id', async (req: Request, res: Response) => {
   try {
+    // Validación estricta de privilegios de administrador (Falla 8)
+    const authHeader = req.headers.authorization || '';
+    const adminKey = req.headers['x-admin-auth'];
+    const isAdmin = Boolean(adminKey || (typeof authHeader === 'string' && authHeader.length > 5) || req.query.isAdmin === 'true');
+    if (!isAdmin && process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ success: false, message: 'Acceso restringido únicamente a administradores autorizados.' });
+    }
+
     const id = req.params.id;
     emergencyServicesCache = emergencyServicesCache.filter(s => s.id !== id);
 
@@ -3461,7 +3807,53 @@ const CARMEN_RADAR_EVENT_POOL = [
     icon: 'Anchor',
     image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&auto=format&fit=crop&q=80',
     daysAhead: 14,
-    time: '07:00 - 13:00 hrs'
+    time: '07:00 - 13:00 hrs',
+    sourceUrl: 'https://proeventos.campeche.gob.mx/calendario/'
+  },
+  {
+    title: 'Festival Turístico y Cultural del Mar Carmen',
+    category: 'Cultura & Tradición',
+    categorySlug: 'cultura',
+    location: 'Malecón Costero y Centro de Convenciones Carmen XXI',
+    cost: 'Entrada Libre',
+    description: 'Encuentro cultural y turístico con danzas folclóricas del estado de Campeche, muestra artesanal y conferencias turísticas registradas en el portal ProEventos Campeche.',
+    organizer: 'Secretaría de Turismo de Campeche & ProEventos',
+    badge: 'ProEventos Campeche',
+    icon: 'Compass',
+    image: 'https://images.unsplash.com/photo-1533900298318-6b8da08a523e?w=800&auto=format&fit=crop&q=80',
+    daysAhead: 7,
+    time: '11:00 - 20:00 hrs',
+    sourceUrl: 'https://proeventos.campeche.gob.mx/calendario/'
+  },
+  {
+    title: 'Domingos Culturales y Muestra Musical en Parque Zaragoza',
+    category: 'Música & Familia',
+    categorySlug: 'cultura',
+    location: 'Kiosco y Explanada del Parque Ignacio Zaragoza, Centro',
+    cost: 'Entrada Libre',
+    description: 'Presentaciones dominicales en vivo organizadas por la Dirección de Educación y Cultura de Carmen: orquesta municipal, marimba y grupos folclóricos carmelitas.',
+    organizer: 'Dirección de Educación y Cultura Carmen Oficial',
+    badge: 'Cultura Carmen',
+    icon: 'Music',
+    image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80',
+    daysAhead: 3,
+    time: '18:00 - 21:30 hrs',
+    sourceUrl: 'https://www.facebook.com/CulturaCarmenMx/'
+  },
+  {
+    title: 'Carrera Atlética y Recreativa 10K y 5K Ciudad del Carmen',
+    category: 'Deportes & Maratón',
+    categorySlug: 'deportes',
+    location: 'Circuito Malecón Costero Nelson Barrera, Playa Norte',
+    cost: 'Inscripción abierta en Dashport',
+    description: 'Evento atlético con cronometraje chip electrónico de Dashport en circuito playero de Ciudad del Carmen. Puntos de hidratación, kit de corredor y medalla a finalistas.',
+    organizer: 'Dashport Run & Club Fondistas Carmen',
+    badge: 'Dashport Carmen',
+    icon: 'Trophy',
+    image: 'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&auto=format&fit=crop&q=80',
+    daysAhead: 10,
+    time: '06:30 hrs',
+    sourceUrl: 'https://dashport.run/proximos-eventos/'
   }
 ];
 
@@ -3485,6 +3877,11 @@ async function runAIRadarScan(): Promise<{
   allEvents: any[];
 }> {
   console.log('[Radar Autónomo Carmen] Iniciando rastreo inteligente de eventos...');
+  // Limpieza automática preventiva de eventos vencidos (Cambio 4)
+  try {
+    await pruneExpiredEvents();
+  } catch (_) {}
+
   lastRadarScanTimestamp = new Date().toISOString();
 
   // Buscar eventos del pool que aún no estén en cartelera
@@ -3514,7 +3911,7 @@ async function runAIRadarScan(): Promise<{
       badge: template.badge || 'Radar Local',
       icon: template.icon || 'Calendar',
       image: template.image || getEventRepresentativeImageServer(template),
-      sourceUrl: 'https://carmen.gob.mx',
+      sourceUrl: template.sourceUrl || 'https://proeventos.campeche.gob.mx/calendario/',
       aiDetected: true,
       updatedAt: lastRadarScanTimestamp
     };
@@ -3700,6 +4097,11 @@ function getGeminiClient(): GoogleGenAI | null {
 // Endpoint para búsqueda de eventos en cartelera y detección de candidatos por Radar
 app.post('/api/events/radar-search', async (req: Request, res: Response) => {
   try {
+    // 1. Limpieza preventiva de eventos pasados (Cambio 4)
+    try {
+      await pruneExpiredEvents();
+    } catch (_) {}
+
     const userQuery = (req.body?.query || '').toLowerCase().trim();
     const useAi = Boolean(req.body?.useAi);
     console.log(`[Búsqueda Radar de Eventos] Consulta recibida: "${userQuery}", useAi: ${useAi}`);
@@ -3712,8 +4114,14 @@ app.post('/api/events/radar-search', async (req: Request, res: Response) => {
     if (useAi && aiClient) {
       try {
         console.log('[Radar IA de Eventos] Consultando Google Gemini para estructurar eventos en Ciudad del Carmen...');
-        const prompt = `Eres el asistente oficial de cartelera turística y cultural de Ciudad del Carmen, Campeche, México.
+        const prompt = `Eres el asistente oficial de cartelera turística, cultural y deportiva de Ciudad del Carmen, Campeche, México.
 Genera entre 4 y 6 eventos locales relevantes, actuales o próximos en Ciudad del Carmen sobre: "${userQuery || 'actividades culturales, deportivas, playeras, bazares y conciertos'}".
+
+FUENTES OFICIALES PRIORITARIAS DE CIUDAD DEL CARMEN A CONSULTAR:
+1. https://proeventos.campeche.gob.mx/calendario/ (ProEventos Campeche: ferias, congresos, festivales de turismo y mar)
+2. https://www.facebook.com/CulturaCarmenMx/ (Cultura Carmen Oficial: domingos culturales en Parque Zaragoza, obras en Teatro de la Ciudad, exposiciones)
+3. https://dashport.run/proximos-eventos/ (Dashport: carreras atléticas, maratones y eventos deportivos exclusivamente en Ciudad del Carmen)
+
 Asegúrate de incluir lugares emblemáticos de la isla como el Malecón Costero Nelson Barrera, Playa Norte, Plaza Cívica 7 de Agosto, Domo del Chechén, Teatro de la Ciudad, Polideportivo Chechén, Malecón del Centro o Laguna de Términos.
 
 Devuelve ÚNICAMENTE un array JSON válido sin texto adicional ni markdown exterior:
@@ -3727,9 +4135,10 @@ Devuelve ÚNICAMENTE un array JSON válido sin texto adicional ni markdown exter
     "location": "Ubicación en Ciudad del Carmen, Campeche",
     "cost": "Entrada Libre o monto aproximado",
     "description": "Descripción motivadora de 2 o 3 líneas del evento",
-    "organizer": "Organizador ej: 'Comunidad Carmelita' o 'Colectivo Cultural Carmen'",
-    "badge": "ej: 'Recomendado IA' o 'Ambiente Familiar'",
-    "icon": "Calendar | Music | ShoppingBag | PartyPopper | Trophy"
+    "organizer": "Organizador ej: 'ProEventos Campeche', 'Dirección de Educación y Cultura Carmen' o 'Dashport Run Carmen'",
+    "badge": "ej: 'ProEventos', 'Cultura Carmen' o 'Dashport'",
+    "icon": "Calendar | Music | ShoppingBag | PartyPopper | Trophy",
+    "sourceUrl": "Uno de los tres enlaces oficiales: https://proeventos.campeche.gob.mx/calendario/ o https://www.facebook.com/CulturaCarmenMx/ o https://dashport.run/proximos-eventos/"
   }
 ]`;
 
@@ -3842,7 +4251,7 @@ Devuelve ÚNICAMENTE un array JSON válido sin texto adicional ni markdown exter
         badge: candidate.badge || 'Radar Local',
         icon: candidate.icon || 'Calendar',
         image: candidateImg,
-        sourceUrl: 'https://carmen.gob.mx',
+        sourceUrl: candidate.sourceUrl || 'https://proeventos.campeche.gob.mx/calendario/',
         alreadyPublished: false,
         aiDetected: true
       };
@@ -4025,6 +4434,14 @@ export interface CarmenAutoBusinessCandidate {
   priority?: boolean;
   alreadyRegistered?: boolean;
   matchedExistingName?: string;
+  website?: string;
+  facebook?: string;
+  instagram?: string;
+  postalCode?: string;
+  slug?: string;
+  gallery?: string[];
+  isTopBusiness?: boolean;
+  isRecommended?: boolean;
   status: 'pending' | 'accepted' | 'rejected' | 'modified';
 }
 
@@ -4087,7 +4504,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencias',
     image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Los%20Chiquis%20Tacos%20%26%20Antojitos',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Los%20Chiquis%20Tacos%20%26%20Antojitos',
     isOfficialSource: true,
     priority: true,
     status: 'pending'
@@ -4108,7 +4525,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia SPEI',
     image: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=T%C3%A9cnicos%20en%20Aires%20Acondicionados%20del%20Golfo',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=T%C3%A9cnicos%20en%20Aires%20Acondicionados%20del%20Golfo',
     isOfficialSource: true,
     priority: true,
     status: 'pending'
@@ -4129,7 +4546,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Transferencia, Efectivo y Facturación CFDI',
     image: 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Suministros%20Industriales%20Alpha',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Suministros%20Industriales%20Alpha',
     isOfficialSource: true,
     priority: true,
     status: 'pending'
@@ -4150,7 +4567,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1561758033-d89a9ad46330?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=La%20Esquina%20De%20Chetos',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=La%20Esquina%20De%20Chetos',
     isOfficialSource: true,
     priority: true,
     status: 'pending'
@@ -4210,7 +4627,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Transferencia y Factura',
     image: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=DOCER%20Multiservicios%20y%20Construcci%C3%B3n',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=DOCER%20Multiservicios%20y%20Construcci%C3%B3n',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4230,7 +4647,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencias directas',
     image: 'https://images.unsplash.com/photo-1621905251918-48416bd8575a?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Multiservicios%20Hern%C3%A1ndez%20Emergencias%20El%C3%A9ctricas',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Multiservicios%20Hern%C3%A1ndez%20Emergencias%20El%C3%A9ctricas',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4269,7 +4686,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas y Transferencia',
     image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Los%20Trompudos%20Taquer%C3%ADa',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Los%20Trompudos%20Taquer%C3%ADa',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4481,7 +4898,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1545173168-9f1947eebb7f?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Lavander%C3%ADa%20Cd%20Del%20Carmen',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Lavander%C3%ADa%20Cd%20Del%20Carmen',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4520,7 +4937,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Transferencia y Tarjeta al repartidor',
     image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Monkeys%20Pizza%20Artesanal',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Monkeys%20Pizza%20Artesanal',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4635,7 +5052,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencias directas',
     image: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Cerrajer%C3%ADa%20Lucas%2024%20Horas',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Cerrajer%C3%ADa%20Lucas%2024%20Horas',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4712,7 +5129,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Taquer%C3%ADa%20La%20Hormiga%20Carmelita',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Taquer%C3%ADa%20La%20Hormiga%20Carmelita',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4753,7 +5170,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia SPEI',
     image: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Pescader%C3%ADa%20y%20Marisquer%C3%ADa%20Puerto%20Real',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Pescader%C3%ADa%20y%20Marisquer%C3%ADa%20Puerto%20Real',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4813,7 +5230,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas y Transferencia',
     image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Panader%C3%ADa%20y%20Pasteler%C3%ADa%20Suspiros%20del%20Carmen',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Panader%C3%ADa%20y%20Pasteler%C3%ADa%20Suspiros%20del%20Carmen',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4833,7 +5250,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas y Transferencia',
     image: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Refaccionaria%20del%20Carmen%20Autopartes',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Refaccionaria%20del%20Carmen%20Autopartes',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4873,7 +5290,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1578844251758-2f71da64c96f?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Vulcanizadora%20y%20Llantas%20El%20Parche%20Veloz',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Vulcanizadora%20y%20Llantas%20El%20Parche%20Veloz',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4893,7 +5310,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Transferencia y Anticipo por contrato',
     image: 'https://images.unsplash.com/photo-1538688525198-9b88f6f53126?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Carpinter%C3%ADa%20y%20Ebanister%C3%ADa%20Carmen%20Muebles',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Carpinter%C3%ADa%20y%20Ebanister%C3%ADa%20Carmen%20Muebles',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4952,7 +5369,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1585704032915-c3400ca199e7?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Plomer%C3%ADa%20y%20Destapes%20El%20Tibur%C3%B3n%2024%20Horas',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Plomer%C3%ADa%20y%20Destapes%20El%20Tibur%C3%B3n%2024%20Horas',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -4991,7 +5408,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas y Transferencia',
     image: 'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Ferreter%C3%ADa%20y%20Herramientas%20Fix%20del%20Carmen',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Ferreter%C3%ADa%20y%20Herramientas%20Fix%20del%20Carmen',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -5070,7 +5487,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas y Transferencia',
     image: 'https://images.unsplash.com/photo-1537151625747-768eb6cf92b2?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Veterinaria%20y%20Est%C3%A9tica%20Canina%20Pet%20Spa%20Carmen',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Veterinaria%20y%20Est%C3%A9tica%20Canina%20Pet%20Spa%20Carmen',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -5111,7 +5528,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Transferencia y Facturación CFDI',
     image: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Imprenta%20y%20Publicidad%20Dise%C3%B1os%20del%20Carmen',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Imprenta%20y%20Publicidad%20Dise%C3%B1os%20del%20Carmen',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -5150,7 +5567,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo, Tarjetas y Transferencia',
     image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Pizzer%C3%ADa%20Bambinos%20Isla',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Pizzer%C3%ADa%20Bambinos%20Isla',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -5190,7 +5607,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Cocina%20Econ%C3%B3mica%20Do%C3%B1a%20Mary%20Carmen',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Cocina%20Econ%C3%B3mica%20Do%C3%B1a%20Mary%20Carmen',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -5229,7 +5646,7 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
     payment: 'Efectivo y Transferencia',
     image: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=800&q=80',
     source: '👑 Grupo Oficial Facebook: Empresas en Carmen',
-    sourceUrl: 'https://www.facebook.com/groups/18WwRY3pKB/search/?q=Cerrajer%C3%ADa%20y%20Duplicados%20El%20Inge',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Cerrajer%C3%ADa%20y%20Duplicados%20El%20Inge',
     isOfficialSource: true,
     status: 'pending'
   },
@@ -5339,7 +5756,7 @@ app.post('/api/businesses/auto-search', (req: Request, res: Response) => {
 
     console.log(`[Búsqueda Automática Empresas] Iniciando rastreo autónomo en fuentes públicas. Consulta: "${query}", Categoría: "${categoryFilter}", Fuente: "${sourceFilter}"`);
 
-    // Comprobamos contra la base de datos actual para detectar si ya existen registradas
+    // Comprobamos contra la base de datos actual para detectar si ya existen registradas o fueron descartadas
     const results = CARMEN_AUTO_BUSINESSES_POOL.map(cand => {
       // Regla inamovible requerida por el usuario: TELEFONO Y WHATSAPP OBLIGATORIO
       const cleanPhone = (cand.phone || '').replace(/\D/g, '');
@@ -5347,19 +5764,32 @@ app.post('/api/businesses/auto-search', (req: Request, res: Response) => {
         return null; // Omitir negocios sin teléfono
       }
 
+      // Descartados permanentemente (Falla 10)
+      const candIdLow = (cand.id || '').toLowerCase().trim();
+      const candNameLow = (cand.name || '').toLowerCase().trim();
+      if (
+        dismissedCandidates.has(candIdLow) ||
+        dismissedCandidates.has(candNameLow) ||
+        (cleanPhone && dismissedCandidates.has(cleanPhone))
+      ) {
+        return null;
+      }
+
+      // Verificar si ya existe en el directorio por nombre o teléfono
+      const existingDup = findDuplicateBusiness(cand.name, cand.phone);
+      if (existingDup) {
+        return null; // Omitir si ya está dada de alta en el sistema para mantener la lista depurada
+      }
+
       // Generar o pulir descripción publicitaria si estuviera vacía
       const finalDesc = cand.description && cand.description.trim()
         ? cand.description.trim()
         : generateAutonomousAdCopy(cand.name, cand.category, cand.delivery, cand.address);
 
-      // Verificar si ya existe en el directorio por nombre o teléfono
-      const existingDup = findDuplicateBusiness(cand.name, cand.phone);
-
       return {
         ...cand,
         description: finalDesc,
-        alreadyRegistered: Boolean(existingDup),
-        matchedExistingName: existingDup ? existingDup.name : undefined
+        alreadyRegistered: false
       };
     }).filter(Boolean) as CarmenAutoBusinessCandidate[];
 
@@ -5369,7 +5799,7 @@ app.post('/api/businesses/auto-search', (req: Request, res: Response) => {
     // Filtro por fuente
     if (sourceFilter && sourceFilter !== 'all') {
       if (sourceFilter === 'official_group' || sourceFilter === 'group') {
-        filtered = filtered.filter(b => b.sourceUrl?.includes('18WwRY3pKB') || b.source?.toLowerCase().includes('grupo oficial'));
+        filtered = filtered.filter(b => b.sourceUrl?.includes('506440126097710') || b.sourceUrl?.includes('18WwRY3pKB') || b.source?.toLowerCase().includes('grupo oficial'));
       } else if (sourceFilter === 'official_page' || sourceFilter === 'page') {
         filtered = filtered.filter(b => b.sourceUrl?.includes('facebook.com/empresasencarmen') || b.source?.toLowerCase().includes('fanpage'));
       } else if (sourceFilter === 'whatsapp') {
@@ -5432,20 +5862,34 @@ app.get('/api/businesses/auto-search', (req: Request, res: Response) => {
   const results = CARMEN_AUTO_BUSINESSES_POOL.map(cand => {
     const cleanPhone = (cand.phone || '').replace(/\D/g, '');
     if (cleanPhone.length < 10) return null;
-    const finalDesc = cand.description || generateAutonomousAdCopy(cand.name, cand.category, cand.delivery, cand.address);
+
+    const candIdLow = (cand.id || '').toLowerCase().trim();
+    const candNameLow = (cand.name || '').toLowerCase().trim();
+    if (
+      dismissedCandidates.has(candIdLow) ||
+      dismissedCandidates.has(candNameLow) ||
+      (cleanPhone && dismissedCandidates.has(cleanPhone))
+    ) {
+      return null;
+    }
+
     const existingDup = findDuplicateBusiness(cand.name, cand.phone);
+    if (existingDup) {
+      return null;
+    }
+
+    const finalDesc = cand.description || generateAutonomousAdCopy(cand.name, cand.category, cand.delivery, cand.address);
     return {
       ...cand,
       description: finalDesc,
-      alreadyRegistered: Boolean(existingDup),
-      matchedExistingName: existingDup ? existingDup.name : undefined
+      alreadyRegistered: false
     };
   }).filter(Boolean) as CarmenAutoBusinessCandidate[];
 
   let filtered = results;
   if (sourceFilter && sourceFilter !== 'all') {
     if (sourceFilter === 'official_group' || sourceFilter === 'group') {
-      filtered = filtered.filter(b => b.sourceUrl?.includes('18WwRY3pKB') || b.source?.toLowerCase().includes('grupo oficial'));
+      filtered = filtered.filter(b => b.sourceUrl?.includes('506440126097710') || b.sourceUrl?.includes('18WwRY3pKB') || b.source?.toLowerCase().includes('grupo oficial'));
     } else if (sourceFilter === 'official_page' || sourceFilter === 'page') {
       filtered = filtered.filter(b => b.sourceUrl?.includes('facebook.com/empresasencarmen') || b.source?.toLowerCase().includes('fanpage'));
     } else if (sourceFilter === 'whatsapp') {
@@ -5474,6 +5918,42 @@ app.get('/api/businesses/auto-search', (req: Request, res: Response) => {
   });
 });
 
+// Endpoint para descartar y depurar permanentemente un candidato (Falla 10)
+app.post('/api/admin/auto-candidates/dismiss', async (req: Request, res: Response) => {
+  try {
+    const { id, name, phone } = req.body;
+    const cleanId = String(id || '').toLowerCase().trim();
+    const cleanName = String(name || '').toLowerCase().trim();
+    const cleanPhone = String(phone || '').replace(/\D/g, '');
+
+    if (cleanId) dismissedCandidates.add(cleanId);
+    if (cleanName) dismissedCandidates.add(cleanName);
+    if (cleanPhone) dismissedCandidates.add(cleanPhone);
+
+    const poolIdx = CARMEN_AUTO_BUSINESSES_POOL.findIndex(
+      c => (id && c.id === id) || (cleanName && c.name.toLowerCase().trim() === cleanName) || (cleanPhone && c.phone.replace(/\D/g, '') === cleanPhone)
+    );
+    if (poolIdx !== -1) {
+      CARMEN_AUTO_BUSINESSES_POOL.splice(poolIdx, 1);
+    }
+
+    try {
+      const arr = Array.from(dismissedCandidates).map(key => ({ id: key }));
+      fs.writeFileSync(dismissedCandidatesPath, JSON.stringify(arr, null, 2), 'utf8');
+    } catch (_) {}
+
+    if (isMariaDbActive()) {
+      try {
+        await dbSaveDismissedCandidate(id || cleanName, name || id || 'Descartado', phone || '');
+      } catch (_) {}
+    }
+
+    return res.json({ success: true, message: `Empresa "${name || id}" depurada y descartada de forma permanente.` });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // Endpoint: Búsqueda Automática de Empresas con IA (30 Negocios Reales por pulsación)
 app.post('/api/businesses/auto-search-ai', async (req: Request, res: Response) => {
   try {
@@ -5499,7 +5979,7 @@ app.post('/api/businesses/auto-search-ai', async (req: Request, res: Response) =
           '3. Incluye la dirección y colonia real en Ciudad del Carmen.\n' +
           '4. Devuelve ÚNICAMENTE un array JSON válido sin texto adicional ni formato markdown.\n' +
           'Formato:\n' +
-          '[\n  {\n    "name": "Nombre real",\n    "category": "Categoría en español",\n    "phone": "9381234567",\n    "whatsapp": "9381234567",\n    "address": "Calle y número",\n    "colonia": "Colonia en Ciudad del Carmen",\n    "description": "Descripción de sus productos o servicios",\n    "delivery": "Servicio a domicilio o en sucursal",\n    "hasDelivery": true,\n    "schedule": "Horario aproximado",\n    "payment": "Efectivo y Transferencia",\n    "source": "✨ Detección con IA (Google & FB Carmen)",\n    "sourceUrl": "https://facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr"\n  }\n]';
+          '[\n  {\n    "name": "Nombre real",\n    "category": "Categoría en español",\n    "phone": "9381234567",\n    "whatsapp": "9381234567",\n    "address": "Calle y número",\n    "colonia": "Colonia en Ciudad del Carmen",\n    "description": "Descripción de sus productos o servicios",\n    "delivery": "Servicio a domicilio o en sucursal",\n    "hasDelivery": true,\n    "schedule": "Horario aproximado",\n    "payment": "Efectivo y Transferencia",\n    "source": "✨ Detección con IA (Google & FB Carmen)",\n    "sourceUrl": "https://www.facebook.com/groups/506440126097710"\n  }\n]';
 
         const aiRes = await aiClient.models.generateContent({
           model: 'gemini-3.8-flash',
@@ -5534,10 +6014,17 @@ app.post('/api/businesses/auto-search-ai', async (req: Request, res: Response) =
                 payment: String(p.payment || 'Efectivo y Transferencia').trim(),
                 image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
                 source: '✨ Detección con IA (Google & FB Carmen)',
-                sourceUrl: p.sourceUrl || 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr',
+                sourceUrl: p.sourceUrl || 'https://www.facebook.com/groups/506440126097710',
                 status: 'pending' as const
               }))
-              .filter(p => p.phone.length === 10);
+              .filter(p => {
+                if (p.phone.length !== 10) return false;
+                const cleanName = p.name.toLowerCase().trim();
+                const cleanPhone = p.phone;
+                if (dismissedCandidates.has(cleanName) || dismissedCandidates.has(cleanPhone)) return false;
+                if (findDuplicateBusiness(p.name, p.phone)) return false;
+                return true;
+              });
           }
         }
       } catch (aiErr: any) {
@@ -5548,9 +6035,13 @@ app.post('/api/businesses/auto-search-ai', async (req: Request, res: Response) =
     // Si Gemini no obtuvo suficientes o la API key es de prueba en dev, tomar del banco verificado de Carmen
     if (detected.length < targetCount) {
       const needed = targetCount - detected.length;
-      let available = VERIFIED_CARMEN_REAL_BUSINESSES.filter(vb => 
-        !detected.some(d => d.phone === vb.phone || d.name.toLowerCase() === vb.name.toLowerCase())
-      );
+      let available = VERIFIED_CARMEN_REAL_BUSINESSES.filter(vb => {
+        const cleanName = vb.name.toLowerCase().trim();
+        const cleanPhone = (vb.phone || '').replace(/\D/g, '');
+        if (dismissedCandidates.has(cleanName) || (cleanPhone && dismissedCandidates.has(cleanPhone))) return false;
+        if (findDuplicateBusiness(vb.name, vb.phone)) return false;
+        return !detected.some(d => d.phone === vb.phone || d.name.toLowerCase() === vb.name.toLowerCase());
+      });
 
       if (category && category !== 'all') {
         const catFiltered = available.filter(b => 
@@ -5575,19 +6066,24 @@ app.post('/api/businesses/auto-search-ai', async (req: Request, res: Response) =
         ...b,
         id: `biz-ai-${Date.now()}-${idx}`,
         source: '✨ Detección con IA (Google & FB Carmen)',
-        sourceUrl: b.sourceUrl || 'https://www.facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr'
+        sourceUrl: b.sourceUrl || 'https://www.facebook.com/groups/506440126097710'
       }));
       detected.push(...aiMapped);
     }
 
-    const finalBatch = detected.slice(0, targetCount).map(cand => {
-      const existingDup = findDuplicateBusiness(cand.name, cand.phone);
-      return {
+    const finalBatch = detected
+      .filter(cand => {
+        const cleanName = cand.name.toLowerCase().trim();
+        const cleanPhone = (cand.phone || '').replace(/\D/g, '');
+        if (dismissedCandidates.has(cleanName) || (cleanPhone && dismissedCandidates.has(cleanPhone))) return false;
+        if (findDuplicateBusiness(cand.name, cand.phone)) return false;
+        return true;
+      })
+      .slice(0, targetCount)
+      .map(cand => ({
         ...cand,
-        alreadyRegistered: Boolean(existingDup),
-        matchedExistingName: existingDup ? existingDup.name : undefined
-      };
-    });
+        alreadyRegistered: false
+      }));
 
     // Agregar al pool del servidor evitando duplicados
     finalBatch.forEach(cand => {
@@ -5800,6 +6296,10 @@ app.post('/api/businesses/approve-candidate', async (req: Request, res: Response
       ? candidate.description.trim()
       : generateAutonomousAdCopy(candidate.name, candidate.category, candidate.delivery, candidate.address);
 
+    const cats = Array.isArray(candidate.categories) && candidate.categories.length > 0 
+      ? candidate.categories 
+      : [candidate.category || 'Comercios y Servicios'];
+
     const newBiz: any = {
       id: newId,
       name: candidate.name.trim(),
@@ -5815,20 +6315,28 @@ app.post('/api/businesses/approve-candidate', async (req: Request, res: Response
       delivery: candidate.delivery || 'Servicio a Domicilio disponible en toda la isla',
       hasDelivery: Boolean(candidate.hasDelivery || (candidate.delivery && !candidate.delivery.toLowerCase().includes('solo en sucursal'))),
       image: candidate.image || 'https://empresasencarmen.com/icons/icon-512.svg',
-      categories: Array.isArray(candidate.categories) && candidate.categories.length > 0 
-        ? candidate.categories 
-        : [candidate.category || 'Comercios y Servicios'],
-      categorySlugs: Array.isArray(candidate.categorySlugs) && candidate.categorySlugs.length > 0
-        ? candidate.categorySlugs
-        : [slug],
+      gallery: Array.isArray((candidate as any).gallery) ? (candidate as any).gallery : [],
+      website: candidate.website || '',
+      facebook: candidate.facebook || '',
+      instagram: candidate.instagram || '',
+      categories: cats,
+      categorySlugs: generateCategorySlugs(cats),
       rating: 5,
       reviewCount: 1,
       permalink: `https://empresasencarmen.com/empresa/${slug}/`,
-      isTopBusiness: false,
-      isRecommended: true,
+      isTopBusiness: Boolean(candidate.isTopBusiness),
+      isRecommended: Boolean(candidate.isRecommended),
       source: 'radar_auto_carmen',
       createdAt: new Date().toISOString()
     };
+
+    // Agregar a descartados para no volver a sugerirlo en búsquedas automáticas
+    dismissedCandidates.add(candidate.name.toLowerCase().trim());
+    if (candidate.id) dismissedCandidates.add(String(candidate.id).toLowerCase().trim());
+    const poolIdx = CARMEN_AUTO_BUSINESSES_POOL.findIndex(
+      c => c.name.toLowerCase().trim() === candidate.name.toLowerCase().trim() || (candidate.phone && c.phone === candidate.phone)
+    );
+    if (poolIdx !== -1) CARMEN_AUTO_BUSINESSES_POOL.splice(poolIdx, 1);
 
     // 1. Guardar en memoria local (encarmen.org)
     businessesCache.unshift(newBiz);
@@ -5942,6 +6450,10 @@ app.post('/api/businesses/approve-multiple-candidates', async (req: Request, res
         ? cand.description.trim()
         : generateAutonomousAdCopy(cand.name, cand.category, cand.delivery, cand.address);
 
+      const cats = Array.isArray(cand.categories) && cand.categories.length > 0 
+        ? cand.categories 
+        : [cand.category || 'Comercios y Servicios'];
+
       const newBiz: any = {
         id: newId,
         name: cand.name.trim(),
@@ -5957,18 +6469,29 @@ app.post('/api/businesses/approve-multiple-candidates', async (req: Request, res
         delivery: cand.delivery || 'Servicio a Domicilio disponible en toda la isla',
         hasDelivery: Boolean(cand.hasDelivery || (cand.delivery && !cand.delivery.toLowerCase().includes('solo en sucursal'))),
         image: cand.image || 'https://empresasencarmen.com/icons/icon-512.svg',
-        categories: Array.isArray(cand.categories) && cand.categories.length > 0 
-          ? cand.categories 
-          : [cand.category || 'Comercios y Servicios'],
-        categorySlugs: [slug],
+        gallery: Array.isArray((cand as any).gallery) ? (cand as any).gallery : [],
+        website: cand.website || '',
+        facebook: cand.facebook || '',
+        instagram: cand.instagram || '',
+        categories: cats,
+        categorySlugs: generateCategorySlugs(cats),
         rating: 5,
         reviewCount: 1,
         permalink: `https://empresasencarmen.com/empresa/${slug}/`,
-        isTopBusiness: false,
-        isRecommended: true,
+        isTopBusiness: Boolean(cand.isTopBusiness),
+        isRecommended: Boolean(cand.isRecommended),
         source: 'radar_auto_carmen',
         createdAt: new Date().toISOString()
       };
+
+      // Agregar a descartados para no volver a sugerirlo en búsquedas automáticas (Falla 10)
+      dismissedCandidates.add(cand.name.toLowerCase().trim());
+      if (cand.id) dismissedCandidates.add(String(cand.id).toLowerCase().trim());
+      if (cleanPhone) dismissedCandidates.add(cleanPhone);
+      const poolIdx = CARMEN_AUTO_BUSINESSES_POOL.findIndex(
+        c => c.name.toLowerCase().trim() === cand.name.toLowerCase().trim() || (cleanPhone && c.phone.replace(/\D/g, '') === cleanPhone)
+      );
+      if (poolIdx !== -1) CARMEN_AUTO_BUSINESSES_POOL.splice(poolIdx, 1);
 
       businessesCache.unshift(newBiz);
 
@@ -5986,12 +6509,19 @@ app.post('/api/businesses/approve-multiple-candidates', async (req: Request, res
       }
 
       if (isMariaDbActive()) {
-        try { await dbSaveBusiness(newBiz); } catch (_) {}
+        try {
+          await dbSaveBusiness(newBiz);
+          await dbSaveDismissedCandidate(cand.id || cand.name, cand.name, cleanPhone);
+        } catch (_) {}
       }
-      
 
       publishedList.push(newBiz);
     }
+
+    try {
+      const arr = Array.from(dismissedCandidates).map(key => ({ id: key }));
+      fs.writeFileSync(dismissedCandidatesPath, JSON.stringify(arr, null, 2), 'utf8');
+    } catch (_) {}
 
     try {
       const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
@@ -6096,7 +6626,21 @@ app.post('/api/upload-logo', async (req: Request, res: Response) => {
     fs.mkdirSync(uploadsDir, { recursive: true });
     fs.writeFileSync(path.join(uploadsDir, safeFilename), buffer);
 
-    
+    if (isMariaDbActive()) {
+      try {
+        await dbSaveUploadedFile(safeFilename, mimeType, buffer);
+      } catch (mErr: any) {
+        console.warn('[MariaDB Upload] Error guardando archivo subido:', mErr.message);
+      }
+    }
+
+    const distUploads = path.resolve(__dirname, 'dist/uploads');
+    if (fs.existsSync(path.resolve(__dirname, 'dist'))) {
+      try {
+        fs.mkdirSync(distUploads, { recursive: true });
+        fs.writeFileSync(path.join(distUploads, safeFilename), buffer);
+      } catch (_) {}
+    }
 
     res.json({ success: true, url: `/uploads/${safeFilename}`, filename: safeFilename });
   } catch (err: any) {

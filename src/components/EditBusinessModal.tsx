@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
   Building2,
@@ -59,6 +59,30 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
+  // Lista plana y exhaustiva de todas las categorías y subcategorías disponibles en el sistema (Falla 13)
+  const allAvailableCategories = useMemo(() => {
+    const list: { name: string; id?: number | string }[] = [];
+    const seen = new Set<string>();
+
+    categories.forEach(c => {
+      if (c && c.name && !seen.has(c.name.toLowerCase().trim())) {
+        seen.add(c.name.toLowerCase().trim());
+        list.push({ name: c.name.trim(), id: c.id || c.slug });
+      }
+      if ((c as any).subcategories && Array.isArray((c as any).subcategories)) {
+        (c as any).subcategories.forEach((sub: any) => {
+          if (sub && sub.name && !seen.has(sub.name.toLowerCase().trim())) {
+            seen.add(sub.name.toLowerCase().trim());
+            list.push({ name: sub.name.trim(), id: sub.id || sub.slug });
+          }
+        });
+      }
+    });
+
+    list.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+    return list;
+  }, [categories]);
+
   useEffect(() => {
     if (business) {
       const initialCol = business.colonia || 'Ciudad del Carmen Centro';
@@ -66,17 +90,32 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       setPostalCode(initialCp);
 
       // Parse existing delivery into multi-select
-      const rawDel = (business.delivery || '').toLowerCase();
+      const rawDel = (business.delivery || '').trim();
+      const rawDelLow = rawDel.toLowerCase();
+      const existingParts = rawDel.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
       const initialDel = STANDARDIZED_DELIVERY_OPTIONS.filter(opt => {
         const oLow = opt.toLowerCase();
-        if (oLow.includes('local') && rawDel.includes('local')) return true;
-        if (oLow.includes('gratis') && rawDel.includes('gratis')) return true;
-        if (oLow.includes('costo') && (rawDel.includes('costo') || rawDel.includes('domicilio'))) return true;
-        if (oLow.includes('cliente') && (rawDel.includes('cliente') || rawDel.includes('lugar'))) return true;
-        if (oLow.includes('envío') && rawDel.includes('envío')) return true;
+        // Exact match with whole string or part
+        if (existingParts.some(p => p === oLow || p.includes(oLow)) || rawDelLow.includes(oLow)) return true;
+        // Specific semantic match per option
+        if (opt === 'Atención en el Local de la empresa') {
+          return existingParts.some(p => (p.includes('local') && !p.includes('paqueter')) || p.includes('mostrador') || p.includes('sucursal') || p.includes('tienda'));
+        }
+        if (opt === 'Servicio a domicilio gratis') {
+          return existingParts.some(p => p.includes('gratis') || p.includes('sin costo'));
+        }
+        if (opt === 'Servicio a domicilio con costo') {
+          return existingParts.some(p => p.includes('con costo') || p.includes('costo') || p.includes('mandadito') || (p.includes('domicilio') && !p.includes('gratis') && !p.includes('cliente')));
+        }
+        if (opt === 'Servicio a domicilio en el lugar del cliente') {
+          return existingParts.some(p => p.includes('lugar del cliente') || p.includes('en sitio') || p.includes('a domicilio en el lugar'));
+        }
+        if (opt === 'Envíos por paquetería local y foránea') {
+          return existingParts.some(p => p.includes('paqueter') || p.includes('foráneo') || p.includes('foranea') || (p.includes('envío') && !p.includes('domicilio')));
+        }
         return false;
       });
-      const parsedDel = initialDel.length > 0 ? initialDel : ['Atención en el Local de la empresa', 'Servicio a domicilio con costo'];
+      const parsedDel = initialDel.length > 0 ? initialDel : ['Atención en el Local de la empresa'];
       setSelectedDeliveryOptions(parsedDel);
 
       // Parse existing payments into multi-select
@@ -219,12 +258,15 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
     try {
       const cleanPhone = cleanPhoneNumber(formData.phone);
       const cleanWa = cleanPhoneNumber(formData.whatsapp) || cleanPhone;
-      const cleanDelivery = normalizeDeliveryOption(formData.delivery);
+      const cleanDelivery = selectedDeliveryOptions.length > 0
+        ? selectedDeliveryOptions.join(', ')
+        : (normalizeDeliveryOption(formData.delivery) || 'Atención en el Local de la empresa');
       const res = await onSave(business.id, {
         ...formData,
         phone: cleanPhone,
         whatsapp: cleanWa,
-        delivery: cleanDelivery
+        delivery: cleanDelivery,
+        hasDelivery: selectedDeliveryOptions.some(d => d.toLowerCase().includes('domicilio') || d.toLowerCase().includes('envío'))
       });
       if (res.success) {
         setSuccessMsg('¡Negocio actualizado correctamente!');
@@ -328,24 +370,55 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-stone-700">Giro / Categoría *</label>
-              <input
-                type="text"
-                list="category-suggestions"
-                value={formData.category || (formData.categories?.[0] || '')}
-                onChange={e => setFormData(prev => ({
-                  ...prev,
-                  category: e.target.value,
-                  categories: [e.target.value]
-                }))}
-                placeholder="Escribe o selecciona categoría..."
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm font-semibold text-stone-800 focus:border-amber-500 outline-none"
-              />
-              <datalist id="category-suggestions">
-                {categories.map(c => (
-                  <option key={c.id} value={c.name} />
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-stone-700">Giro / Categoría *</label>
+                <span className="text-[10px] text-stone-400">Ver todas las categorías</span>
+              </div>
+              <select
+                value={
+                  allAvailableCategories.some(c => c.name.toLowerCase() === (formData.category || '').toLowerCase())
+                    ? allAvailableCategories.find(c => c.name.toLowerCase() === (formData.category || '').toLowerCase())?.name
+                    : (formData.category ? '__custom__' : '')
+                }
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === '__custom__') {
+                    setFormData(prev => ({ ...prev, category: '' }));
+                  } else {
+                    setFormData(prev => ({
+                      ...prev,
+                      category: val,
+                      categories: [val]
+                    }));
+                  }
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm font-semibold text-stone-800 bg-white focus:border-amber-500 outline-none cursor-pointer"
+              >
+                <option value="" disabled>-- Selecciona del listado completo de categorías ({allAvailableCategories.length}) --</option>
+                {allAvailableCategories.map(c => (
+                  <option key={c.id || c.name} value={c.name}>
+                    {c.name}
+                  </option>
                 ))}
-              </datalist>
+                <option value="__custom__">➕ Escribir otra categoría personalizada...</option>
+              </select>
+
+              {(!allAvailableCategories.some(c => c.name.toLowerCase() === (formData.category || '').toLowerCase()) || formData.category === '') && (
+                <div className="mt-1.5">
+                  <input
+                    type="text"
+                    value={formData.category === '__custom__' ? '' : (formData.category || '')}
+                    onChange={e => setFormData(prev => ({
+                      ...prev,
+                      category: e.target.value,
+                      categories: [e.target.value]
+                    }))}
+                    placeholder="Escribe el nombre de la categoría personalizada..."
+                    className="w-full px-3 py-2 rounded-xl border border-amber-300 text-xs sm:text-sm font-semibold text-stone-800 focus:border-amber-500 outline-none"
+                    autoFocus
+                  />
+                </div>
+              )}
             </div>
           </div>
 

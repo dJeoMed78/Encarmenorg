@@ -153,11 +153,11 @@ export const AdminWindowsMobileMenu: React.FC<AdminWindowsMobileMenuProps> = ({
             <button
               type="button"
               onClick={onLogout}
-              className="p-1.5 rounded-lg bg-white/5 hover:bg-rose-950/60 border border-white/10 hover:border-rose-500/40 text-slate-300 hover:text-rose-200 transition-colors cursor-pointer text-xs flex items-center gap-1.5"
-              title="Cerrar sesión de administrador"
+              className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold transition-colors cursor-pointer text-xs flex items-center gap-1.5 shadow-xs"
+              title="Cerrar sesión de administrador y volver como usuario normal"
             >
-              <LogOut className="w-3.5 h-3.5 text-rose-400" />
-              <span className="hidden sm:inline">Bloquear</span>
+              <LogOut className="w-3.5 h-3.5 text-white" />
+              <span>Cerrar Sesión</span>
             </button>
           </div>
         </div>
