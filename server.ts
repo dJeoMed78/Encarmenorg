@@ -2264,7 +2264,10 @@ async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: 
               ]
             };
 
-            if (wpImages.length > 0) {
+            // CRITICAL: NEVER re-upload images to WooCommerce if product already has images!
+            // Passing images: [{ src: '...' }] causes WordPress to re-download the image and regenerate 10+ thumbnails each time, exhausting Hostinger inodes!
+            const existingWpImages = Array.isArray(fullWpProduct.images) ? fullWpProduct.images : [];
+            if (existingWpImages.length === 0 && wpImages.length > 0) {
               putPayload.images = wpImages;
             }
 
@@ -2339,16 +2342,10 @@ async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: 
   }
 }
 
-// Run initial sync from WooCommerce in background after startup
+// Initial background sync from WooCommerce on startup (runs once safely without duplicating images)
 setTimeout(() => {
   syncAllWooCommerceProducts().catch(() => {});
-}, 3000);
-
-// Recurring auto-sync every 15 minutes to keep Hostinger MariaDB and WordPress synchronized
-setInterval(() => {
-  console.log('[WooCommerce Auto-Sync] Ejecutando sincronización bidireccional periódica...');
-  syncAllWooCommerceProducts().catch((e) => console.warn('[WooCommerce Auto-Sync] Error:', e.message));
-}, 15 * 60 * 1000);
+}, 5000);
 
 // Helper to check duplicates by phone or normalized name
 function findDuplicateBusiness(name?: string, phone?: string) {
@@ -2611,7 +2608,8 @@ app.patch('/api/businesses/:id', async (req: Request, res: Response) => {
           ]
         };
 
-        if (wpImages.length > 0) {
+        // Only re-upload images to WooCommerce if the user explicitly provided a new image or gallery
+        if (wpImages.length > 0 && (req.body.image || req.body.gallery)) {
           putBody.images = wpImages;
         }
 
