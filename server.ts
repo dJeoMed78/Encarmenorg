@@ -188,27 +188,34 @@ app.get('/uploads/:filename', async (req: Request, res: Response) => {
       console.warn('[MariaDB uploads fallback] Error:', e.message);
     }
   }
-  // Automatic proxy & cache from encarmen.org (the live production server)
-  try {
-    const upstreamUrl = `https://encarmen.org/uploads/${encodeURIComponent(filename)}`;
-    const remoteRes = await fetch(upstreamUrl);
-    if (remoteRes.ok) {
-      const buf = Buffer.from(await remoteRes.arrayBuffer());
-      const contentType = remoteRes.headers.get('content-type') || 'image/jpeg';
-      try {
-        fs.mkdirSync(path.dirname(localPath), { recursive: true });
-        fs.writeFileSync(localPath, buf);
-      } catch (_) {}
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
-      return res.send(buf);
-    }
-  } catch (_) {}
+  // Automatic proxy & cache from WordPress uploads or encarmen.org
+  const fallbackSources = [
+    `https://empresasencarmen.com/wp-content/uploads/2026/10/${encodeURIComponent(filename)}`,
+    `https://empresasencarmen.com/wp-content/uploads/2026/09/${encodeURIComponent(filename)}`,
+    `https://empresasencarmen.com/wp-content/uploads/2024/07/${encodeURIComponent(filename)}`,
+    `https://encarmen.org/uploads/${encodeURIComponent(filename)}`
+  ];
 
-  const host = (req.hostname || req.headers.host || '').toLowerCase();
-  if (!host.includes('encarmen.org')) {
-    return res.redirect(302, `https://encarmen.org/uploads/${encodeURIComponent(filename)}`);
+  for (const upstreamUrl of fallbackSources) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const remoteRes = await fetch(upstreamUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (remoteRes.ok) {
+        const buf = Buffer.from(await remoteRes.arrayBuffer());
+        const contentType = remoteRes.headers.get('content-type') || 'image/jpeg';
+        try {
+          fs.mkdirSync(path.dirname(localPath), { recursive: true });
+          fs.writeFileSync(localPath, buf);
+        } catch (_) {}
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+        return res.send(buf);
+      }
+    } catch (_) {}
   }
+
   return res.status(404).send('Image not found');
 });
 

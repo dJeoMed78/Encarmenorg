@@ -325,7 +325,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                     target.dataset.triedLive = 'true';
                     const parts = target.src.split('/uploads/');
                     const filename = parts[parts.length - 1];
-                    target.src = `https://empresasencarmen.com/uploads/${filename}`;
+                    target.src = `https://empresasencarmen.com/wp-content/uploads/2026/10/${filename}`;
                   } else {
                     target.onerror = null;
                     target.style.display = 'none';

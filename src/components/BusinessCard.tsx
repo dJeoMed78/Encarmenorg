@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { Business, Promotion } from '../types';
 import { trackAnalyticsEvent } from '../services/api';
-import { getBusinessPrimaryCategory, getBusinessImageUrl } from '../utils/businessUrl';
+import { getBusinessPrimaryCategory, getBusinessImageUrl, formatImageUrl } from '../utils/businessUrl';
 import { getWhatsAppUrl } from '../utils/phone';
 
 interface BusinessCardProps {
@@ -97,6 +97,25 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({
               onError={e => {
                 const target = e.target as HTMLImageElement;
                 target.onerror = null;
+                if (displayImage.startsWith('/uploads/')) {
+                  const filename = displayImage.replace('/uploads/', '');
+                  target.onerror = () => {
+                    target.onerror = null;
+                    if (business.gallery && business.gallery.length > 0 && business.gallery[0] !== displayImage) {
+                      target.src = formatImageUrl(business.gallery[0]);
+                      target.onerror = () => setImgFailed(true);
+                    } else {
+                      setImgFailed(true);
+                    }
+                  };
+                  target.src = `https://empresasencarmen.com/wp-content/uploads/2026/10/${filename}`;
+                  return;
+                }
+                if (business.gallery && business.gallery.length > 0 && business.gallery[0] !== displayImage) {
+                  target.src = formatImageUrl(business.gallery[0]);
+                  target.onerror = () => setImgFailed(true);
+                  return;
+                }
                 setImgFailed(true);
               }}
             />
