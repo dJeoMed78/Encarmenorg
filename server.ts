@@ -165,6 +165,26 @@ app.use('/uploads', express.static(path.resolve(__dirname, 'public/uploads'), {
   }
 }));
 
+// Persistent brand logo and banner route with MariaDB uploaded_files fallback
+app.get('/images/:filename', async (req: Request, res: Response, next) => {
+  const filename = req.params.filename;
+  if (isMariaDbActive()) {
+    try {
+      const file = await dbGetUploadedFile(filename);
+      if (file && file.data) {
+        res.setHeader('Content-Type', file.mimeType || 'image/png');
+        res.setHeader('Cache-Control', 'public, max-age=60, must-revalidate');
+        return res.send(file.data);
+      }
+    } catch (_) {}
+  }
+  const localPath = path.resolve(__dirname, 'public/images', filename);
+  if (fs.existsSync(localPath)) {
+    return res.sendFile(localPath);
+  }
+  next();
+});
+
 // Fallback to MariaDB uploaded_files table for /uploads/:filename across restarts and deployments
 app.get('/uploads/:filename', async (req: Request, res: Response) => {
   const filename = req.params.filename;
@@ -6702,7 +6722,10 @@ app.post('/api/admin/banner-and-logo', async (req: Request, res: Response) => {
       portalConfig.bannerUrl = '/images/banner-empresas-en-carmen.png?v=' + Date.now();
       portalConfig.lastUpdated = new Date().toISOString();
       fs.writeFileSync(portalConfigPath, JSON.stringify(portalConfig, null, 2), 'utf8');
-      if (isMariaDbActive()) { dbSavePortalConfig(portalConfig).catch(() => {}); }
+      if (isMariaDbActive()) {
+        dbSavePortalConfig(portalConfig).catch(() => {});
+        dbSaveUploadedFile('banner-empresas-en-carmen.png', 'image/png', bannerBuffer).catch(() => {});
+      }
     }
 
     if (logoBase64 && typeof logoBase64 === 'string') {
@@ -6725,7 +6748,10 @@ app.post('/api/admin/banner-and-logo', async (req: Request, res: Response) => {
       portalConfig.logoUrl = '/images/logo-oficial.png?v=' + Date.now();
       portalConfig.lastUpdated = new Date().toISOString();
       fs.writeFileSync(portalConfigPath, JSON.stringify(portalConfig, null, 2), 'utf8');
-      if (isMariaDbActive()) { dbSavePortalConfig(portalConfig).catch(() => {}); }
+      if (isMariaDbActive()) {
+        dbSavePortalConfig(portalConfig).catch(() => {});
+        dbSaveUploadedFile('logo-oficial.png', 'image/png', logoBuffer).catch(() => {});
+      }
     }
 
     let gitPushed = false;
