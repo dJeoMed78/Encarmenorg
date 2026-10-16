@@ -94,7 +94,7 @@ function findBusinessFromUrl(bizList: Business[]): Business | null {
     // 3. Check direct clean path /:slug (e.g. /clean-topal or /uniformescddelcarmen)
     if (!empresaParam && typeof window !== 'undefined') {
       const rawPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
-      const reservedPaths = ['admin', 'api', 'login', 'register', 'zonas', 'categorias', 'promociones', 'clasificados', 'uploads', 'assets', 'images', 'icons'];
+      const reservedPaths = ['admin', 'api', 'login', 'register', 'registro', 'subir-negocio', 'alta', 'alta-empresa', 'zonas', 'colonias', 'categorias', 'promociones', 'clasificados', 'guardados', 'favoritos', 'uploads', 'assets', 'images', 'icons'];
       if (rawPath && !reservedPaths.includes(rawPath.toLowerCase()) && !rawPath.includes('/')) {
         empresaParam = decodeURIComponent(rawPath);
       }
@@ -128,6 +128,37 @@ function findBusinessFromUrl(bizList: Business[]): Business | null {
   return null;
 }
 
+function getInitialActiveTab(): 'directory' | 'classifieds' | 'categories' | 'zones' | 'favorites' | 'register' {
+  if (typeof window === 'undefined') return 'directory';
+  try {
+    const rawPath = window.location.pathname.toLowerCase().replace(/^\/+|\/+$/g, '');
+    const hash = window.location.hash.toLowerCase().replace(/^#+/, '');
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = (params.get('tab') || '').toLowerCase();
+
+    if (
+      rawPath === 'register' || rawPath === 'registro' || rawPath === 'subir-negocio' || rawPath === 'alta' || rawPath === 'alta-empresa' ||
+      hash === 'register' || hash === 'registro' || hash === 'subir-negocio' ||
+      tabParam === 'register' || tabParam === 'registro'
+    ) {
+      return 'register';
+    }
+    if (rawPath === 'clasificados' || hash === 'clasificados' || tabParam === 'classifieds' || tabParam === 'clasificados') {
+      return 'classifieds';
+    }
+    if (rawPath === 'categorias' || hash === 'categorias' || tabParam === 'categories') {
+      return 'categories';
+    }
+    if (rawPath === 'zonas' || rawPath === 'colonias' || hash === 'zonas' || hash === 'colonias' || tabParam === 'zones') {
+      return 'zones';
+    }
+    if (rawPath === 'favoritos' || rawPath === 'guardados' || hash === 'favoritos' || hash === 'guardados' || tabParam === 'favorites') {
+      return 'favorites';
+    }
+  } catch {}
+  return 'directory';
+}
+
 export default function App() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [categories, setCategories] = useState<(Category & { subcategories?: Category[] })[]>([]);
@@ -136,7 +167,7 @@ export default function App() {
   const [health, setHealth] = useState<WpHealth | null>(null);
 
   // Navigation & Modals
-  const [activeTab, setActiveTab] = useState<'directory' | 'classifieds' | 'categories' | 'zones' | 'favorites' | 'register'>('directory');
+  const [activeTab, setActiveTab] = useState<'directory' | 'classifieds' | 'categories' | 'zones' | 'favorites' | 'register'>(getInitialActiveTab);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [syncModalInitialTab, setSyncModalInitialTab] = useState<'start' | 'brand_media' | 'businesses' | undefined>('start');
@@ -211,6 +242,33 @@ export default function App() {
       })
       .catch(() => {});
   }, []);
+
+  // Listen to browser navigation (back/forward, hash changes)
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const tab = getInitialActiveTab();
+      setActiveTab(tab);
+    };
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', handleUrlChange);
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('hashchange', handleUrlChange);
+    };
+  }, []);
+
+  // Sync browser URL bar when user switches between main tabs
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const current = window.location.pathname.toLowerCase().replace(/^\/+|\/+$/g, '');
+    try {
+      if (activeTab === 'register' && current !== 'registro' && current !== 'register' && current !== 'subir-negocio') {
+        window.history.pushState({ tab: 'register' }, '', '/registro');
+      } else if (activeTab === 'directory' && (current === 'registro' || current === 'register' || current === 'subir-negocio')) {
+        window.history.pushState({ tab: 'directory' }, '', '/');
+      }
+    } catch {}
+  }, [activeTab]);
 
   const handleDownloadZip = async () => {
     try {
