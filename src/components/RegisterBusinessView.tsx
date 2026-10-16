@@ -293,7 +293,8 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
         phone: phoneClean,
         whatsapp: waClean,
         deliveryOption: deliveryStr,
-        image: formData.image || logoPreview || ''
+        image: formData.image || logoPreview || '',
+        gallery: galleryImages
       });
 
       if (res.success) {
@@ -806,6 +807,74 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Galería de Fotos de Productos o Servicios (Hasta 10 archivos) */}
+          <div className="space-y-3 pt-5 border-t border-stone-200/80">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+              <div>
+                <label className="text-xs sm:text-sm font-bold text-stone-800 flex items-center gap-2">
+                  <Images className="w-4 h-4 text-amber-500" />
+                  <span>Fotos de Productos, Servicios o Menú (Hasta 10 fotos)</span>
+                </label>
+                <p className="text-[11px] sm:text-xs text-stone-500 mt-0.5">
+                  Sube fotos de tus platillos, trabajos realizados, productos estrella o instalaciones para tu catálogo digital.
+                </p>
+              </div>
+              <span className="self-start sm:self-auto text-xs font-bold px-3 py-1 rounded-full bg-stone-100 text-stone-700 border border-stone-200 shrink-0">
+                {galleryImages.length} de 10 fotos
+              </span>
+            </div>
+
+            {/* Grid de Fotos y Botón de Subida */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 pt-1">
+              {galleryImages.map((imgUrl, idx) => (
+                <div key={idx} className="relative aspect-square rounded-2xl border border-stone-200 overflow-hidden bg-stone-100 shadow-xs group">
+                  <img
+                    src={imgUrl}
+                    alt={`Foto ${idx + 1}`}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveGalleryImage(idx)}
+                    className="absolute top-1.5 right-1.5 p-1 rounded-full bg-rose-600/90 hover:bg-rose-700 text-white shadow-md transition-colors cursor-pointer"
+                    title="Eliminar foto"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded-md bg-black/60 text-white text-[10px] font-bold">
+                    #{idx + 1}
+                  </span>
+                </div>
+              ))}
+
+              {/* Botón para Subir Más Fotos */}
+              {galleryImages.length < 10 && (
+                <label className="relative aspect-square rounded-2xl border-2 border-dashed border-stone-300 hover:border-amber-500 hover:bg-amber-50/50 flex flex-col items-center justify-center text-stone-400 hover:text-amber-600 cursor-pointer transition-all bg-stone-50/60 p-3 text-center">
+                  <Upload className="w-6 h-6 mb-1 text-amber-500" />
+                  <span className="text-xs font-bold text-stone-700">+ Subir Fotos</span>
+                  <span className="text-[10px] text-stone-400 leading-tight mt-0.5">
+                    Selecciona hasta {10 - galleryImages.length} foto(s)
+                  </span>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleGalleryUpload}
+                    disabled={isUploadingGallery}
+                    className="hidden"
+                  />
+                </label>
+              )}
+            </div>
+
+            {isUploadingGallery && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-2 text-xs font-semibold text-amber-800 animate-pulse">
+                <RefreshCw className="w-4 h-4 animate-spin text-amber-600" />
+                <span>Subiendo y optimizando fotos de productos... Por favor espera un momento.</span>
+              </div>
+            )}
           </div>
         </div>
 
