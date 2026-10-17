@@ -10,3 +10,5 @@ coverage/
 *.tar.gz
 public/imagenes-parte-*.zip
 public/codigo-fuente-empresasencarmen-*.zip
+public/backup.zip
+public/codigo-fuente-empresasencarmen.zip
