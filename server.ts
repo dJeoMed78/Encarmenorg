@@ -305,7 +305,10 @@ let editPinsCache: Record<number, { pin: string; expiresAt: number; remainingMin
 
 // Load Seed Businesses
 try {
-  const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
+  let bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
+  if (!fs.existsSync(bizPath)) {
+    bizPath = path.resolve(process.cwd(), 'src/data/businesses_seed.json');
+  }
   if (fs.existsSync(bizPath)) {
     businessesCache = JSON.parse(fs.readFileSync(bizPath, 'utf8'));
     console.log(`[Cache] ${businessesCache.length} empresas cargadas de seed.`);
@@ -316,7 +319,10 @@ try {
 
 // Load Seed Categories
 try {
-  const catPath = path.resolve(__dirname, 'src/data/categories_seed.json');
+  let catPath = path.resolve(__dirname, 'src/data/categories_seed.json');
+  if (!fs.existsSync(catPath)) {
+    catPath = path.resolve(process.cwd(), 'src/data/categories_seed.json');
+  }
   if (fs.existsSync(catPath)) {
     categoriesCache = JSON.parse(fs.readFileSync(catPath, 'utf8'));
     console.log(`[Cache] ${categoriesCache.length} categorías cargadas de seed.`);
@@ -6925,9 +6931,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
 
-if (!isProduction) {
+if (!isProduction && !process.env.VERCEL) {
   // Vite Dev Server middleware for dynamic TypeScript compilation, HMR, and React SPA preview
   console.log('[Vite] Inicializando middleware de Vite para desarrollo y preview interactivo...');
   const vite = await createViteServer({
