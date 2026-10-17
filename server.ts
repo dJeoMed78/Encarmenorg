@@ -44,7 +44,7 @@ import {
   dbGetUploadedFile,
   dbSaveDismissedCandidate,
   dbLoadDismissedCandidates
-} from './src/db/mariadb.js';
+} from './src/db/mariadb';
 
 let _filenameStr = '';
 let _dirnameStr = process.cwd();
