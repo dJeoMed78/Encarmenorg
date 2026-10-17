@@ -1,0 +1,24 @@
+{
+  "short_name": "Empresas Carmen",
+  "name": "Directorio Empresas en Carmen",
+  "description": "Directorio empresarial y catálogo comercial de Ciudad del Carmen, Campeche.",
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#fafaf9",
+  "theme_color": "#d97706",
+  "display": "standalone",
+  "orientation": "portrait"
+}
