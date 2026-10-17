@@ -8,7 +8,6 @@ import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { ZipArchive } from 'archiver';
 import { GoogleGenAI } from '@google/genai';
-import { createServer as createViteServer } from 'vite';
 import {
   initMariaDb,
   isMariaDbActive,
@@ -6936,6 +6935,7 @@ const isProduction = process.env.NODE_ENV === 'production' || !!process.env.VERC
 if (!isProduction && !process.env.VERCEL) {
   // Vite Dev Server middleware for dynamic TypeScript compilation, HMR, and React SPA preview
   console.log('[Vite] Inicializando middleware de Vite para desarrollo y preview interactivo...');
+  const { createServer: createViteServer } = await import('vite');
   const vite = await createViteServer({
     server: { middlewareMode: true, allowedHosts: true },
     appType: 'spa'
