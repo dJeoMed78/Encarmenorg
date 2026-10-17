@@ -46,8 +46,15 @@ import {
   dbLoadDismissedCandidates
 } from './src/db/mariadb.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+let _filenameStr = '';
+let _dirnameStr = process.cwd();
+try {
+  if (typeof import.meta !== 'undefined' && import.meta && import.meta.url) {
+    _filenameStr = fileURLToPath(import.meta.url);
+    _dirnameStr = path.dirname(_filenameStr);
+  }
+} catch (_) {}
+const __dirname = _dirnameStr || process.cwd();
 
 const app = express();
 const PORT = Number(process.env.PORT || process.env.DEFAULT_APP_PORT) || 3000;
