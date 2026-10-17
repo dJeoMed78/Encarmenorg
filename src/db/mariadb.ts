@@ -43,9 +43,11 @@ export async function initMariaDb(): Promise<boolean> {
       password: config.password,
       database: config.database,
       waitForConnections: true,
-      connectionLimit: 10,
+      connectionLimit: process.env.VERCEL ? 3 : 10,
       queueLimit: 0,
       connectTimeout: 10000,
+      idleTimeout: 15000,
+      enableKeepAlive: true,
     });
 
     const [rows] = await pool.query('SELECT 1 as test');
