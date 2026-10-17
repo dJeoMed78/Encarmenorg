@@ -7017,7 +7017,11 @@ if (!isProduction) {
   });
 }
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[Express] Servidor corriendo exitosamente en http://0.0.0.0:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[Express] Servidor corriendo exitosamente en http://0.0.0.0:${PORT}`);
+  });
+}
+
+export default app;
 
