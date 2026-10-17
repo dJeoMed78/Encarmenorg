@@ -2348,9 +2348,11 @@ async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: 
 }
 
 // Initial background sync from WooCommerce on startup (runs once safely without duplicating images)
-setTimeout(() => {
-  syncAllWooCommerceProducts().catch(() => {});
-}, 5000);
+if (!process.env.VERCEL) {
+  setTimeout(() => {
+    syncAllWooCommerceProducts().catch(() => {});
+  }, 5000);
+}
 
 // Helper to check duplicates by phone or normalized name
 function findDuplicateBusiness(name?: string, phone?: string) {
