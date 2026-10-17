@@ -7,6 +7,7 @@ const API_BASE = '/api';
 export async function fetchBusinesses(params: {
   q?: string;
   category?: string;
+  subcategory?: string;
   colonia?: string;
   hasWhatsapp?: boolean;
   hasDelivery?: boolean;
@@ -16,6 +17,7 @@ export async function fetchBusinesses(params: {
   const query = new URLSearchParams();
   if (params.q) query.set('q', params.q);
   if (params.category && params.category !== 'all') query.set('category', params.category);
+  if (params.subcategory) query.set('subcategory', params.subcategory);
   if (params.colonia && params.colonia !== 'todas') query.set('colonia', params.colonia);
   if (params.hasWhatsapp) query.set('hasWhatsapp', 'true');
   if (params.hasDelivery) query.set('hasDelivery', 'true');
@@ -51,7 +53,13 @@ export async function fetchBusinesses(params: {
         b.categories.some(c => c.toLowerCase().includes(term))
       );
     }
-    if (params.category && params.category !== 'all') {
+    if (params.subcategory) {
+      const sub = params.subcategory.toLowerCase();
+      list = list.filter(b =>
+        b.categorySlugs.some(s => s.toLowerCase() === sub) ||
+        b.categories.some(c => c.toLowerCase() === sub)
+      );
+    } else if (params.category && params.category !== 'all') {
       const cat = params.category.toLowerCase();
       list = list.filter(b =>
         b.categorySlugs.some(s => s.toLowerCase() === cat) ||

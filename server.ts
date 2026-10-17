@@ -1595,6 +1595,7 @@ app.get('/api/businesses', async (req: Request, res: Response) => {
 
   const q = ((req.query.q as string) || '').toLowerCase().trim();
   const category = (req.query.category as string) || '';
+  const subcategory = (req.query.subcategory as string) || '';
   const colonia = (req.query.colonia as string) || '';
   const hasWhatsapp = req.query.hasWhatsapp === 'true';
   const hasDelivery = req.query.hasDelivery === 'true';
@@ -1614,7 +1615,13 @@ app.get('/api/businesses', async (req: Request, res: Response) => {
     );
   }
 
-  if (category && category !== 'all') {
+  if (subcategory) {
+    const subLow = subcategory.toLowerCase();
+    list = list.filter(b =>
+      (b.categorySlugs && b.categorySlugs.some((s: string) => s.toLowerCase() === subLow)) ||
+      (b.categories && b.categories.some((c: string) => c.toLowerCase() === subLow))
+    );
+  } else if (category && category !== 'all') {
     const catLow = category.toLowerCase();
     list = list.filter(b =>
       (b.categorySlugs && b.categorySlugs.some((s: string) => s.toLowerCase() === catLow)) ||
@@ -2283,19 +2290,31 @@ async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: 
               putPayload.images = wpImages;
             }
 
-            await fetch(`https://empresasencarmen.com/wp-json/wc/v3/products/${targetWpId}`, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': authHeader
-              },
-              body: JSON.stringify(putPayload)
-            });
+            try {
+              const controller = new AbortController();
+              const timeout = setTimeout(() => controller.abort(), 6000);
+              const wpPutRes = await fetch(`https://empresasencarmen.com/wp-json/wc/v3/products/${targetWpId}`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': authHeader
+                },
+                body: JSON.stringify(putPayload),
+                signal: controller.signal
+              });
+              clearTimeout(timeout);
 
-            purgeWordPressCache([b.slug, ...(b.previousSlugs || [])]);
-            console.log(`[WooCommerce Sync] Actualizadas categorías, imágenes y estructura para "${b.name}" en WordPress ID #${targetWpId}.`);
+              if (wpPutRes.ok) {
+                purgeWordPressCache([b.slug, ...(b.previousSlugs || [])]);
+                console.log(`[WooCommerce Sync] Actualizadas categorías, imágenes y estructura para "${b.name}" en WordPress ID #${targetWpId}.`);
+              } else {
+                console.warn(`[WooCommerce Sync] Aviso al actualizar "${b.name}" en WordPress: HTTP ${wpPutRes.status}`);
+              }
+            } catch (err: any) {
+              console.warn(`[WooCommerce Sync] Servidor WordPress empresasencarmen.com no accesible para "${b.name}":`, err.message);
+            }
           } catch (syncErr: any) {
-            console.warn(`[WooCommerce Sync] Error al actualizar "${b.name}" en WordPress:`, syncErr.message);
+            console.warn(`[WooCommerce Sync] Error procesando "${b.name}":`, syncErr.message);
           }
         }
       } else if (!matchingWp) {

@@ -26,13 +26,23 @@ function getCarmenVersion() {
   const hour = map.hour || '12';
   const minute = map.minute || '00';
 
-  return `${day}${month}${year}:${hour}${minute}`;
+  let deployCode = process.env.VERCEL_GIT_COMMIT_SHA
+    ? process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7)
+    : (process.env.DEPLOY_CODE || 'aa9ab96');
+
+  // Hosting: V (Vercel), R (Render), A (Azure)
+  let hosting = 'V';
+  if (process.env.RENDER) hosting = 'R';
+  else if (process.env.AZURE_WEBAPP_NAME || process.env.WEBSITE_SITE_NAME) hosting = 'A';
+  else if (process.env.HOSTING_ID) hosting = process.env.HOSTING_ID;
+
+  return `${day}${month}${year}:${hour}${minute}:${deployCode}:${hosting}`;
 }
 
 const version = getCarmenVersion();
 const filePath = path.resolve(__dirname, '../src/constants/version.ts');
 const fileContent = `// Automatic dynamic version control stamp for Empresas en Carmen
-// Updated automatically on every build (Format: DDMMYY:HHMM - Hora de Carmen / Campeche)
+// Updated automatically on every build (Format: DDMMYY:HHMM:DEPLOY_CODE:HOSTING_ID - Hora de Carmen / Campeche)
 export const APP_VERSION = '${version}';
 export const APP_BUILD_TIMESTAMP = '${new Date().toISOString()}';
 `;

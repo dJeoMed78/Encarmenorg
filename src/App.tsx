@@ -657,18 +657,32 @@ export default function App() {
 
     // Subcategory if selected
     if (selectedSubcategory) {
-      const sub = selectedSubcategory.toLowerCase();
-      list = list.filter(b =>
-        b.categorySlugs.some(s => s.toLowerCase() === sub) ||
-        b.categories.some(c => c.toLowerCase() === sub)
-      );
+      const sub = normalizeStr(selectedSubcategory).replace(/-/g, ' ');
+      list = list.filter(b => {
+        const matchSlug = b.categorySlugs && b.categorySlugs.some(s => {
+          const sNorm = normalizeStr(s).replace(/-/g, ' ');
+          return sNorm === sub || s.toLowerCase() === selectedSubcategory.toLowerCase();
+        });
+        const matchCat = b.categories && b.categories.some(c => {
+          const cNorm = normalizeStr(c).replace(/-/g, ' ');
+          return cNorm === sub || c.toLowerCase() === selectedSubcategory.toLowerCase();
+        });
+        return matchSlug || matchCat;
+      });
     } else if (selectedCategory !== 'all') {
       // Parent category
-      const cat = selectedCategory.toLowerCase();
-      list = list.filter(b =>
-        b.categorySlugs.some(s => s.toLowerCase() === cat) ||
-        b.categories.some(c => c.toLowerCase() === cat)
-      );
+      const cat = normalizeStr(selectedCategory).replace(/-/g, ' ');
+      list = list.filter(b => {
+        const matchSlug = b.categorySlugs && b.categorySlugs.some(s => {
+          const sNorm = normalizeStr(s).replace(/-/g, ' ');
+          return sNorm === cat || s.toLowerCase() === selectedCategory.toLowerCase();
+        });
+        const matchCat = b.categories && b.categories.some(c => {
+          const cNorm = normalizeStr(c).replace(/-/g, ' ');
+          return cNorm === cat || c.toLowerCase() === selectedCategory.toLowerCase();
+        });
+        return matchSlug || matchCat;
+      });
     }
 
     // Colonia
@@ -727,9 +741,9 @@ export default function App() {
     setDisplayLimit(24);
   };
 
-  const handleSelectCategoryFromView = (slug: string) => {
+  const handleSelectCategoryFromView = (slug: string, subcategory?: string) => {
     setSelectedCategory(slug);
-    setSelectedSubcategory('');
+    setSelectedSubcategory(subcategory || '');
     setActiveTab('directory');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -921,25 +935,44 @@ export default function App() {
               setSelectedSubcategory={setSelectedSubcategory}
             />
 
-            {/* Active search filter notification bar */}
-            {query.trim() && (
+            {/* Active search or category filter notification bar */}
+            {(query.trim() || selectedCategory !== 'all' || Boolean(selectedSubcategory)) && (
               <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-2">
                 <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
                   <div className="flex items-center gap-2 text-stone-800">
                     <Search className="w-4 h-4 text-amber-600 shrink-0" />
                     <span>
-                      Mostrando resultados exclusivos para: <strong className="text-stone-950">"{query}"</strong> ({filteredBusinesses.length} {filteredBusinesses.length === 1 ? 'resultado' : 'resultados'})
+                      {query.trim() ? (
+                        <>Mostrando resultados exclusivos para: <strong className="text-stone-950">"{query}"</strong></>
+                      ) : (
+                        <>
+                          Filtrando por giro: <strong className="text-stone-950">
+                            {(() => {
+                              const activeParent = categories.find(c => c.slug === selectedCategory || c.name.toLowerCase() === selectedCategory.toLowerCase());
+                              const parentName = activeParent?.name || selectedCategory;
+                              if (selectedSubcategory) {
+                                const activeSub = activeParent?.subcategories?.find(s => s.slug === selectedSubcategory || s.name.toLowerCase() === selectedSubcategory.toLowerCase());
+                                const subName = activeSub?.name || selectedSubcategory;
+                                return `${parentName} › ${subName}`;
+                              }
+                              return parentName;
+                            })()}
+                          </strong>
+                        </>
+                      )} ({filteredBusinesses.length} {filteredBusinesses.length === 1 ? 'negocio activo' : 'negocios activos'})
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
                       setQuery('');
+                      setSelectedCategory('all');
+                      setSelectedSubcategory('');
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
                     className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-stone-50 border border-stone-300 text-stone-700 font-bold text-xs shadow-xs transition-colors cursor-pointer"
                   >
-                    ✕ Limpiar búsqueda y ver cartelera y cupones
+                    ✕ Limpiar filtros y ver todos los giros
                   </button>
                 </div>
               </div>
