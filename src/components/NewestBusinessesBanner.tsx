@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Sparkles, Building2, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import { Business } from '../types';
+import { getOptimizedImageUrl } from '../utils/businessUrl';
 
 interface NewestItem {
   id: number;
@@ -142,14 +143,19 @@ export const NewestBusinessesBanner: React.FC<NewestBusinessesBannerProps> = ({
                 <div className="relative aspect-square w-full bg-stone-100 overflow-hidden flex items-center justify-center border-b border-stone-100">
                   {item.image ? (
                     <img
-                      src={item.image}
+                      src={getOptimizedImageUrl(item.image, 320)}
                       alt={item.name}
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                       loading="lazy"
+                      decoding="async"
                       onError={(e) => {
-                        // Fallback placeholder if image fails to load
-                        (e.target as HTMLElement).style.display = 'none';
+                        const target = e.target as HTMLImageElement;
+                        if (target.src !== item.image) {
+                          target.src = item.image;
+                        } else {
+                          target.style.display = 'none';
+                        }
                       }}
                     />
                   ) : (

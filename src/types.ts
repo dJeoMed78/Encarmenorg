@@ -209,6 +209,11 @@ export interface ClassifiedAd {
   createdAt: string;
   status: 'active' | 'sold' | 'expired';
   views?: number;
+  sourceUrl?: string;
+  source?: string;
+  aiDetected?: boolean;
+  pendingApproval?: boolean;
+  alreadyPublished?: boolean;
 }
 
 export interface Promotion {

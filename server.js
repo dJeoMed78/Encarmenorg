@@ -2303,7 +2303,20 @@ async function syncAllWooCommerceProducts() {
 				existingMap.set(p.id, parsed);
 			} else {
 				const old = existingMap.get(p.id) || {};
-				if (Boolean(old.isLocallyEdited || old.image && old.image.startsWith("/uploads/") || old.gallery && old.gallery.some((img) => img.startsWith("/uploads/")) || Array.isArray(old.previousSlugs) && old.previousSlugs.length > 0 || Array.isArray(old.previousNames) && old.previousNames.length > 0 || old.updatedAt && (!p.date_modified || new Date(old.updatedAt) > new Date(p.date_modified)))) {
+				const isPendingLocalEdit = Boolean(
+					old.isLocallyEdited &&
+					old.updatedAt &&
+					p.date_modified &&
+					new Date(old.updatedAt) > new Date(p.date_modified)
+				);
+				const hasLocalCustomizations = Boolean(
+					isPendingLocalEdit ||
+					(old.image && old.image.startsWith("/uploads/")) ||
+					(old.gallery && old.gallery.some((img) => img.startsWith("/uploads/"))) ||
+					(Array.isArray(old.previousSlugs) && old.previousSlugs.length > 0) ||
+					(Array.isArray(old.previousNames) && old.previousNames.length > 0)
+				);
+				if (hasLocalCustomizations) {
 					const mergedCategories = old.categories && old.categories.length > 0 ? old.categories : parsed.categories;
 					const mergedCategorySlugs = old.categorySlugs && old.categorySlugs.length > 0 ? old.categorySlugs : parsed.categorySlugs;
 					const mergedCategory = old.category || mergedCategories[0] || "Comercios y Servicios";
@@ -2330,12 +2343,13 @@ async function syncAllWooCommerceProducts() {
 						website: old.website || parsed.website,
 						previousSlugs: old.previousSlugs || [],
 						previousNames: old.previousNames || [],
-						isLocallyEdited: true,
+						isLocallyEdited: isPendingLocalEdit,
 						updatedAt: old.updatedAt || (/* @__PURE__ */ new Date()).toISOString()
 					});
 				} else existingMap.set(p.id, {
 					...old,
 					...parsed,
+					isLocallyEdited: false,
 					previousSlugs: old.previousSlugs || [],
 					previousNames: old.previousNames || []
 				});
@@ -2374,8 +2388,9 @@ async function syncAllWooCommerceProducts() {
 				typeof fullWpProduct.description === "string" && fullWpProduct.description;
 				const wpShortDesc = typeof fullWpProduct.short_description === "string" ? fullWpProduct.short_description : "";
 				const wpHasShortcode = wpShortDesc.includes("ficha_empresa") || wpShortDesc.includes("fe-wrapper");
-				const wpSlugMismatch = b.slug && fullWpProduct.slug && b.slug.toLowerCase() !== fullWpProduct.slug.toLowerCase();
-				const wpNameMismatch = b.name && fullWpProduct.name && b.name.trim() !== fullWpProduct.name.trim();
+				const wpSlugMismatch = Boolean(b.slug && fullWpProduct.slug && b.slug.toLowerCase().trim() !== fullWpProduct.slug.toLowerCase().trim());
+				const decodeHtml = (str) => (str || "").replace(/&amp;/g, "&").replace(/&#8211;/g, "-").replace(/&#8217;/g, "'").replace(/&quot;/g, '"').trim();
+				const wpNameMismatch = Boolean(b.name && fullWpProduct.name && decodeHtml(b.name).toLowerCase() !== decodeHtml(fullWpProduct.name).toLowerCase());
 				if (b.isLocallyEdited || wpValidCats.length === 0 || !wpHasShortcode || wpSlugMismatch || wpNameMismatch) try {
 					const catPayload = resolveWooCommerceCategoryIds(b);
 					const cleanDesc = cleanWooCommerceDescription(b.description || b.name);
@@ -2441,7 +2456,7 @@ async function syncAllWooCommerceProducts() {
 					if ((Array.isArray(fullWpProduct.images) ? fullWpProduct.images : []).length === 0 && wpImages.length > 0) putPayload.images = wpImages;
 					try {
 						const controller = new AbortController();
-						const timeout = setTimeout(() => controller.abort(), 6e3);
+						const timeout = setTimeout(() => controller.abort(), 15000);
 						const wpPutRes = await fetch(`https://empresasencarmen.com/wp-json/wc/v3/products/${targetWpId}`, {
 							method: "PUT",
 							headers: {
@@ -2453,14 +2468,20 @@ async function syncAllWooCommerceProducts() {
 						});
 						clearTimeout(timeout);
 						if (wpPutRes.ok) {
+							b.isLocallyEdited = false;
+							if (existingMap.has(targetWpId)) {
+								const it = existingMap.get(targetWpId);
+								if (it) it.isLocallyEdited = false;
+							}
 							purgeWordPressCache([b.slug, ...b.previousSlugs || []]);
 							console.log(`[WooCommerce Sync] Actualizadas categorías, imágenes y estructura para "${b.name}" en WordPress ID #${targetWpId}.`);
-						} else console.warn(`[WooCommerce Sync] Aviso al actualizar "${b.name}" en WordPress: HTTP ${wpPutRes.status}`);
+						} else console.info(`[WooCommerce Sync] Aviso al actualizar "${b.name}" en WordPress: HTTP ${wpPutRes.status}`);
 					} catch (err) {
-						console.warn(`[WooCommerce Sync] Servidor WordPress empresasencarmen.com no accesible para "${b.name}":`, err.message);
+						console.info(`[WooCommerce Sync] Servidor WordPress empresasencarmen.com en espera temporal para "${b.name}":`, err.message);
 					}
+					await new Promise(resolve => setTimeout(resolve, 300));
 				} catch (syncErr) {
-					console.warn(`[WooCommerce Sync] Error procesando "${b.name}":`, syncErr.message);
+					console.info(`[WooCommerce Sync] Aviso procesando "${b.name}":`, syncErr.message);
 				}
 			} else if (!matchingWp) {
 				console.log(`[WooCommerce Sync] Exportando empresa local "${b.name}" a empresasencarmen.com...`);

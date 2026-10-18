@@ -37,6 +37,7 @@ import {
   getBusinessPrimaryCategory,
   getBusinessImageUrl
 } from '../utils/businessUrl';
+import { StarRatingWidget } from './StarRatingWidget';
 
 interface ClientBusinessPageViewProps {
   business: Business;
@@ -317,6 +318,8 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
               <img
                 src={displayImage}
                 alt={business.name}
+                loading="lazy"
+                decoding="async"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"
                 onError={e => {
@@ -573,6 +576,14 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                 )}
               </div>
             </div>
+
+            {/* Sistema de Calificación de 1 a 5 Estrellas */}
+            <StarRatingWidget
+              businessId={business.id}
+              businessName={business.name}
+              initialRating={business.rating}
+              initialReviewCount={business.reviewCount}
+            />
 
             {/* Operational Details Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">

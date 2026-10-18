@@ -228,8 +228,20 @@ async function createTablesIfNotExist() {
       \`name\` VARCHAR(255) NOT NULL,
       \`phone\` VARCHAR(50) DEFAULT '',
       \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    `CREATE TABLE IF NOT EXISTS \`business_ratings\` (
+      \`id\` VARCHAR(64) PRIMARY KEY,
+      \`business_id\` VARCHAR(64) NOT NULL,
+      \`rating\` TINYINT NOT NULL,
+      \`visitor_id\` VARCHAR(100) NOT NULL,
+      \`ip\` VARCHAR(50) DEFAULT '',
+      \`comment\` TEXT,
+      \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_biz_visitor (\`business_id\`, \`visitor_id\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
   ];
+
 
   for (const q of queries) {
     try {

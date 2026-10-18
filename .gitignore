@@ -8,7 +8,11 @@ coverage/
 !.env.example
 *.tar.zst
 *.tar.gz
+public/cache/
+codigo-fuente-empresasencarmen*.zip
+backup.zip
 public/imagenes-parte-*.zip
 public/codigo-fuente-empresasencarmen-*.zip
 public/backup.zip
 public/codigo-fuente-empresasencarmen.zip
+

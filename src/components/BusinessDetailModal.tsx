@@ -35,6 +35,7 @@ import {
 } from '../utils/businessUrl';
 import { getWhatsAppUrl, formatPhoneNumber } from '../utils/phone';
 import { trackAnalyticsEvent, reportBusinessIssue, verifyBusinessEditPin, generateBusinessEditPin } from '../services/api';
+import { StarRatingWidget } from './StarRatingWidget';
 
 interface BusinessDetailModalProps {
   business: Business | null;
@@ -445,6 +446,14 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
               </p>
             </div>
           )}
+
+          {/* Calificación de Negocios de 1 a 5 Estrellas */}
+          <StarRatingWidget
+            businessId={business.id}
+            businessName={business.name}
+            initialRating={business.rating}
+            initialReviewCount={business.reviewCount}
+          />
 
           {/* Business Details Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

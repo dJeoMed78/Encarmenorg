@@ -628,6 +628,71 @@ export async function deleteClassified(id: string): Promise<{
   return await res.json();
 }
 
+export async function searchClassifiedRadarCandidates(
+  query: string = '',
+  category: string = 'all',
+  useAi: boolean = false
+): Promise<{
+  success: boolean;
+  candidates: import('../types').ClassifiedAd[];
+  aiInfo?: {
+    usedAi: boolean;
+    quotaExhausted?: boolean;
+    message?: string;
+  };
+  message?: string;
+}> {
+  try {
+    const res = await fetch(API_BASE + '/classifieds/radar-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, category, useAi })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  } catch (err: any) {
+    return {
+      success: false,
+      candidates: [],
+      message: err.message || 'Error consultando el radar de clasificados'
+    };
+  }
+}
+
+export async function approveClassifiedCandidate(candidate: Partial<import('../types').ClassifiedAd>): Promise<{
+  success: boolean;
+  message: string;
+  classified?: import('../types').ClassifiedAd;
+}> {
+  try {
+    const res = await fetch(API_BASE + '/classifieds/approve-candidate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ candidate })
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Error al aprobar anuncio' };
+  }
+}
+
+export async function batchApproveClassifiedCandidates(candidates: Partial<import('../types').ClassifiedAd>[]): Promise<{
+  success: boolean;
+  message: string;
+  count?: number;
+}> {
+  try {
+    const res = await fetch(API_BASE + '/classifieds/batch-approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ candidates })
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Error al aprobar anuncios por lote' };
+  }
+}
+
 
 export interface ExtractedBusinessAI {
   name: string;
@@ -1031,5 +1096,56 @@ export async function approveMultipleAutoBusinessCandidates(
     };
   }
 }
+
+export interface BusinessRatingStats {
+  average: number;
+  count: number;
+  distribution?: Record<number, number>;
+  hasRated?: boolean;
+  userRating?: number | null;
+}
+
+export async function fetchBusinessRating(
+  businessId: number | string,
+  visitorId?: string
+): Promise<BusinessRatingStats> {
+  try {
+    const q = visitorId ? `?visitorId=${encodeURIComponent(visitorId)}` : '';
+    const res = await fetch(`${API_BASE}/ratings/${businessId}${q}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (_) {
+    return {
+      average: 5.0,
+      count: 0,
+      distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      hasRated: false,
+      userRating: null
+    };
+  }
+}
+
+export async function submitBusinessRating(params: {
+  businessId: number | string;
+  rating: number;
+  visitorId: string;
+  comment?: string;
+}): Promise<{ success: boolean; message: string; rating?: number; reviewCount?: number; stats?: any }> {
+  try {
+    const res = await fetch(`${API_BASE}/ratings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+    const data = await res.json();
+    return data;
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || 'Error de conexión al enviar la calificación'
+    };
+  }
+}
+
 
 

@@ -92,26 +92,28 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({
               src={displayImage}
               alt={business.name}
               loading="lazy"
+              decoding="async"
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               onError={e => {
                 const target = e.target as HTMLImageElement;
                 target.onerror = null;
-                if (displayImage.startsWith('/uploads/')) {
-                  const filename = displayImage.replace('/uploads/', '');
+                // If optimized proxy failed, fallback to direct raw URL
+                const rawUrl = formatImageUrl(business.image);
+                if (target.src !== rawUrl && rawUrl) {
+                  target.src = rawUrl;
                   target.onerror = () => {
                     target.onerror = null;
-                    if (business.gallery && business.gallery.length > 0 && business.gallery[0] !== displayImage) {
+                    if (business.gallery && business.gallery.length > 0) {
                       target.src = formatImageUrl(business.gallery[0]);
                       target.onerror = () => setImgFailed(true);
                     } else {
                       setImgFailed(true);
                     }
                   };
-                  target.src = `https://empresasencarmen.com/wp-content/uploads/2026/10/${filename}`;
                   return;
                 }
-                if (business.gallery && business.gallery.length > 0 && business.gallery[0] !== displayImage) {
+                if (business.gallery && business.gallery.length > 0) {
                   target.src = formatImageUrl(business.gallery[0]);
                   target.onerror = () => setImgFailed(true);
                   return;
@@ -196,15 +198,31 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({
 
         {/* Card Body */}
         <div className="p-4 sm:p-5 space-y-3">
-          {/* Metadata: zero-pill discipline (unboxed clean text with separators) */}
-          <div className="flex items-center gap-1.5 text-xs text-stone-500 font-medium truncate">
-            <span className="text-amber-800 font-semibold">{displayCategory}</span>
-            {business.colonia && (
-              <>
-                <span aria-hidden="true" className="text-stone-300">·</span>
-                <span className="text-stone-600 truncate">{business.colonia}</span>
-              </>
-            )}
+          {/* Metadata: category, colonia, and rating badge */}
+          <div className="flex items-center justify-between gap-1.5 text-xs text-stone-500 font-medium">
+            <div className="flex items-center gap-1.5 truncate">
+              <span className="text-amber-800 font-semibold">{displayCategory}</span>
+              {business.colonia && (
+                <>
+                  <span aria-hidden="true" className="text-stone-300">·</span>
+                  <span className="text-stone-600 truncate">{business.colonia}</span>
+                </>
+              )}
+            </div>
+
+            {/* Rating badge */}
+            <div
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200/70 text-amber-900 font-bold shrink-0 text-[11px]"
+              title={`${(business.rating || 5).toFixed(1)} estrellas (${business.reviewCount || 0} calificaciones)`}
+            >
+              <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+              <span>{(business.rating || 5).toFixed(1)}</span>
+              {Boolean(business.reviewCount) && (
+                <span className="text-[10px] text-stone-400 font-normal">
+                  ({business.reviewCount})
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Distinctive Active Promotion Banner Button */}

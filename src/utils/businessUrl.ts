@@ -125,10 +125,21 @@ export function formatImageUrl(url?: string | null): string {
   return img;
 }
 
+export function getOptimizedImageUrl(url?: string | null, width = 480, quality = 80): string {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (trimmed.startsWith('data:') || trimmed.endsWith('.svg')) {
+    return trimmed;
+  }
+  const formatted = formatImageUrl(trimmed);
+  if (!formatted) return '';
+  return `/api/img?url=${encodeURIComponent(formatted)}&w=${width}&q=${quality}&format=webp`;
+}
+
 /**
- * Resolves reliable image URL for a business, with fallback for local uploads like Brio Cleaner.
+ * Resolves reliable and optimized image URL for a business, using server-side WebP compression.
  */
-export function getBusinessImageUrl(business: Partial<Business>): string {
+export function getBusinessImageUrl(business: Partial<Business>, width = 480): string {
   if (!business || !business.image) return '';
-  return formatImageUrl(business.image);
+  return getOptimizedImageUrl(business.image, width);
 }

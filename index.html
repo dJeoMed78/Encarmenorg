@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="google" content="notranslate" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0" />
+    <script>
+      // Prevent browser console errors for HMR WebSocket connection closed in cloud preview environment
+      window.addEventListener('unhandledrejection', function(e) {
+        if (e && e.reason && (
+          (e.reason.message && e.reason.message.includes('WebSocket')) ||
+          String(e.reason).includes('WebSocket')
+        )) {
+          e.preventDefault();
+        }
+      });
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <link rel="manifest" href="/manifest.json" />

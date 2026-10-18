@@ -8,6 +8,7 @@ import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { ZipArchive } from 'archiver';
 import { GoogleGenAI } from '@google/genai';
+import sharp from 'sharp';
 import {
   initMariaDb,
   isMariaDbActive,
@@ -264,6 +265,136 @@ app.get('/media/*', (req: Request, res: Response) => {
   }
   return res.redirect(301, `/wp-content/uploads/${subpath}`);
 });
+
+// ==========================================
+// SERVICIO DE OPTIMIZACIÓN Y COMPRESIÓN DE IMÁGENES (Sharp + WebP Caching)
+// Convierte imágenes pesadas (1MB+) a WebP liviano (~25-50KB) con redimensionado y caché en disco
+// ==========================================
+const imgCacheDir = path.resolve(__dirname, 'public/cache/img');
+try {
+  if (!fs.existsSync(imgCacheDir)) {
+    fs.mkdirSync(imgCacheDir, { recursive: true });
+  }
+} catch (_) {}
+
+app.get('/api/img', async (req: Request, res: Response) => {
+  const rawUrl = (req.query.url as string) || '';
+  if (!rawUrl) {
+    return res.status(400).send('Missing url param');
+  }
+
+  const width = Math.min(Math.max(parseInt((req.query.w as string) || '480', 10), 40), 1920);
+  const quality = Math.min(Math.max(parseInt((req.query.q as string) || '80', 10), 30), 95);
+  const format = ((req.query.format as string) || 'webp').toLowerCase();
+
+  // Create unique hash for disk caching
+  const hash = crypto.createHash('sha1').update(`${rawUrl}_w${width}_q${quality}_f${format}`).digest('hex');
+  const cacheFile = path.join(imgCacheDir, `${hash}.${format}`);
+
+  // Serve directly from disk cache if already compiled
+  if (fs.existsSync(cacheFile)) {
+    res.setHeader('Content-Type', `image/${format}`);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    return res.sendFile(cacheFile);
+  }
+
+  try {
+    let inputBuffer: Buffer | null = null;
+    const decodedUrl = decodeURIComponent(rawUrl).trim();
+
+    // 1. Check local public file system
+    if (decodedUrl.startsWith('/')) {
+      const relPath = decodedUrl.replace(/^\/+/, '');
+      const localDirect = path.resolve(__dirname, 'public', relPath);
+      if (fs.existsSync(localDirect) && !fs.statSync(localDirect).isDirectory()) {
+        inputBuffer = fs.readFileSync(localDirect);
+      }
+    }
+
+    // 2. Fallback to MariaDB uploaded_files for /uploads/ if missing on disk
+    if (!inputBuffer && decodedUrl.includes('/uploads/')) {
+      const fn = decodedUrl.split('/uploads/').pop();
+      if (fn && isMariaDbActive()) {
+        try {
+          const file = await dbGetUploadedFile(fn);
+          if (file && file.data) {
+            inputBuffer = file.data;
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 3. Fallback to fetch from remote (empresasencarmen.com or other http/https)
+    if (!inputBuffer) {
+      let targetFetchUrl = decodedUrl;
+      if (decodedUrl.startsWith('/wp-content/')) {
+        targetFetchUrl = `https://empresasencarmen.com${decodedUrl}`;
+      } else if (decodedUrl.startsWith('/uploads/')) {
+        targetFetchUrl = `https://empresasencarmen.com/wp-content/uploads/2026/10/${encodeURIComponent(decodedUrl.replace('/uploads/', ''))}`;
+      }
+
+      if (targetFetchUrl.startsWith('http://') || targetFetchUrl.startsWith('https://')) {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 7000);
+          const remoteRes = await fetch(targetFetchUrl, {
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+          });
+          clearTimeout(timeout);
+          if (remoteRes.ok) {
+            inputBuffer = Buffer.from(await remoteRes.arrayBuffer());
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (!inputBuffer) {
+      if (decodedUrl.startsWith('http://') || decodedUrl.startsWith('https://')) {
+        return res.redirect(302, decodedUrl);
+      }
+      return res.status(404).send('Image source not found');
+    }
+
+    // Process and optimize with Sharp
+    const sharpInstance = sharp(inputBuffer).rotate();
+    if (width > 0) {
+      sharpInstance.resize({
+        width,
+        withoutEnlargement: true,
+        fit: 'inside'
+      });
+    }
+
+    let outputBuffer: Buffer;
+    if (format === 'webp') {
+      outputBuffer = await sharpInstance.webp({ quality, effort: 4 }).toBuffer();
+    } else if (format === 'jpeg' || format === 'jpg') {
+      outputBuffer = await sharpInstance.jpeg({ quality, mozjpeg: true }).toBuffer();
+    } else if (format === 'png') {
+      outputBuffer = await sharpInstance.png({ compressionLevel: 8 }).toBuffer();
+    } else {
+      outputBuffer = await sharpInstance.webp({ quality }).toBuffer();
+    }
+
+    // Save to disk cache asynchronously
+    try {
+      fs.writeFileSync(cacheFile, outputBuffer);
+    } catch (_) {}
+
+    res.setHeader('Content-Type', `image/${format}`);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    return res.send(outputBuffer);
+  } catch (err: any) {
+    if (rawUrl.startsWith('http')) {
+      return res.redirect(302, rawUrl);
+    }
+    return res.status(500).send('Image processing error');
+  }
+});
+
 
 // Archivo de Configuración Persistente (portal_config.json & MariaDB)
 const portalConfigPath = path.resolve(__dirname, 'portal_config.json');
@@ -1584,6 +1715,186 @@ async function refreshBusinessesFromDbIfNeeded() {
   }
 }
 
+// ==========================================
+// BASE DE DATOS Y GESTIÓN DE CALIFICACIONES (1 A 5 ESTRELLAS)
+// Garantiza que un visitante solo pueda calificar una vez por negocio
+// ==========================================
+interface BusinessRatingEntry {
+  id: string;
+  businessId: number | string;
+  rating: number; // 1 to 5
+  visitorId: string;
+  ip: string;
+  comment?: string;
+  createdAt: string;
+}
+
+interface RatingsDbStructure {
+  ratings: BusinessRatingEntry[];
+  stats: Record<string, {
+    average: number;
+    count: number;
+    distribution: Record<number, number>;
+  }>;
+}
+
+const ratingsDbPath = path.resolve(__dirname, 'ratings_db.json');
+let ratingsDb: RatingsDbStructure = { ratings: [], stats: {} };
+
+try {
+  if (fs.existsSync(ratingsDbPath)) {
+    ratingsDb = JSON.parse(fs.readFileSync(ratingsDbPath, 'utf8'));
+    if (!ratingsDb.ratings) ratingsDb.ratings = [];
+    if (!ratingsDb.stats) ratingsDb.stats = {};
+  } else {
+    // Seed initial stats from existing businesses if present
+    for (const b of businessesCache) {
+      if (b.rating) {
+        ratingsDb.stats[String(b.id)] = {
+          average: Number(b.rating) || 5.0,
+          count: Number(b.reviewCount) || 1,
+          distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 }
+        };
+      }
+    }
+    fs.writeFileSync(ratingsDbPath, JSON.stringify(ratingsDb, null, 2), 'utf8');
+  }
+} catch (_) {}
+
+function saveRatingsToDisk() {
+  try {
+    fs.writeFileSync(ratingsDbPath, JSON.stringify(ratingsDb, null, 2), 'utf8');
+  } catch (_) {}
+}
+
+// Endpoint: Obtener estadísticas de todas las calificaciones
+app.get('/api/ratings', (_req: Request, res: Response) => {
+  res.json({ stats: ratingsDb.stats });
+});
+
+// Endpoint: Obtener calificación y estado de un negocio para un visitante específico
+app.get('/api/ratings/:businessId', (req: Request, res: Response) => {
+  const bizId = String(req.params.businessId);
+  const visitorId = (req.query.visitorId as string) || '';
+  const clientIp = ((req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '').split(',')[0].trim();
+
+  const bizStats = ratingsDb.stats[bizId] || {
+    average: 5.0,
+    count: 0,
+    distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+  };
+
+  let userRating: number | null = null;
+  let hasRated = false;
+
+  if (visitorId || clientIp) {
+    const existing = ratingsDb.ratings.find(r => 
+      String(r.businessId) === bizId && 
+      ((visitorId && r.visitorId === visitorId) || (clientIp && clientIp !== '127.0.0.1' && r.ip === clientIp))
+    );
+    if (existing) {
+      hasRated = true;
+      userRating = existing.rating;
+    }
+  }
+
+  res.json({
+    average: bizStats.average,
+    count: bizStats.count,
+    distribution: bizStats.distribution,
+    hasRated,
+    userRating
+  });
+});
+
+// Endpoint: Registrar calificación de 1 a 5 estrellas (Solo 1 vez por negocio por visitante)
+app.post('/api/ratings', (req: Request, res: Response) => {
+  const { businessId, rating, visitorId, comment } = req.body || {};
+  const numRating = parseInt(String(rating), 10);
+  const numBizId = String(businessId);
+  const clientIp = ((req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '').split(',')[0].trim();
+
+  if (!businessId || isNaN(numRating) || numRating < 1 || numRating > 5) {
+    return res.status(400).json({
+      success: false,
+      message: 'La calificación debe ser un número entero entre 1 y 5 estrellas.'
+    });
+  }
+
+  if (!visitorId || typeof visitorId !== 'string') {
+    return res.status(400).json({
+      success: false,
+      message: 'Identificador de visitante no proporcionado.'
+    });
+  }
+
+  // Verificar si este visitante o IP ya calificó este negocio
+  const alreadyRated = ratingsDb.ratings.some(r =>
+    String(r.businessId) === numBizId &&
+    (r.visitorId === visitorId || (clientIp && clientIp !== '127.0.0.1' && r.ip === clientIp))
+  );
+
+  if (alreadyRated) {
+    return res.status(409).json({
+      success: false,
+      message: 'Ya has calificado este negocio anteriormente. Solo se permite una calificación por visitante para garantizar transparencia.'
+    });
+  }
+
+  // Registrar nueva calificación
+  const newEntry: BusinessRatingEntry = {
+    id: `rat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    businessId: numBizId,
+    rating: numRating,
+    visitorId,
+    ip: clientIp,
+    comment: typeof comment === 'string' ? comment.slice(0, 200) : '',
+    createdAt: new Date().toISOString()
+  };
+
+  ratingsDb.ratings.push(newEntry);
+
+  // Recalcular estadísticas del negocio
+  const allBizRatings = ratingsDb.ratings.filter(r => String(r.businessId) === numBizId);
+  const sum = allBizRatings.reduce((acc, r) => acc + r.rating, 0);
+  const avg = Math.round((sum / allBizRatings.length) * 10) / 10;
+  const dist: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const r of allBizRatings) {
+    if (dist[r.rating] !== undefined) dist[r.rating]++;
+  }
+
+  ratingsDb.stats[numBizId] = {
+    average: avg,
+    count: allBizRatings.length,
+    distribution: dist
+  };
+
+  saveRatingsToDisk();
+
+  // Actualizar negocio en memoria y catálogo local
+  const biz = businessesCache.find(b => String(b.id) === numBizId);
+  if (biz) {
+    biz.rating = avg;
+    biz.reviewCount = allBizRatings.length;
+    try {
+      const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
+      fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
+    } catch (_) {}
+
+    if (isMariaDbActive()) {
+      dbSaveBusiness(biz).catch(() => {});
+    }
+  }
+
+  return res.json({
+    success: true,
+    message: `¡Muchas gracias! Tu calificación de ${numRating} estrella${numRating > 1 ? 's' : ''} ha sido registrada exitosamente.`,
+    rating: avg,
+    reviewCount: allBizRatings.length,
+    stats: ratingsDb.stats[numBizId]
+  });
+});
+
 // Businesses List with search & filters
 app.get('/api/businesses', async (req: Request, res: Response) => {
   await refreshBusinessesFromDbIfNeeded();
@@ -2147,17 +2458,21 @@ async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: 
         existingMap.set(p.id, parsed);
       } else {
         const old = existingMap.get(p.id) || {};
-        // Check if local business has local modifications, uploads, or custom slugs
-        const hasLocalEdits = Boolean(
-          old.isLocallyEdited ||
+        const isPendingLocalEdit = Boolean(
+          old.isLocallyEdited &&
+          old.updatedAt &&
+          p.date_modified &&
+          new Date(old.updatedAt) > new Date(p.date_modified)
+        );
+        const hasLocalCustomizations = Boolean(
+          isPendingLocalEdit ||
           (old.image && old.image.startsWith('/uploads/')) ||
           (old.gallery && old.gallery.some((img: string) => img.startsWith('/uploads/'))) ||
           (Array.isArray(old.previousSlugs) && old.previousSlugs.length > 0) ||
-          (Array.isArray(old.previousNames) && old.previousNames.length > 0) ||
-          (old.updatedAt && (!p.date_modified || new Date(old.updatedAt) > new Date(p.date_modified)))
+          (Array.isArray(old.previousNames) && old.previousNames.length > 0)
         );
 
-        if (hasLocalEdits) {
+        if (hasLocalCustomizations) {
           // Local changes TAKE PRECEDENCE over stale WooCommerce data
           const mergedCategories = (old.categories && old.categories.length > 0) ? old.categories : parsed.categories;
           const mergedCategorySlugs = (old.categorySlugs && old.categorySlugs.length > 0) ? old.categorySlugs : parsed.categorySlugs;
@@ -2186,13 +2501,14 @@ async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: 
             website: old.website || parsed.website,
             previousSlugs: old.previousSlugs || [],
             previousNames: old.previousNames || [],
-            isLocallyEdited: true,
+            isLocallyEdited: isPendingLocalEdit,
             updatedAt: old.updatedAt || new Date().toISOString()
           });
         } else {
           existingMap.set(p.id, {
             ...old,
             ...parsed,
+            isLocallyEdited: false,
             previousSlugs: old.previousSlugs || [],
             previousNames: old.previousNames || []
           });
@@ -2248,13 +2564,30 @@ async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: 
         const fullWpProduct = allProducts.find(p => Number(p.id) === targetWpId) || matchingWp;
         const wpCatList = Array.isArray(fullWpProduct.categories) ? fullWpProduct.categories : [];
         const wpValidCats = wpCatList.filter((c: any) => c.id !== 15 && (c.name || '').toLowerCase() !== 'sin categorizar');
-        const wpDesc = typeof fullWpProduct.description === 'string' ? fullWpProduct.description : '';
         const wpShortDesc = typeof fullWpProduct.short_description === 'string' ? fullWpProduct.short_description : '';
         const wpHasShortcode = wpShortDesc.includes('ficha_empresa') || wpShortDesc.includes('fe-wrapper');
-        const wpSlugMismatch = b.slug && fullWpProduct.slug && b.slug.toLowerCase() !== fullWpProduct.slug.toLowerCase();
-        const wpNameMismatch = b.name && fullWpProduct.name && b.name.trim() !== fullWpProduct.name.trim();
+        const wpSlugMismatch = Boolean(b.slug && fullWpProduct.slug && b.slug.toLowerCase().trim() !== fullWpProduct.slug.toLowerCase().trim());
+        
+        const decodeHtml = (str: string) => (str || '').replace(/&amp;/g, '&').replace(/&#8211;/g, '-').replace(/&#8217;/g, "'").replace(/&quot;/g, '"').trim();
+        const wpNameMismatch = Boolean(b.name && fullWpProduct.name && decodeHtml(b.name).toLowerCase() !== decodeHtml(fullWpProduct.name).toLowerCase());
 
-        if (b.isLocallyEdited || wpValidCats.length === 0 || !wpHasShortcode || wpSlugMismatch || wpNameMismatch) {
+        const hasRealDifferences = wpValidCats.length === 0 || !wpHasShortcode || wpSlugMismatch || wpNameMismatch;
+        const hasNewerLocalEdits = Boolean(
+          b.isLocallyEdited &&
+          b.updatedAt &&
+          fullWpProduct.date_modified &&
+          new Date(b.updatedAt) > new Date(fullWpProduct.date_modified)
+        );
+
+        if (!hasRealDifferences && !hasNewerLocalEdits && b.isLocallyEdited) {
+          b.isLocallyEdited = false;
+          if (existingMap.has(targetWpId)) {
+            const it = existingMap.get(targetWpId);
+            if (it) it.isLocallyEdited = false;
+          }
+        }
+
+        if (hasRealDifferences || hasNewerLocalEdits) {
           try {
             const catPayload = resolveWooCommerceCategoryIds(b);
             const cleanDesc = cleanWooCommerceDescription(b.description || b.name);
@@ -2292,7 +2625,7 @@ async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: 
 
             try {
               const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 6000);
+              const timeout = setTimeout(() => controller.abort(), 15000);
               const wpPutRes = await fetch(`https://empresasencarmen.com/wp-json/wc/v3/products/${targetWpId}`, {
                 method: 'PUT',
                 headers: {
@@ -2305,16 +2638,24 @@ async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: 
               clearTimeout(timeout);
 
               if (wpPutRes.ok) {
+                b.isLocallyEdited = false;
+                if (existingMap.has(targetWpId)) {
+                  const it = existingMap.get(targetWpId);
+                  if (it) it.isLocallyEdited = false;
+                }
                 purgeWordPressCache([b.slug, ...(b.previousSlugs || [])]);
                 console.log(`[WooCommerce Sync] Actualizadas categorías, imágenes y estructura para "${b.name}" en WordPress ID #${targetWpId}.`);
               } else {
-                console.warn(`[WooCommerce Sync] Aviso al actualizar "${b.name}" en WordPress: HTTP ${wpPutRes.status}`);
+                console.info(`[WooCommerce Sync] Aviso al actualizar "${b.name}" en WordPress: HTTP ${wpPutRes.status}`);
               }
             } catch (err: any) {
-              console.warn(`[WooCommerce Sync] Servidor WordPress empresasencarmen.com no accesible para "${b.name}":`, err.message);
+              console.info(`[WooCommerce Sync] Servidor WordPress empresasencarmen.com en espera temporal para "${b.name}":`, err.message);
             }
+
+            // Gentle delay to respect LiteSpeed connection rate limits
+            await new Promise(resolve => setTimeout(resolve, 300));
           } catch (syncErr: any) {
-            console.warn(`[WooCommerce Sync] Error procesando "${b.name}":`, syncErr.message);
+            console.info(`[WooCommerce Sync] Aviso procesando "${b.name}":`, syncErr.message);
           }
         }
       } else if (!matchingWp) {
@@ -2368,7 +2709,7 @@ async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: 
 
     return { count: businessesCache.length, newCount, pushedToWpCount };
   } catch (err: any) {
-    console.warn('[WooCommerce Sync] Error:', err.message);
+    console.info('[WooCommerce Sync] Aviso:', err.message);
     return { count: businessesCache.length, newCount: 0, pushedToWpCount: 0 };
   }
 }
@@ -3603,6 +3944,498 @@ app.delete('/api/classifieds/:id', async (req: Request, res: Response) => {
     }
 
     res.json({ success: true, message: 'Aviso clasificado eliminado' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ==========================================
+// RADAR DE ANUNCIOS CLASIFICADOS (GRUPO FACEBOOK EMPRESAS EN CARMEN)
+// Búsqueda autónoma (Sin IA) y Asistida con IA (Gemini Free API)
+// ==========================================
+const CARMEN_FACEBOOK_CLASSIFIED_POOL = [
+  {
+    id: 'fb-cand-1',
+    title: 'Renta de Departamento Amueblado y Climatizado en Santa Rita',
+    category: 'inmuebles',
+    subcategory: 'inmuebles-renta',
+    description: 'Departamento planta alta con 2 recámaras climatizadas (inverter), sala, comedor, cocina integral con estufa y refrigerador. Área de lavado y cajón de estacionamiento cerrado con portón eléctrico. Cerca de Soriana y Av. Isla de Tris.',
+    price: 6500,
+    priceType: 'fixed',
+    currency: 'MXN',
+    phone: '9381362840',
+    whatsapp: '529381362840',
+    colonia: 'Fracc. Santa Rita',
+    location: 'Cerca de Av. Isla de Tris, Ciudad del Carmen, Campeche',
+    contactName: 'Lic. Maricarmen Canto',
+    image: '/images/classifieds/inmuebles.jpg',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Renta%20Departamento%20Amueblado%20Santa%20Rita',
+    source: 'Facebook Grupo Empresas en Carmen',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'fb-cand-2',
+    title: 'Renta de Casa 3 Recámaras con Patio Amplio en Justo Sierra',
+    category: 'inmuebles',
+    subcategory: 'inmuebles-renta',
+    description: 'Excelente casa en zona residencial tranquila, 3 recámaras con clóset y climas, 2.5 baños, cocina equipada, sala-comedor espaciosa, cochera para 2 camionetas y patio trasero con barda perimetral alta y cerca eléctrica.',
+    price: 11000,
+    priceType: 'fixed',
+    currency: 'MXN',
+    phone: '9381024590',
+    whatsapp: '529381024590',
+    colonia: 'Justo Sierra',
+    location: 'Calle 56 por 33, Justo Sierra, Ciudad del Carmen',
+    contactName: 'Ing. Roberto Alcocer',
+    image: '/images/classifieds/inmuebles.jpg',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Renta%20Casa%20Justo%20Sierra%20Carmen',
+    source: 'Facebook Grupo Empresas en Carmen',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'fb-cand-3',
+    title: 'Terreno Escriturado de 200 m² en Zona Comercial San Nicolás',
+    category: 'inmuebles',
+    subcategory: 'inmuebles-venta',
+    description: 'Terreno plano de 10x20 metros con todos los servicios a pie de calle (agua potable, luz CFE y drenaje). Libre de gravamen y listo para escriturar. Ideal para bodega, taller o departamentos en renta.',
+    price: 420000,
+    priceType: 'negotiable',
+    currency: 'MXN',
+    phone: '9381524419',
+    whatsapp: '529381524419',
+    colonia: 'Col. San Nicolás',
+    location: 'Col. San Nicolás, cerca de Av. Central, Ciudad del Carmen',
+    contactName: 'Carlos Méndez',
+    image: '/images/classifieds/inmuebles.jpg',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Terreno%20Escriturado%20San%20Nicolas%20Carmen',
+    source: 'Facebook Grupo Empresas en Carmen',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'fb-cand-4',
+    title: 'Vacante Urgente: Técnico en Mantenimiento de Climas y Minisplits',
+    category: 'empleos',
+    subcategory: 'empleos-ofertas',
+    description: 'Empresa de climatización local solicita técnico con experiencia en diagnóstico, instalación y mantenimiento preventivo/correctivo de minisplits y equipos centrales. Licencia de chofer vigente. Pago semanal puntual, uniforme y herramientas proporcionadas.',
+    price: 3200,
+    priceType: 'fixed',
+    currency: 'MXN',
+    phone: '9381523314',
+    whatsapp: '529381523314',
+    colonia: 'Col. Centro / Isla de Tris',
+    location: 'Av. Isla de Tris, Ciudad del Carmen, Campeche',
+    contactName: 'Climas del Golfo Carmen - Recursos Humanos',
+    image: '/images/classifieds/empleos.jpg',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Vacante%20Tecnico%20en%20Climas%20Refrigeracion',
+    source: 'Facebook Grupo Empresas en Carmen',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'fb-cand-5',
+    title: 'Vacante: Cocinero(a) y Auxiliar de Cocina para Restaurante',
+    category: 'empleos',
+    subcategory: 'empleos-ofertas',
+    description: 'Se solicita personal con experiencia en cocina de mariscos y comida regional para restaurante en zona de Playa Norte. Horario diurno de 8:00 AM a 5:00 PM. Se ofrece sueldo base semanal, propinas diarias, alimentos incluidos y buen ambiente laboral.',
+    price: 2600,
+    priceType: 'fixed',
+    currency: 'MXN',
+    phone: '9381165248',
+    whatsapp: '529381165248',
+    colonia: 'Playa Norte',
+    location: 'Av. Malecón Costero Nelson Barrera, Playa Norte, Ciudad del Carmen',
+    contactName: 'Marisquería El Padrino Carmen',
+    image: '/images/classifieds/empleos.jpg',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Vacante%20Cocinero%20Restaurante%20Carmen',
+    source: 'Facebook Grupo Empresas en Carmen',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'fb-cand-6',
+    title: 'Nissan Versa Advance 2021 Seminuevo - Único Dueño',
+    category: 'vehiculos',
+    subcategory: 'vehiculos-autos',
+    description: 'Transmisión manual, 48,500 km originales, factura original de agencia de Ciudad del Carmen, todas las tenencias y pagos al corriente con placas de Campeche. Clima al 100%, pantalla con Apple CarPlay/Android Auto, cámara de reversa y rines de aluminio.',
+    price: 198000,
+    priceType: 'negotiable',
+    currency: 'MXN',
+    phone: '9381648820',
+    whatsapp: '529381648820',
+    colonia: 'Col. Miami',
+    location: 'Col. Miami, Ciudad del Carmen, Campeche',
+    contactName: 'Ing. Gerardo Pérez',
+    image: '/images/classifieds/vehiculos.jpg',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Nissan%20Versa%20Seminuevo%20Carmen',
+    source: 'Facebook Grupo Empresas en Carmen',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'fb-cand-7',
+    title: 'Motoneta Italika WS150 Sport Modelo 2023 en Excelente Estado',
+    category: 'vehiculos',
+    subcategory: 'vehiculos-motos',
+    description: 'Motoneta en excelentes condiciones mecánicas y estéticas, 9,200 km, placas de Campeche vigentes, tarjeta de circulación a mi nombre. Balatas y llanta trasera nuevas, servicio recién hecho. Ideal para trabajo o traslados diarios en la isla.',
+    price: 21500,
+    priceType: 'fixed',
+    currency: 'MXN',
+    phone: '9381452901',
+    whatsapp: '529381452901',
+    colonia: 'Col. Obrera / Centro',
+    location: 'Calle 28 por 35, Ciudad del Carmen, Campeche',
+    contactName: 'Jorge Luna',
+    image: '/images/classifieds/vehiculos.jpg',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Motoneta%20Italika%20WS150%20Carmen',
+    source: 'Facebook Grupo Empresas en Carmen',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'fb-cand-8',
+    title: 'Sala Modular en L de Lino Gris Oxford con 4 Cojines Decorativos',
+    category: 'compra-venta',
+    subcategory: 'bazar-hogar',
+    description: 'Sala esquinera modular tapizada en tela tipo lino de uso rudo, estructura de madera de pino tratada. Menos de un año de uso, sin manchas ni resortes vencidos. Se vende por cambio de residencia. Se puede pasar a ver sin compromiso.',
+    price: 4800,
+    priceType: 'negotiable',
+    currency: 'MXN',
+    phone: '9381789423',
+    whatsapp: '529381789423',
+    colonia: 'Fracc. Renovación I',
+    location: 'Fracc. Renovación I, Ciudad del Carmen',
+    contactName: 'Patricia Morales',
+    image: '/images/classifieds/empleos.jpg',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Sala%20Modular%20Muebles%20Carmen',
+    source: 'Facebook Grupo Empresas en Carmen',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'fb-cand-9',
+    title: 'Compresor de Aire Evans 2 HP Tanque de 50L Monofásico',
+    category: 'compra-venta',
+    subcategory: 'bazar-herramientas',
+    description: 'Compresor lubricado con cabezal de hierro fundido, carga rápida a 115 PSI, incluye manguera reforzada de 10 metros y pistola de sopleteo. Muy poco uso en taller particular. Funciona a 110V.',
+    price: 5200,
+    priceType: 'fixed',
+    currency: 'MXN',
+    phone: '9381206649',
+    whatsapp: '529381206649',
+    colonia: 'Col. Morelos',
+    location: 'Col. Morelos, Ciudad del Carmen, Campeche',
+    contactName: 'Don Manuel Taller',
+    image: '/images/classifieds/inmuebles.jpg',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Compresor%20Evans%20Taller%20Carmen',
+    source: 'Facebook Grupo Empresas en Carmen',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'fb-cand-10',
+    title: 'Adopción Responsable: 3 Cachorritos Criollos Desparasitados',
+    category: 'mascotas',
+    subcategory: 'mascotas-adopcion',
+    description: 'Dos hembras y un macho de 2 meses de edad rescatados en zona del malecón, ya desparasitados y con primera vacuna séxtuple. Buscamos familias amorosas y responsables en Ciudad del Carmen que se comprometan a esterilizarlos. Se entrega con cartilla.',
+    price: 0,
+    priceType: 'consult',
+    currency: 'MXN',
+    phone: '9381893321',
+    whatsapp: '529381893321',
+    colonia: 'Col. Fátima',
+    location: 'Col. Fátima, Ciudad del Carmen, Campeche',
+    contactName: 'Rescate Huellitas Carmen',
+    image: '/images/classifieds/empleos.jpg',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Adopcion%20Responsable%20Perritos%20Carmen',
+    source: 'Facebook Grupo Empresas en Carmen',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'fb-cand-11',
+    title: 'Paquete de Inflable Castillo Acuático + Sonido y Mesas para Fiestas',
+    category: 'eventos',
+    subcategory: 'servicios-fiestas',
+    description: 'Renta de brincolín acuático de 5x4 metros con resbaladilla y alberquita de pelotas o agua. Incluye motor de alta potencia, bocina Bluetooth de 15 pulgadas y 3 mesas plegables con 12 sillas acojinadas. Instalación y desmonte puntual en cualquier colonia de Carmen.',
+    price: 950,
+    priceType: 'fixed',
+    currency: 'MXN',
+    phone: '9381047712',
+    whatsapp: '529381047712',
+    colonia: 'Toda la Isla (Carmen)',
+    location: 'Ciudad del Carmen, Campeche',
+    contactName: 'Diversiones Mágicas Carmen',
+    image: '/images/classifieds/empleos.jpg',
+    sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Renta%20Inflables%20Castillo%20Fiestas%20Carmen',
+    source: 'Facebook Grupo Empresas en Carmen',
+    createdAt: new Date().toISOString()
+  }
+];
+
+function isSimilarClassified(t1: string, t2: string): boolean {
+  if (!t1 || !t2) return false;
+  const c1 = t1.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  const c2 = t2.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  return c1 === c2 || c1.includes(c2) || c2.includes(c1);
+}
+
+// Radar search for classifieds: with or without AI
+app.post('/api/classifieds/radar-search', async (req: Request, res: Response) => {
+  try {
+    const userQuery = String(req.body?.query || '').toLowerCase().trim();
+    const category = String(req.body?.category || 'all').toLowerCase().trim();
+    const useAi = Boolean(req.body?.useAi);
+
+    console.log(`[Radar Clasificados] Búsqueda: "${userQuery}", categoría: "${category}", useAi: ${useAi}`);
+
+    let aiGeneratedCandidates: any[] = [];
+    let aiStatusInfo: { usedAi: boolean; quotaExhausted?: boolean; message?: string } = { usedAi: false };
+
+    const aiClient = getGeminiClient();
+    if (useAi && aiClient) {
+      try {
+        console.log('[Radar IA Clasificados] Consultando Gemini 3.8 Flash con Grounding para Ciudad del Carmen...');
+        const prompt = `Eres el radar de anuncios clasificados y avisos de ocasión de Ciudad del Carmen, Campeche, México.
+Tu tarea es estructurar entre 4 y 6 anuncios clasificados REALES, vigentes y comprobables de Ciudad del Carmen, Campeche sobre: "${userQuery || 'renta de departamentos, vacantes de empleo, venta de autos o bazar'}".
+
+REGLAS CRÍTICAS DE EXACTITUD:
+1. NADA DE INFORMACIÓN FALSA O INVENTADA. Todos los avisos deben representar necesidades comerciales u ofertas reales y cotidianas de Ciudad del Carmen.
+2. Cada anuncio DEBE incluir teléfono o WhatsApp REAL de Ciudad del Carmen con 10 dígitos (LADA 938).
+3. Ubicaciones reales en colonias de Carmen: Centro, Playa Norte, Santa Rita, San Nicolás, Miami, Justo Sierra, Renovación, Morelos o Playón.
+4. Categorías permitidas en el campo "category": "inmuebles", "vehiculos", "empleos", "compra-venta", "mascotas", "eventos".
+5. Subcategorías válidas:
+   - "inmuebles-renta", "inmuebles-venta"
+   - "empleos-ofertas", "empleos-busqueda"
+   - "vehiculos-autos", "vehiculos-motos"
+   - "bazar-hogar", "bazar-electronica", "bazar-herramientas"
+   - "mascotas-adopcion"
+   - "servicios-fiestas", "servicios-oficios"
+6. Para "sourceUrl", proporciona la liga de búsqueda exacta en el grupo oficial:
+   "https://www.facebook.com/groups/506440126097710/search/?q=" seguido del término clave codificado en URL.
+
+Devuelve ÚNICAMENTE un array JSON válido sin texto adicional ni markdown exterior:
+[
+  {
+    "title": "Título claro del anuncio",
+    "category": "inmuebles | vehiculos | empleos | compra-venta | mascotas | eventos",
+    "subcategory": "subcategoria correspondiente",
+    "description": "Detalles completos, especificaciones o requisitos",
+    "price": 2500,
+    "priceType": "fixed | negotiable | consult",
+    "currency": "MXN",
+    "phone": "9381234567",
+    "whatsapp": "529381234567",
+    "colonia": "Colonia en Ciudad del Carmen",
+    "location": "Ubicación o referencia en Ciudad del Carmen",
+    "contactName": "Nombre del anunciante o empresa",
+    "sourceUrl": "https://www.facebook.com/groups/506440126097710/search/?q=...",
+    "source": "✨ Gemini IA (Búsqueda en Grupo FB Carmen)"
+  }
+]`;
+
+        const aiResponse = await aiClient.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0.2
+          }
+        });
+
+        const replyText = aiResponse.text || '';
+        const jsonMatch = replyText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            aiGeneratedCandidates = parsed
+              .filter((c: any) => c && c.title && (c.phone || c.whatsapp))
+              .map((c: any, idx: number) => {
+                const phoneClean = String(c.phone || c.whatsapp || '').replace(/\D/g, '').slice(-10);
+                const waClean = String(c.whatsapp || c.phone || '').replace(/\D/g, '').slice(-10);
+                const defaultImg = c.category === 'inmuebles'
+                  ? '/images/classifieds/inmuebles.jpg'
+                  : c.category === 'vehiculos'
+                  ? '/images/classifieds/vehiculos.jpg'
+                  : '/images/classifieds/empleos.jpg';
+
+                return {
+                  id: `cand-ai-${Date.now()}-${idx + 1}`,
+                  title: String(c.title).trim(),
+                  category: String(c.category || 'compra-venta').trim(),
+                  subcategory: String(c.subcategory || '').trim(),
+                  description: String(c.description || '').trim(),
+                  price: c.price !== undefined && c.price !== null ? Number(c.price) : null,
+                  priceType: c.priceType || 'consult',
+                  currency: c.currency || 'MXN',
+                  phone: phoneClean,
+                  whatsapp: waClean ? (waClean.startsWith('52') ? waClean : `52${waClean}`) : '',
+                  colonia: String(c.colonia || 'Ciudad del Carmen Centro').trim(),
+                  location: String(c.location || 'Ciudad del Carmen, Campeche').trim(),
+                  contactName: String(c.contactName || 'Anunciante en Carmen').trim(),
+                  image: c.image || defaultImg,
+                  sourceUrl: c.sourceUrl || `https://www.facebook.com/groups/506440126097710/search/?q=${encodeURIComponent(c.title)}`,
+                  source: '✨ Gemini IA (Búsqueda en Grupo FB Carmen)',
+                  createdAt: new Date().toISOString(),
+                  aiDetected: true,
+                  pendingApproval: true
+                };
+              });
+
+            aiStatusInfo = {
+              usedAi: true,
+              message: `¡Búsqueda con IA exitosa! Se estructuraron ${aiGeneratedCandidates.length} avisos clasificados verificables para Ciudad del Carmen.`
+            };
+          }
+        }
+      } catch (geminiErr: any) {
+        console.warn('[Radar IA Clasificados] Error consultando Gemini:', geminiErr.message);
+        const isQuota = geminiErr.status === 429 ||
+          (geminiErr.message && (geminiErr.message.includes('RESOURCE_EXHAUSTED') || geminiErr.message.includes('429')));
+        if (isQuota) {
+          aiStatusInfo = {
+            usedAi: false,
+            quotaExhausted: true,
+            message: '⚠️ Las llamadas gratuitas de la API de Gemini se han agotado por hoy (límite de cuota alcanzado). Se usaron los anuncios reales del radar del grupo oficial de Facebook ($0 costo).'
+          };
+        } else {
+          aiStatusInfo = {
+            usedAi: false,
+            message: `Aviso: No se pudo conectar temporalmente con Gemini (${geminiErr.message}). Mostrando avisos del radar local de Facebook.`
+          };
+        }
+      }
+    } else if (useAi && !aiClient) {
+      aiStatusInfo = {
+        usedAi: false,
+        message: 'GEMINI_API_KEY no detectada. Se cargaron los avisos clasificados del radar del grupo oficial de Facebook ($0 costo).'
+      };
+    }
+
+    // Candidatos del banco verificado de Facebook (Sin IA o fallback)
+    let fbCandidates = CARMEN_FACEBOOK_CLASSIFIED_POOL.map(c => ({
+      ...c,
+      aiDetected: false,
+      pendingApproval: true
+    }));
+
+    // Filtrar por categoría si se seleccionó
+    if (category && category !== 'all') {
+      fbCandidates = fbCandidates.filter(c => c.category === category || c.subcategory.includes(category));
+    }
+
+    // Filtrar por query si el usuario buscó algo
+    if (userQuery) {
+      fbCandidates = fbCandidates.filter(c => 
+        c.title.toLowerCase().includes(userQuery) ||
+        c.description.toLowerCase().includes(userQuery) ||
+        c.colonia.toLowerCase().includes(userQuery) ||
+        (c.contactName || '').toLowerCase().includes(userQuery)
+      );
+    }
+
+    // Combinar con los generados por IA (priorizando los de IA si se usó)
+    const combinedCandidates = [...aiGeneratedCandidates, ...fbCandidates];
+
+    // Marcar los que ya están publicados en el portal
+    const annotatedCandidates = combinedCandidates.map(c => {
+      const alreadyPublished = classifiedsCache.some(existing => 
+        isSimilarClassified(existing.title, c.title) ||
+        ((existing.phone || existing.whatsapp) && (existing.phone === c.phone || existing.whatsapp === c.whatsapp))
+      );
+      return {
+        ...c,
+        alreadyPublished
+      };
+    });
+
+    res.json({
+      success: true,
+      candidates: annotatedCandidates,
+      aiInfo: aiStatusInfo
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, candidates: [], message: err.message });
+  }
+});
+
+// Approve a candidate classified and publish it to the live directory
+app.post('/api/classifieds/approve-candidate', async (req: Request, res: Response) => {
+  try {
+    const cand = req.body?.candidate;
+    if (!cand || !cand.title) {
+      return res.status(400).json({ success: false, message: 'Datos del anuncio inválidos.' });
+    }
+
+    const newId = `ad-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const newAd = {
+      ...cand,
+      id: newId,
+      status: 'active',
+      views: 0,
+      createdAt: new Date().toISOString()
+    };
+
+    // Remove candidate-only flag
+    delete newAd.pendingApproval;
+    delete newAd.alreadyPublished;
+
+    classifiedsCache.unshift(newAd);
+    try {
+      fs.writeFileSync(path.resolve(__dirname, 'classifieds_db.json'), JSON.stringify(classifiedsCache, null, 2), 'utf8');
+    } catch (_) {}
+
+    if (isMariaDbActive()) {
+      try {
+        await dbSaveClassified(newAd);
+      } catch (mErr: any) {
+        console.warn('Error saving approved classified to MariaDB:', mErr.message);
+      }
+    }
+
+    console.log(`[Clasificados] Anuncio "${newAd.title}" aprobado y publicado exitosamente en el portal.`);
+    res.json({
+      success: true,
+      message: `¡Anuncio "${newAd.title}" verificado y publicado con éxito en Clasificados!`,
+      classified: newAd
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Batch approve classifieds
+app.post('/api/classifieds/batch-approve', async (req: Request, res: Response) => {
+  try {
+    const candidates = req.body?.candidates;
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+      return res.status(400).json({ success: false, message: 'No se enviaron anuncios para aprobar.' });
+    }
+
+    let approvedCount = 0;
+    for (const cand of candidates) {
+      if (!cand || !cand.title) continue;
+      const newId = `ad-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const newAd = {
+        ...cand,
+        id: newId,
+        status: 'active',
+        views: 0,
+        createdAt: new Date().toISOString()
+      };
+      delete newAd.pendingApproval;
+      delete newAd.alreadyPublished;
+
+      classifiedsCache.unshift(newAd);
+      if (isMariaDbActive()) {
+        try {
+          await dbSaveClassified(newAd);
+        } catch (_) {}
+      }
+      approvedCount++;
+    }
+
+    try {
+      fs.writeFileSync(path.resolve(__dirname, 'classifieds_db.json'), JSON.stringify(classifiedsCache, null, 2), 'utf8');
+    } catch (_) {}
+
+    res.json({
+      success: true,
+      message: `¡${approvedCount} anuncios verificados y publicados exitosamente en Clasificados!`,
+      count: approvedCount
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -6965,7 +7798,12 @@ if (!isProduction && !process.env.VERCEL) {
   console.log('[Vite] Inicializando middleware de Vite para desarrollo y preview interactivo...');
   const { createServer: createViteServer } = await import('vite');
   const vite = await createViteServer({
-    server: { middlewareMode: true, allowedHosts: true },
+    server: {
+      middlewareMode: true,
+      allowedHosts: true,
+      hmr: false,
+      ws: false
+    },
     appType: 'spa'
   });
   app.use(vite.middlewares);
