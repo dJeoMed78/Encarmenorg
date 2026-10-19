@@ -53,11 +53,29 @@ export const PromotionsBanner: React.FC<PromotionsBannerProps> = ({
 
   if (!promotions || !Array.isArray(promotions) || promotions.length === 0) return null;
 
-  // PAGINATION & AUTO-SLIDE LOGIC (4 items per page)
-  const itemsPerPage = 4;
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 768;
+  });
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // PAGINATION & AUTO-SLIDE LOGIC
+  const itemsPerPage = isMobile ? 1 : 4;
   const totalPages = Math.ceil(promotions.length / itemsPerPage);
 
-  // Auto-slide only if more than 4 items (totalPages > 1)
+  // Reset page when viewport changes
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [isMobile]);
+
+  // Auto-slide only if more than totalPages > 1 and not paused
   useEffect(() => {
     if (isHovered || isCollapsed || totalPages <= 1 || isAllPromosModalOpen) {
       return;
@@ -249,12 +267,12 @@ export const PromotionsBanner: React.FC<PromotionsBannerProps> = ({
             {/* CARRUSEL O CUADRÍCULA ESTÁTICA */}
             <div className="relative overflow-hidden">
               {/* Si hay 4 o menos, se muestra fijo sin desplazamiento para no dejar huecos */}
-              {promotions.length <= 4 ? (
+              {promotions.length <= itemsPerPage ? (
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   {promotions.map(promo => renderPromoCard(promo))}
                 </div>
               ) : (
-                /* Si hay más de 4, se desplaza una página completa (4 elementos) */
+                /* Si hay más de itemsPerPage, se desplaza una página completa */
                 <div
                   className="flex transition-transform duration-700 ease-out"
                   style={{ transform: `translateX(-${currentPage * 100}%)` }}
