@@ -430,6 +430,10 @@ export function getEventRepresentativeImage(event: {
 
     // If it's a valid remote HTTPS image URL (e.g. unsplash, cdn, direct image file)
     if (!isWebpageNotImage && (raw.startsWith('http') || raw.startsWith('data:image'))) {
+      // Para usuarios bajo proxy o redes corporativas restringidas, evitar dominios externos como unsplash.com y usar siempre imagen local interna
+      if (raw.includes('unsplash.com') || raw.includes('facebook') || raw.includes('fbcdn') || raw.includes('placeholder')) {
+        return getFallbackThematicImage(event);
+      }
       return raw;
     }
   }

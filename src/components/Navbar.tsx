@@ -8,6 +8,7 @@ import {
   PlusCircle,
   ShieldAlert,
   ExternalLink,
+  Calendar,
   Image as ImageIcon
 } from 'lucide-react';
 import { useBrandConfig } from '../utils/brand';
@@ -69,6 +70,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Tag className="w-3.5 h-3.5" />
               <span>Clasificados</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('events')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                activeTab === 'events'
+                  ? 'bg-amber-500 text-stone-950 shadow-xs font-bold'
+                  : 'text-stone-700 hover:text-stone-950 hover:bg-stone-200/50 font-medium'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5 text-amber-600" />
+              <span>Eventos</span>
             </button>
 
             <button
@@ -177,6 +190,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Tag className="w-4 h-4" />
             <span className="text-[11px] sm:text-xs">Avisos</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('events')}
+            className={`flex-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 py-1.5 px-1 rounded-lg transition-colors min-h-[44px] ${
+              activeTab === 'events'
+                ? 'text-amber-600 font-bold bg-amber-50'
+                : 'text-stone-700 active:bg-stone-100 font-medium'
+            }`}
+          >
+            <Calendar className="w-4 h-4" />
+            <span className="text-[11px] sm:text-xs">Eventos</span>
           </button>
 
           <button

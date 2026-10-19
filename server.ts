@@ -3853,15 +3853,67 @@ app.delete('/api/admin/coupons/:couponId', async (req: Request, res: Response) =
 
 // ==========================================
 // AVISOS DE OCASIÓN (CLASIFICADOS)
+// Reglas de vigencia:
+// 1. Mostrar anuncios con máximo 3 días de publicación.
+// 2. Permanencia máxima de 1 semana (7 días); al vencer se mueven a papelera y no se muestran al usuario final.
 // ==========================================
+
+function pruneExpiredClassifieds(): number {
+  const now = Date.now();
+  const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+  let trashedCount = 0;
+  let changed = false;
+
+  classifiedsCache = classifiedsCache.map(ad => {
+    if (ad.status !== 'trash') {
+      const createdTs = new Date(ad.createdAt || Date.now()).getTime();
+      if (now - createdTs > ONE_WEEK_MS) {
+        trashedCount++;
+        changed = true;
+        return {
+          ...ad,
+          status: 'trash' as const,
+          trashedAt: new Date().toISOString()
+        };
+      }
+    }
+    return ad;
+  });
+
+  if (changed) {
+    try {
+      fs.writeFileSync(path.resolve(__dirname, 'classifieds_db.json'), JSON.stringify(classifiedsCache, null, 2), 'utf8');
+      console.log(`[Auto-Limpieza Clasificados] ${trashedCount} anuncios con más de 7 días enviados a papelera.`);
+    } catch (_) {}
+  }
+  return trashedCount;
+}
+
+// Ejecutar limpieza al iniciar y cada hora
+pruneExpiredClassifieds();
+setInterval(() => {
+  pruneExpiredClassifieds();
+}, 60 * 60 * 1000);
+
 app.get('/api/classifieds', (req: Request, res: Response) => {
   try {
+    pruneExpiredClassifieds();
+
+    if (classifiedsCache.length === 0) {
+      try {
+        const cPath = path.resolve(__dirname, 'classifieds_db.json');
+        if (fs.existsSync(cPath)) {
+          classifiedsCache = JSON.parse(fs.readFileSync(cPath, 'utf8'));
+        }
+      } catch (_) {}
+    }
+
     let list = [...classifiedsCache];
     const { category, subcategory, q, colonia, status, priceType, allStatus } = req.query;
 
     if (!allStatus) {
-      const targetStatus = typeof status === 'string' ? status : 'active';
-      list = list.filter(item => (item.status || 'active') === targetStatus);
+      // Regla: No mostrar en papelera ni expirados al usuario final
+      list = list.filter(item => (item.status || 'active') === 'active');
     } else if (typeof status === 'string' && status) {
       list = list.filter(item => item.status === status);
     }
@@ -4201,6 +4253,121 @@ const CARMEN_FACEBOOK_CLASSIFIED_POOL = [
     sourceUrl: 'https://www.facebook.com/groups/506440126097710/search/?q=Renta%20Inflables%20Castillo%20Fiestas%20Carmen',
     source: 'Facebook Grupo Empresas en Carmen',
     createdAt: new Date().toISOString()
+  },
+  {
+    id: 'cand-idc-1',
+    title: 'Becario / Prácticas Profesionales de Diseño Web',
+    category: 'empleos',
+    subcategory: 'empleos-ofertas',
+    companyName: 'Asociación de Recursos Humanos Carmen',
+    modality: 'Modalidad distancia / Prácticas',
+    experience: 'Estudiantes / Recién egresados',
+    description: 'Buscamos estudiante de diseño web o sistemas computacionales para apoyo en plataformas digitales locales. Horario flexible adaptable a clases.',
+    price: 4500,
+    priceType: 'fixed',
+    currency: 'MXN',
+    phone: '9381362840',
+    whatsapp: '529381362840',
+    colonia: 'Cd. del Carmen Centro',
+    location: 'Ciudad del Carmen, Campeche',
+    contactName: 'Recursos Humanos',
+    image: '/images/classifieds/empleos.jpg',
+    sourceUrl: 'https://isladelcarmen.com/',
+    source: 'Isla del Carmen',
+    isVerified: true,
+    createdAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString()
+  },
+  {
+    id: 'cand-idc-2',
+    title: 'Rig Admins & Radio Ops Offshore',
+    category: 'empleos',
+    subcategory: 'empleos-ofertas',
+    companyName: 'Prime Ocean',
+    modality: 'Offshore / Rotación 14x14',
+    experience: 'Experiencia marina requerida',
+    description: 'Administración de cuadrillas marinas, enlace de radiocomunicación VHF y telecomunicaciones costa afuera en la Sonda de Campeche.',
+    price: null,
+    priceType: 'consult',
+    currency: 'MXN',
+    phone: '9383811200',
+    whatsapp: '529383811200',
+    colonia: 'Playa Norte',
+    location: 'Base Marina Carmen / Sonda de Campeche',
+    contactName: 'Prime Ocean Reclutamiento',
+    image: '/images/classifieds/empleos.jpg',
+    sourceUrl: 'https://isladelcarmen.com/',
+    source: 'Isla del Carmen',
+    isVerified: true,
+    createdAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString()
+  },
+  {
+    id: 'cand-compu-1',
+    title: 'Especialista en Inspección de Materiales y Tubería',
+    category: 'empleos',
+    subcategory: 'empleos-ofertas',
+    companyName: 'Constructora Subacuática Diavaz',
+    modality: 'Tierra / Tiempo completo',
+    experience: '3 años en inspección marina',
+    description: 'Inspección de calidad en patios de fabricación naval y tuberías industriales. Cursos de seguridad industrial vigentes.',
+    price: 18500,
+    priceType: 'fixed',
+    currency: 'MXN',
+    phone: '9382861000',
+    whatsapp: '529382861000',
+    colonia: 'Zona Industrial Km 10',
+    location: 'Carretera Carmen-Puerto Real Km 10',
+    contactName: 'Diavaz Capital Humano',
+    image: '/images/classifieds/empleos.jpg',
+    sourceUrl: 'https://mx.computrabajo.com/empleos-en-carmen',
+    source: 'CompuTrabajo Carmen',
+    isVerified: true,
+    createdAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString()
+  },
+  {
+    id: 'cand-ind-1',
+    title: 'Auxiliar de Almacén y Control de Inventarios Portuarios',
+    category: 'empleos',
+    subcategory: 'empleos-ofertas',
+    companyName: 'Oceamar Logistics Carmen',
+    modality: 'Tiempo completo / Prestaciones de ley',
+    experience: '1 año en almacén de insumos',
+    description: 'Control de refacciones, entrega de material a barcos y embarcaciones en muelles y captura en ERP.',
+    price: 10500,
+    priceType: 'fixed',
+    currency: 'MXN',
+    phone: '9381047780',
+    whatsapp: '529381047780',
+    colonia: 'Puerto Pesquero Laguna Azul',
+    location: 'Puerto Pesquero, Cd. del Carmen',
+    contactName: 'Oceamar RH',
+    image: '/images/classifieds/empleos.jpg',
+    sourceUrl: 'https://mx.indeed.com/l-ciudad-del-carmen,-camp.-empleos.html?vjk=d448df7db3ff667f',
+    source: 'Indeed Carmen',
+    isVerified: true,
+    createdAt: new Date(Date.now() - 36 * 3600 * 1000).toISOString()
+  },
+  {
+    id: 'cand-loc-1',
+    title: 'Renta de Departamento Amueblado Ejecutivo 1 Recámara Climatizado',
+    category: 'inmuebles',
+    subcategory: 'inmuebles-renta',
+    companyName: 'Inmobiliaria Isla Real',
+    modality: 'En Renta / Incluye servicios',
+    experience: 'Contrato semestral',
+    description: 'Ideal para profesionistas o ingenieros en Carmen. Clima inverter, cocina equipada, cama king size, baño completo y cochera.',
+    price: 7500,
+    priceType: 'fixed',
+    currency: 'MXN',
+    phone: '9381299640',
+    whatsapp: '529381299640',
+    colonia: 'Fracc. Justo Sierra',
+    location: 'Justo Sierra, Ciudad del Carmen',
+    contactName: 'Lic. Laura Domínguez',
+    image: '/images/classifieds/inmuebles.jpg',
+    sourceUrl: 'https://www.locanto.com.mx/ciudaddelcarmen/',
+    source: 'Locanto Ciudad del Carmen',
+    isVerified: true,
+    createdAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString()
   }
 ];
 
@@ -4223,7 +4390,6 @@ app.post('/api/classifieds/radar-search', async (req: Request, res: Response) =>
     let aiGeneratedCandidates: any[] = [];
     let aiStatusInfo: { usedAi: boolean; quotaExhausted?: boolean; message?: string } = { usedAi: false };
 
-    const aiClient = getGeminiClient();
     const aiClient = getGeminiClient();
     if (false && useAi && aiClient) {
       try {
@@ -4266,7 +4432,7 @@ Devuelve ÚNICAMENTE un array JSON válido sin texto adicional ni markdown exter
   }
 ]`;
 
-        const aiResponse = await aiClient.models.generateContent({
+        const aiResponse = await (aiClient as any).models.generateContent({
           model: 'gemini-3.8-flash',
           contents: prompt,
           config: {
@@ -4277,7 +4443,7 @@ Devuelve ÚNICAMENTE un array JSON válido sin texto adicional ni markdown exter
 
         const replyText = aiResponse.text || '';
         const jsonMatch = replyText.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
+        if (jsonMatch && jsonMatch[0]) {
           const parsed = JSON.parse(jsonMatch[0]);
           if (Array.isArray(parsed) && parsed.length > 0) {
             aiGeneratedCandidates = parsed

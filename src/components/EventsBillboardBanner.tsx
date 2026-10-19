@@ -53,10 +53,12 @@ import { getEventRepresentativeImage, getFallbackThematicImage } from '../utils/
 
 interface EventsBillboardBannerProps {
   onOpenEmergencyGuide?: () => void;
+  onOpenEventsPage?: () => void;
 }
 
 export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
-  onOpenEmergencyGuide
+  onOpenEmergencyGuide,
+  onOpenEventsPage
 }) => {
   const [events, setEvents] = useState<EventItem[]>(() => getEventsData());
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -433,11 +435,15 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
               referrerPolicy="no-referrer"
               onError={(e) => {
                 const imgEl = e.currentTarget as HTMLImageElement;
-                imgEl.style.display = 'none';
-                const placeholder = imgEl.parentElement?.querySelector('.event-fallback-placeholder') as HTMLElement;
-                if (placeholder) {
-                  placeholder.classList.remove('hidden');
-                  placeholder.style.display = 'flex';
+                if (!imgEl.src.includes('/uploads/kiosco-parque-zaragoza.jpg')) {
+                  imgEl.src = '/uploads/kiosco-parque-zaragoza.jpg';
+                } else {
+                  imgEl.style.display = 'none';
+                  const placeholder = imgEl.parentElement?.querySelector('.event-fallback-placeholder') as HTMLElement;
+                  if (placeholder) {
+                    placeholder.classList.remove('hidden');
+                    placeholder.style.display = 'flex';
+                  }
                 }
               }}
               className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
@@ -604,6 +610,19 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
+            )}
+
+            {onOpenEventsPage && (
+              <button
+                type="button"
+                onClick={onOpenEventsPage}
+                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-xs sm:text-sm transition-all cursor-pointer flex items-center gap-1.5 shadow-md active:scale-95 shrink-0"
+                title="Abrir cartelera y página de eventos"
+              >
+                <Calendar className="w-4 h-4 text-stone-950 shrink-0" />
+                <span>Ver Eventos</span>
+                <ChevronRight className="w-4 h-4 text-stone-950 shrink-0" />
+              </button>
             )}
 
             <button
@@ -809,6 +828,33 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
                 </button>
               </div>
             )}
+
+            {/* Banner bottom CTA: Explora la cartelera completa */}
+            {onOpenEventsPage && (
+              <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-stone-850 to-amber-500/15 border border-amber-500/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left shadow-md">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-stone-950 flex items-center justify-center font-black shrink-0 shadow-xs">
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white flex items-center gap-2 justify-center sm:justify-start">
+                      <span>Página Oficial de Eventos de Ciudad del Carmen</span>
+                    </h4>
+                    <p className="text-xs text-stone-300">
+                      Conciertos, ferias, bazares, eventos deportivos y culturales en Carmen.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onOpenEventsPage}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-xs transition-all shadow-md shrink-0 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <span>Ver todos los eventos</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
         )}
         </>
@@ -948,10 +994,23 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
               </div>
             )}
 
-            <div className="flex justify-end pt-2">
+            <div className="flex items-center justify-between pt-2 gap-2">
+              {onOpenEventsPage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedEvent(null);
+                    onOpenEventsPage();
+                  }}
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Ver en Eventos</span>
+                </button>
+              )}
               <button
                 onClick={() => setSelectedEvent(null)}
-                className="px-5 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-white font-bold text-xs cursor-pointer"
+                className="px-5 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-white font-bold text-xs cursor-pointer ml-auto"
               >
                 Cerrar
               </button>

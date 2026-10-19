@@ -25,6 +25,8 @@ import { ClaimCouponModal } from './components/ClaimCouponModal';
 import { CategoriesFullView } from './components/CategoriesFullView';
 import { EmergencyGuideModal } from './components/EmergencyGuideModal';
 import { EventsBillboardBanner } from './components/EventsBillboardBanner';
+import { EventsPage } from './components/EventsPage';
+import { getEventsData } from './services/eventsService';
 import {
   fetchNewestBusinesses,
   fetchClassifieds,
@@ -128,7 +130,7 @@ function findBusinessFromUrl(bizList: Business[]): Business | null {
   return null;
 }
 
-function getInitialActiveTab(): 'directory' | 'classifieds' | 'categories' | 'zones' | 'favorites' | 'register' {
+function getInitialActiveTab(): 'directory' | 'classifieds' | 'categories' | 'zones' | 'favorites' | 'register' | 'events' {
   if (typeof window === 'undefined') return 'directory';
   try {
     const rawPath = window.location.pathname.toLowerCase().replace(/^\/+|\/+$/g, '');
@@ -142,6 +144,9 @@ function getInitialActiveTab(): 'directory' | 'classifieds' | 'categories' | 'zo
       tabParam === 'register' || tabParam === 'registro'
     ) {
       return 'register';
+    }
+    if (rawPath === 'eventos' || rawPath === 'cartelera' || hash === 'eventos' || hash === 'cartelera' || tabParam === 'events' || tabParam === 'eventos') {
+      return 'events';
     }
     if (rawPath === 'clasificados' || hash === 'clasificados' || tabParam === 'classifieds' || tabParam === 'clasificados') {
       return 'classifieds';
@@ -167,7 +172,7 @@ export default function App() {
   const [health, setHealth] = useState<WpHealth | null>(null);
 
   // Navigation & Modals
-  const [activeTab, setActiveTab] = useState<'directory' | 'classifieds' | 'categories' | 'zones' | 'favorites' | 'register'>(getInitialActiveTab);
+  const [activeTab, setActiveTab] = useState<'directory' | 'classifieds' | 'categories' | 'zones' | 'favorites' | 'register' | 'events'>(getInitialActiveTab);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [syncModalInitialTab, setSyncModalInitialTab] = useState<'start' | 'brand_media' | 'businesses' | undefined>('start');
@@ -257,15 +262,32 @@ export default function App() {
     };
   }, []);
 
-  // Sync browser URL bar when user switches between main tabs
+  // Sync browser URL bar & title when user switches between main tabs
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const current = window.location.pathname.toLowerCase().replace(/^\/+|\/+$/g, '');
     try {
-      if (activeTab === 'register' && current !== 'registro' && current !== 'register' && current !== 'subir-negocio') {
+      if (activeTab === 'events' && current !== 'eventos' && current !== 'cartelera') {
+        window.history.pushState({ tab: 'events' }, '', '/eventos');
+        document.title = 'Cartelera y Calendario de Eventos en Carmen | Empresas en Carmen';
+      } else if (activeTab === 'classifieds' && current !== 'clasificados') {
+        window.history.pushState({ tab: 'classifieds' }, '', '/clasificados');
+        document.title = 'Bolsa de Trabajo y Clasificados en Carmen | Empresas en Carmen';
+      } else if (activeTab === 'register' && current !== 'registro' && current !== 'register' && current !== 'subir-negocio') {
         window.history.pushState({ tab: 'register' }, '', '/registro');
-      } else if (activeTab === 'directory' && (current === 'registro' || current === 'register' || current === 'subir-negocio')) {
+        document.title = 'Subir Mi Negocio Gratis | Empresas en Carmen';
+      } else if (activeTab === 'categories' && current !== 'categorias') {
+        window.history.pushState({ tab: 'categories' }, '', '/categorias');
+        document.title = 'Categorías y Giros Comerciales | Empresas en Carmen';
+      } else if (activeTab === 'zones' && current !== 'colonias' && current !== 'zonas') {
+        window.history.pushState({ tab: 'zones' }, '', '/colonias');
+        document.title = 'Negocios por Colonia en Carmen | Empresas en Carmen';
+      } else if (activeTab === 'favorites' && current !== 'guardados' && current !== 'favoritos') {
+        window.history.pushState({ tab: 'favorites' }, '', '/guardados');
+        document.title = 'Negocios Guardados | Empresas en Carmen';
+      } else if (activeTab === 'directory' && current !== '') {
         window.history.pushState({ tab: 'directory' }, '', '/');
+        document.title = 'Empresas en Carmen - Directorio Empresarial y Comercial';
       }
     } catch {}
   }, [activeTab]);
@@ -899,6 +921,14 @@ export default function App() {
                 setActiveTab('register');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
+              onGoToEvents={() => {
+                setActiveTab('events');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              onGoToClassifieds={() => {
+                setActiveTab('classifieds');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
               onSearchSubmit={() => {
                 const target = document.getElementById('resultados-directorio');
                 if (target) {
@@ -923,6 +953,10 @@ export default function App() {
             {!query.trim() && (
               <EventsBillboardBanner
                 onOpenEmergencyGuide={() => setIsEmergencyGuideOpen(true)}
+                onOpenEventsPage={() => {
+                  setActiveTab('events');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               />
             )}
 
@@ -1075,6 +1109,17 @@ export default function App() {
               setIsClassifiedCreateOpen(true);
             }}
             onOpenDetailModal={(ad) => setSelectedClassified(ad)}
+          />
+        )}
+
+        {activeTab === 'events' && (
+          <EventsPage
+            events={getEventsData()}
+            onBackToDirectory={() => {
+              setActiveTab('directory');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onOpenCreateEvent={() => setIsSyncModalOpen(true)}
           />
         )}
 
@@ -1378,6 +1423,22 @@ export default function App() {
                     className="hover:text-white transition-colors"
                   >
                     Negocios por Colonia
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => { setActiveTab('classifieds'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="hover:text-white transition-colors"
+                  >
+                    Bolsa de Trabajo y Clasificados
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => { setActiveTab('events'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="hover:text-white transition-colors text-amber-300 font-semibold flex items-center gap-1.5"
+                  >
+                    <span>📅 Cartelera y Calendario de Eventos</span>
                   </button>
                 </li>
                 <li>

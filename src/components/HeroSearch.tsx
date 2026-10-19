@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, X, MapPin, MessageSquare, Truck, Phone, SlidersHorizontal, RotateCcw, PlusCircle, ArrowDown, AlertCircle, Mic, MicOff, Volume2, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
+import { Search, X, MapPin, MessageSquare, Truck, Phone, SlidersHorizontal, RotateCcw, PlusCircle, ArrowDown, AlertCircle, Mic, MicOff, Volume2, ChevronDown, ChevronUp, Share2, Calendar, Tag } from 'lucide-react';
 import { APP_VERSION } from '../constants/version';
 
 interface HeroSearchProps {
@@ -22,6 +22,8 @@ interface HeroSearchProps {
   totalAll: number;
   onResetFilters: () => void;
   onGoToRegister?: () => void;
+  onGoToEvents?: () => void;
+  onGoToClassifieds?: () => void;
   onSearchSubmit?: () => void;
 }
 
@@ -45,6 +47,8 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
   totalAll,
   onResetFilters,
   onGoToRegister,
+  onGoToEvents,
+  onGoToClassifieds,
   onSearchSubmit
 }) => {
   const [noResultToast, setNoResultToast] = useState<string | null>(null);
@@ -552,6 +556,57 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
                 </button>
               </div>
             )}
+
+            {/* Quick Navigation Cards: Eventos y Clasificados */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              {onGoToEvents && (
+                <button
+                  type="button"
+                  onClick={onGoToEvents}
+                  className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-stone-850 to-amber-500/10 hover:from-amber-500/30 border border-amber-500/40 text-left flex items-center justify-between gap-3 group transition-all shadow-md cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500 text-stone-950 flex items-center justify-center font-bold shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                      <Calendar className="w-5 h-5 text-stone-950" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-black text-amber-400 uppercase tracking-wider">Cartelera Oficial</span>
+                        <span className="px-1.5 py-0.2 bg-amber-500 text-stone-950 text-[9px] font-black rounded-full">Nuevo</span>
+                      </div>
+                      <div className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-amber-300 transition-colors">
+                        📅 Eventos en Carmen
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold text-amber-400 shrink-0 hidden sm:inline-block">Abrir →</span>
+                </button>
+              )}
+
+              {onGoToClassifieds && (
+                <button
+                  type="button"
+                  onClick={onGoToClassifieds}
+                  className="p-3 rounded-2xl bg-gradient-to-r from-sky-500/20 via-stone-850 to-sky-500/10 hover:from-sky-500/30 border border-sky-500/40 text-left flex items-center justify-between gap-3 group transition-all shadow-md cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-sky-500 text-stone-950 flex items-center justify-center font-bold shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                      <Tag className="w-5 h-5 text-stone-950" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-black text-sky-400 uppercase tracking-wider">Bolsa de Trabajo</span>
+                        <span className="px-1.5 py-0.2 bg-sky-500 text-stone-950 text-[9px] font-black rounded-full">Activo</span>
+                      </div>
+                      <div className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-sky-300 transition-colors">
+                        💼 Clasificados & Vacantes
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold text-sky-400 shrink-0 hidden sm:inline-block">Abrir →</span>
+                </button>
+              )}
+            </div>
 
             {/* Quick Filter Toggles & Quick Searches */}
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs pt-1">

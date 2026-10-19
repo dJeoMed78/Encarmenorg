@@ -207,10 +207,15 @@ export interface ClassifiedAd {
   videoUrl?: string;
   userToken?: string;
   createdAt: string;
-  status: 'active' | 'sold' | 'expired';
+  status: 'active' | 'sold' | 'expired' | 'trash';
   views?: number;
   sourceUrl?: string;
   source?: string;
+  companyName?: string;
+  modality?: string;
+  experience?: string;
+  isVerified?: boolean;
+  trashedAt?: string;
   aiDetected?: boolean;
   pendingApproval?: boolean;
   alreadyPublished?: boolean;
