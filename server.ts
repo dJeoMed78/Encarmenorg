@@ -4224,7 +4224,8 @@ app.post('/api/classifieds/radar-search', async (req: Request, res: Response) =>
     let aiStatusInfo: { usedAi: boolean; quotaExhausted?: boolean; message?: string } = { usedAi: false };
 
     const aiClient = getGeminiClient();
-    if (useAi && aiClient) {
+    const aiClient = getGeminiClient();
+    if (false && useAi && aiClient) {
       try {
         console.log('[Radar IA Clasificados] Consultando Gemini 3.8 Flash con Grounding para Ciudad del Carmen...');
         const prompt = `Eres el radar de anuncios clasificados y avisos de ocasión de Ciudad del Carmen, Campeche, México.
