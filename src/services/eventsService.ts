@@ -106,27 +106,32 @@ export const ensureEventRepresentativeImage = (item: EventItem): EventItem => {
   };
 };
 
-// Helper to load cached data from localStorage or empty
+// Helper to load cached data from localStorage or fallback to DEFAULT_EVENTS_DATA
 const loadLocalInitial = (): EventItem[] => {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined') {
+    return sortEventsChronologically((DEFAULT_EVENTS_DATA as EventItem[]).map(ensureEventRepresentativeImage));
+  }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
+      if (Array.isArray(parsed) && parsed.length > 0) {
         return sortEventsChronologically(parsed.map(ensureEventRepresentativeImage));
       }
     }
   } catch (e) {
     console.error('Error reading events from localStorage:', e);
   }
-  return [];
+  return sortEventsChronologically((DEFAULT_EVENTS_DATA as EventItem[]).map(ensureEventRepresentativeImage));
 };
 
 inMemoryEvents = loadLocalInitial();
 
 // Synchronous getter for immediate render
 export const getEventsData = (): EventItem[] => {
+  if (!inMemoryEvents || inMemoryEvents.length === 0) {
+    inMemoryEvents = sortEventsChronologically((DEFAULT_EVENTS_DATA as EventItem[]).map(ensureEventRepresentativeImage));
+  }
   return sortEventsChronologically(inMemoryEvents.map(ensureEventRepresentativeImage));
 };
 
@@ -154,13 +159,18 @@ export const fetchEventsFromAPI = async (): Promise<EventItem[]> => {
     const res = await fetch('/api/events');
     if (res.ok) {
       const data = await res.json();
-      if (data.success && Array.isArray(data.events)) {
+      if (data.success && Array.isArray(data.events) && data.events.length > 0) {
         notifyAndPersist(data.events);
         return data.events;
       }
     }
   } catch (err) {
     console.warn('Could not fetch events from /api/events:', err);
+  }
+  if (!inMemoryEvents || inMemoryEvents.length === 0) {
+    const fallback = sortEventsChronologically((DEFAULT_EVENTS_DATA as EventItem[]).map(ensureEventRepresentativeImage));
+    notifyAndPersist(fallback);
+    return fallback;
   }
   return inMemoryEvents;
 };

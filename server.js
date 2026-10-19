@@ -3280,6 +3280,14 @@ app.delete("/api/events/:id", async (req, res) => {
 	}
 });
 app.get("/api/promotions", (_req, res) => {
+	if (promotionsCache.length === 0) {
+		try {
+			const promoPath = path.resolve(__dirname, 'promotions_db.json');
+			if (fs.existsSync(promoPath)) {
+				promotionsCache = JSON.parse(fs.readFileSync(promoPath, 'utf8'));
+			}
+		} catch (_) {}
+	}
 	res.json({
 		success: true,
 		count: promotionsCache.length,

@@ -39,6 +39,7 @@ interface AdminWindowsMobileMenuProps {
   analytics: SiteAnalytics | null;
   classifiedsCount: number;
   promotionsCount: number;
+  eventsCount?: number;
   isSyncing: boolean;
   onTriggerSync: () => Promise<void>;
   onSelectTab: (tab: 'businesses' | 'analytics' | 'reports' | 'classifieds' | 'new_business' | 'promotions' | 'status' | 'emergency' | 'events' | 'admins' | 'brand_media' | 'desired_changes' | 'config_editor') => void;
@@ -54,6 +55,7 @@ export const AdminWindowsMobileMenu: React.FC<AdminWindowsMobileMenuProps> = ({
   analytics,
   classifiedsCount,
   promotionsCount,
+  eventsCount = 10,
   isSyncing,
   onTriggerSync,
   onSelectTab,
@@ -471,12 +473,12 @@ export const AdminWindowsMobileMenu: React.FC<AdminWindowsMobileMenuProps> = ({
             </div>
 
             <div className="space-y-0.5">
-              <div className="text-xl sm:text-2xl font-light text-white tracking-tight leading-tight">
-                Cartelera
+              <div className="text-3xl sm:text-4xl font-light text-white tracking-tighter">
+                {eventsCount}
               </div>
-              <p className="text-[11px] text-amber-100 font-medium">Eventos y Bazares</p>
+              <p className="text-[11px] text-amber-100 font-medium">eventos en cartelera</p>
               <p className="text-[10px] text-amber-200/80">
-                Publicar y editar actividades
+                Conciertos, ferias y cultura
               </p>
             </div>
 

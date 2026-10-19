@@ -90,6 +90,7 @@ import {
   checkBusinessDuplicate,
   getPromotions
 } from '../services/api';
+import { getEventsData, fetchEventsFromAPI } from '../services/eventsService';
 
 interface WordPressSyncModalProps {
   classifieds?: ClassifiedAd[];
@@ -206,14 +207,21 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
   const [loadingReports, setLoadingReports] = useState(false);
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
 
-  // Promotions count state
+  // Promotions and Events count state
   const [promotionsCount, setPromotionsCount] = useState<number>(0);
+  const [eventsCount, setEventsCount] = useState<number>(() => getEventsData().length);
 
   useEffect(() => {
     if (isOpen && isAuthenticated) {
       getPromotions().then(res => {
         if (res && res.success) {
           setPromotionsCount(res.count || res.promotions?.length || 0);
+        }
+      }).catch(() => {});
+
+      fetchEventsFromAPI().then(evts => {
+        if (Array.isArray(evts)) {
+          setEventsCount(evts.length);
         }
       }).catch(() => {});
     }
@@ -931,6 +939,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
               analytics={analytics}
               classifiedsCount={classifieds.length}
               promotionsCount={promotionsCount}
+              eventsCount={eventsCount}
               isSyncing={isSyncing}
               onTriggerSync={onTriggerSync}
               onSelectTab={(tab) => setActiveTab(tab)}

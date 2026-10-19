@@ -37,6 +37,7 @@ import {
 import {
   EventItem,
   getEventsData,
+  fetchEventsFromAPI,
   initEventsRealtimeSync,
   addEventItem,
   updateEventItem,
@@ -84,9 +85,9 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try {
       const stored = localStorage.getItem('carmelita_cartelera_collapsed');
-      return stored !== null ? stored === 'true' : true; // Por default minimizado (Falla 14)
+      return stored !== null ? stored === 'true' : false; // Por default abierto y visible
     } catch {
-      return true;
+      return false;
     }
   });
 
@@ -201,8 +202,19 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
 
   useEffect(() => {
     const unsub = initEventsRealtimeSync();
+
+    // Ensure immediate sync from backend API or local cache
+    fetchEventsFromAPI().then(evts => {
+      if (Array.isArray(evts) && evts.length > 0) {
+        setEvents(evts);
+      }
+    }).catch(() => {});
+
     const handleUpdate = () => {
-      setEvents([...getEventsData()]);
+      const data = getEventsData();
+      if (data && data.length > 0) {
+        setEvents([...data]);
+      }
       setIsAdmin(isSessionAdminAuthenticated());
     };
     window.addEventListener('events-billboard-updated', handleUpdate);

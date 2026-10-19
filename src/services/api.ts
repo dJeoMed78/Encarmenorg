@@ -756,15 +756,21 @@ export function getSafeImageUrl(url?: string | null): string {
 // PROMOTIONS & FLASH COUPONS API
 // ==========================================
 
+import seedPromotions from '../data/promotions_seed.json';
+
 export async function getPromotions(): Promise<{ success: boolean; count: number; promotions: import('../types').Promotion[] }> {
   try {
     const res = await fetch(`${API_BASE}/promotions`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.promotions) && data.promotions.length > 0) {
+        return data;
+      }
+    }
   } catch (err: any) {
-    console.error('Error fetching promotions:', err);
-    return { success: false, count: 0, promotions: [] };
+    console.warn('Error fetching promotions from /api/promotions:', err);
   }
+  return { success: true, count: seedPromotions.length, promotions: seedPromotions as any };
 }
 
 export async function getBusinessPromotion(businessId: number): Promise<{ success: boolean; promotion: import('../types').Promotion | null }> {
@@ -820,11 +826,16 @@ export async function getAdminPromotions(): Promise<{
 }> {
   try {
     const res = await fetch(`${API_BASE}/admin/promotions`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.promotions) && data.promotions.length > 0) {
+        return data;
+      }
+    }
   } catch (err: any) {
-    return { success: false, count: 0, promotions: [], adminAlertEmails: [] };
+    console.warn('Error fetching admin promotions:', err);
   }
+  return { success: true, count: seedPromotions.length, promotions: seedPromotions as any, adminAlertEmails: [] };
 }
 
 export async function saveAdminPromotion(promoData: any): Promise<{

@@ -162,24 +162,5 @@
     "category": "Cultura & Música",
     "aiDetected": true,
     "status": "published"
-  },
-  {
-    "id": "evt-ai-1791236740389-ktrh",
-    "title": "La Placita Bazar: Edición Octubre",
-    "icon": "ShoppingBag",
-    "image": "/uploads/Placita-Bazar.jpg",
-    "location": "Centro de Convenciones Carmen XXI, Playa Norte, Ciudad del Carmen",
-    "time": "11:00 AM a 21:00 hrs",
-    "category": "Social y Bazares",
-    "updatedAt": "2026-10-14T02:31:08.857Z",
-    "cost": "Entrada Libre",
-    "sourceUrl": "https://proeventos.campeche.gob.mx",
-    "organizer": "Colectivo La Placita Bazar",
-    "description": "Bazar comercial y creativo con marcas independientes, diseño local, moda, artesanías, repostería y zona gastronómica para toda la familia carmelita.",
-    "date": "17 y 18 de Octubre de 2026",
-    "badge": "Bazar",
-    "aiDetected": true,
-    "categorySlug": "bazares",
-    "status": "published"
   }
 ]

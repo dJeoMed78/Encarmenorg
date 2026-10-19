@@ -3565,12 +3565,43 @@ app.delete('/api/events/:id', async (req: Request, res: Response) => {
   }
 });
 
+app.post('/api/events/reset', async (_req: Request, res: Response) => {
+  try {
+    const defaultEventsPath = path.resolve(__dirname, 'src/data/events_carmen.json');
+    if (fs.existsSync(defaultEventsPath)) {
+      eventsCache = JSON.parse(fs.readFileSync(defaultEventsPath, 'utf8'));
+    } else {
+      const evPath = path.resolve(__dirname, 'events_db.json');
+      if (fs.existsSync(evPath)) {
+        eventsCache = JSON.parse(fs.readFileSync(evPath, 'utf8'));
+      }
+    }
+    fs.writeFileSync(path.resolve(__dirname, 'events_db.json'), JSON.stringify(eventsCache, null, 2), 'utf8');
+    if (isMariaDbActive()) {
+      for (const evt of eventsCache) {
+        try { await dbSaveEvent(evt); } catch (_) {}
+      }
+    }
+    res.json({ success: true, count: eventsCache.length, events: eventsCache });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ==========================================
 // PROMOCIONES Y CUPONES FLASH (Endpoints API)
 // ==========================================
 
 // Obtener todas las promociones activas para catálogo público
 app.get('/api/promotions', (_req: Request, res: Response) => {
+  if (promotionsCache.length === 0) {
+    try {
+      const promoPath = path.resolve(__dirname, 'promotions_db.json');
+      if (fs.existsSync(promoPath)) {
+        promotionsCache = JSON.parse(fs.readFileSync(promoPath, 'utf8'));
+      }
+    } catch (_) {}
+  }
   res.json({
     success: true,
     count: promotionsCache.length,
@@ -3650,6 +3681,14 @@ app.post('/api/promotions/:promotionId/claim', async (req: Request, res: Respons
 
 // Admin: Obtener lista completa de promociones
 app.get('/api/admin/promotions', (_req: Request, res: Response) => {
+  if (promotionsCache.length === 0) {
+    try {
+      const promoPath = path.resolve(__dirname, 'promotions_db.json');
+      if (fs.existsSync(promoPath)) {
+        promotionsCache = JSON.parse(fs.readFileSync(promoPath, 'utf8'));
+      }
+    } catch (_) {}
+  }
   res.json({
     success: true,
     count: promotionsCache.length,

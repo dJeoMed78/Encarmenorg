@@ -31,9 +31,9 @@ export const PromotionsBanner: React.FC<PromotionsBannerProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try {
       const stored = localStorage.getItem('carmelita_promotions_collapsed');
-      return stored !== null ? stored === 'true' : true; // Por default minimizado (Falla 14)
+      return stored !== null ? stored === 'true' : false; // Por default visible y abierto
     } catch {
-      return true;
+      return false;
     }
   });
 

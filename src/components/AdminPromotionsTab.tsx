@@ -32,6 +32,7 @@ import {
   updateCouponStatus,
   uploadBusinessLogo
 } from '../services/api';
+import seedPromotions from '../data/promotions_seed.json';
 
 interface AdminPromotionsTabProps {
   businesses: Business[];
@@ -42,7 +43,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
   const [coupons, setCoupons] = useState<ClaimedCoupon[]>([]);
   const [alertEmails, setAlertEmails] = useState<string[]>(['djeomed@gmail.com', 'Ddeysi763@gmail.com']);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeSubTab, setActiveSubTab] = useState<'coupons' | 'promos' | 'create'>('coupons');
+  const [activeSubTab, setActiveSubTab] = useState<'coupons' | 'promos' | 'create'>('promos');
   const [searchTerm, setSearchTerm] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -162,11 +163,11 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
         getAdminPromotions(),
         getAdminCoupons()
       ]);
-      if (promosRes.success && Array.isArray(promosRes.promotions)) {
+      if (promosRes.success && Array.isArray(promosRes.promotions) && promosRes.promotions.length > 0) {
         setPromotions(promosRes.promotions);
         if (promosRes.adminAlertEmails) setAlertEmails(promosRes.adminAlertEmails);
       } else {
-        setPromotions([]);
+        setPromotions(seedPromotions as any);
       }
       if (couponsRes.success && Array.isArray(couponsRes.coupons)) {
         setCoupons(couponsRes.coupons);
@@ -175,7 +176,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
       }
     } catch (err) {
       console.error('Error loading admin promo data:', err);
-      setPromotions([]);
+      setPromotions(seedPromotions as any);
       setCoupons([]);
     } finally {
       setIsLoading(false);
