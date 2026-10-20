@@ -269,7 +269,7 @@ export default function App() {
     try {
       if (activeTab === 'events' && current !== 'eventos' && current !== 'cartelera') {
         window.history.pushState({ tab: 'events' }, '', '/eventos');
-        document.title = 'Cartelera y Calendario de Eventos en Carmen | Empresas en Carmen';
+        document.title = 'Eventos en Carmen | Cartelera Oficial | Empresas en Carmen';
       } else if (activeTab === 'classifieds' && current !== 'clasificados') {
         window.history.pushState({ tab: 'classifieds' }, '', '/clasificados');
         document.title = 'Bolsa de Trabajo y Clasificados en Carmen | Empresas en Carmen';
@@ -1438,7 +1438,7 @@ export default function App() {
                     onClick={() => { setActiveTab('events'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                     className="hover:text-white transition-colors text-amber-300 font-semibold flex items-center gap-1.5"
                   >
-                    <span>📅 Cartelera y Calendario de Eventos</span>
+                    <span>📅 Eventos</span>
                   </button>
                 </li>
                 <li>

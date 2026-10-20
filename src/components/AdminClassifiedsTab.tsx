@@ -65,9 +65,11 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set());
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [isBatchApproving, setIsBatchApproving] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const handleOpenRadar = () => {
     setIsRadarOpen(true);
+    setModalError(null);
     if (radarCandidates.length === 0) {
       handleSearchRadar(false);
     }
@@ -76,9 +78,10 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
   const handleSearchRadar = async (useAiMode: boolean) => {
     setRadarLoading(true);
     setRadarAiInfo(null);
+    setModalError(null);
     try {
       const res = await searchClassifiedRadarCandidates(radarQuery, radarCat, useAiMode);
-      if (res.success && Array.isArray(res.candidates)) {
+      if (res.success && Array.isArray(res.candidates) && res.candidates.length > 0) {
         setRadarCandidates(res.candidates);
         const unpub = res.candidates.filter(c => !c.alreadyPublished).map(c => c.id);
         setSelectedCandidateIds(new Set(unpub));
@@ -86,10 +89,10 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
           setRadarAiInfo(res.aiInfo);
         }
       } else {
-        setNotification({ type: 'error', text: res.message || 'Error al buscar en el radar' });
+        setModalError(res.message || 'No se encontraron candidatos para los criterios ingresados.');
       }
     } catch (err: any) {
-      setNotification({ type: 'error', text: err.message || 'Error de conexión con el radar' });
+      setModalError(err.message || 'Error de conexión con el radar.');
     } finally {
       setRadarLoading(false);
     }
@@ -528,6 +531,23 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                   </button>
                 </div>
               </div>
+
+              {/* Modal Error Alert */}
+              {modalError && (
+                <div className="p-3 rounded-xl text-xs bg-rose-50 border border-rose-200 text-rose-800 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span className="font-medium">{modalError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSearchRadar(false)}
+                    className="px-2.5 py-1 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-900 font-bold text-[11px] cursor-pointer shrink-0"
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              )}
 
               {/* Status & Quota message banner */}
               {radarAiInfo && (

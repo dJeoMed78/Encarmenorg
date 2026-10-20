@@ -468,33 +468,33 @@ try {
   console.warn('[Cache] Error cargando categories_seed:', e);
 }
 
-// Thematic representative images for events in Ciudad del Carmen
+// Thematic representative images for events in Ciudad del Carmen (Local uploads for proxy compatibility)
 const THEMATIC_EVENT_IMAGES_SERVER = {
-  running: 'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&auto=format&fit=crop&q=80',
-  cycling: 'https://images.unsplash.com/photo-1541625602330-2277a4c46182?w=800&auto=format&fit=crop&q=80',
-  soccer: 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800&auto=format&fit=crop&q=80',
-  baseball: 'https://images.unsplash.com/photo-1508344928928-7165b67de128?w=800&auto=format&fit=crop&q=80',
-  fishing: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&auto=format&fit=crop&q=80',
-  sportsGeneral: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=800&auto=format&fit=crop&q=80',
-  conference: 'https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&auto=format&fit=crop&q=80',
-  agriculture: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&auto=format&fit=crop&q=80',
-  concert: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80',
-  partyNight: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=80',
-  tradicionZaragoza: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&auto=format&fit=crop&q=80',
-  bazar: 'https://images.unsplash.com/photo-1533900298318-6b8da08a523e?w=800&auto=format&fit=crop&q=80',
-  gastronomiaMariscos: 'https://images.unsplash.com/photo-1559847844-5315695dadae?w=800&auto=format&fit=crop&q=80',
-  grill: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&auto=format&fit=crop&q=80',
-  bakeryCafe: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=800&auto=format&fit=crop&q=80',
-  diaDeMuertos: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&auto=format&fit=crop&q=80',
-  theater: 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=800&auto=format&fit=crop&q=80',
-  dance: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=800&auto=format&fit=crop&q=80',
-  cinema: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&auto=format&fit=crop&q=80',
-  artExhibition: 'https://images.unsplash.com/photo-1536924940846-227afb31e2a5?w=800&auto=format&fit=crop&q=80',
-  kidsFamily: 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=800&auto=format&fit=crop&q=80',
-  pets: 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=800&auto=format&fit=crop&q=80',
-  beach: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
-  patronalFiesta: 'https://images.unsplash.com/photo-1518638150340-f706e86654de?w=800&auto=format&fit=crop&q=80',
-  wellness: 'https://images.unsplash.com/photo-1545205597-3d9d02c29597?w=800&auto=format&fit=crop&q=80'
+  running: '/uploads/38637-CATRINAS_10K.jpg',
+  cycling: '/uploads/kiosco-parque-zaragoza.jpg',
+  soccer: '/uploads/kiosco-parque-zaragoza.jpg',
+  baseball: '/uploads/kiosco-parque-zaragoza.jpg',
+  fishing: '/uploads/festival-gastronomico-carmen.jpg',
+  sportsGeneral: '/uploads/38637-CATRINAS_10K.jpg',
+  conference: '/uploads/bazar-emprendedores-carmen.jpg',
+  agriculture: '/uploads/festival-gastronomico-carmen.jpg',
+  concert: '/uploads/concierto-musica-carmen.jpg',
+  partyNight: '/uploads/concierto-musica-carmen.jpg',
+  tradicionZaragoza: '/uploads/kiosco-parque-zaragoza.jpg',
+  bazar: '/uploads/bazar-emprendedores-carmen.jpg',
+  gastronomiaMariscos: '/uploads/festival-gastronomico-carmen.jpg',
+  grill: '/uploads/festival-gastronomico-carmen.jpg',
+  bakeryCafe: '/uploads/festival-gastronomico-carmen.jpg',
+  diaDeMuertos: '/uploads/dia-de-muertos-carmen.jpg',
+  theater: '/uploads/concierto-musica-carmen.jpg',
+  dance: '/uploads/kiosco-parque-zaragoza.jpg',
+  cinema: '/uploads/concierto-musica-carmen.jpg',
+  artExhibition: '/uploads/bazar-emprendedores-carmen.jpg',
+  kidsFamily: '/uploads/kiosco-parque-zaragoza.jpg',
+  pets: '/uploads/kiosco-parque-zaragoza.jpg',
+  beach: '/uploads/festival-gastronomico-carmen.jpg',
+  patronalFiesta: '/uploads/kiosco-parque-zaragoza.jpg',
+  wellness: '/uploads/kiosco-parque-zaragoza.jpg'
 };
 
 // Smart representative image resolver for events in Ciudad del Carmen
@@ -509,7 +509,8 @@ function getEventRepresentativeImageServer(event: {
   // If image is already an absolute HTTP/HTTPS URL or relative uploads/images, preserve it
   if (event.image && typeof event.image === 'string') {
     const raw = event.image.trim();
-    if (raw.startsWith('http') || raw.startsWith('/uploads/') || raw.startsWith('/images/')) {
+    // Evitar dominios externos como unsplash.com que son bloqueados por proxies o cortafuegos corporativos
+    if (raw.startsWith('/uploads/') || raw.startsWith('/images/') || (raw.startsWith('http') && !raw.includes('unsplash.com'))) {
       return raw;
     }
   }
@@ -865,7 +866,7 @@ try {
     const rawEvts = JSON.parse(fs.readFileSync(evtPath, 'utf8'));
     eventsCache = rawEvts.map((e: any) => ({
       ...e,
-      image: (e.image && typeof e.image === 'string' && e.image.trim())
+      image: (e.image && typeof e.image === 'string' && e.image.trim() && !e.image.includes('unsplash.com'))
         ? e.image.trim()
         : getEventRepresentativeImageServer(e)
     }));
@@ -4391,9 +4392,9 @@ app.post('/api/classifieds/radar-search', async (req: Request, res: Response) =>
     let aiStatusInfo: { usedAi: boolean; quotaExhausted?: boolean; message?: string } = { usedAi: false };
 
     const aiClient = getGeminiClient();
-    if (false && useAi && aiClient) {
+    if (useAi && aiClient) {
       try {
-        console.log('[Radar IA Clasificados] Consultando Gemini 3.8 Flash con Grounding para Ciudad del Carmen...');
+        console.log('[Radar IA Clasificados] Consultando Gemini para Ciudad del Carmen...');
         const prompt = `Eres el radar de anuncios clasificados y avisos de ocasión de Ciudad del Carmen, Campeche, México.
 Tu tarea es estructurar entre 4 y 6 anuncios clasificados REALES, vigentes y comprobables de Ciudad del Carmen, Campeche sobre: "${userQuery || 'renta de departamentos, vacantes de empleo, venta de autos o bazar'}".
 
@@ -4432,16 +4433,26 @@ Devuelve ÚNICAMENTE un array JSON válido sin texto adicional ni markdown exter
   }
 ]`;
 
-        const aiResponse = await (aiClient as any).models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config: {
-            responseMimeType: 'application/json',
-            temperature: 0.2
+        const modelsToTry = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+        let replyText = '';
+        for (const m of modelsToTry) {
+          try {
+            const aiResponse = await (aiClient as any).models.generateContent({
+              model: m,
+              contents: prompt,
+              config: {
+                responseMimeType: 'application/json',
+                temperature: 0.2
+              }
+            });
+            if (aiResponse && aiResponse.text) {
+              replyText = aiResponse.text;
+              break;
+            }
+          } catch (modelErr: any) {
+            console.warn(`[Radar IA Clasificados] Falló modelo ${m}:`, modelErr.message);
           }
-        });
-
-        const replyText = aiResponse.text || '';
+        }
         const jsonMatch = replyText.match(/\[[\s\S]*\]/);
         if (jsonMatch && jsonMatch[0]) {
           const parsed = JSON.parse(jsonMatch[0]);
@@ -4745,7 +4756,7 @@ function isSimilarEvent(existingTitle: string, newTitle: string): boolean {
   return false;
 }
 
-// Catálogo dinámico de eventos auténticos de Ciudad del Carmen para detección por Radar
+// Catálogo dinámico de eventos auténticos de Ciudad del Carmen para detección por Radar (Compatibles con Proxy)
 const CARMEN_RADAR_EVENT_POOL = [
   {
     title: 'Festival del Marisco y Camarón Carmelita',
@@ -4757,7 +4768,7 @@ const CARMEN_RADAR_EVENT_POOL = [
     organizer: 'Asociación de Restauranteros Carmelitas y Turismo Carmen',
     badge: 'Radar Local',
     icon: 'UtensilsCrossed',
-    image: 'https://images.unsplash.com/photo-1559847844-5315695dadae?w=800&auto=format&fit=crop&q=80',
+    image: '/uploads/festival-gastronomico-carmen.jpg',
     daysAhead: 5,
     time: '12:00 - 21:00 hrs'
   },
@@ -4771,7 +4782,7 @@ const CARMEN_RADAR_EVENT_POOL = [
     organizer: 'Dirección de Educación y Cultura de Carmen',
     badge: 'Radar Local',
     icon: 'Music',
-    image: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&auto=format&fit=crop&q=80',
+    image: '/uploads/kiosco-parque-zaragoza.jpg',
     daysAhead: 6,
     time: '19:00 - 22:30 hrs'
   },
@@ -4785,7 +4796,7 @@ const CARMEN_RADAR_EVENT_POOL = [
     organizer: 'Club de Atletismo y Fondistas Isla del Carmen',
     badge: 'Radar Deportivo',
     icon: 'Activity',
-    image: 'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&auto=format&fit=crop&q=80',
+    image: '/uploads/38637-CATRINAS_10K.jpg',
     daysAhead: 8,
     time: '06:30 - 10:00 hrs'
   },
@@ -4799,7 +4810,7 @@ const CARMEN_RADAR_EVENT_POOL = [
     organizer: 'Colectivo Carmen Emprende',
     badge: 'Radar Local',
     icon: 'ShoppingBag',
-    image: 'https://images.unsplash.com/photo-1533900298318-6b8da08a523e?w=800&auto=format&fit=crop&q=80',
+    image: '/uploads/bazar-emprendedores-carmen.jpg',
     daysAhead: 4,
     time: '16:00 - 22:00 hrs'
   },
@@ -4813,7 +4824,7 @@ const CARMEN_RADAR_EVENT_POOL = [
     organizer: 'Juventud y Arte Carmen A.C.',
     badge: 'Radar Musical',
     icon: 'Music',
-    image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80',
+    image: '/uploads/concierto-musica-carmen.jpg',
     daysAhead: 7,
     time: '17:30 - 22:00 hrs'
   },
@@ -4827,7 +4838,7 @@ const CARMEN_RADAR_EVENT_POOL = [
     organizer: 'DIF Municipal Carmen y Cine Club',
     badge: 'Radar Familiar',
     icon: 'Film',
-    image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&auto=format&fit=crop&q=80',
+    image: '/uploads/concierto-musica-carmen.jpg',
     daysAhead: 6,
     time: '18:30 hrs'
   },
@@ -4841,7 +4852,7 @@ const CARMEN_RADAR_EVENT_POOL = [
     organizer: 'Comisión Municipal del Deporte (INDECAR)',
     badge: 'Radar Deportivo',
     icon: 'Sun',
-    image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
+    image: '/uploads/festival-gastronomico-carmen.jpg',
     daysAhead: 11,
     time: '08:00 - 16:00 hrs'
   },
@@ -4855,7 +4866,7 @@ const CARMEN_RADAR_EVENT_POOL = [
     organizer: 'Cronistas e Historiadores de Carmen',
     badge: 'Radar Cultural',
     icon: 'Image',
-    image: 'https://images.unsplash.com/photo-1536924940846-227afb31e2a5?w=800&auto=format&fit=crop&q=80',
+    image: '/uploads/kiosco-parque-zaragoza.jpg',
     daysAhead: 10,
     time: '09:00 - 19:00 hrs'
   },
@@ -4869,7 +4880,7 @@ const CARMEN_RADAR_EVENT_POOL = [
     organizer: 'Comunidad Bici-Carmen y Tránsito Municipal',
     badge: 'Radar Nocturno',
     icon: 'Bike',
-    image: 'https://images.unsplash.com/photo-1541625602330-2277a4c46182?w=800&auto=format&fit=crop&q=80',
+    image: '/uploads/kiosco-parque-zaragoza.jpg',
     daysAhead: 9,
     time: '20:00 hrs'
   },
@@ -4883,7 +4894,7 @@ const CARMEN_RADAR_EVENT_POOL = [
     organizer: 'Comité de Vecinos del Guanal',
     badge: 'Radar Gastronómico',
     icon: 'Coffee',
-    image: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=800&auto=format&fit=crop&q=80',
+    image: '/uploads/festival-gastronomico-carmen.jpg',
     daysAhead: 12,
     time: '17:00 - 22:00 hrs'
   },
@@ -4897,7 +4908,7 @@ const CARMEN_RADAR_EVENT_POOL = [
     organizer: 'Taller de Teatro Guiñol Carmen',
     badge: 'Radar Infantil',
     icon: 'Drama',
-    image: 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=800&auto=format&fit=crop&q=80',
+    image: '/uploads/concierto-musica-carmen.jpg',
     daysAhead: 13,
     time: '17:00 hrs'
   },
@@ -4911,7 +4922,7 @@ const CARMEN_RADAR_EVENT_POOL = [
     organizer: 'Club Náutico y Ambiental Carmen',
     badge: 'Radar Acuático',
     icon: 'Anchor',
-    image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&auto=format&fit=crop&q=80',
+    image: '/uploads/festival-gastronomico-carmen.jpg',
     daysAhead: 14,
     time: '07:00 - 13:00 hrs',
     sourceUrl: 'https://proeventos.campeche.gob.mx/calendario/'
@@ -4926,7 +4937,7 @@ const CARMEN_RADAR_EVENT_POOL = [
     organizer: 'Secretaría de Turismo de Campeche & ProEventos',
     badge: 'ProEventos Campeche',
     icon: 'Compass',
-    image: 'https://images.unsplash.com/photo-1533900298318-6b8da08a523e?w=800&auto=format&fit=crop&q=80',
+    image: '/uploads/bazar-emprendedores-carmen.jpg',
     daysAhead: 7,
     time: '11:00 - 20:00 hrs',
     sourceUrl: 'https://proeventos.campeche.gob.mx/calendario/'
@@ -4941,7 +4952,7 @@ const CARMEN_RADAR_EVENT_POOL = [
     organizer: 'Dirección de Educación y Cultura Carmen Oficial',
     badge: 'Cultura Carmen',
     icon: 'Music',
-    image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80',
+    image: '/uploads/kiosco-parque-zaragoza.jpg',
     daysAhead: 3,
     time: '18:00 - 21:30 hrs',
     sourceUrl: 'https://www.facebook.com/CulturaCarmenMx/'
@@ -4956,7 +4967,7 @@ const CARMEN_RADAR_EVENT_POOL = [
     organizer: 'Dashport Run & Club Fondistas Carmen',
     badge: 'Dashport Carmen',
     icon: 'Trophy',
-    image: 'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&auto=format&fit=crop&q=80',
+    image: '/uploads/38637-CATRINAS_10K.jpg',
     daysAhead: 10,
     time: '06:30 hrs',
     sourceUrl: 'https://dashport.run/proximos-eventos/'
@@ -5033,8 +5044,29 @@ async function runAIRadarScan(): Promise<{
         console.warn('[MariaDB Radar] Error guardando evento:', err.message);
       }
     }
+  }
 
-
+  // Si ya estaban todos en la cartelera, refrescar y proyectar fechas próximas para mantener la cartelera siempre viva
+  if (newlyAdded.length === 0 && CARMEN_RADAR_EVENT_POOL.length > 0) {
+    const templatesToRefresh = [...CARMEN_RADAR_EVENT_POOL].slice(0, 3);
+    for (const t of templatesToRefresh) {
+      const idx = eventsCache.findIndex(e => isSimilarEvent(e.title, t.title));
+      const freshDate = formatFutureDate(t.daysAhead || 5);
+      if (idx >= 0) {
+        eventsCache[idx] = {
+          ...eventsCache[idx],
+          date: freshDate,
+          image: t.image || getEventRepresentativeImageServer(t),
+          updatedAt: lastRadarScanTimestamp
+        };
+        newlyAdded.push(eventsCache[idx]);
+        if (isMariaDbActive()) {
+          try {
+            await dbSaveEvent(eventsCache[idx]);
+          } catch (_) {}
+        }
+      }
+    }
   }
 
   if (newlyAdded.length > 0) {
@@ -5248,15 +5280,25 @@ Devuelve ÚNICAMENTE un array JSON válido sin texto adicional ni markdown exter
   }
 ]`;
 
-        const response = await aiClient.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config: {
-            responseMimeType: 'application/json'
+        const candidateModels = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+        let replyText = '';
+        for (const m of candidateModels) {
+          try {
+            const response = await aiClient.models.generateContent({
+              model: m,
+              contents: prompt,
+              config: {
+                responseMimeType: 'application/json'
+              }
+            });
+            if (response && response.text) {
+              replyText = response.text;
+              break;
+            }
+          } catch (modelErr: any) {
+            console.warn(`[Radar IA Eventos] Falló modelo ${m}:`, modelErr.message);
           }
-        });
-
-        const replyText = response.text || '';
+        }
         const jsonMatch = replyText.match(/\[[\s\S]*\]/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
@@ -7087,16 +7129,41 @@ app.post('/api/businesses/auto-search-ai', async (req: Request, res: Response) =
           'Formato:\n' +
           '[\n  {\n    "name": "Nombre real",\n    "category": "Categoría en español",\n    "phone": "9381234567",\n    "whatsapp": "9381234567",\n    "address": "Calle y número",\n    "colonia": "Colonia en Ciudad del Carmen",\n    "description": "Descripción de sus productos o servicios",\n    "delivery": "Servicio a domicilio o en sucursal",\n    "hasDelivery": true,\n    "schedule": "Horario aproximado",\n    "payment": "Efectivo y Transferencia",\n    "source": "✨ Detección con IA (Google & FB Carmen)",\n    "sourceUrl": "https://www.facebook.com/groups/506440126097710"\n  }\n]';
 
-        const aiRes = await aiClient.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config: {
-            tools: [{ googleSearch: {} }],
-            temperature: 0.2
+        const modelsToTry = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+        let rawText = '';
+        for (const m of modelsToTry) {
+          try {
+            const aiRes = await aiClient.models.generateContent({
+              model: m,
+              contents: prompt,
+              config: {
+                tools: [{ googleSearch: {} }],
+                temperature: 0.2
+              }
+            });
+            if (aiRes && aiRes.text) {
+              rawText = aiRes.text;
+              break;
+            }
+          } catch (toolErr: any) {
+            try {
+              const aiRes = await aiClient.models.generateContent({
+                model: m,
+                contents: prompt,
+                config: {
+                  responseMimeType: 'application/json',
+                  temperature: 0.2
+                }
+              });
+              if (aiRes && aiRes.text) {
+                rawText = aiRes.text;
+                break;
+              }
+            } catch (fallbackErr: any) {
+              console.warn(`[Auto-Search IA] Falló modelo ${m}:`, fallbackErr.message);
+            }
           }
-        });
-
-        const rawText = aiRes.text || '';
+        }
         const jsonMatch = rawText.match(/\[[\s\S]*\]/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);

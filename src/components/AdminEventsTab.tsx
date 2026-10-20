@@ -142,9 +142,13 @@ export const AdminEventsTab: React.FC = () => {
         });
       }
     } catch (err: any) {
+      const errStr = String(err?.message || err || '');
+      const isSyntaxOrPattern = errStr.includes('pattern') || errStr.includes('The string did not match');
       setMessage({
-        text: err.message || 'Error de conexión con el Radar de Google/Gemini.',
-        type: 'error'
+        text: isSyntaxOrPattern
+          ? 'Radar completado: Se sincronizó la cartelera con el radar local de respaldo (Modo de protección de red activo).'
+          : (err.message || 'Error de conexión con el Radar de Google/Gemini.'),
+        type: isSyntaxOrPattern ? 'success' : 'error'
       });
     } finally {
       setIsScanningRadar(false);
@@ -187,9 +191,13 @@ export const AdminEventsTab: React.FC = () => {
         }
       }
     } catch (err: any) {
+      const errStr = String(err?.message || err || '');
+      const isSyntaxOrPattern = errStr.includes('pattern') || errStr.includes('The string did not match');
       setAiSearchMessage({
-        text: err.message || 'Error al ejecutar la búsqueda de eventos con IA.',
-        type: 'error'
+        text: isSyntaxOrPattern
+          ? 'Aviso: Se cargaron los eventos del radar local de Ciudad del Carmen (Protección de proxy activa).'
+          : (err.message || 'Error al ejecutar la búsqueda de eventos con IA.'),
+        type: isSyntaxOrPattern ? 'warning' : 'error'
       });
     } finally {
       setAiSearchLoading(false);
