@@ -1388,6 +1388,21 @@ app.get('/api/database-status', (_req: Request, res: Response) => {
   });
 });
 
+// System health and status check
+app.get(['/api/health', '/api/system/status'], (_req: Request, res: Response) => {
+  res.json({
+    status: 'ok',
+    uptime: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+    businesses: businessesCache.length,
+    events: eventsCache.length,
+    classifieds: classifiedsCache.length,
+    promotions: promotionsCache.length,
+    emergencyServices: emergencyServicesCache.length,
+    database: isMariaDbActive() ? 'mariadb' : 'json_cache'
+  });
+});
+
 // Reconnect to Hostinger MariaDB
 app.post('/api/mariadb/reconnect', async (_req: Request, res: Response) => {
   try {
@@ -4661,7 +4676,7 @@ app.post('/api/classifieds/batch-approve', async (req: Request, res: Response) =
 // ==========================================
 // GUÍA DE EMERGENCIAS Y TELÉFONOS ÚTILES
 // ==========================================
-app.get('/api/emergency', (_req: Request, res: Response) => {
+app.get(['/api/emergency', '/api/emergency-services'], (_req: Request, res: Response) => {
   res.json({
     success: true,
     total: emergencyServicesCache.length,
@@ -7931,41 +7946,6 @@ app.get('/api/admin/banner-and-logo', (_req: Request, res: Response) => {
     bannerUrl: `/images/banner-empresas-en-carmen.png?v=${Date.now()}`,
     logoUrl: `/images/logo-oficial.png?v=${Date.now()}`
   });
-});
-
-// Serve uploaded images with Firestore & live production fallback
-app.get('/uploads/:filename', async (req: Request, res: Response) => {
-  const rawParam = req.params.filename || '';
-  const filename = path.basename(rawParam);
-
-  // Security check: Must be a valid image filename, no traversal, no hidden files
-  const SAFE_IMG_NAME = /^[a-zA-Z0-9_\-\.]+\.(jpg|jpeg|png|webp|svg|gif|ico)$/i;
-  if (!SAFE_IMG_NAME.test(filename) || filename.includes('..') || filename.startsWith('.')) {
-    return res.status(404).send('Invalid image filename');
-  }
-
-  const localFile = path.resolve(__dirname, 'public/uploads', filename);
-
-  if (fs.existsSync(localFile)) {
-    return res.sendFile(localFile);
-  }
-
-  
-
-  // Live production fallback (encarmen.org)
-  try {
-    const liveRes = await fetch(`https://encarmen.org/uploads/${filename}`);
-    if (liveRes.ok) {
-      const buf = Buffer.from(await liveRes.arrayBuffer());
-      const uploadsDir = path.resolve(__dirname, 'public/uploads');
-      fs.mkdirSync(uploadsDir, { recursive: true });
-      fs.writeFileSync(localFile, buf);
-      res.setHeader('Content-Type', liveRes.headers.get('content-type') || 'image/jpeg');
-      return res.send(buf);
-    }
-  } catch (_) {}
-
-  res.status(404).send('Image not found');
 });
 
 // Robots.txt

@@ -216,7 +216,7 @@ export const AdminEventsTab: React.FC = () => {
   const handlePublishSelectedCandidates = async () => {
     const toPublish = aiCandidates.filter(c => selectedCandidateIds.has(c.id) && !c.alreadyPublished);
     if (toPublish.length === 0) {
-      alert('Por favor selecciona al menos un evento que aún no esté publicado.');
+      setAiSearchMessage({ text: 'Por favor selecciona al menos un evento que aún no esté publicado.', type: 'warning' });
       return;
     }
     setIsPublishingCandidates(true);
@@ -232,7 +232,7 @@ export const AdminEventsTab: React.FC = () => {
         loadRadarStatus();
       }
     } catch (err: any) {
-      alert(err.message || 'Error al publicar eventos.');
+      setMessage({ text: err.message || 'Error al publicar eventos.', type: 'error' });
     } finally {
       setIsPublishingCandidates(false);
     }
@@ -320,11 +320,11 @@ export const AdminEventsTab: React.FC = () => {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Por favor selecciona un archivo de imagen (JPG, PNG, WebP).');
+      setMessage({ text: 'Por favor selecciona un archivo de imagen (JPG, PNG, WebP).', type: 'error' });
       return;
     }
     if (file.size > 6 * 1024 * 1024) {
-      alert('La imagen no debe exceder los 6MB.');
+      setMessage({ text: 'La imagen no debe exceder los 6MB.', type: 'error' });
       return;
     }
 
@@ -351,7 +351,7 @@ export const AdminEventsTab: React.FC = () => {
       setIsUploadingImage(false);
     };
     reader.onerror = () => {
-      alert('Error leyendo la imagen.');
+      setMessage({ text: 'Error leyendo la imagen seleccionada.', type: 'error' });
       setIsUploadingImage(false);
     };
     reader.readAsDataURL(file);

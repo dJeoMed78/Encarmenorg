@@ -107,7 +107,7 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 6 * 1024 * 1024) {
-      alert('La imagen no debe exceder los 6MB.');
+      setAiSearchNotification({ text: 'La imagen no debe exceder los 6MB.', type: 'error' });
       return;
     }
     setIsUploadingImage(true);
@@ -134,7 +134,7 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
     };
     reader.onerror = () => {
       setIsUploadingImage(false);
-      alert('Error al leer el archivo.');
+      setAiSearchNotification({ text: 'Error al leer el archivo de imagen.', type: 'error' });
     };
     reader.readAsDataURL(file);
   };
@@ -338,7 +338,11 @@ export const EventsBillboardBanner: React.FC<EventsBillboardBannerProps> = ({
         setTimeout(() => setAiSearchNotification(null), 8000);
       }
     } catch (err: any) {
-      alert(err.message || 'Error al publicar eventos.');
+      setAiSearchNotification({
+        text: err?.message || 'Error al publicar eventos.',
+        type: 'error'
+      });
+      setTimeout(() => setAiSearchNotification(null), 6000);
     } finally {
       setIsPublishingCandidates(false);
     }

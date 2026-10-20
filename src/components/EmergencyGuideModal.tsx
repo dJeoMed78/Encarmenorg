@@ -152,7 +152,14 @@ export const EmergencyGuideModal: React.FC<EmergencyGuideModalProps> = ({
 
   const handleShare = (item: EmergencyServiceItem) => {
     const text = `🚨 Número de Emergencia en Ciudad del Carmen:\n\n*${item.name}*\n📞 Teléfono: ${item.phone}\n📍 Ubicación: ${item.address}\n⏱️ Horario: ${item.schedule}\n\nEncuentra más teléfonos de auxilio 24/7 en https://encarmen.org`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    const shareUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    const a = document.createElement('a');
+    a.href = shareUrl;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const handleOpenAddNew = () => {

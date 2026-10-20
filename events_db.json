@@ -1,23 +1,5 @@
 [
   {
-    "id": "evt-radar-1792500962068-d5y7",
-    "title": "Carrera Atlética y Recreativa 10K y 5K Ciudad del Carmen",
-    "category": "Deportes & Maratón",
-    "categorySlug": "deportes",
-    "date": "Viernes, 30 de octubre",
-    "time": "06:30 hrs",
-    "location": "Circuito Malecón Costero Nelson Barrera, Playa Norte",
-    "cost": "Inscripción abierta en Dashport",
-    "description": "Evento atlético con cronometraje chip electrónico de Dashport en circuito playero de Ciudad del Carmen. Puntos de hidratación, kit de corredor y medalla a finalistas.",
-    "organizer": "Dashport Run & Club Fondistas Carmen",
-    "badge": "Dashport Carmen",
-    "icon": "Trophy",
-    "image": "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&auto=format&fit=crop&q=80",
-    "sourceUrl": "https://dashport.run/proximos-eventos/",
-    "aiDetected": true,
-    "updatedAt": "2026-10-20T12:56:01.662Z"
-  },
-  {
     "id": "evt-radar-1792500961983-fvqx",
     "title": "Domingos Culturales y Muestra Musical en Parque Zaragoza",
     "category": "Música & Familia",
@@ -33,7 +15,27 @@
     "image": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80",
     "sourceUrl": "https://www.facebook.com/CulturaCarmenMx/",
     "aiDetected": true,
-    "updatedAt": "2026-10-20T12:56:01.662Z"
+    "updatedAt": "2026-10-20T12:56:01.662Z",
+    "status": "published"
+  },
+  {
+    "id": "evt-radar-1792500962068-d5y7",
+    "title": "Carrera Atlética y Recreativa 10K y 5K Ciudad del Carmen",
+    "category": "Deportes & Maratón",
+    "categorySlug": "deportes",
+    "date": "Viernes, 30 de octubre",
+    "time": "06:30 hrs",
+    "location": "Circuito Malecón Costero Nelson Barrera, Playa Norte",
+    "cost": "Inscripción abierta en Dashport",
+    "description": "Evento atlético con cronometraje chip electrónico de Dashport en circuito playero de Ciudad del Carmen. Puntos de hidratación, kit de corredor y medalla a finalistas.",
+    "organizer": "Dashport Run & Club Fondistas Carmen",
+    "badge": "Dashport Carmen",
+    "icon": "Trophy",
+    "image": "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&auto=format&fit=crop&q=80",
+    "sourceUrl": "https://dashport.run/proximos-eventos/",
+    "aiDetected": true,
+    "updatedAt": "2026-10-20T12:56:01.662Z",
+    "status": "published"
   },
   {
     "id": "evt-radar-1792500961663-9ko4",
@@ -51,25 +53,8 @@
     "image": "https://images.unsplash.com/photo-1533900298318-6b8da08a523e?w=800&auto=format&fit=crop&q=80",
     "sourceUrl": "https://proeventos.campeche.gob.mx/calendario/",
     "aiDetected": true,
-    "updatedAt": "2026-10-20T12:56:01.662Z"
-  },
-  {
-    "id": "evt-radar-1792500566090-m89b",
-    "title": "Torneo de Pesca Recreativa Laguna de Términos",
-    "category": "Pesca Deportiva & Naturaleza",
-    "categorySlug": "deportes",
-    "date": "Martes, 3 de noviembre",
-    "time": "07:00 - 13:00 hrs",
-    "location": "Paseo de la Puntilla y Muelle Fiscal",
-    "cost": "Observación Gratuita",
-    "description": "Competencia amistosa de captura y liberación de especies locales en las tranquilas aguas de la Laguna de Términos. Premiación a las piezas más destacadas.",
-    "organizer": "Club Náutico y Ambiental Carmen",
-    "badge": "Radar Acuático",
-    "icon": "Anchor",
-    "image": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&auto=format&fit=crop&q=80",
-    "sourceUrl": "https://proeventos.campeche.gob.mx/calendario/",
-    "aiDetected": true,
-    "updatedAt": "2026-10-20T12:49:25.692Z"
+    "updatedAt": "2026-10-20T12:56:01.662Z",
+    "status": "published"
   },
   {
     "id": "evt-radar-1792500566011-fyx5",
@@ -87,7 +72,27 @@
     "image": "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=800&auto=format&fit=crop&q=80",
     "sourceUrl": "https://proeventos.campeche.gob.mx/calendario/",
     "aiDetected": true,
-    "updatedAt": "2026-10-20T12:49:25.692Z"
+    "updatedAt": "2026-10-20T12:49:25.692Z",
+    "status": "published"
+  },
+  {
+    "id": "evt-radar-1792500566090-m89b",
+    "title": "Torneo de Pesca Recreativa Laguna de Términos",
+    "category": "Pesca Deportiva & Naturaleza",
+    "categorySlug": "deportes",
+    "date": "Martes, 3 de noviembre",
+    "time": "07:00 - 13:00 hrs",
+    "location": "Paseo de la Puntilla y Muelle Fiscal",
+    "cost": "Observación Gratuita",
+    "description": "Competencia amistosa de captura y liberación de especies locales en las tranquilas aguas de la Laguna de Términos. Premiación a las piezas más destacadas.",
+    "organizer": "Club Náutico y Ambiental Carmen",
+    "badge": "Radar Acuático",
+    "icon": "Anchor",
+    "image": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&auto=format&fit=crop&q=80",
+    "sourceUrl": "https://proeventos.campeche.gob.mx/calendario/",
+    "aiDetected": true,
+    "updatedAt": "2026-10-20T12:49:25.692Z",
+    "status": "published"
   },
   {
     "id": "evt-radar-1792500565693-45ey",
@@ -105,7 +110,8 @@
     "image": "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=800&auto=format&fit=crop&q=80",
     "sourceUrl": "https://proeventos.campeche.gob.mx/calendario/",
     "aiDetected": true,
-    "updatedAt": "2026-10-20T12:49:25.692Z"
+    "updatedAt": "2026-10-20T12:49:25.692Z",
+    "status": "published"
   },
   {
     "id": "evt-radar-1792499593047-h4r8",
@@ -226,7 +232,7 @@
     "title": "Festival del Marisco y Camarón Carmelita",
     "category": "Gastronomía & Tradición",
     "categorySlug": "gastronomia",
-    "date": "Sábado, 24 de octubre",
+    "date": "Domingo, 25 de octubre",
     "time": "12:00 - 21:00 hrs",
     "location": "Malecón Costero Nelson Barrera, Playa Norte",
     "cost": "Entrada Libre",
@@ -237,7 +243,7 @@
     "image": "/uploads/festival-gastronomico-carmen.jpg",
     "sourceUrl": "https://proeventos.campeche.gob.mx/calendario/",
     "aiDetected": true,
-    "updatedAt": "2026-10-19T16:59:10.971Z",
+    "updatedAt": "2026-10-20T13:25:29.950Z",
     "status": "published"
   },
   {
@@ -245,7 +251,7 @@
     "title": "Noche Bohemia y Trova Yucateca en el Kiosco",
     "category": "Cultura & Música",
     "categorySlug": "cultura",
-    "date": "Domingo, 25 de octubre",
+    "date": "Lunes, 26 de octubre",
     "time": "19:00 - 22:30 hrs",
     "location": "Kiosco del Parque Ignacio Zaragoza, Centro",
     "cost": "Entrada Libre",
@@ -256,7 +262,7 @@
     "image": "/uploads/kiosco-parque-zaragoza.jpg",
     "sourceUrl": "https://proeventos.campeche.gob.mx/calendario/",
     "aiDetected": true,
-    "updatedAt": "2026-10-19T16:59:10.971Z",
+    "updatedAt": "2026-10-20T13:25:29.950Z",
     "status": "published"
   },
   {
@@ -264,7 +270,7 @@
     "title": "Carrera Atlética 5K y 10K Malecón Playa Norte",
     "category": "Deportes & Fitness",
     "categorySlug": "deportes",
-    "date": "Martes, 27 de octubre",
+    "date": "Miércoles, 28 de octubre",
     "time": "06:30 - 10:00 hrs",
     "location": "Circuito Malecón Costero hacia Punta Norte",
     "cost": "Registro Gratuito (Kit $150 MXN opcional)",
@@ -272,10 +278,10 @@
     "organizer": "Club de Atletismo y Fondistas Isla del Carmen",
     "badge": "Radar Deportivo",
     "icon": "Activity",
-    "image": "/uploads/kiosco-parque-zaragoza.jpg",
+    "image": "/uploads/38637-CATRINAS_10K.jpg",
     "sourceUrl": "https://proeventos.campeche.gob.mx/calendario/",
     "aiDetected": true,
-    "updatedAt": "2026-10-19T16:59:10.971Z",
+    "updatedAt": "2026-10-20T13:25:29.950Z",
     "status": "published"
   },
   {
