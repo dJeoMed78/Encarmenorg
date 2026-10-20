@@ -4234,12 +4234,18 @@ Devuelve ÚNICAMENTE un array JSON válido sin texto adicional ni markdown exter
 
     // Filtrar por query si el usuario buscó algo
     if (userQuery) {
-      fbCandidates = fbCandidates.filter(c => 
-        c.title.toLowerCase().includes(userQuery) ||
-        c.description.toLowerCase().includes(userQuery) ||
-        c.colonia.toLowerCase().includes(userQuery) ||
-        (c.contactName || '').toLowerCase().includes(userQuery)
-      );
+      const q = userQuery.toLowerCase().trim();
+      const isJob = q === 'empleo' || q === 'empleos' || q === 'trabajo' || q === 'vacante' || q === 'vacantes';
+      fbCandidates = fbCandidates.filter(c => {
+        if (isJob && (c.category === 'empleos' || (c.subcategory && c.subcategory.includes('empleo')))) return true;
+        const title = (c.title || '').toLowerCase();
+        const desc = (c.description || '').toLowerCase();
+        const col = (c.colonia || '').toLowerCase();
+        const contact = (c.contactName || '').toLowerCase();
+        const cat = (c.category || '').toLowerCase();
+        const subcat = (c.subcategory || '').toLowerCase();
+        return title.includes(q) || desc.includes(q) || col.includes(q) || contact.includes(q) || cat.includes(q) || subcat.includes(q);
+      });
     }
 
     // Combinar con los generados por IA (priorizando los de IA si se usó)

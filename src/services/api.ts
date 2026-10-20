@@ -668,11 +668,16 @@ export async function searchClassifiedRadarCandidates(
   }
   if (query && query.trim()) {
     const q = query.toLowerCase().trim();
-    filtered = filtered.filter(c =>
-      c.title.toLowerCase().includes(q) ||
-      c.description.toLowerCase().includes(q) ||
-      (c.colonia && c.colonia.toLowerCase().includes(q))
-    );
+    const isJob = q === 'empleo' || q === 'empleos' || q === 'trabajo' || q === 'vacante' || q === 'vacantes';
+    filtered = filtered.filter(c => {
+      if (isJob && (c.category === 'empleos' || (c.subcategory && c.subcategory.includes('empleo')))) return true;
+      const title = (c.title || '').toLowerCase();
+      const desc = (c.description || '').toLowerCase();
+      const col = (c.colonia || '').toLowerCase();
+      const cat = (c.category || '').toLowerCase();
+      const subcat = (c.subcategory || '').toLowerCase();
+      return title.includes(q) || desc.includes(q) || col.includes(q) || cat.includes(q) || subcat.includes(q);
+    });
   }
 
   return {
