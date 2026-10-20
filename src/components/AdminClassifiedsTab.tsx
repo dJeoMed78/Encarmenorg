@@ -426,22 +426,22 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
       {/* MODAL: RADAR DE ANUNCIOS CLASIFICADOS (GRUPO FB / IA)     */}
       {/* ========================================================= */}
       {isRadarOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl border border-stone-200 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-stone-900/60 backdrop-blur-xs">
+          <div className="bg-white w-full max-w-4xl h-[92dvh] sm:h-auto sm:max-h-[88vh] rounded-3xl shadow-2xl border border-stone-200 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-stone-200 bg-stone-50 flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <span className="p-2.5 rounded-2xl bg-indigo-600 text-white font-bold shadow-xs">
-                  <Radio className="w-5 h-5 animate-pulse" />
+            <div className="p-3 sm:p-5 border-b border-stone-200 bg-stone-50 flex items-start justify-between gap-3 sm:gap-4 shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <span className="p-2 sm:p-2.5 rounded-2xl bg-indigo-600 text-white font-bold shadow-xs shrink-0">
+                  <Radio className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse" />
                 </span>
-                <div>
-                  <h3 className="text-base sm:text-lg font-black text-stone-900 flex items-center gap-2">
+                <div className="min-w-0">
+                  <h3 className="text-sm sm:text-lg font-black text-stone-900 flex items-center gap-1.5 sm:gap-2 flex-wrap">
                     <span>📡 Radar de Anuncios Clasificados</span>
-                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                    <span className="text-[9px] sm:text-[10px] font-extrabold uppercase px-1.5 sm:px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 shrink-0">
                       Grupo Facebook & IA
                     </span>
                   </h3>
-                  <p className="text-xs text-stone-500 mt-0.5 max-w-2xl">
+                  <p className="text-xs text-stone-500 mt-0.5 max-w-2xl hidden sm:block">
                     Rastreador de publicaciones del grupo oficial{' '}
                     <a
                       href="https://www.facebook.com/groups/506440126097710"
@@ -454,13 +454,16 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                     </a>
                     . El administrador verifica la autenticidad y aprueba cada anuncio antes de publicarlo en el portal.
                   </p>
+                  <p className="text-[11px] text-stone-500 mt-0.5 sm:hidden truncate">
+                    Grupo Oficial: Empresas en Carmen (506440126097710)
+                  </p>
                 </div>
               </div>
 
               <button
                 type="button"
                 onClick={() => setIsRadarOpen(false)}
-                className="p-2 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-200 transition-colors cursor-pointer"
+                className="p-1.5 sm:p-2 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-200 transition-colors cursor-pointer shrink-0"
                 title="Cerrar Radar"
               >
                 <X className="w-5 h-5" />
@@ -468,7 +471,7 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
             </div>
 
             {/* Search & Actions Bar */}
-            <div className="p-4 border-b border-stone-200 bg-white space-y-3">
+            <div className="p-3 sm:p-4 border-b border-stone-200 bg-white space-y-2 sm:space-y-3 shrink-0">
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
                 <div className="sm:col-span-5 relative">
                   <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -612,8 +615,11 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
               </div>
             </div>
 
-            {/* Candidates List Body */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 bg-stone-100/50">
+            {/* Candidates List Body (Scrollable container with native iOS touch momentum) */}
+            <div
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-5 space-y-3 sm:space-y-4 bg-stone-100/50 touch-pan-y"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
               {radarLoading ? (
                 <div className="py-16 text-center space-y-3">
                   <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto" />
@@ -798,7 +804,7 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-stone-200 bg-stone-50 flex items-center justify-between text-xs text-stone-500">
+            <div className="p-3 sm:p-4 border-t border-stone-200 bg-stone-50 flex items-center justify-between text-xs text-stone-500 shrink-0">
               <span className="flex items-center gap-1">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
                 <span>Verificación obligatoria del administrador activa</span>
