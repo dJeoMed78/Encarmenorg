@@ -15,5 +15,13 @@
     "facebookGroup": "https://facebook.com/share/g/18WwRY3pKB/?mibextid=wwXIfr",
     "facebookPage": "https://facebook.com/empresasencarmen"
   },
-  "lastUpdated": "2026-10-16T16:07:54.255Z"
+  "lastUpdated": "2026-10-16T16:07:54.255Z",
+  "maintenanceMode": {
+    "enabled": false,
+    "title": "Portal Temporalmente en Mantenimiento",
+    "message": "Estamos realizando actualizaciones y mantenimiento técnico en la plataforma. Volveremos a estar en línea muy pronto.",
+    "bannerUrl": "/images/banner-empresas-en-carmen.png",
+    "estimatedReturn": "Unos momentos",
+    "updatedAt": "2026-10-21T11:00:00.000Z"
+  }
 }

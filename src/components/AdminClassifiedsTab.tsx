@@ -102,13 +102,13 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
     setApprovingId(cand.id);
     try {
       const res = await approveClassifiedCandidate(cand);
-      if (res.success && res.classified) {
+      if (res.success) {
         setNotification({
           type: 'success',
           text: `¡Anuncio "${cand.title}" verificado y publicado con éxito!`
         });
-        // Mark as published locally in the radar list
-        setRadarCandidates(prev => prev.map(c => c.id === cand.id ? { ...c, alreadyPublished: true } : c));
+        // Remove from radar candidates list immediately
+        setRadarCandidates(prev => prev.filter(c => c.id !== cand.id));
         setSelectedCandidateIds(prev => {
           const next = new Set(prev);
           next.delete(cand.id);
@@ -139,7 +139,8 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
           text: `¡${toApprove.length} anuncios verificados y publicados en Clasificados!`
         });
         const approvedIds = new Set(toApprove.map(c => c.id));
-        setRadarCandidates(prev => prev.map(c => approvedIds.has(c.id) ? { ...c, alreadyPublished: true } : c));
+        // Remove all approved from radar list
+        setRadarCandidates(prev => prev.filter(c => !approvedIds.has(c.id)));
         setSelectedCandidateIds(new Set());
         if (onRefresh) onRefresh();
       } else {

@@ -1569,7 +1569,7 @@ app.post('/api/admin/portal-config/raw', async (req: Request, res: Response) => 
 });
 
 // Obtener "Cambios Deseados" y "Fallas del Portal"
-app.get('/api/admin/portal-notes', async (_req: Request, res: Response) => {
+app.get(['/api/admin/portal-notes', '/admin/portal-notes'], async (_req: Request, res: Response) => {
   try {
     if (isMariaDbActive()) {
       const dbNotes = await dbLoadPortalNotes();
@@ -1593,7 +1593,7 @@ app.get('/api/admin/portal-notes', async (_req: Request, res: Response) => {
 });
 
 // Guardar "Cambios Deseados" y "Fallas del Portal"
-app.post('/api/admin/portal-notes', async (req: Request, res: Response) => {
+app.post(['/api/admin/portal-notes', '/admin/portal-notes'], async (req: Request, res: Response) => {
   try {
     const { cambios_al_portal, fallas_del_portal } = req.body;
 
@@ -1621,6 +1621,60 @@ app.post('/api/admin/portal-notes', async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, message: err.message || 'Error al guardar notas.' });
   }
 });
+
+// ==========================================
+// MODO MANTENIMIENTO / DESACTIVACIÓN DEL PORTAL
+// ==========================================
+app.get(['/api/maintenance', '/maintenance', '/api/system/maintenance'], (_req: Request, res: Response) => {
+  const mode = portalConfig.maintenanceMode || {
+    enabled: false,
+    title: 'Portal en Mantenimiento',
+    message: 'Estamos realizando tareas de mantenimiento preventivo.',
+    bannerUrl: '/images/banner-empresas-en-carmen.png',
+    estimatedReturn: 'En unos momentos'
+  };
+  res.json({
+    success: true,
+    maintenance: mode
+  });
+});
+
+app.post(['/api/admin/maintenance', '/admin/maintenance'], async (req: Request, res: Response) => {
+  try {
+    const { enabled, title, message, bannerUrl, estimatedReturn } = req.body || {};
+
+    portalConfig.maintenanceMode = {
+      enabled: Boolean(enabled),
+      title: title && String(title).trim() ? String(title).trim() : 'Portal Temporalmente en Mantenimiento',
+      message: message && String(message).trim() ? String(message).trim() : 'Estamos realizando ajustes técnicos y mejoras en el portal. Volvemos en unos momentos.',
+      bannerUrl: bannerUrl ? String(bannerUrl).trim() : (portalConfig.bannerUrl || '/images/banner-empresas-en-carmen.png'),
+      estimatedReturn: estimatedReturn ? String(estimatedReturn).trim() : 'Pronto',
+      updatedAt: new Date().toISOString()
+    };
+    portalConfig.lastUpdated = new Date().toISOString();
+
+    fs.writeFileSync(portalConfigPath, JSON.stringify(portalConfig, null, 2), 'utf8');
+
+    let dbSaved = false;
+    if (isMariaDbActive()) {
+      dbSaved = await dbSavePortalConfig(portalConfig);
+    }
+
+    console.log(`[Mantenimiento] Estado de mantenimiento actualizado: ${portalConfig.maintenanceMode.enabled ? 'ACTIVADO (Portal Desactivado)' : 'DESACTIVADO (Portal En Línea)'}`);
+
+    return res.json({
+      success: true,
+      message: portalConfig.maintenanceMode.enabled
+        ? '¡Portal desactivado al público exitosamente! (Modo Mantenimiento Activo)'
+        : '¡Portal reactivado con éxito! (El directorio vuelve a estar en línea para todos)',
+      maintenance: portalConfig.maintenanceMode,
+      dbSaved
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Error al cambiar modo mantenimiento: ' + err.message });
+  }
+});
+
 
 // Version
 app.get('/api/version', (_req: Request, res: Response) => {
@@ -2911,10 +2965,10 @@ app.post('/api/submit-business', async (req: Request, res: Response) => {
 });
 
 // Admin update business
-app.patch('/api/businesses/:id', async (req: Request, res: Response) => {
+app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
-    const idx = businessesCache.findIndex(b => String(b.id) === id);
+    const idx = businessesCache.findIndex(b => String(b.id) === String(id) || Number(b.id) === Number(id));
     if (idx === -1) {
       return res.status(404).json({ success: false, message: 'Empresa no encontrada' });
     }
@@ -2965,7 +3019,10 @@ app.patch('/api/businesses/:id', async (req: Request, res: Response) => {
     if (isMariaDbActive()) {
       try {
         await dbSaveBusiness(updated);
+        cachedDbSignature = null;
       } catch (_) {}
+    } else {
+      cachedDbSignature = null;
     }
 
     // Sync update with WordPress WooCommerce if credentials exist
@@ -3237,10 +3294,10 @@ app.post('/api/businesses/:id/verify-edit-pin', (req: Request, res: Response) =>
 });
 
 // Admin delete business
-app.delete('/api/businesses/:id', async (req: Request, res: Response) => {
+app.delete(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
-    const idx = businessesCache.findIndex(b => String(b.id) === id);
+    const idx = businessesCache.findIndex(b => String(b.id) === String(id) || Number(b.id) === Number(id));
     if (idx === -1) {
       return res.status(404).json({ success: false, message: 'Empresa no encontrada' });
     }
@@ -3252,12 +3309,13 @@ app.delete('/api/businesses/:id', async (req: Request, res: Response) => {
       fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
     } catch (_) {}
 
-    
-
     if (isMariaDbActive()) {
       try {
         await dbDeleteBusiness(id);
+        cachedDbSignature = null;
       } catch (_) {}
+    } else {
+      cachedDbSignature = null;
     }
 
     // Sync deletion with WordPress WooCommerce if credentials exist
@@ -4274,7 +4332,7 @@ Devuelve ÚNICAMENTE un array JSON válido sin texto adicional ni markdown exter
 });
 
 // Approve a candidate classified and publish it to the live directory
-app.post('/api/classifieds/approve-candidate', async (req: Request, res: Response) => {
+app.post(['/api/classifieds/approve-candidate', '/classifieds/approve-candidate'], async (req: Request, res: Response) => {
   try {
     const cand = req.body?.candidate;
     if (!cand || !cand.title) {
@@ -4319,7 +4377,7 @@ app.post('/api/classifieds/approve-candidate', async (req: Request, res: Respons
 });
 
 // Batch approve classifieds
-app.post('/api/classifieds/batch-approve', async (req: Request, res: Response) => {
+app.post(['/api/classifieds/batch-approve', '/classifieds/batch-approve'], async (req: Request, res: Response) => {
   try {
     const candidates = req.body?.candidates;
     if (!Array.isArray(candidates) || candidates.length === 0) {

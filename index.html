@@ -14,6 +14,14 @@
           e.preventDefault();
         }
       });
+      window.addEventListener('error', function(e) {
+        if (e && (
+          (e.message && e.message.includes('WebSocket')) ||
+          (e.filename && e.filename.includes('@vite/client'))
+        )) {
+          e.preventDefault();
+        }
+      });
     </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />

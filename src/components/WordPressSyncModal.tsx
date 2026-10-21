@@ -75,6 +75,7 @@ import { AdminAccountsManagerTab } from './AdminAccountsManagerTab';
 import { AdminBrandMediaTab } from './AdminBrandMediaTab';
 import { AdminDesiredChangesTab } from './AdminDesiredChangesTab';
 import { AdminConfigEditorTab } from './AdminConfigEditorTab';
+import { AdminMaintenanceTab } from './AdminMaintenanceTab';
 import ALL_COLONIAS_CARMEN from '../data/colonias_carmen.json';
 import { cleanPhoneNumber } from '../utils/phone';
 import { DELIVERY_OPTIONS, normalizeDeliveryOption } from '../constants/delivery';
@@ -154,7 +155,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
   const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showAdminPassword, setShowAdminPassword] = useState(false);
-  const [activeTab, setActiveTab] = useState<'start' | 'businesses' | 'ai_assistant' | 'analytics' | 'reports' | 'classifieds' | 'new_business' | 'promotions' | 'status' | 'emergency' | 'events' | 'admins' | 'brand_media' | 'desired_changes' | 'config_editor'>('start');
+  const [activeTab, setActiveTab] = useState<'start' | 'businesses' | 'ai_assistant' | 'analytics' | 'reports' | 'classifieds' | 'new_business' | 'promotions' | 'status' | 'emergency' | 'events' | 'admins' | 'brand_media' | 'desired_changes' | 'config_editor' | 'maintenance'>('start');
   const [currentTime, setCurrentTime] = useState(() => {
     const d = new Date();
     return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
@@ -373,6 +374,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
       case 'admins': return 'Administradores & Claves de Acceso';
       case 'desired_changes': return 'Cambios Deseados y Fallas del Portal';
       case 'config_editor': return 'Archivo de Configuración en Vivo';
+      case 'maintenance': return 'Modo Mantenimiento y Desactivación del Portal';
       case 'status': return 'Conexión & Sincronización';
       default: return 'Inicio';
     }
@@ -1194,6 +1196,19 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
                   <button
                     type="button"
+                    onClick={() => setActiveTab('maintenance')}
+                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                      activeTab === 'maintenance'
+                        ? 'bg-rose-700 text-white font-black'
+                        : 'text-rose-300 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                    <span>🔴 Desactivar Portal</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setActiveTab('status')}
                     className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                       activeTab === 'status'
@@ -1691,6 +1706,10 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
           ) : activeTab === 'config_editor' ? (
             <div className="p-4 sm:p-6">
               <AdminConfigEditorTab />
+            </div>
+          ) : activeTab === 'maintenance' ? (
+            <div className="p-4 sm:p-6">
+              <AdminMaintenanceTab />
             </div>
           ) : activeTab === 'status' ? (
             <div className="space-y-6">

@@ -5,6 +5,20 @@ import radarClassifiedsSeed from '../data/radar_classifieds_pool.json';
 
 const API_BASE = '/api';
 
+export async function parseJsonResponse<T>(res: Response, fallbackErrorMsg: string): Promise<T> {
+  const text = await res.text();
+  try {
+    const data = JSON.parse(text);
+    return data as T;
+  } catch (_parseErr) {
+    if (!res.ok) {
+      throw new Error(`El servidor respondió con código HTTP ${res.status}.`);
+    }
+    const cleanSnippet = text.replace(/<[^>]*>?/gm, '').trim().slice(0, 120);
+    throw new Error(cleanSnippet ? `Respuesta no válida del servidor: "${cleanSnippet}"` : fallbackErrorMsg);
+  }
+}
+
 export async function fetchBusinesses(params: {
   q?: string;
   category?: string;
@@ -441,8 +455,7 @@ export async function adminUpdateBusiness(id: number, data: Partial<import('../t
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    return await parseJsonResponse(res, 'Error al actualizar negocio');
   } catch (err: any) {
     return { success: false, message: err.message || 'Error al actualizar negocio' };
   }
@@ -453,8 +466,7 @@ export async function adminDeleteBusiness(id: number): Promise<{ success: boolea
     const res = await fetch(`${API_BASE}/businesses/${id}`, {
       method: 'DELETE'
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    return await parseJsonResponse(res, 'Error al dar de baja el negocio');
   } catch (err: any) {
     return { success: false, message: err.message || 'Error al dar de baja el negocio' };
   }
@@ -701,7 +713,7 @@ export async function approveClassifiedCandidate(candidate: Partial<import('../t
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ candidate })
     });
-    return await res.json();
+    return await parseJsonResponse(res, 'Error al aprobar anuncio');
   } catch (err: any) {
     return { success: false, message: err.message || 'Error al aprobar anuncio' };
   }
@@ -718,11 +730,63 @@ export async function batchApproveClassifiedCandidates(candidates: Partial<impor
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ candidates })
     });
-    return await res.json();
+    return await parseJsonResponse(res, 'Error al aprobar anuncios por lote');
   } catch (err: any) {
     return { success: false, message: err.message || 'Error al aprobar anuncios por lote' };
   }
 }
+
+// ==========================================
+// MODO MANTENIMIENTO / DESACTIVACIÓN DEL PORTAL
+// ==========================================
+export interface MaintenanceModeConfig {
+  enabled: boolean;
+  title: string;
+  message: string;
+  bannerUrl?: string;
+  estimatedReturn?: string;
+  updatedAt?: string;
+}
+
+export async function getMaintenanceMode(): Promise<{
+  success: boolean;
+  maintenance: MaintenanceModeConfig;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/maintenance?_t=${Date.now()}`, {
+      cache: 'no-store'
+    });
+    return await parseJsonResponse(res, 'No se pudo obtener el estado de mantenimiento.');
+  } catch (_err: any) {
+    return {
+      success: true,
+      maintenance: {
+        enabled: false,
+        title: 'Portal Temporalmente en Mantenimiento',
+        message: 'Estamos realizando mejoras técnicas en el portal.',
+        bannerUrl: '/images/banner-empresas-en-carmen.png'
+      }
+    };
+  }
+}
+
+export async function updateMaintenanceMode(config: Partial<MaintenanceModeConfig>): Promise<{
+  success: boolean;
+  message: string;
+  maintenance?: MaintenanceModeConfig;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/admin/maintenance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config)
+    });
+    return await parseJsonResponse(res, 'Error al actualizar estado de mantenimiento');
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Error de conexión con el servidor.' };
+  }
+}
+
 
 
 export interface ExtractedBusinessAI {

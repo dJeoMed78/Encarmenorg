@@ -270,9 +270,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       });
       if (res.success) {
         setSuccessMsg('¡Negocio actualizado correctamente!');
-        setTimeout(() => {
-          onClose();
-        }, 1200);
+        onClose();
       } else {
         setErrorMsg(res.message || 'Error al guardar los cambios.');
       }
@@ -827,6 +825,12 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           </div>
 
           {/* Submit Toolbar */}
+          {errorMsg && (
+            <div className="mb-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
           <div className="pt-4 border-t border-stone-200 flex items-center justify-end gap-2">
             <button
               type="button"

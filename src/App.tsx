@@ -35,8 +35,12 @@ import {
   deleteClassified,
   adminUpdateBusiness,
   adminDeleteBusiness,
-  getPromotions
+  getPromotions,
+  getMaintenanceMode,
+  updateMaintenanceMode,
+  MaintenanceModeConfig
 } from './services/api';
+import { MaintenanceOverlay } from './components/MaintenanceOverlay';
 import { isSessionAdminAuthenticated, clearAdminAuth } from './utils/adminAuth';
 import { ClassifiedAd, Promotion } from './types';
 import {
@@ -220,6 +224,10 @@ export default function App() {
 
   // 24/7 Emergency Guide state
   const [isEmergencyGuideOpen, setIsEmergencyGuideOpen] = useState(false);
+
+  // Portal Maintenance Mode state
+  const [maintenanceConfig, setMaintenanceConfig] = useState<MaintenanceModeConfig | null>(null);
+  const [toastMsg, setToastMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   // Private ZIP download for Creator / Admin (Only visible in AI Studio dev environment or if Admin is authenticated)
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
@@ -482,22 +490,25 @@ export default function App() {
     const confirmMsg = `¿Estás seguro de que deseas eliminar permanentemente a "${b.name}" del directorio y de WordPress?`;
     if (!window.confirm(confirmMsg)) return;
 
-    // Optimistic remove
-    setBusinesses(prev => prev.filter(item => item.id !== b.id));
-    if (selectedBusiness && selectedBusiness.id === b.id) {
+    // Optimistic remove from local view
+    setBusinesses(prev => prev.filter(item => String(item.id) !== String(b.id) && Number(item.id) !== Number(b.id)));
+    if (selectedBusiness && (String(selectedBusiness.id) === String(b.id) || Number(selectedBusiness.id) === Number(b.id))) {
       setSelectedBusiness(null);
     }
-    if (directBusinessView && directBusinessView.id === b.id) {
+    if (directBusinessView && (String(directBusinessView.id) === String(b.id) || Number(directBusinessView.id) === Number(b.id))) {
       setDirectBusinessView(null);
       window.history.pushState({}, '', '/');
     }
-    try {
-      await adminDeleteBusiness(b.id);
-      await loadData();
-    } catch (err: any) {
-      alert(`Error al eliminar: ${err.message}`);
-      await loadData();
+
+    const res = await adminDeleteBusiness(b.id);
+    if (res.success) {
+      setToastMsg({ text: `¡Negocio "${b.name}" eliminado permanentemente!`, type: 'success' });
+      setTimeout(() => setToastMsg(null), 4500);
+    } else {
+      setToastMsg({ text: res.message || 'Error al eliminar empresa.', type: 'error' });
+      setTimeout(() => setToastMsg(null), 5000);
     }
+    await loadData();
   };
 
   const handleSaveEditedBusiness = async (id: number, data: Partial<Business>) => {
@@ -519,9 +530,21 @@ export default function App() {
         setBusinesses(prev => prev.map(b => isTarget(b) ? { ...b, ...finalBiz } : b));
         if (isTarget(selectedBusiness)) setSelectedBusiness(finalBiz);
         if (isTarget(directBusinessView)) setDirectBusinessView(finalBiz);
-        if (isTarget(editingAdminBusiness)) setEditingAdminBusiness(finalBiz);
       }
+      // Close modal immediately and show notification
+      setEditingAdminBusiness(null);
+      setToastMsg({
+        text: `¡Datos de "${data.name || 'la empresa'}" actualizados y guardados exitosamente!`,
+        type: 'success'
+      });
+      setTimeout(() => setToastMsg(null), 4500);
       await loadData();
+    } else {
+      setToastMsg({
+        text: res.message || 'Error al guardar los cambios en el servidor.',
+        type: 'error'
+      });
+      setTimeout(() => setToastMsg(null), 5000);
     }
     return res;
   };
@@ -582,6 +605,10 @@ export default function App() {
 
       fetchClassifieds().then(res => {
         if (res.classifieds) setClassifieds(res.classifieds);
+      }).catch(() => {});
+
+      getMaintenanceMode().then(mRes => {
+        if (mRes && mRes.maintenance) setMaintenanceConfig(mRes.maintenance);
       }).catch(() => {});
 
       setHealth(healthRes);
@@ -791,6 +818,53 @@ export default function App() {
     );
   };
 
+  // If Maintenance Mode is active and visitor is not authenticated as admin, show maintenance screen
+  if (maintenanceConfig?.enabled && !isAdminAuthenticated) {
+    return (
+      <>
+        <MaintenanceOverlay
+          config={maintenanceConfig}
+          onAdminLoginClick={() => setIsSyncModalOpen(true)}
+        />
+        {/* Admin PIN Login & Management Modal */}
+        <WordPressSyncModal
+          isOpen={isSyncModalOpen}
+          onClose={() => setIsSyncModalOpen(false)}
+          businesses={businesses}
+          categories={categories}
+          coloniasList={coloniasList}
+          stats={stats}
+          health={health}
+          onTriggerSync={handleTriggerSync}
+          isSyncing={isSyncing}
+          syncResultMsg={syncResultMsg}
+          onBusinessUpdated={loadData}
+          onSelectBusiness={(biz) => setSelectedBusiness(biz)}
+          onEditBusiness={(biz) => setEditingAdminBusiness(biz)}
+          onToggleTop={handleToggleTop}
+          onToggleRecommended={handleToggleRecommended}
+          onDeleteBusiness={handleDeleteBusinessFromHome}
+          onBusinessAdded={(newBiz) => {
+            setBusinesses(prev => [newBiz, ...prev]);
+            loadData();
+          }}
+          classifieds={classifieds}
+          onOpenCreateClassified={() => {
+            setEditingClassified(null);
+            setIsClassifiedCreateOpen(true);
+          }}
+          onOpenEditClassified={(ad) => {
+            setEditingClassified(ad);
+            setIsClassifiedCreateOpen(true);
+          }}
+          onDeleteClassified={handleDeleteClassified}
+          onOpenDetailClassified={(ad) => setSelectedClassified(ad)}
+          onRefreshClassifieds={loadClassifieds}
+        />
+      </>
+    );
+  }
+
   // Standalone Client Mini-Page View (e.g. from QR scan, shared link ?empresa=slug, or direct view)
   if (directBusinessView) {
     const handleBackToMainDirectory = () => {
@@ -883,6 +957,40 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-stone-50 text-stone-900 font-sans selection:bg-amber-500 selection:text-white">
+      {/* Admin Maintenance Mode Active Warning Banner */}
+      {maintenanceConfig?.enabled && isAdminAuthenticated && (
+        <div className="bg-rose-700 text-white px-4 py-2.5 text-xs sm:text-sm font-bold flex flex-wrap items-center justify-between sticky top-0 z-[120] shadow-md border-b border-rose-800">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping shrink-0" />
+            <span>🔴 MODO MANTENIMIENTO ACTIVO — El portal está desactivado para el público general. Solo tú como administrador puedes ver y editar el directorio.</span>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              const res = await updateMaintenanceMode({ enabled: false });
+              if (res.success) {
+                setMaintenanceConfig(prev => prev ? { ...prev, enabled: false } : null);
+                setToastMsg({ text: '¡Portal reactivado con éxito para todos los visitantes!', type: 'success' });
+                setTimeout(() => setToastMsg(null), 4000);
+              }
+            }}
+            className="px-3 py-1 bg-white hover:bg-rose-100 text-rose-800 rounded-lg font-black text-xs shadow-xs transition-colors cursor-pointer whitespace-nowrap ml-auto sm:ml-3"
+          >
+            🟢 Reactivar Portal Ahora
+          </button>
+        </div>
+      )}
+
+      {/* Global Toast Notification */}
+      {toastMsg && (
+        <div className={`fixed bottom-5 right-5 z-[200] px-4 py-3 rounded-2xl shadow-2xl border text-xs sm:text-sm font-bold flex items-center gap-2.5 animate-in slide-in-from-bottom duration-200 ${
+          toastMsg.type === 'success'
+            ? 'bg-emerald-950 text-emerald-200 border-emerald-600'
+            : 'bg-rose-950 text-rose-200 border-rose-600'
+        }`}>
+          <span>{toastMsg.text}</span>
+        </div>
+      )}
 
       {/* Top Navbar */}
       <Navbar

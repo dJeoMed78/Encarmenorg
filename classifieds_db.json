@@ -1,5 +1,14 @@
 [
   {
+    "title": "Test Ad",
+    "description": "Testing",
+    "category": "empleos",
+    "id": "ad-1792580651899-olfc",
+    "status": "active",
+    "views": 0,
+    "createdAt": "2026-10-21T11:04:11.899Z"
+  },
+  {
     "id": "ad-idc-01",
     "title": "Becario / Prácticas Profesionales de Diseño Web y Medios",
     "category": "empleos",
@@ -20,7 +29,8 @@
     "isVerified": true,
     "status": "active",
     "views": 42,
-    "createdAt": "2026-10-18T18:00:00.000Z"
+    "createdAt": "2026-10-18T18:00:00.000Z",
+    "userToken": ""
   },
   {
     "id": "ad-idc-02",
@@ -43,7 +53,8 @@
     "isVerified": true,
     "status": "active",
     "views": 89,
-    "createdAt": "2026-10-18T16:30:00.000Z"
+    "createdAt": "2026-10-18T16:30:00.000Z",
+    "userToken": ""
   },
   {
     "id": "ad-idc-03",
@@ -66,7 +77,8 @@
     "isVerified": true,
     "status": "active",
     "views": 65,
-    "createdAt": "2026-10-17T20:15:00.000Z"
+    "createdAt": "2026-10-17T20:15:00.000Z",
+    "userToken": ""
   },
   {
     "id": "ad-idc-04",
@@ -89,53 +101,8 @@
     "isVerified": true,
     "status": "active",
     "views": 53,
-    "createdAt": "2026-10-17T17:00:00.000Z"
-  },
-  {
-    "id": "ad-compu-01",
-    "title": "Ayudante General de Mantenimiento y Patio Industrial",
-    "category": "empleos",
-    "subcategory": "empleos-ofertas",
-    "companyName": "Servicios Marítimos y Portuarios del Golfo",
-    "modality": "Patio / Tiempo completo",
-    "experience": "1 año en oficios o pailería básica",
-    "price": 2800,
-    "priceType": "fixed",
-    "currency": "MXN",
-    "colonia": "Puerto Pesquero Laguna Azul",
-    "location": "Recinto Portuario Laguna Azul, Cd. del Carmen",
-    "phone": "9381123450",
-    "whatsapp": "529381123450",
-    "description": "Limpieza y desengrase de piezas, apoyo a mecánicos navales y estiba de equipo para embarque en muelles de Carmen.",
-    "sourceUrl": "https://mx.computrabajo.com/empleos-en-carmen",
-    "source": "CompuTrabajo Carmen",
-    "isVerified": true,
-    "status": "active",
-    "views": 78,
-    "createdAt": "2026-10-18T14:00:00.000Z"
-  },
-  {
-    "id": "ad-compu-02",
-    "title": "Operador de Control de Acceso y Vigilancia Patrimonial",
-    "category": "empleos",
-    "subcategory": "empleos-ofertas",
-    "companyName": "Seguridad Corporativa Carmen",
-    "modality": "Turno 12x24 / Urge contratar",
-    "experience": "Secundaria concluida",
-    "price": 3100,
-    "priceType": "fixed",
-    "currency": "MXN",
-    "colonia": "Col. Miami",
-    "location": "Residencial Miami, Ciudad del Carmen",
-    "phone": "9381458920",
-    "whatsapp": "529381458920",
-    "description": "Registro de visitantes, control vehicular, rondines perimetrales y monitoreo de circuito cerrado de televisión (CCTV).",
-    "sourceUrl": "https://mx.computrabajo.com/empleos-en-carmen",
-    "source": "CompuTrabajo Carmen",
-    "isVerified": true,
-    "status": "active",
-    "views": 61,
-    "createdAt": "2026-10-17T22:30:00.000Z"
+    "createdAt": "2026-10-17T17:00:00.000Z",
+    "userToken": ""
   },
   {
     "id": "ad-ind-01",
@@ -158,7 +125,8 @@
     "isVerified": true,
     "status": "active",
     "views": 94,
-    "createdAt": "2026-10-18T11:45:00.000Z"
+    "createdAt": "2026-10-18T11:45:00.000Z",
+    "userToken": ""
   },
   {
     "id": "ad-ind-02",
@@ -181,7 +149,8 @@
     "isVerified": true,
     "status": "active",
     "views": 112,
-    "createdAt": "2026-10-18T09:20:00.000Z"
+    "createdAt": "2026-10-18T09:20:00.000Z",
+    "userToken": ""
   },
   {
     "id": "ad-loc-01",
@@ -204,7 +173,8 @@
     "isVerified": true,
     "status": "active",
     "views": 128,
-    "createdAt": "2026-10-18T15:10:00.000Z"
+    "createdAt": "2026-10-18T15:10:00.000Z",
+    "userToken": ""
   },
   {
     "id": "ad-loc-02",
@@ -227,6 +197,55 @@
     "isVerified": true,
     "status": "active",
     "views": 145,
-    "createdAt": "2026-10-17T19:00:00.000Z"
+    "createdAt": "2026-10-17T19:00:00.000Z",
+    "userToken": ""
+  },
+  {
+    "id": "ad-compu-01",
+    "title": "Ayudante General de Mantenimiento y Patio Industrial",
+    "category": "empleos",
+    "subcategory": "empleos-ofertas",
+    "companyName": "Servicios Marítimos y Portuarios del Golfo",
+    "modality": "Patio / Tiempo completo",
+    "experience": "1 año en oficios o pailería básica",
+    "price": 2800,
+    "priceType": "fixed",
+    "currency": "MXN",
+    "colonia": "Puerto Pesquero Laguna Azul",
+    "location": "Recinto Portuario Laguna Azul, Cd. del Carmen",
+    "phone": "9381123450",
+    "whatsapp": "529381123450",
+    "description": "Limpieza y desengrase de piezas, apoyo a mecánicos navales y estiba de equipo para embarque en muelles de Carmen.",
+    "sourceUrl": "https://mx.computrabajo.com/empleos-en-carmen",
+    "source": "CompuTrabajo Carmen",
+    "isVerified": true,
+    "status": "active",
+    "views": 78,
+    "createdAt": "2026-10-18T14:00:00.000Z",
+    "userToken": ""
+  },
+  {
+    "id": "ad-compu-02",
+    "title": "Operador de Control de Acceso y Vigilancia Patrimonial",
+    "category": "empleos",
+    "subcategory": "empleos-ofertas",
+    "companyName": "Seguridad Corporativa Carmen",
+    "modality": "Turno 12x24 / Urge contratar",
+    "experience": "Secundaria concluida",
+    "price": 3100,
+    "priceType": "fixed",
+    "currency": "MXN",
+    "colonia": "Col. Miami",
+    "location": "Residencial Miami, Ciudad del Carmen",
+    "phone": "9381458920",
+    "whatsapp": "529381458920",
+    "description": "Registro de visitantes, control vehicular, rondines perimetrales y monitoreo de circuito cerrado de televisión (CCTV).",
+    "sourceUrl": "https://mx.computrabajo.com/empleos-en-carmen",
+    "source": "CompuTrabajo Carmen",
+    "isVerified": true,
+    "status": "active",
+    "views": 61,
+    "createdAt": "2026-10-17T22:30:00.000Z",
+    "userToken": ""
   }
 ]

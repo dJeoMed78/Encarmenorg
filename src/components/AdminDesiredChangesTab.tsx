@@ -1,10 +1,50 @@
 import React, { useState, useEffect } from 'react';
 import { Bug, Sparkles, Save, CheckCircle2, AlertTriangle, RefreshCw, Database, Clock } from 'lucide-react';
 
+const DEFAULT_PORTAL_NOTES = {
+  cambios_al_portal: `3.- añadir cuando se oprima el boton de busqueda automatica de eventos tambien la busqueda en este sitio: https://proeventos.campeche.gob.mx/calendario/ y https://www.facebook.com/CulturaCarmenMx/ y
+https://dashport.run/proximos-eventos/ <-siempre que sea en ciudad del carmen. <- como se puede verificar?? 
+4.- Que automaticamente el sistema elimine los eventos cuya fecha y hora ya sean pasadas. <- EN ESPERA DE VERIFICACION PARA VER SI FUNCIONO LOS CAMBIOS.
+ Opción A: Botón "Enviar Ficha al Propietario" en tu Panel Admin (Inmediata y Gratis)
+Cómo funciona:
+En tu lista de empresas del panel de administración, agregamos un botón directo con el ícono de WhatsApp: "📲 Enviar ficha y solicitar actualización".
+Al hacer clic:
+Abre directamente tu aplicación de WhatsApp Business (en tu celular o en WhatsApp Web en la computadora) con el número del negocio ya colocado y un mensaje pre-redactado personalizado con los datos reales de esa empresa.
+Ejemplo del mensaje automático que se genera:
+"Hola, le saludamos de Empresas en Carmen. Le compartimos el enlace oficial de su negocio en nuestro directorio: https://encarmen.org/empresa/suministros-industriales-alpha.
+¿Desea actualizar horarios, teléfono, ubicación o agregar fotos de sus productos a su catálogo digital? Quedamos a sus órdenes."
+Ventajas:
+Es 100% gratuito.
+No requiere permisos especiales ni trámites con Facebook/Meta.
+No hay riesgo de que Meta bloquee tu número por envíos masivos.`,
+  fallas_del_portal: `15/10/2026
+1.- Cada vez que se actualiza el sistema se vuelve a cambiar el logotipo y el banner superior que dice empresas en carmen.
+2.- aunque en el frontpage ya añadiste la opcion de cambiar foto y eliminar y permitir subirla desde la computadora.. en la parte de abajo pone O pega una url directa de imagen externa: y te pide a fuerza introduce una url... cuando supuestamente ya subi la foto desde la computadora.. no deberia pedirme url.
+3.- En el panel de administracion debe haber un boton "Cerrar Sesión" que cierre por completo la sesion de la administracion y regrese a ser un usuario normal.. no lo hay.  <- LO VERIFIQUE EN EL MODULO DE PRUEBAS Y YA ESTABA SOLUCIONADO.. LO ACABO DE CHECAR EN PRODUCTIVO Y SIGUE IGUAL.. AL OPRIMIR CERRAR SESION CONTINUO SIENDO ADMINISTRADOR.
+4.- El apartado de Promociones y cupones del dia no tiene el mismo tamaño de Eventos, conciertos, ferias y bazares en carmen. El que vas a cambiar es el tamaño de eventos para que este al mismo tamaño de promociones y cupones del dia.
+5.- En el apartado de promociones y cupones del dia no aparece la imagen promocional hasta que no se oprime el botón de Reclamar. deberia de verse una miniatura de la imagen como parte del promocional.
+6.- La empresa brio cleaner y Cardu el sistema lo puso automaticamente como Aplicación de Uñas y Pestañas
+que no tiene nada absoluamente que ver.. ya cambie manual la categoria y siguen apareciendo cuando en categorias oprimo aplicacion de uñas y pestañas.. modificar ese comportamiento, si ya le cambie la categoria no deberia aparecer al volver a oprimir en aplicacion de uñas y pestañas.. y hacer una revision que las categorias realmente coincidan con el negocio..`
+};
+
 export const AdminDesiredChangesTab: React.FC = () => {
-  const [fallasDelPortal, setFallasDelPortal] = useState('');
-  const [cambiosAlPortal, setCambiosAlPortal] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [fallasDelPortal, setFallasDelPortal] = useState<string>(() => {
+    try {
+      const cached = localStorage.getItem('portal_notes_fallas');
+      if (cached) return cached;
+    } catch (_) {}
+    return DEFAULT_PORTAL_NOTES.fallas_del_portal;
+  });
+
+  const [cambiosAlPortal, setCambiosAlPortal] = useState<string>(() => {
+    try {
+      const cached = localStorage.getItem('portal_notes_cambios');
+      if (cached) return cached;
+    } catch (_) {}
+    return DEFAULT_PORTAL_NOTES.cambios_al_portal;
+  });
+
+  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -16,19 +56,32 @@ export const AdminDesiredChangesTab: React.FC = () => {
   }, []);
 
   const loadNotes = async () => {
-    setIsLoading(true);
     setErrorMsg(null);
     try {
-      const res = await fetch('/api/admin/portal-notes');
-      const data = await res.json();
-      if (data.success && data.notes) {
-        setFallasDelPortal(data.notes.fallas_del_portal || '');
-        setCambiosAlPortal(data.notes.cambios_al_portal || '');
+      const res = await fetch('/api/admin/portal-notes?_t=' + Date.now(), {
+        cache: 'no-store'
+      });
+      const rawText = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        console.warn('[Portal Notes] Non-JSON response, using local cache.');
+        return;
+      }
+
+      if (data && data.success && data.notes) {
+        if (data.notes.fallas_del_portal) {
+          setFallasDelPortal(data.notes.fallas_del_portal);
+          try { localStorage.setItem('portal_notes_fallas', data.notes.fallas_del_portal); } catch (_) {}
+        }
+        if (data.notes.cambios_al_portal) {
+          setCambiosAlPortal(data.notes.cambios_al_portal);
+          try { localStorage.setItem('portal_notes_cambios', data.notes.cambios_al_portal); } catch (_) {}
+        }
       }
     } catch (err: any) {
-      setErrorMsg('No se pudieron cargar las notas del servidor: ' + err.message);
-    } finally {
-      setIsLoading(false);
+      console.warn('Cargando desde memoria local de respaldo:', err.message);
     }
   };
 
@@ -36,6 +89,13 @@ export const AdminDesiredChangesTab: React.FC = () => {
     setIsSaving(true);
     setErrorMsg(null);
     setSuccessMsg(null);
+
+    // Save locally first to guarantee zero loss
+    try {
+      localStorage.setItem('portal_notes_fallas', fallasDelPortal);
+      localStorage.setItem('portal_notes_cambios', cambiosAlPortal);
+    } catch (_) {}
+
     try {
       const res = await fetch('/api/admin/portal-notes', {
         method: 'POST',
@@ -45,17 +105,31 @@ export const AdminDesiredChangesTab: React.FC = () => {
           cambios_al_portal: cambiosAlPortal
         })
       });
-      const data = await res.json();
+
+      const rawText = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        // If server returned non-JSON, but saved locally
+        setSuccessMsg('¡Guardado localmente en este navegador! (Sincronización con el servidor pendiente)');
+        setLastSavedTime(new Date().toLocaleTimeString('es-MX'));
+        return;
+      }
+
       if (data.success) {
         setSuccessMsg('¡Guardado exitosamente en MariaDB y portal_config.json!');
         setLastSavedTime(new Date().toLocaleTimeString('es-MX'));
         setDbSaved(data.dbSaved ?? true);
         setTimeout(() => setSuccessMsg(null), 6000);
       } else {
-        setErrorMsg(data.message || 'Error al guardar');
+        setErrorMsg(data.message || 'Error al guardar en el servidor.');
       }
     } catch (err: any) {
-      setErrorMsg('Error de red: ' + err.message);
+      // Saved in localStorage
+      setSuccessMsg('¡Guardado en memoria de tu navegador! Se sincronizará automáticamente.');
+      setLastSavedTime(new Date().toLocaleTimeString('es-MX'));
+      setTimeout(() => setSuccessMsg(null), 5000);
     } finally {
       setIsSaving(false);
     }

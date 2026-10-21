@@ -42,7 +42,7 @@ interface AdminWindowsMobileMenuProps {
   eventsCount?: number;
   isSyncing: boolean;
   onTriggerSync: () => Promise<void>;
-  onSelectTab: (tab: 'businesses' | 'analytics' | 'reports' | 'classifieds' | 'new_business' | 'promotions' | 'status' | 'emergency' | 'events' | 'admins' | 'brand_media' | 'desired_changes' | 'config_editor') => void;
+  onSelectTab: (tab: 'businesses' | 'analytics' | 'reports' | 'classifieds' | 'new_business' | 'promotions' | 'status' | 'emergency' | 'events' | 'admins' | 'brand_media' | 'desired_changes' | 'config_editor' | 'maintenance') => void;
   onClose: () => void;
   onLogout: () => void;
   currentTime: string;
@@ -631,6 +631,35 @@ export const AdminWindowsMobileMenu: React.FC<AdminWindowsMobileMenuProps> = ({
             <div className="text-[11px] font-medium text-sky-200 uppercase tracking-wider pt-1 border-t border-white/15 flex items-center justify-between">
               <span>editar config</span>
               <ChevronRight className="w-3.5 h-3.5 text-sky-100 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </button>
+
+          {/* TILE 11: DESACTIVAR PORTAL / MODO MANTENIMIENTO (Square Tile, Metro Crimson / Red #C41010) */}
+          <button
+            type="button"
+            onClick={() => onSelectTab('maintenance')}
+            className="col-span-1 sm:col-span-1 p-3.5 sm:p-4 bg-[#A80000] hover:bg-[#8F0000] border border-rose-400/40 text-left flex flex-col justify-between h-44 sm:h-48 relative overflow-hidden transition-all duration-150 cursor-pointer shadow-lg active:scale-[0.98] group"
+          >
+            <div className="flex items-start justify-between">
+              <ShieldAlert className="w-7 h-7 text-rose-200 group-hover:scale-110 transition-transform" />
+              <span className="px-1.5 py-0.5 rounded bg-black/40 text-white font-black text-[10px] tracking-wider animate-pulse">
+                OFF/ON
+              </span>
+            </div>
+
+            <div className="space-y-0.5">
+              <div className="text-lg sm:text-xl font-light text-white tracking-tight leading-tight">
+                Desactivar Portal
+              </div>
+              <p className="text-[11px] text-rose-100 font-medium">Modo Mantenimiento</p>
+              <p className="text-[10px] text-rose-200/90">
+                Pausa el portal y muestra tu justificación
+              </p>
+            </div>
+
+            <div className="text-[11px] font-medium text-rose-200 uppercase tracking-wider pt-1 border-t border-white/15 flex items-center justify-between">
+              <span>control de acceso</span>
+              <ChevronRight className="w-3.5 h-3.5 text-rose-100 group-hover:translate-x-1 transition-transform" />
             </div>
           </button>
         </div>
