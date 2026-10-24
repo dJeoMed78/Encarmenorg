@@ -5,14 +5,11 @@ import {
   Tag,
   Gift,
   ShieldAlert,
-  Calendar,
   Database,
-  RefreshCw,
   LogOut,
-  X,
-  LayoutGrid,
   Link2,
-  Megaphone
+  Megaphone,
+  Wrench
 } from 'lucide-react';
 import { AdminDesktopTabId } from './AdminMacOSDesktop';
 
@@ -31,26 +28,19 @@ interface AdminMacOSDockProps {
 export const AdminMacOSDock: React.FC<AdminMacOSDockProps> = ({
   activeTab,
   onSelectTab,
-  isSyncing,
-  onTriggerSync,
-  onLogout,
   onClose,
   businessesCount,
   classifiedsCount
 }) => {
   const dockApps: {
-    id: AdminDesktopTabId;
+    id: AdminDesktopTabId | 'salir';
     label: string;
     icon: React.ReactNode;
-    gradient: string;
+    gradient?: string;
     badge?: number | string;
+    isCustomIcon?: boolean;
+    onClick?: () => void;
   }[] = [
-    {
-      id: 'start',
-      label: 'Escritorio',
-      icon: <LayoutGrid className="w-5 h-5 text-white" />,
-      gradient: 'from-sky-400 via-blue-500 to-indigo-600'
-    },
     {
       id: 'businesses',
       label: 'Catálogo',
@@ -80,8 +70,17 @@ export const AdminMacOSDock: React.FC<AdminMacOSDockProps> = ({
     {
       id: 'events',
       label: 'Eventos',
-      icon: <Calendar className="w-5 h-5 text-white" />,
-      gradient: 'from-pink-500 via-fuchsia-500 to-purple-600'
+      isCustomIcon: true,
+      icon: (
+        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-[13px] bg-white flex flex-col overflow-hidden shadow-md border border-stone-200">
+          <div className="bg-[#FF3B30] text-white text-[8px] font-black uppercase tracking-wider py-0.5 text-center leading-none">
+            JUN
+          </div>
+          <div className="flex-1 flex items-center justify-center text-stone-900 font-extrabold text-sm sm:text-base leading-none">
+            17
+          </div>
+        </div>
+      )
     },
     {
       id: 'links',
@@ -110,84 +109,102 @@ export const AdminMacOSDock: React.FC<AdminMacOSDockProps> = ({
     {
       id: 'maintenance',
       label: 'Mantenimiento',
-      icon: <ShieldAlert className="w-5 h-5 text-white" />,
+      icon: <Wrench className="w-5 h-5 text-white" />,
       gradient: 'from-slate-500 via-slate-600 to-slate-800'
+    },
+    {
+      id: 'salir',
+      label: 'Salir',
+      icon: <LogOut className="w-5 h-5 text-white" />,
+      gradient: 'from-rose-500 via-red-600 to-red-700',
+      onClick: onClose
     }
   ];
 
   return (
     <div className="fixed bottom-2.5 left-1/2 -translate-x-1/2 z-50 max-w-[98vw] pointer-events-auto select-none">
-      <div className="px-3.5 py-2 rounded-[26px] bg-slate-950/75 backdrop-blur-3xl border border-white/25 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex items-end gap-2 sm:gap-3 overflow-x-auto no-scrollbar">
-        {dockApps.map((item) => {
-          const isActive = activeTab === item.id;
+      <div
+        className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-[26px] border border-white/85 shadow-[0_20px_50px_rgba(0,0,0,0.30)] flex items-end gap-1.5 sm:gap-2.5 overflow-x-auto no-scrollbar"
+        style={{
+          background: 'rgba(255, 255, 255, 0.72)',
+          backdropFilter: 'blur(30px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(30px) saturate(180%)'
+        }}
+      >
+        {dockApps.map((item, idx) => {
+          const isActive = item.id !== 'salir' && activeTab === item.id;
+          const isExit = item.id === 'salir';
+
           return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onSelectTab(item.id)}
-              className="group relative flex flex-col items-center gap-1 px-1.5 py-0.5 cursor-pointer transition-transform duration-200 hover:-translate-y-1.5 shrink-0"
-            >
-              <div
-                className={`relative w-10 h-10 sm:w-11 sm:h-11 rounded-[13px] bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-lg border border-white/30 transition-all ${
-                  isActive ? 'ring-2 ring-white scale-105' : 'opacity-90 group-hover:opacity-100'
-                }`}
+            <React.Fragment key={item.id}>
+              {/* Separador sutil antes de Salir */}
+              {isExit && (
+                <div className="w-px h-9 bg-stone-300/80 mx-0.5 self-center shrink-0" />
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (item.onClick) {
+                    item.onClick();
+                  } else if (item.id !== 'salir') {
+                    onSelectTab(item.id);
+                  }
+                }}
+                className="group relative flex flex-col items-center gap-1 px-1 py-0.5 cursor-pointer transition-transform duration-200 hover:-translate-y-1.5 shrink-0"
               >
-                <div className="absolute inset-x-0 top-0 h-1/2 rounded-t-[13px] bg-gradient-to-b from-white/30 to-transparent pointer-events-none" />
-                {item.icon}
-                {item.badge !== undefined && (
-                  <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 min-w-[18px] h-[18px] rounded-full bg-rose-600 text-white font-black text-[9px] flex items-center justify-center border border-white shadow">
-                    {item.badge}
-                  </span>
+                {item.isCustomIcon ? (
+                  <div
+                    className={`relative transition-all ${
+                      isActive ? 'ring-2 ring-sky-500 rounded-[13px] scale-105' : 'opacity-95 group-hover:opacity-100'
+                    }`}
+                  >
+                    {item.icon}
+                    {item.badge !== undefined && (
+                      <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 min-w-[18px] h-[18px] rounded-full bg-rose-600 text-white font-black text-[9px] flex items-center justify-center border border-white shadow">
+                        {item.badge}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    className={`relative w-10 h-10 sm:w-11 sm:h-11 rounded-[13px] bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-md border border-white/40 transition-all ${
+                      isActive ? 'ring-2 ring-sky-500 scale-105' : 'opacity-95 group-hover:opacity-100'
+                    }`}
+                  >
+                    <div className="absolute inset-x-0 top-0 h-1/2 rounded-t-[13px] bg-gradient-to-b from-white/35 to-transparent pointer-events-none" />
+                    {item.icon}
+                    {item.badge !== undefined && (
+                      <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 min-w-[18px] h-[18px] rounded-full bg-rose-600 text-white font-black text-[9px] flex items-center justify-center border border-white shadow">
+                        {item.badge}
+                      </span>
+                    )}
+                  </div>
                 )}
-              </div>
 
-              {/* Etiqueta visible debajo de cada icono del Dock */}
-              <span
-                className={`text-[10px] leading-tight font-semibold tracking-tight whitespace-nowrap ${
-                  isActive ? 'text-amber-300 font-bold' : 'text-white/85 group-hover:text-white'
-                }`}
-              >
-                {item.label}
-              </span>
+                {/* Nombre claramente escrito debajo */}
+                <span
+                  className={`text-[10px] leading-tight font-semibold tracking-tight whitespace-nowrap ${
+                    isActive
+                      ? 'text-sky-700 font-bold'
+                      : isExit
+                      ? 'text-rose-600 group-hover:text-rose-700'
+                      : 'text-stone-700 group-hover:text-stone-950'
+                  }`}
+                >
+                  {item.label}
+                </span>
 
-              <span
-                className={`w-1 h-1 rounded-full transition-all ${
-                  isActive ? 'bg-amber-400 scale-110' : 'bg-transparent'
-                }`}
-              />
-            </button>
+                {/* Indicador de aplicación activa */}
+                <span
+                  className={`w-1.5 h-1.5 rounded-full transition-all ${
+                    isActive ? 'bg-sky-600 scale-100 shadow-[0_0_6px_rgba(2,132,199,0.8)]' : 'bg-transparent'
+                  }`}
+                />
+              </button>
+            </React.Fragment>
           );
         })}
-
-        {/* Separador Vertical */}
-        <div className="w-px h-10 bg-white/20 mx-0.5 self-center shrink-0" />
-
-        {/* Sincronizar */}
-        <button
-          type="button"
-          onClick={onTriggerSync}
-          disabled={isSyncing}
-          className="group flex flex-col items-center gap-1 px-1.5 py-0.5 cursor-pointer transition-transform duration-200 hover:-translate-y-1.5 shrink-0"
-        >
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-[13px] bg-gradient-to-br from-sky-500 to-blue-700 flex items-center justify-center shadow-lg border border-white/30">
-            <RefreshCw className={`w-5 h-5 text-white ${isSyncing ? 'animate-spin' : ''}`} />
-          </div>
-          <span className="text-[10px] leading-tight font-semibold text-white/85">Sync</span>
-          <span className="w-1 h-1 rounded-full bg-transparent" />
-        </button>
-
-        {/* Salir al Portal */}
-        <button
-          type="button"
-          onClick={onClose}
-          className="group flex flex-col items-center gap-1 px-1.5 py-0.5 cursor-pointer transition-transform duration-200 hover:-translate-y-1.5 shrink-0"
-        >
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-[13px] bg-gradient-to-br from-rose-500 to-red-700 flex items-center justify-center shadow-lg border border-white/30">
-            <LogOut className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-[10px] leading-tight font-semibold text-rose-200">Salir</span>
-          <span className="w-1 h-1 rounded-full bg-transparent" />
-        </button>
       </div>
     </div>
   );

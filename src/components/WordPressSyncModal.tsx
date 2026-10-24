@@ -180,14 +180,14 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     if (typeof window === 'undefined') return false;
     const ua = navigator.userAgent || '';
     const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-    return isMobileUA || window.innerWidth < 850;
+    return isMobileUA || window.innerWidth < 768;
   });
 
   useEffect(() => {
     const handleResize = () => {
       const ua = navigator.userAgent || '';
       const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-      setIsMobileDevice(isMobileUA || window.innerWidth < 850);
+      setIsMobileDevice(isMobileUA || window.innerWidth < 768);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -785,194 +785,147 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
       onClick={e => e.stopPropagation()}
     >
       {!isAuthenticated ? (
-        /* macOS SEQUOIA MULTI-ADMIN LOCK SCREEN WITH ZACATAL BRIDGE & BIG APPLE CLOCK */
-        <div
-          className="flex-1 flex flex-col justify-between items-center p-6 sm:p-10 relative overflow-hidden bg-cover bg-center"
-          style={{
-            backgroundImage: `radial-gradient(ellipse at center, rgba(3, 15, 34, 0.70) 0%, rgba(1, 8, 18, 0.95) 100%), url('/puente.jpg')`
-          }}
-        >
-          {/* Subtle Ambient Radial Glows & Liquid Glass Blur */}
-          <div className="absolute inset-0 backdrop-blur-xl bg-[#020b18]/50 pointer-events-none" />
-          <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-sky-500/15 rounded-full blur-[140px] pointer-events-none" />
-          <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-amber-500/10 rounded-full blur-[140px] pointer-events-none" />
+        <div className="flex-1 flex flex-col justify-center items-center p-4 sm:p-8 relative overflow-hidden select-none">
+          {/* Fondo luminoso del Puente Zacatal al atardecer sin capa negra */}
+          <div
+            className="absolute inset-0 bg-cover bg-center pointer-events-none"
+            style={{ backgroundImage: "url('/puente.jpg')" }}
+          />
+          <div className="absolute inset-0 bg-black/10 pointer-events-none" />
 
-          {/* Top Bar with Close Button */}
-          <div className="w-full flex items-center justify-between z-10">
-            <div className="flex items-center gap-2 text-xs text-sky-200/80 font-mono tracking-wider">
-              <span></span>
-              <span className="font-semibold">Empresas en Carmen OS · macOS Sequoia</span>
+          {/* Contenedor central: Reloj arriba + Tarjeta Frosted Light Glass */}
+          <div className="relative z-10 w-full max-w-md mx-auto flex flex-col items-center text-center space-y-5">
+            {/* Reloj grande blanco estilo macOS Lock Screen */}
+            <div className="space-y-0.5">
+              <div className="text-6xl sm:text-7xl font-bold text-white tracking-tight drop-shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
+                {currentTime}
+              </div>
+              <div className="text-sm sm:text-base font-medium text-white/95 capitalize drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)]">
+                {currentDate}
+              </div>
             </div>
-            <button
-              onClick={handleModalClose}
-              aria-label="Cerrar y volver al directorio"
-              className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer backdrop-blur-xl border border-white/10"
+
+            {/* Tarjeta Central en Cristal Blanco Translúcido */}
+            <div
+              className="w-full rounded-[2rem] p-6 sm:p-8 space-y-5 border border-white/80 shadow-[0_25px_60px_rgba(0,0,0,0.32)]"
+              style={{
+                background: 'rgba(255, 255, 255, 0.68)',
+                backdropFilter: 'blur(28px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(28px) saturate(180%)',
+              }}
             >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Sequoia Big Apple Clock */}
-          <div className="z-10 text-center space-y-1 my-auto pt-2 pb-4">
-            <div className="text-6xl sm:text-7xl md:text-8xl font-extralight tracking-tight text-white/95 font-sans drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]">
-              {currentTime}
-            </div>
-            <div className="text-sm sm:text-base font-light text-sky-200/90 capitalize tracking-wide drop-shadow-sm">
-              {currentDate}
-            </div>
-          </div>
-
-          {/* Center: macOS Multi-Admin Selector or Password Entry */}
-          {selectedAdminUser === null ? (
-            /* User selection cards (Y and J) */
-            <div className="w-full max-w-xl mx-auto mb-auto py-2 space-y-6 text-center z-10">
               <div className="space-y-1">
-                <h3 className="text-2xl sm:text-3xl font-light text-white tracking-tight">
-                  Iniciar Sesión
+                <div className="text-xs font-semibold text-stone-600 flex items-center justify-center gap-1">
+                  <span></span>
+                  <span>Empresas en Carmen OS</span>
+                </div>
+                <h3 className="text-xl sm:text-2xl font-bold text-stone-800 tracking-tight">
+                  Iniciar Sesión · Administración
                 </h3>
-                <p className="text-xs sm:text-sm text-sky-200/80 font-normal">
-                  Selecciona tu cuenta de administrador
-                </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-md mx-auto">
-                {adminAccounts.map(account => (
-                  <button
-                    key={account.username}
-                    type="button"
-                    onClick={() => {
-                      setSelectedAdminUser(account);
-                      setAdminPasswordInput('');
-                      setAdminLoginError(null);
-                    }}
-                    className="group relative p-6 sm:p-7 rounded-[2rem] bg-black/45 hover:bg-black/65 backdrop-blur-2xl border border-white/15 hover:border-white/35 shadow-2xl transition-all duration-300 flex flex-col items-center text-center space-y-3 hover:scale-105 active:scale-98 cursor-pointer"
-                  >
-                    <div className={`w-20 h-20 rounded-full bg-gradient-to-tr ${account.avatarColor} text-white flex items-center justify-center text-3xl font-light shadow-2xl shadow-sky-500/25 ring-2 ring-white/25 group-hover:ring-4 group-hover:ring-white/40 transition-all`}>
-                      {account.initial}
-                    </div>
-                    <div className="space-y-0.5">
-                      <div className="text-xl font-medium text-white tracking-tight group-hover:text-sky-300 transition-colors">
-                        {account.username}
+              {/* Avatares Y (Yuss · Admin) y J (Jeo · Admin) siempre visibles */}
+              <div className="flex items-center justify-center gap-8 sm:gap-10 py-1">
+                {adminAccounts.map((account) => {
+                  const activeUser = selectedAdminUser || adminAccounts[1] || adminAccounts[0];
+                  const isSelected = activeUser?.username === account.username;
+                  const isY = account.initial.toUpperCase() === 'Y';
+                  return (
+                    <button
+                      key={account.username}
+                      type="button"
+                      onClick={() => {
+                        setSelectedAdminUser(account);
+                        setAdminLoginError(null);
+                      }}
+                      className="group flex flex-col items-center gap-2 cursor-pointer transition-transform duration-200 hover:scale-105"
+                    >
+                      <div
+                        className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center text-2xl sm:text-3xl font-semibold text-white transition-all ${
+                          isY
+                            ? 'bg-gradient-to-b from-purple-400 to-violet-600'
+                            : 'bg-gradient-to-b from-sky-300 to-blue-600'
+                        } ${
+                          isSelected
+                            ? 'ring-4 ring-sky-300 shadow-[0_0_25px_rgba(56,189,248,0.9)] scale-105'
+                            : 'opacity-85 hover:opacity-100 ring-2 ring-white/70 shadow-md'
+                        }`}
+                      >
+                        {account.initial}
                       </div>
-                      <div className="text-[11px] text-sky-200/70 font-light">
-                        {account.role}
-                      </div>
-                    </div>
-                    <span className="text-xs text-sky-300/90 group-hover:text-white flex items-center gap-1.5 pt-0.5 font-medium transition-colors">
-                      <span>Ingresar clave</span>
-                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                    </span>
-                  </button>
-                ))}
+                      <span className="text-xs font-bold text-stone-800">
+                        {isY ? 'Yuss · Admin' : 'Jeo · Admin'}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
 
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={handleModalClose}
-                  className="text-xs sm:text-sm text-sky-200/70 hover:text-white transition-colors cursor-pointer"
-                >
-                  ← Volver al directorio público
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* macOS Password Unlock Card for selected user */
-            <div className="w-full max-w-sm mx-auto mb-auto p-7 sm:p-8 rounded-[2.5rem] bg-black/55 backdrop-blur-3xl border border-white/20 shadow-[0_20px_60px_rgba(0,0,0,0.7)] space-y-5 text-center z-10">
-              <div className={`w-20 h-20 rounded-full bg-gradient-to-tr ${selectedAdminUser.avatarColor} text-white flex items-center justify-center text-3xl font-light mx-auto shadow-2xl ring-2 ring-white/25`}>
-                {selectedAdminUser.initial}
-              </div>
-
-              <div className="space-y-0.5">
-                <h3 className="text-xl font-medium text-white tracking-tight">
-                  {selectedAdminUser.username}
-                </h3>
-                <p className="text-xs text-sky-200/80 font-normal">
-                  {selectedAdminUser.role} · Empresas en Carmen OS
-                </p>
-              </div>
-
-              <form onSubmit={handleAdminLoginSubmit} className="space-y-3.5">
-                <div className="relative flex items-center">
-                  <Lock className="w-4 h-4 text-white/50 absolute left-4 pointer-events-none" />
+              {/* Barra de Contraseña en Cápsula Clara */}
+              <form
+                onSubmit={(e) => {
+                  if (!selectedAdminUser) {
+                    setSelectedAdminUser(adminAccounts[1] || adminAccounts[0]);
+                  }
+                  handleAdminLoginSubmit(e);
+                }}
+                className="space-y-2.5"
+              >
+                <div className="relative flex items-center max-w-xs mx-auto">
                   <input
                     type={showAdminPassword ? 'text' : 'password'}
                     autoFocus
-                    placeholder="Contraseña"
+                    placeholder="Contraseña de administrador..."
                     value={adminPasswordInput}
-                    onChange={e => {
+                    onChange={(e) => {
+                      if (!selectedAdminUser) {
+                        setSelectedAdminUser(adminAccounts[1] || adminAccounts[0]);
+                      }
                       setAdminPasswordInput(e.target.value);
                       if (adminLoginError) setAdminLoginError(null);
                     }}
-                    className={`w-full py-3.5 pl-11 pr-11 rounded-full border text-center text-sm text-white tracking-wider outline-none transition-all bg-white/15 backdrop-blur-xl placeholder:text-white/40 ${
-                      adminLoginError
-                        ? 'border-rose-500 bg-rose-950/40 ring-2 ring-rose-500/40'
-                        : 'border-white/25 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/40'
-                    }`}
+                    className="w-full py-2.5 pl-4 pr-11 rounded-full bg-white/85 border border-stone-300/90 text-xs sm:text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-sky-400 shadow-inner"
                   />
                   <button
-                    type="button"
-                    onClick={() => setShowAdminPassword(!showAdminPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-white/50 hover:text-white cursor-pointer"
+                    type="submit"
+                    disabled={isLoggingIn}
+                    title="Iniciar sesión"
+                    className="absolute right-1.5 w-7 h-7 rounded-full bg-white hover:bg-sky-50 border border-stone-300 text-stone-700 flex items-center justify-center shadow-xs transition cursor-pointer disabled:opacity-50"
                   >
-                    {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
                 {adminLoginError && (
-                  <p className="text-xs text-rose-300 font-semibold flex items-center justify-center gap-1.5 animate-bounce">
+                  <p className="text-xs text-rose-600 font-bold flex items-center justify-center gap-1">
                     <AlertTriangle className="w-3.5 h-3.5" />
                     <span>{adminLoginError}</span>
                   </p>
                 )}
-
-                <button
-                  type="submit"
-                  disabled={isLoggingIn}
-                  className="w-full py-3.5 px-5 rounded-full bg-[#007AFF] hover:bg-[#0062cc] text-white font-semibold text-sm transition-all shadow-lg shadow-sky-600/30 cursor-pointer active:scale-98 disabled:opacity-50"
-                >
-                  {isLoggingIn ? 'Verificando...' : 'Iniciar sesión'}
-                </button>
               </form>
 
-              <div className="flex items-center justify-center gap-4 text-xs pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedAdminUser(null);
-                    setAdminPasswordInput('');
-                    setAdminLoginError(null);
-                  }}
-                  className="text-sky-300 hover:text-white transition-colors cursor-pointer"
-                >
-                  ← Cambiar de cuenta
-                </button>
-                <span className="text-white/30">·</span>
+              {/* Botón Volver al directorio público */}
+              <div className="pt-1">
                 <button
                   type="button"
                   onClick={handleModalClose}
-                  className="text-sky-200/70 hover:text-white transition-colors cursor-pointer"
+                  className="px-4 py-1.5 rounded-full bg-white/75 hover:bg-white border border-stone-300/90 text-[11px] font-semibold text-stone-700 shadow-2xs transition cursor-pointer"
                 >
-                  Cancelar
+                  Volver al directorio público
                 </button>
               </div>
             </div>
-          )}
-
-          {/* Bottom Footnote */}
-          <div className="text-center text-xs text-white/40 pb-2 z-10">
-            Empresas en Carmen OS · Edición Móvil & Desktop
           </div>
         </div>
       ) : (
         /* macOS 27 Golden Gate Authenticated Admin Workspace */
         <div
-          className="flex-1 flex flex-col min-h-0 bg-[#061124] text-white relative overflow-hidden font-sans select-none"
+          className="flex-1 flex flex-col min-h-0 bg-stone-100 text-stone-800 relative overflow-hidden font-sans select-none"
           onClick={() => setOpenMenuDropdown(null)}
         >
           {/* macOS 27 Golden Gate Top Menu Bar (Desktop Only) */}
           {!isMobileDevice && (
-            <div className="h-8 bg-slate-950/80 backdrop-blur-2xl border-b border-white/10 px-3.5 flex items-center justify-between text-xs font-medium text-white/90 select-none z-40 shrink-0">
+            <div className="h-8 bg-white/75 backdrop-blur-2xl border-b border-stone-200/80 px-3.5 flex items-center justify-between text-xs font-semibold text-stone-800 select-none z-40 shrink-0 shadow-2xs">
               {/* Left:  Apple Menu & App Title */}
               <div className="flex items-center gap-3 sm:gap-4">
                 {/* Apple Logo Dropdown */}
@@ -983,8 +936,8 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                       e.stopPropagation();
                       setOpenMenuDropdown(openMenuDropdown === 'apple' ? null : 'apple');
                     }}
-                    className={`px-2 py-0.5 rounded hover:bg-white/15 transition-colors cursor-pointer text-base leading-none ${
-                      openMenuDropdown === 'apple' ? 'bg-white/20' : ''
+                    className={`px-2 py-0.5 rounded hover:bg-stone-200/60 text-stone-800 transition-colors cursor-pointer text-base leading-none ${
+                      openMenuDropdown === 'apple' ? 'bg-stone-200/70' : ''
                     }`}
                     title="Menú Apple"
                   >
@@ -992,56 +945,56 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                   </button>
                   {openMenuDropdown === 'apple' && (
                     <div
-                      className="absolute top-full left-0 mt-1 w-64 rounded-2xl bg-slate-900/95 backdrop-blur-3xl border border-white/15 shadow-2xl py-1 text-xs text-white z-50 animate-in fade-in zoom-in-95 duration-100"
+                      className="absolute top-full left-0 mt-1 w-64 rounded-2xl bg-white/95 backdrop-blur-3xl border border-stone-200 shadow-2xl py-1 text-xs text-stone-800 z-50 animate-in fade-in zoom-in-95 duration-100"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="px-3.5 py-2 font-semibold text-white/95 border-b border-white/10">
+                      <div className="px-3.5 py-2 font-semibold text-stone-900 border-b border-stone-200">
                         Empresas en Carmen OS 27.2
-                        <div className="text-[10px] text-amber-300 font-normal">Golden Gate Edition</div>
+                        <div className="text-[10px] text-amber-600 font-medium">Golden Gate Edition</div>
                       </div>
                       <button
                         type="button"
                         onClick={() => { setOpenMenuDropdown(null); setActiveTab('config_editor'); }}
-                        className="w-full text-left px-3.5 py-1.5 hover:bg-blue-600 transition-colors flex items-center justify-between cursor-pointer"
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-sky-50 text-stone-700 hover:text-sky-900 transition-colors flex items-center justify-between cursor-pointer"
                       >
                         <span>Ajustes del Sistema...</span>
-                        <span className="text-white/40 text-[10px]">⌘,</span>
+                        <span className="text-stone-400 text-[10px]">⌘,</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => { setOpenMenuDropdown(null); onTriggerSync(); }}
-                        className="w-full text-left px-3.5 py-1.5 hover:bg-blue-600 transition-colors flex items-center justify-between cursor-pointer"
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-sky-50 text-stone-700 hover:text-sky-900 transition-colors flex items-center justify-between cursor-pointer"
                       >
                         <span>Sincronizar con WordPress</span>
-                        <span className="text-white/40 text-[10px]">⌘S</span>
+                        <span className="text-stone-400 text-[10px]">⌘S</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => { setOpenMenuDropdown(null); setActiveTab('status'); }}
-                        className="w-full text-left px-3.5 py-1.5 hover:bg-blue-600 transition-colors flex items-center justify-between cursor-pointer"
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-sky-50 text-stone-700 hover:text-sky-900 transition-colors flex items-center justify-between cursor-pointer"
                       >
                         <span>Estado de MariaDB & Servidor</span>
                       </button>
-                      <div className="my-1 border-t border-white/10" />
+                      <div className="my-1 border-t border-stone-200" />
                       <button
                         type="button"
                         onClick={() => { setOpenMenuDropdown(null); setActiveTab('start'); }}
-                        className="w-full text-left px-3.5 py-1.5 hover:bg-blue-600 transition-colors cursor-pointer"
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-sky-50 text-stone-700 hover:text-sky-900 transition-colors cursor-pointer"
                       >
                         Mostrar Escritorio
                       </button>
                       <button
                         type="button"
                         onClick={() => { setOpenMenuDropdown(null); handleLogout(); }}
-                        className="w-full text-left px-3.5 py-1.5 hover:bg-rose-600 text-rose-300 hover:text-white transition-colors cursor-pointer"
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-rose-50 text-rose-600 hover:text-rose-700 transition-colors cursor-pointer"
                       >
                         Cerrar Sesión de Administrador
                       </button>
-                      <div className="my-1 border-t border-white/10" />
+                      <div className="my-1 border-t border-stone-200" />
                       <button
                         type="button"
                         onClick={() => { setOpenMenuDropdown(null); handleModalClose(); }}
-                        className="w-full text-left px-3.5 py-1.5 hover:bg-white/10 text-white/70 transition-colors cursor-pointer"
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-stone-100 text-stone-600 hover:text-stone-900 transition-colors cursor-pointer"
                       >
                         Salir al Directorio Público
                       </button>
@@ -1050,51 +1003,51 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 </div>
 
                 {/* Bold Current App Name */}
-                <span className="font-bold text-white tracking-tight">
+                <span className="font-bold text-stone-900 tracking-tight">
                   {activeTab === 'start' ? 'Empresas en Carmen OS' : getTabTitle(activeTab)}
                 </span>
 
                 {/* Quick Navigation Dropdowns/Buttons */}
-                <div className="hidden lg:flex items-center gap-1 text-white/75">
+                <div className="hidden lg:flex items-center gap-1 text-stone-700">
                   <button
                     type="button"
                     onClick={() => setActiveTab('businesses')}
-                    className="px-2 py-0.5 rounded hover:bg-white/15 hover:text-white transition-colors cursor-pointer"
+                    className="px-2 py-0.5 rounded hover:bg-stone-200/60 hover:text-stone-950 transition-colors cursor-pointer"
                   >
                     Catálogo
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveTab('new_business')}
-                    className="px-2 py-0.5 rounded hover:bg-white/15 hover:text-white transition-colors cursor-pointer"
+                    className="px-2 py-0.5 rounded hover:bg-stone-200/60 hover:text-stone-950 transition-colors cursor-pointer"
                   >
                     Nueva Empresa
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveTab('ai_assistant')}
-                    className="px-2 py-0.5 rounded hover:bg-white/15 hover:text-white transition-colors cursor-pointer text-purple-300"
+                    className="px-2 py-0.5 rounded hover:bg-stone-200/60 hover:text-purple-700 text-purple-700 font-semibold transition-colors cursor-pointer"
                   >
                     Asistente IA
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveTab('analytics')}
-                    className="px-2 py-0.5 rounded hover:bg-white/15 hover:text-white transition-colors cursor-pointer"
+                    className="px-2 py-0.5 rounded hover:bg-stone-200/60 hover:text-stone-950 transition-colors cursor-pointer"
                   >
                     Métricas
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveTab('reports')}
-                    className="px-2 py-0.5 rounded hover:bg-white/15 hover:text-white transition-colors cursor-pointer text-amber-300"
+                    className="px-2 py-0.5 rounded hover:bg-stone-200/60 hover:text-amber-800 text-amber-700 font-semibold transition-colors cursor-pointer"
                   >
                     Reportes
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveTab('classifieds')}
-                    className="px-2 py-0.5 rounded hover:bg-white/15 hover:text-white transition-colors cursor-pointer"
+                    className="px-2 py-0.5 rounded hover:bg-stone-200/60 hover:text-stone-950 transition-colors cursor-pointer"
                   >
                     Clasificados
                   </button>
@@ -1105,8 +1058,8 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
               <div className="flex items-center gap-3 text-xs">
 
                 {/* MariaDB Live Ping */}
-                <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-[11px] font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-[11px] font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   <span>MariaDB OK</span>
                 </div>
 
@@ -1115,33 +1068,33 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                   type="button"
                   onClick={onTriggerSync}
                   disabled={isSyncing}
-                  className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-white/15 text-white/80 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                  className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-stone-200/60 text-stone-700 hover:text-stone-950 transition-colors cursor-pointer disabled:opacity-50"
                   title="Sincronizar con WordPress"
                 >
-                  <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-sky-400' : ''}`} />
+                  <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-sky-600' : ''}`} />
                   <span>{isSyncing ? 'Sincronizando' : 'Sincronizar'}</span>
                 </button>
 
                 {/* Battery 100% */}
-                <div className="hidden md:flex items-center gap-1 text-white/70">
+                <div className="hidden md:flex items-center gap-1 text-stone-600">
                   <Battery className="w-4 h-4" />
                   <span className="text-[10px]">100%</span>
                 </div>
 
                 {/* WiFi */}
-                <Wifi className="w-3.5 h-3.5 text-white/80 hidden sm:block" />
+                <Wifi className="w-3.5 h-3.5 text-stone-600 hidden sm:block" />
 
                 {/* Live Clock & Date */}
-                <span className="font-medium text-white/90">
+                <span className="font-medium text-stone-800">
                   {currentDate.split(',')[0]} {currentTime}
                 </span>
 
                 {/* Admin Avatar Pill */}
-                <div className="flex items-center gap-1.5 pl-1.5 border-l border-white/20">
+                <div className="flex items-center gap-1.5 pl-1.5 border-l border-stone-300">
                   <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-sky-400 to-blue-600 text-[11px] font-bold text-white flex items-center justify-center shadow-xs">
                     {getLoggedInAdminName().charAt(0).toUpperCase()}
                   </div>
-                  <span className="text-white/80 hidden xl:inline font-normal">
+                  <span className="text-stone-800 hidden xl:inline font-semibold">
                     {getLoggedInAdminName()}
                   </span>
                 </div>
@@ -1197,34 +1150,37 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 ? 'p-0 w-full h-full'
                 : isWindowMaximized ? 'p-0' : 'p-2 sm:p-4 pb-20 sm:pb-22'
             }`}>
-              {/* Twilight Wallpaper backdrop behind floating window (Desktop Only) */}
+              {/* Fondo luminoso del Puente Zacatal al atardecer */}
               {!isMobileDevice && !isWindowMaximized && (
-                <div className="absolute inset-0 bg-gradient-to-b from-[#061124] via-[#0b1c38] to-[#040c1a] pointer-events-none" />
+                <div
+                  className="absolute inset-0 bg-cover bg-center pointer-events-none"
+                  style={{ backgroundImage: "url('/puente.jpg')" }}
+                />
               )}
 
               {/* The Window Frame */}
               <div className={`relative flex-1 flex flex-col min-h-0 ${
                 isMobileDevice
-                  ? 'w-full h-full rounded-none border-none bg-slate-950'
+                  ? 'w-full h-full rounded-none border-none bg-stone-100 text-stone-800'
                   : isWindowMaximized
-                    ? 'w-full h-full rounded-none border-b border-white/10 bg-slate-900/90 backdrop-blur-3xl'
-                    : 'w-full max-w-7xl mx-auto rounded-2xl sm:rounded-3xl border border-white/20 shadow-[0_30px_90px_rgba(0,0,0,0.65)] overflow-hidden bg-slate-900/90 backdrop-blur-3xl'
+                    ? 'w-full h-full rounded-none border-b border-stone-200/80 bg-white/90 backdrop-blur-3xl text-stone-800'
+                    : 'w-full max-w-7xl mx-auto rounded-2xl sm:rounded-3xl border border-white/90 shadow-[0_28px_80px_rgba(0,0,0,0.38)] overflow-hidden bg-white/82 backdrop-blur-3xl text-stone-800'
               }`}>
 
                 {/* Header: iOS Nav Bar on Mobile VS macOS Traffic Lights Titlebar on Desktop */}
                 {isMobileDevice ? (
-                  <div className="h-12 bg-slate-950/95 border-b border-white/15 px-3 flex items-center justify-between shrink-0 select-none z-20">
+                  <div className="h-12 bg-white/90 border-b border-stone-200/80 px-3 flex items-center justify-between shrink-0 select-none z-20 text-stone-800">
                     <button
                       type="button"
                       onClick={() => setActiveTab('start')}
-                      className="flex items-center gap-1 text-sky-400 hover:text-sky-300 font-semibold text-sm active:opacity-60 cursor-pointer"
+                      className="flex items-center gap-1 text-sky-600 hover:text-sky-700 font-semibold text-sm active:opacity-60 cursor-pointer"
                     >
                       <ChevronLeft className="w-5 h-5 -ml-1" />
                       <span>Inicio</span>
                     </button>
 
                     <div className="text-center truncate px-2">
-                      <div className="text-xs font-bold text-white tracking-tight truncate max-w-[200px]">
+                      <div className="text-xs font-bold text-stone-900 tracking-tight truncate max-w-[200px]">
                         {getTabTitle(activeTab)}
                       </div>
                     </div>
@@ -1234,15 +1190,15 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         type="button"
                         onClick={onTriggerSync}
                         disabled={isSyncing}
-                        className="p-1.5 rounded-lg bg-blue-600/30 text-sky-200 active:scale-95 transition-all cursor-pointer"
+                        className="p-1.5 rounded-lg bg-sky-100 text-sky-700 active:scale-95 transition-all cursor-pointer"
                         title="Sincronizar"
                       >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-sky-400' : ''}`} />
+                        <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-sky-600' : ''}`} />
                       </button>
                       <button
                         type="button"
                         onClick={handleModalClose}
-                        className="p-1.5 rounded-lg bg-white/10 text-white/80 active:scale-95 transition-all cursor-pointer"
+                        className="p-1.5 rounded-lg bg-stone-100 text-stone-700 hover:bg-stone-200 active:scale-95 transition-all cursor-pointer"
                         title="Cerrar y volver al directorio"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -1251,7 +1207,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                   </div>
                 ) : (
                   /* macOS Window Titlebar with Traffic Lights */
-                  <div className="h-11 sm:h-12 bg-slate-950/85 border-b border-white/15 px-3 sm:px-4 flex items-center justify-between shrink-0 select-none z-20">
+                  <div className="h-11 sm:h-12 bg-white/70 border-b border-stone-200/80 px-3 sm:px-4 flex items-center justify-between shrink-0 select-none z-20 text-stone-800">
                     {/* Traffic Lights: Red (Close), Yellow (Minimize), Green (Zoom/Maximize) */}
                     <div className="flex items-center gap-2 group">
                       <button
@@ -1281,11 +1237,11 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                     </div>
 
                     {/* Centered Window Title & Breadcrumb */}
-                    <div className="flex items-center gap-2 text-xs font-semibold text-white tracking-tight truncate max-w-[240px] sm:max-w-md">
-                      <span className="text-white/40 hidden sm:inline"></span>
+                    <div className="flex items-center gap-2 text-xs font-semibold text-stone-800 tracking-tight truncate max-w-[240px] sm:max-w-md">
+                      <span className="text-stone-400 hidden sm:inline"></span>
                       <span className="truncate">{getTabTitle(activeTab)}</span>
-                      <span className="text-white/30 hidden sm:inline">·</span>
-                      <span className="text-white/50 text-[11px] font-normal hidden sm:inline">macOS 27 Golden Gate</span>
+                      <span className="text-stone-300 hidden sm:inline">·</span>
+                      <span className="text-stone-500 text-[11px] font-normal hidden sm:inline">macOS 27 Golden Gate</span>
                     </div>
 
                     {/* Right Window Toolbar Controls */}
@@ -1293,8 +1249,8 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                       <button
                         type="button"
                         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                        className={`p-1.5 rounded-lg border border-white/10 text-xs text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer hidden md:flex items-center gap-1 ${
-                          isSidebarOpen ? 'bg-white/10' : ''
+                        className={`p-1.5 rounded-lg border border-stone-300 text-xs font-semibold text-stone-700 bg-white hover:bg-stone-100 transition-colors cursor-pointer hidden md:flex items-center gap-1 ${
+                          isSidebarOpen ? 'bg-stone-100 ring-1 ring-stone-300' : ''
                         }`}
                         title={isSidebarOpen ? "Ocultar barra lateral" : "Mostrar barra lateral"}
                       >
@@ -1306,17 +1262,17 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         type="button"
                         onClick={onTriggerSync}
                         disabled={isSyncing}
-                        className="px-2.5 py-1 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 border border-blue-400/30 text-xs font-medium text-white flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                        className="px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-300 text-xs font-semibold text-stone-700 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                         title="Sincronizar datos"
                       >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-sky-400' : ''}`} />
+                        <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-sky-600' : ''}`} />
                         <span className="hidden sm:inline">{isSyncing ? 'Sincronizando' : 'Sync'}</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setActiveTab('start')}
-                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-medium text-white/90 hover:text-white transition-colors cursor-pointer"
+                        className="px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-300 text-xs font-semibold text-stone-700 transition-colors cursor-pointer"
                         title="Ver Escritorio"
                       >
                         Escritorio
@@ -1329,28 +1285,28 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 <div className="flex-1 flex min-h-0 overflow-hidden">
                   {/* macOS Sidebar Navigation (Desktop Only) */}
                   {!isMobileDevice && isSidebarOpen && (
-                    <aside className="w-56 sm:w-64 bg-slate-950/75 backdrop-blur-2xl border-r border-white/10 flex flex-col p-2.5 sm:p-3 overflow-y-auto shrink-0 select-none space-y-4">
+                    <aside className="w-56 sm:w-64 bg-white/55 backdrop-blur-2xl border-r border-stone-200/80 flex flex-col p-2.5 sm:p-3 overflow-y-auto shrink-0 select-none space-y-4">
                       {/* Section 1: Favoritos */}
                       <div className="space-y-0.5">
-                        <div className="text-[10px] font-bold text-white/40 tracking-wider uppercase px-2 mb-1">
+                        <div className="text-[10px] font-extrabold text-stone-400 tracking-wider uppercase px-2 mb-1">
                           Favoritos
                         </div>
                         <button
                           type="button"
                           onClick={() => setActiveTab('businesses')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'businesses'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <Building2 className="w-4 h-4 text-amber-400 shrink-0" />
+                            <Building2 className="w-4 h-4 text-amber-500 shrink-0" />
                             <span className="truncate">Catálogo Empresas</span>
                           </div>
                           {businesses.length > 0 && (
                             <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                              activeTab === 'businesses' ? 'bg-white/25 text-white' : 'bg-white/15 text-white/80'
+                              activeTab === 'businesses' ? 'bg-sky-500 text-white' : 'bg-stone-200/80 text-stone-700'
                             }`}>
                               {businesses.length}
                             </span>
@@ -1360,14 +1316,14 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setActiveTab('ai_assistant')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'ai_assistant'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+                            <Sparkles className="w-4 h-4 text-purple-500 shrink-0" />
                             <span className="truncate">Asistente IA</span>
                           </div>
                         </button>
@@ -1375,19 +1331,19 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setActiveTab('analytics')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'analytics'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <BarChart3 className="w-4 h-4 text-cyan-400 shrink-0" />
+                            <BarChart3 className="w-4 h-4 text-cyan-600 shrink-0" />
                             <span className="truncate">Alcance & Métricas</span>
                           </div>
                           {analytics && (analytics.totalVisits ?? 0) > 0 && (
                             <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                              activeTab === 'analytics' ? 'bg-white/25 text-white' : 'bg-emerald-500/30 text-emerald-300'
+                              activeTab === 'analytics' ? 'bg-sky-500 text-white' : 'bg-emerald-100 text-emerald-800'
                             }`}>
                               {analytics.totalVisits}
                             </span>
@@ -1397,14 +1353,14 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setActiveTab('reports')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'reports'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                            <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
                             <span className="truncate">Reportes</span>
                           </div>
                           {reports.filter(r => r.status === 'pending').length > 0 && (
@@ -1417,19 +1373,19 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setActiveTab('classifieds')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'classifieds'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <Tag className="w-4 h-4 text-violet-400 shrink-0" />
+                            <Tag className="w-4 h-4 text-violet-500 shrink-0" />
                             <span className="truncate">Clasificados</span>
                           </div>
                           {classifieds.length > 0 && (
                             <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                              activeTab === 'classifieds' ? 'bg-white/25 text-white' : 'bg-white/15 text-white/80'
+                              activeTab === 'classifieds' ? 'bg-sky-500 text-white' : 'bg-stone-200/80 text-stone-700'
                             }`}>
                               {classifieds.length}
                             </span>
@@ -1439,20 +1395,20 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
                       {/* Section 2: Comercio & Ciudad */}
                       <div className="space-y-0.5">
-                        <div className="text-[10px] font-bold text-white/40 tracking-wider uppercase px-2 mb-1">
+                        <div className="text-[10px] font-extrabold text-stone-400 tracking-wider uppercase px-2 mb-1">
                           Comercio y Ciudad
                         </div>
                         <button
                           type="button"
                           onClick={() => setActiveTab('new_business')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'new_business'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <PlusCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <PlusCircle className="w-4 h-4 text-emerald-600 shrink-0" />
                             <span className="truncate">Nueva Empresa</span>
                           </div>
                         </button>
@@ -1460,19 +1416,19 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setActiveTab('promotions')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'promotions'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <Gift className="w-4 h-4 text-amber-400 shrink-0" />
+                            <Gift className="w-4 h-4 text-amber-500 shrink-0" />
                             <span className="truncate">Promociones</span>
                           </div>
                           {promotionsCount > 0 && (
                             <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                              activeTab === 'promotions' ? 'bg-white/25 text-white' : 'bg-amber-500/20 text-amber-300'
+                              activeTab === 'promotions' ? 'bg-sky-500 text-white' : 'bg-amber-100 text-amber-800'
                             }`}>
                               {promotionsCount}
                             </span>
@@ -1482,14 +1438,14 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setActiveTab('emergency')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'emergency'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+                            <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
                             <span className="truncate">Emergencias 24/7</span>
                           </div>
                         </button>
@@ -1497,19 +1453,19 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setActiveTab('events')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'events'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <Calendar className="w-4 h-4 text-fuchsia-400 shrink-0" />
+                            <Calendar className="w-4 h-4 text-fuchsia-500 shrink-0" />
                             <span className="truncate">Cartelera Eventos</span>
                           </div>
                           {eventsCount > 0 && (
                             <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                              activeTab === 'events' ? 'bg-white/25 text-white' : 'bg-white/15 text-white/80'
+                              activeTab === 'events' ? 'bg-sky-500 text-white' : 'bg-stone-200/80 text-stone-700'
                             }`}>
                               {eventsCount}
                             </span>
@@ -1519,20 +1475,20 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
                       {/* Section 3: Sistema & Ajustes */}
                       <div className="space-y-0.5">
-                        <div className="text-[10px] font-bold text-white/40 tracking-wider uppercase px-2 mb-1">
+                        <div className="text-[10px] font-extrabold text-stone-400 tracking-wider uppercase px-2 mb-1">
                           Sistema y Ajustes
                         </div>
                         <button
                           type="button"
                           onClick={() => setActiveTab('links')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'links'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <Globe className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <Globe className="w-4 h-4 text-emerald-600 shrink-0" />
                             <span className="truncate">Canales & Grupos</span>
                           </div>
                         </button>
@@ -1540,14 +1496,14 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setActiveTab('publicidad')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'publicidad'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                            <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
                             <span className="truncate">Publicidad & Banners</span>
                           </div>
                         </button>
@@ -1555,14 +1511,14 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setActiveTab('brand_media')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'brand_media'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <ImageIcon className="w-4 h-4 text-teal-400 shrink-0" />
+                            <ImageIcon className="w-4 h-4 text-teal-600 shrink-0" />
                             <span className="truncate">Banner y Logo</span>
                           </div>
                         </button>
@@ -1570,14 +1526,14 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setActiveTab('admins')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'admins'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <KeyRound className="w-4 h-4 text-indigo-400 shrink-0" />
+                            <KeyRound className="w-4 h-4 text-indigo-600 shrink-0" />
                             <span className="truncate">Administradores</span>
                           </div>
                         </button>
@@ -1585,14 +1541,14 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setActiveTab('status')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'status'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <Database className="w-4 h-4 text-blue-400 shrink-0" />
+                            <Database className="w-4 h-4 text-blue-600 shrink-0" />
                             <span className="truncate">MariaDB & Sync</span>
                           </div>
                         </button>
@@ -1600,14 +1556,14 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setActiveTab('desired_changes')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'desired_changes'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <Bug className="w-4 h-4 text-amber-400 shrink-0" />
+                            <Bug className="w-4 h-4 text-amber-500 shrink-0" />
                             <span className="truncate">Cambios Deseados</span>
                           </div>
                         </button>
@@ -1615,14 +1571,14 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setActiveTab('config_editor')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'config_editor'
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
-                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                              ? 'bg-sky-500/15 border border-sky-400/40 text-sky-800 font-bold shadow-2xs'
+                              : 'text-stone-700 hover:text-stone-950 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            <FileCode className="w-4 h-4 text-sky-400 shrink-0" />
+                            <FileCode className="w-4 h-4 text-sky-600 shrink-0" />
                             <span className="truncate">Editor Configuración</span>
                           </div>
                         </button>
@@ -1630,10 +1586,10 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setActiveTab('maintenance')}
-                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer ${
                             activeTab === 'maintenance'
-                              ? 'bg-rose-700 text-white shadow-md shadow-rose-700/30 font-semibold'
-                              : 'text-rose-400 hover:text-white hover:bg-white/10'
+                              ? 'bg-rose-500/15 border border-rose-400/40 text-rose-800 font-bold shadow-2xs'
+                              : 'text-rose-600 hover:text-rose-700 hover:bg-white/80 font-medium'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
@@ -1646,8 +1602,8 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                   )}
 
                   {/* Subtab Body Container (Full-width on mobile, no sidebar squish) */}
-                  <div className={`w-full overflow-y-auto flex-1 overscroll-contain bg-stone-100 text-stone-900 ${
-                    isMobileDevice ? 'p-3 sm:p-5 pb-28 space-y-4' : 'p-4 sm:p-8 space-y-5 sm:space-y-6'
+                  <div className={`w-full overflow-y-auto flex-1 overscroll-contain bg-white/75 text-stone-800 pb-28 ${
+                    isMobileDevice ? 'p-3 sm:p-5 space-y-4' : 'p-4 sm:p-8 space-y-5 sm:space-y-6'
                   }`}>
           {actionSuccessMsg && (
             <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2">
@@ -2894,6 +2850,8 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
               pendingReportsCount={reports.filter(r => r.status === 'pending').length}
               businessesCount={businesses.length}
               classifiedsCount={classifieds.length}
+              onLogout={handleLogout}
+              onClose={handleModalClose}
             />
           ) : (
             <AdminMacOSDock

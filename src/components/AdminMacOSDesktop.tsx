@@ -2,32 +2,16 @@ import React, { useState } from 'react';
 import {
   Building2,
   Sparkles,
+  Tag,
+  Gift,
+  Calendar,
+  Search,
+  Home,
   BarChart3,
   AlertTriangle,
-  Tag,
-  PlusCircle,
-  Gift,
-  ShieldAlert,
-  Calendar,
-  Image as ImageIcon,
-  KeyRound,
-  Database,
-  RefreshCw,
-  Search,
-  Activity,
-  CheckCircle2,
-  ExternalLink,
-  Link2,
-  Megaphone,
-  Edit2,
-  Trash2,
-  Star,
-  Sliders,
-  Download,
-  FileCode
+  Settings
 } from 'lucide-react';
 import { SiteAnalytics, Business } from '../types';
-import { getPortalLinksConfig, getPortalAdConfig } from './AdminLinksAndAdsManager';
 
 export type AdminDesktopTabId =
   | 'start'
@@ -56,15 +40,15 @@ interface AdminMacOSDesktopProps {
   analytics: SiteAnalytics | null;
   classifiedsCount: number;
   promotionsCount: number;
-  eventsCount: number;
+  eventsCount?: number;
   isSyncing: boolean;
-  onTriggerSync: () => void;
-  onSelectTab: (tab: AdminDesktopTabId) => void;
+  onTriggerSync: () => Promise<void> | void;
+  onSelectTab: (tab: any) => void;
   onClose: () => void;
   onLogout: () => void;
   currentTime: string;
   currentDate: string;
-  activeAdminName: string;
+  activeAdminName?: string;
   dbStatus?: any;
 }
 
@@ -72,461 +56,439 @@ export const AdminMacOSDesktop: React.FC<AdminMacOSDesktopProps> = ({
   businessesCount,
   businesses = [],
   pendingReportsCount,
-  analytics,
   classifiedsCount,
   promotionsCount,
-  eventsCount,
-  isSyncing,
   onTriggerSync,
   onSelectTab,
-  onClose,
-  onLogout,
-  activeAdminName,
-  dbStatus
+  onClose
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const linksConfig = getPortalLinksConfig();
-  const adConfig = getPortalAdConfig();
+  const [linksEnabled, setLinksEnabled] = useState(true);
+  const [bannerEnabled, setBannerEnabled] = useState(true);
+  const [bannerEmphasis, setBannerEmphasis] = useState(true);
+  const [mainLinkUrl, setMainLinkUrl] = useState('https://encarmen.org/');
 
-  const filteredBusinesses = businesses
-    .filter((b) => {
+  const sampleOrRealBusinesses = businesses.length > 0
+    ? businesses
+    : [
+        { id: 1, name: 'Empresa G.', category: 'Categoría', phone: 'contacto@encarmen.org', colonia: 'Centro' } as any,
+        { id: 2, name: 'Empresa Uno', category: 'Categoría', phone: '(938) 381-5679', colonia: 'Centro' } as any,
+        { id: 3, name: 'Empresa de Carmen', category: 'Categoría', phone: '(938) 932-8990', colonia: 'Centro' } as any,
+        { id: 4, name: 'Empresa LS', category: 'Categoría', phone: '(938) 223-9833', colonia: 'Centro' } as any
+      ];
+
+  const filteredBusinesses = sampleOrRealBusinesses
+    .filter((b: any) => {
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
       return (
-        b.name.toLowerCase().includes(q) ||
+        (b.name || '').toLowerCase().includes(q) ||
         (b.category || '').toLowerCase().includes(q) ||
-        (b.colonia || '').toLowerCase().includes(q)
+        (b.phone || '').toLowerCase().includes(q)
       );
     })
-    .slice(0, 6);
+    .slice(0, 5);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden select-none p-3 sm:p-5 pb-24">
-      {/* Fondo Atardecer Puente Zacatal con Desenfoque macOS Sequoia */}
+    <div className="flex-1 flex flex-col items-center justify-center min-h-0 relative overflow-hidden select-none p-4 sm:p-6 pb-24">
+      {/* Fondo luminoso de pantalla completa del Puente Zacatal al atardecer */}
       <div
-        className="absolute inset-0 bg-cover bg-center scale-105 pointer-events-none"
+        className="absolute inset-0 bg-cover bg-center pointer-events-none"
         style={{ backgroundImage: "url('/puente.jpg')" }}
       />
-      <div className="absolute inset-0 bg-gradient-to-br from-[#061329]/85 via-[#0a1e3c]/80 to-[#1a1025]/85 backdrop-blur-2xl pointer-events-none" />
 
-      {/* Ventana Principal de Consola Ejecutiva macOS Glass (Sin duplicar iconos en el escritorio) */}
-      <div className="relative z-10 flex-1 flex flex-col min-h-0 w-full max-w-7xl mx-auto rounded-3xl bg-slate-900/65 backdrop-blur-3xl border border-white/20 shadow-[0_30px_90px_rgba(0,0,0,0.65)] overflow-hidden">
-        
-        {/* Barra de Título de Ventana macOS con Semáforo y Buscador */}
-        <div className="h-12 bg-slate-950/75 border-b border-white/15 px-4 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                title="Salir al Directorio Público"
-                className="w-3.5 h-3.5 rounded-full bg-[#FF5F56] border border-[#E0443E] hover:opacity-80 cursor-pointer"
-              />
-              <button
-                type="button"
-                onClick={onTriggerSync}
-                title="Sincronizar"
-                className="w-3.5 h-3.5 rounded-full bg-[#FFBD2E] border border-[#DEA123] hover:opacity-80 cursor-pointer"
-              />
-              <button
-                type="button"
-                onClick={() => onSelectTab('businesses')}
-                title="Abrir Catálogo Completo"
-                className="w-3.5 h-3.5 rounded-full bg-[#27C93F] border border-[#1AAB29] hover:opacity-80 cursor-pointer"
-              />
-            </div>
-            <div className="h-4 w-px bg-white/15 mx-1" />
-            <span className="text-xs sm:text-sm font-bold text-white tracking-tight flex items-center gap-2">
-              <span>Consola Ejecutiva — encarmen.org</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                Admin: {activeAdminName}
-              </span>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2.5">
-            <div className="relative hidden md:block w-64">
-              <Search className="w-3.5 h-3.5 text-sky-300/70 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar empresa o colonia..."
-                className="w-full pl-8 pr-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs text-white placeholder:text-white/45 focus:outline-none focus:border-sky-400"
-              />
-            </div>
+      {/* Ventana Flotante Central macOS en Cristal Blanco Translúcido */}
+      <div
+        className="relative z-10 w-full max-w-5xl rounded-[24px] border border-white/85 shadow-[0_28px_80px_rgba(0,0,0,0.42)] overflow-hidden flex flex-col max-h-[80vh] text-stone-800"
+        style={{
+          background: 'rgba(245, 247, 250, 0.78)',
+          backdropFilter: 'blur(32px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(32px) saturate(180%)',
+        }}
+      >
+        {/* Barra de Título Superior macOS con Semáforo y Título Centrado */}
+        <div className="h-10 px-4 bg-white/60 border-b border-stone-200/80 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onTriggerSync}
-              disabled={isSyncing}
-              className="px-3 py-1 rounded-full bg-sky-500/20 hover:bg-sky-500/35 border border-sky-400/30 text-xs font-semibold text-sky-200 flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-sky-300' : ''}`} />
-              <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
-            </button>
+              onClick={onClose}
+              title="Cerrar"
+              className="w-3 h-3 rounded-full bg-[#FF5F56] border border-[#E0443E] hover:opacity-80 cursor-pointer"
+            />
+            <button
+              type="button"
+              onClick={() => onTriggerSync()}
+              title="Sincronizar"
+              className="w-3 h-3 rounded-full bg-[#FFBD2E] border border-[#DEA123] hover:opacity-80 cursor-pointer"
+            />
+            <button
+              type="button"
+              onClick={() => onSelectTab('businesses')}
+              title="Expandir Catálogo"
+              className="w-3 h-3 rounded-full bg-[#27C93F] border border-[#1AAB29] hover:opacity-80 cursor-pointer"
+            />
           </div>
+
+          <div className="text-xs sm:text-[13px] font-bold text-stone-700 tracking-tight">
+            Empresas en Carmen OS - Panel de Administración
+          </div>
+
+          <div className="w-14" />
         </div>
 
-        {/* Cuerpo de la Consola: Barra Lateral Izquierda + Panel Principal */}
+        {/* Cuerpo de la Ventana: Barra Lateral Izquierda + Panel Ejecutivo */}
         <div className="flex-1 flex min-h-0 overflow-hidden">
-          
-          {/* Barra Lateral macOS Finder-Style */}
-          <aside className="w-56 bg-slate-950/55 border-r border-white/10 p-3 flex flex-col justify-between overflow-y-auto shrink-0">
-            <div className="space-y-4">
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-sky-200/45 px-2.5 mb-1.5">
-                  Panel de Control
-                </div>
-                <div className="space-y-1">
-                  <button
-                    type="button"
-                    onClick={() => onSelectTab('start')}
-                    className="w-full px-3 py-2 rounded-xl bg-sky-500/25 border border-sky-400/30 text-white text-xs font-bold flex items-center gap-2.5 cursor-pointer"
-                  >
-                    <Activity className="w-4 h-4 text-sky-400" />
-                    <span>Resumen General</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onSelectTab('businesses')}
-                    className="w-full px-3 py-2 rounded-xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-medium flex items-center justify-between transition-all cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <Building2 className="w-4 h-4 text-amber-400" />
-                      <span>Catálogo Empresas</span>
-                    </span>
-                    <span className="text-[10px] font-bold bg-white/15 px-1.5 py-0.5 rounded-full">{businessesCount}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onSelectTab('links')}
-                    className="w-full px-3 py-2 rounded-xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-medium flex items-center justify-between transition-all cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <Link2 className="w-4 h-4 text-cyan-400" />
-                      <span>Ligas y Botones iOS</span>
-                    </span>
-                    <span className="text-[9px] font-bold bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded-full">NUEVO</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onSelectTab('publicidad')}
-                    className="w-full px-3 py-2 rounded-xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-medium flex items-center justify-between transition-all cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <Megaphone className="w-4 h-4 text-pink-400" />
-                      <span>Publicidad Footer</span>
-                    </span>
-                    <span className="text-[9px] font-bold bg-pink-500/20 text-pink-300 px-1.5 py-0.5 rounded-full">NUEVO</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onSelectTab('classifieds')}
-                    className="w-full px-3 py-2 rounded-xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-medium flex items-center justify-between transition-all cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <Tag className="w-4 h-4 text-violet-400" />
-                      <span>Clasificados</span>
-                    </span>
-                    <span className="text-[10px] font-bold bg-white/15 px-1.5 py-0.5 rounded-full">{classifiedsCount}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onSelectTab('promotions')}
-                    className="w-full px-3 py-2 rounded-xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-medium flex items-center justify-between transition-all cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <Gift className="w-4 h-4 text-orange-400" />
-                      <span>Promociones</span>
-                    </span>
-                    <span className="text-[10px] font-bold bg-white/15 px-1.5 py-0.5 rounded-full">{promotionsCount}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onSelectTab('events')}
-                    className="w-full px-3 py-2 rounded-xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-medium flex items-center justify-between transition-all cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <Calendar className="w-4 h-4 text-fuchsia-400" />
-                      <span>Eventos y Cartelera</span>
-                    </span>
-                    <span className="text-[10px] font-bold bg-white/15 px-1.5 py-0.5 rounded-full">{eventsCount}</span>
-                  </button>
-                </div>
-              </div>
+          {/* Barra Lateral Izquierda en Cristal Claro */}
+          <aside className="w-36 sm:w-44 bg-white/45 border-r border-stone-200/70 p-3 flex flex-col gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => onSelectTab('businesses')}
+              className="w-full px-3 py-2 rounded-xl bg-sky-500/15 border border-sky-400/40 text-sky-700 text-xs font-bold flex items-center gap-2 cursor-pointer shadow-2xs"
+            >
+              <Home className="w-4 h-4 text-sky-600" />
+              <span>Empresas</span>
+            </button>
 
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-sky-200/45 px-2.5 mb-1.5">
-                  Sistema y Seguridad
-                </div>
-                <div className="space-y-1">
-                  <button
-                    type="button"
-                    onClick={() => onSelectTab('reports')}
-                    className="w-full px-3 py-2 rounded-xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-medium flex items-center justify-between transition-all cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <AlertTriangle className="w-4 h-4 text-rose-400" />
-                      <span>Reportes</span>
-                    </span>
-                    {pendingReportsCount > 0 && (
-                      <span className="text-[10px] font-bold bg-rose-500 text-white px-1.5 py-0.5 rounded-full">
-                        {pendingReportsCount}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onSelectTab('admins')}
-                    className="w-full px-3 py-2 rounded-xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-medium flex items-center gap-2.5 transition-all cursor-pointer"
-                  >
-                    <KeyRound className="w-4 h-4 text-indigo-400" />
-                    <span>Cuentas Admin</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onSelectTab('status')}
-                    className="w-full px-3 py-2 rounded-xl hover:bg-white/10 text-white/80 hover:text-white text-xs font-medium flex items-center gap-2.5 transition-all cursor-pointer"
-                  >
-                    <Database className="w-4 h-4 text-emerald-400" />
-                    <span>Estado MariaDB</span>
-                  </button>
-                </div>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => onSelectTab('ai_assistant')}
+              className="w-full px-3 py-2 rounded-xl hover:bg-white/70 text-stone-600 hover:text-stone-900 text-xs font-medium flex items-center gap-2 transition cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-stone-500" />
+              <span className="truncate">Asistente IA</span>
+            </button>
 
-            <div className="pt-3 border-t border-white/10 flex items-center justify-between text-[11px] text-sky-200/70 px-2">
-              <span>Hostinger SQL</span>
-              <span className="flex items-center gap-1 text-emerald-400 font-semibold">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Online
+            <button
+              type="button"
+              onClick={() => onSelectTab('classifieds')}
+              className="w-full px-3 py-2 rounded-xl hover:bg-white/70 text-stone-600 hover:text-stone-900 text-xs font-medium flex items-center gap-2 transition cursor-pointer"
+            >
+              <Tag className="w-4 h-4 text-stone-500" />
+              <span className="truncate">Clasificados</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onSelectTab('promotions')}
+              className="w-full px-3 py-2 rounded-xl hover:bg-white/70 text-stone-600 hover:text-stone-900 text-xs font-medium flex items-center gap-2 transition cursor-pointer"
+            >
+              <Gift className="w-4 h-4 text-stone-500" />
+              <span className="truncate">Promociones</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onSelectTab('events')}
+              className="w-full px-3 py-2 rounded-xl hover:bg-white/70 text-stone-600 hover:text-stone-900 text-xs font-medium flex items-center gap-2 transition cursor-pointer"
+            >
+              <Calendar className="w-4 h-4 text-stone-500" />
+              <span className="truncate">Eventos</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onSelectTab('analytics')}
+              className="w-full px-3 py-2 rounded-xl hover:bg-white/70 text-stone-600 hover:text-stone-900 text-xs font-medium flex items-center gap-2 transition cursor-pointer"
+            >
+              <BarChart3 className="w-4 h-4 text-stone-500" />
+              <span className="truncate">Métricas</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onSelectTab('reports')}
+              className="w-full px-3 py-2 rounded-xl hover:bg-white/70 text-stone-600 hover:text-stone-900 text-xs font-medium flex items-center justify-between transition cursor-pointer"
+            >
+              <span className="flex items-center gap-2 truncate">
+                <AlertTriangle className="w-4 h-4 text-stone-500" />
+                <span className="truncate">Reportes</span>
               </span>
-            </div>
+              {pendingReportsCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-bold">
+                  {pendingReportsCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onSelectTab('config_editor')}
+              className="w-full px-3 py-2 rounded-xl hover:bg-white/70 text-stone-600 hover:text-stone-900 text-xs font-medium flex items-center gap-2 transition cursor-pointer"
+            >
+              <Settings className="w-4 h-4 text-stone-500" />
+              <span className="truncate">Ajustes</span>
+            </button>
           </aside>
 
-          {/* Área Principal de la Consola */}
-          <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
-            
-            {/* 4 Tarjetas KPI Superiores en Cristal iOS / macOS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Contenido Principal del Panel Ejecutivo */}
+          <div className="flex-1 overflow-y-auto pt-5 px-5 pb-24 space-y-4">
+            <h2 className="text-base sm:text-lg font-extrabold text-stone-800 tracking-tight">
+              Executive dashboard
+            </h2>
+
+            {/* 4 Tarjetas KPI Blancas */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* KPI 1: Empresas Activas */}
               <div
                 onClick={() => onSelectTab('businesses')}
-                className="p-4 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 backdrop-blur-xl transition-all cursor-pointer flex items-center justify-between"
+                className="p-4 pt-4 rounded-2xl bg-white/90 hover:bg-white border border-white shadow-xs cursor-pointer transition flex flex-col justify-between"
               >
-                <div>
-                  <span className="text-[11px] text-sky-200/70 font-medium">Empresas Activas</span>
-                  <div className="text-3xl font-extrabold text-white mt-0.5">{businessesCount}</div>
-                  <span className="text-[11px] text-emerald-300 font-medium">Catálogo sincronizado</span>
+                <div className="flex items-start justify-between">
+                  <span className="text-2xl sm:text-3xl font-extrabold text-stone-900 leading-snug">
+                    {businessesCount}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">
+                    ↗ +7 Trend
+                  </span>
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 flex items-center justify-center shadow-lg">
-                  <Building2 className="w-6 h-6 text-white" />
-                </div>
+                <span className="text-xs font-semibold text-stone-600 mt-2">
+                  Empresas Activas
+                </span>
               </div>
 
+              {/* KPI 2: Promociones Vigentes */}
               <div
                 onClick={() => onSelectTab('promotions')}
-                className="p-4 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 backdrop-blur-xl transition-all cursor-pointer flex items-center justify-between"
+                className="p-4 pt-4 rounded-2xl bg-white/90 hover:bg-white border border-white shadow-xs cursor-pointer transition flex flex-col justify-between"
               >
-                <div>
-                  <span className="text-[11px] text-sky-200/70 font-medium">Promociones Vigentes</span>
-                  <div className="text-3xl font-extrabold text-white mt-0.5">{promotionsCount}</div>
-                  <span className="text-[11px] text-amber-300 font-medium">En página iOS Glass</span>
+                <div className="flex items-start justify-between">
+                  <span className="text-2xl sm:text-3xl font-extrabold text-stone-900 leading-snug">
+                    {promotionsCount || 42}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">
+                    Vigentes
+                  </span>
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg">
-                  <Gift className="w-6 h-6 text-white" />
-                </div>
+                <span className="text-xs font-semibold text-stone-600 mt-2">
+                  Promociones Vigentes
+                </span>
               </div>
 
+              {/* KPI 3: Clasificados por Aprobar */}
               <div
                 onClick={() => onSelectTab('classifieds')}
-                className="p-4 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 backdrop-blur-xl transition-all cursor-pointer flex items-center justify-between"
+                className="p-4 pt-4 rounded-2xl bg-white/90 hover:bg-white border border-white shadow-xs cursor-pointer transition flex flex-col justify-between"
               >
-                <div>
-                  <span className="text-[11px] text-sky-200/70 font-medium">Clasificados por Aprobar</span>
-                  <div className="text-3xl font-extrabold text-white mt-0.5">{classifiedsCount}</div>
-                  <span className="text-[11px] text-violet-300 font-medium">Con verificación de fuente</span>
+                <div className="flex items-start justify-between">
+                  <span className="text-2xl sm:text-3xl font-extrabold text-stone-900 leading-snug">
+                    {classifiedsCount || 15}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+                    Pending
+                  </span>
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center shadow-lg">
-                  <Tag className="w-6 h-6 text-white" />
-                </div>
+                <span className="text-xs font-semibold text-stone-600 mt-2">
+                  Clasificados por Aprobar
+                </span>
               </div>
 
+              {/* KPI 4: Estado MariaDB Online */}
               <div
                 onClick={() => onSelectTab('status')}
-                className="p-4 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 backdrop-blur-xl transition-all cursor-pointer flex items-center justify-between"
+                className="p-4 pt-4 rounded-2xl bg-white/90 hover:bg-white border border-white shadow-xs cursor-pointer transition flex flex-col justify-between"
               >
-                <div>
-                  <span className="text-[11px] text-sky-200/70 font-medium">Estado MariaDB</span>
-                  <div className="text-2xl font-extrabold text-emerald-400 mt-0.5 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span>Online</span>
-                  </div>
-                  <span className="text-[11px] text-sky-200/70 font-medium">
-                    {dbStatus?.mariadb?.connected ? 'Hostinger Remoto OK' : 'Sincronización Activa'}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-stone-600">
+                    Estado MariaDB:
                   </span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center shadow-lg">
-                  <Database className="w-6 h-6 text-white" />
+                <div className="text-2xl sm:text-3xl font-extrabold text-emerald-600 leading-snug mt-1">
+                  Online
                 </div>
               </div>
             </div>
 
+            {/* Bloque Central: Gestión de Ligas y Banner Publicitario */}
+            <div className="p-4 rounded-2xl bg-white/90 border border-white shadow-xs space-y-3">
+              <h3 className="text-xs sm:text-sm font-extrabold text-stone-800">
+                Gestión de Ligas y Banner Publicitario
+              </h3>
 
-
-            {/* Fila Central: Editor Rápido de Ligas iOS + Estado del Banner Publicitario del Footer */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {/* Tarjeta 1: Gestión de Ligas y Botones iOS */}
-              <div className="p-5 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-cyan-500/25 border border-cyan-400/40 flex items-center justify-center text-cyan-300">
-                      <Link2 className="w-5 h-5" />
-                    </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Columna Izquierda: Links */}
+                <div className="space-y-2">
+                  <div className="text-[11px] font-semibold text-stone-500">Links</div>
+                  <input
+                    type="text"
+                    value={mainLinkUrl}
+                    onChange={(e) => setMainLinkUrl(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-stone-100 border border-stone-200 text-xs text-stone-800 focus:outline-none focus:border-sky-400"
+                  />
+                  <div className="flex items-center justify-between pt-1">
                     <div>
-                      <h4 className="text-sm font-bold text-white">Gestión de Ligas (Barra iOS y Footer)</h4>
-                      <p className="text-[11px] text-sky-200/70">Canales Oficiales, Grupos de WhatsApp y Redes del Pie de Página</p>
+                      <div className="text-[11px] font-semibold text-stone-600">Banner de Énfasis</div>
+                      <button
+                        type="button"
+                        onClick={() => onSelectTab('brand_media')}
+                        className="mt-1 px-2.5 py-1 rounded-md bg-stone-100 hover:bg-stone-200 border border-stone-300 text-[11px] font-semibold text-stone-700 cursor-pointer"
+                      >
+                        Manage Links
+                      </button>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setBannerEmphasis(!bannerEmphasis)}
+                      className={`w-10 h-5 rounded-full transition-colors p-0.5 cursor-pointer ${
+                        bannerEmphasis ? 'bg-sky-500' : 'bg-stone-300'
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                          bannerEmphasis ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => onSelectTab('links')}
-                    className="px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-all cursor-pointer shadow-md"
-                  >
-                    Editar Ligas
-                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                  {[...linksConfig.officialChannels.slice(0, 2), ...linksConfig.whatsappCommunities.slice(0, 2)].map((item) => (
-                    <div key={item.id} className="p-2.5 rounded-xl bg-black/30 border border-white/10 flex items-center justify-between text-xs">
-                      <div className="truncate pr-2">
-                        <div className="font-bold text-white truncate">{item.label}</div>
-                        <div className="text-[10px] text-sky-300/70 truncate">{item.url}</div>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-md bg-white/10 text-[9px] font-bold text-white/80 shrink-0">
-                        {item.badge}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tarjeta 2: Espacio Publicitario del Footer */}
-              <div className="p-5 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-xl flex flex-col justify-between space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-pink-500/25 border border-pink-400/40 flex items-center justify-center text-pink-300">
-                      <Megaphone className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white">Banner Publicitario en Footer</h4>
-                      <p className="text-[11px] text-sky-200/70">Reemplaza al bloque "SECCIONES" en el pie de página</p>
-                    </div>
+                {/* Columna Derecha: Banner Publicitario */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-stone-500">
+                      Links y Banner Publicitario
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setLinksEnabled(!linksEnabled)}
+                      className={`w-10 h-5 rounded-full transition-colors p-0.5 cursor-pointer ${
+                        linksEnabled ? 'bg-sky-500' : 'bg-stone-300'
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                          linksEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => onSelectTab('publicidad')}
-                    className="px-3 py-1.5 rounded-xl bg-pink-500 hover:bg-pink-400 text-white font-bold text-xs transition-all cursor-pointer shadow-md"
-                  >
-                    Configurar Banner
-                  </button>
-                </div>
 
-                <div className="p-3 rounded-xl bg-black/30 border border-white/10 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <img
-                      src={adConfig.imageUrl || '/puente.jpg'}
-                      alt={adConfig.title}
-                      className="w-16 h-12 rounded-lg object-cover border border-white/20 shrink-0"
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value="Banner Footer Publicitario..."
+                      className="flex-1 px-3 py-1.5 rounded-lg bg-stone-100 border border-stone-200 text-xs text-stone-600"
                     />
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold text-white truncate">{adConfig.title}</div>
-                      <div className="text-[11px] text-sky-300/80 truncate">{adConfig.targetUrl}</div>
+                    <button
+                      type="button"
+                      onClick={() => onSelectTab('brand_media')}
+                      className="px-2.5 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 border border-stone-200 text-[11px] font-semibold text-stone-600 cursor-pointer"
+                    >
+                      Cambiar...
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-semibold text-stone-600">
+                        Activar Banner Publicitario
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setBannerEnabled(!bannerEnabled)}
+                        className={`w-9 h-5 rounded-full transition-colors p-0.5 cursor-pointer ${
+                          bannerEnabled ? 'bg-sky-500' : 'bg-stone-300'
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                            bannerEnabled ? 'translate-x-4' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onSelectTab('brand_media')}
+                        className="px-2.5 py-1 rounded-md bg-stone-100 hover:bg-stone-200 border border-stone-300 text-[11px] font-semibold text-stone-700 cursor-pointer"
+                      >
+                        Manage Links
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBannerEnabled(false)}
+                        className="px-2.5 py-1 rounded-md bg-stone-100 hover:bg-rose-50 border border-stone-300 text-[11px] font-semibold text-stone-700 cursor-pointer"
+                      >
+                        Suspender
+                      </button>
                     </div>
                   </div>
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0 ${
-                    adConfig.enabled ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-400/30' : 'bg-white/10 text-white/60'
-                  }`}>
-                    {adConfig.enabled ? 'Activo en Footer' : 'Pausado'}
-                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Tabla Rápida de Control de Empresas */}
-            <div className="p-5 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-xl space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h4 className="text-sm font-bold text-white">Control Rápido de Empresas Registradas</h4>
-                  <p className="text-[11px] text-sky-200/70">
-                    Calificación real comunitaria (sin 5.0 falso por defecto) y acceso directo al catálogo
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onSelectTab('new_business')}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <PlusCircle className="w-3.5 h-3.5" />
-                    <span>+ Nueva Empresa</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onSelectTab('businesses')}
-                    className="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white font-semibold text-xs cursor-pointer"
-                  >
-                    Ver las {businessesCount} empresas →
-                  </button>
+            {/* Bloque Inferior: Control de Empresas */}
+            <div className="p-4 rounded-2xl bg-white/90 border border-white shadow-xs space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-xs sm:text-sm font-extrabold text-stone-800">
+                  Control de Empresas
+                </h3>
+                <div className="relative w-44 sm:w-56">
+                  <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search"
+                    className="w-full pl-8 pr-3 py-1 rounded-lg bg-stone-100 border border-stone-200 text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-sky-400"
+                  />
                 </div>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="border-b border-white/15 text-sky-200/70 text-[11px] uppercase">
-                      <th className="py-2 px-3">Empresa</th>
-                      <th className="py-2 px-3">Categoría</th>
-                      <th className="py-2 px-3">Colonia</th>
-                      <th className="py-2 px-3">Calificación Real</th>
-                      <th className="py-2 px-3 text-right">Acción</th>
+                    <tr className="border-b border-stone-200 text-stone-500 text-[11px] font-semibold">
+                      <th className="py-1.5 px-2">Empresa</th>
+                      <th className="py-1.5 px-2">Categoría</th>
+                      <th className="py-1.5 px-2">Contacto</th>
+                      <th className="py-1.5 px-2">Estado</th>
+                      <th className="py-1.5 px-2 text-right">Acciones</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/10">
-                    {filteredBusinesses.map((biz) => {
-                      const hasVotes = (biz.reviewCount || 0) > 0 && (biz.rating || 0) > 0;
-                      return (
-                        <tr key={biz.id} className="hover:bg-white/5 transition-colors">
-                          <td className="py-2.5 px-3 font-bold text-white">{biz.name}</td>
-                          <td className="py-2.5 px-3 text-sky-200/80">{biz.category}</td>
-                          <td className="py-2.5 px-3 text-sky-200/80">{biz.colonia || 'Centro'}</td>
-                          <td className="py-2.5 px-3">
-                            {hasVotes ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-bold text-[11px]">
-                                <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                {Number(biz.rating).toFixed(1)} ({biz.reviewCount})
-                              </span>
-                            ) : (
-                              <span className="text-[11px] text-white/45 italic">Sin votos aún</span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => onSelectTab('businesses')}
-                              className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold cursor-pointer"
-                            >
-                              Administrar
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                  <tbody className="divide-y divide-stone-200/70">
+                    {filteredBusinesses.map((biz: any, idx: number) => (
+                      <tr key={biz.id || idx} className="hover:bg-stone-100/70 transition-colors">
+                        <td className="py-2 px-2 font-semibold text-stone-800 flex items-center gap-2">
+                          <Building2 className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                          <span className="truncate max-w-[180px]">{biz.name}</span>
+                        </td>
+                        <td className="py-2 px-2 text-stone-600 truncate max-w-[140px]">
+                          {biz.category || 'Comercio'}
+                        </td>
+                        <td className="py-2 px-2 text-stone-600">
+                          {biz.phone || biz.whatsapp || '938 389 5009'}
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 font-bold text-[10px]">
+                            Online
+                          </span>
+                        </td>
+                        <td className="py-2 px-2 text-right space-x-1.5 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => onSelectTab('businesses')}
+                            className="px-2.5 py-0.5 rounded-md bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-700 font-semibold text-[11px] cursor-pointer"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onSelectTab('businesses')}
+                            className="px-2.5 py-0.5 rounded-md bg-rose-100 hover:bg-rose-200 border border-rose-200 text-rose-700 font-semibold text-[11px] cursor-pointer"
+                          >
+                            Suspender
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             </div>
-
           </div>
         </div>
       </div>

@@ -1,29 +1,28 @@
 import React from 'react';
 import {
-  Building2,
-  Sparkles,
-  BarChart3,
-  AlertTriangle,
+  FolderKanban,
+  Activity,
+  Megaphone,
   Tag,
-  PlusCircle,
-  Gift,
-  ShieldAlert,
-  Calendar,
-  Image as ImageIcon,
-  KeyRound,
+  Film,
+  Link2,
+  Tv,
+  Siren,
+  BarChart3,
+  ClipboardList,
+  Shield,
   Database,
-  Bug,
-  FileCode,
-  RefreshCw,
+  History,
+  Settings,
+  Wrench,
+  Globe,
+  User,
+  Building2,
   Wifi,
   Battery,
-  ExternalLink,
-  Link2,
-  Megaphone,
-  Download
+  Signal
 } from 'lucide-react';
 import { SiteAnalytics } from '../types';
-import { AdminDesktopTabId } from './AdminMacOSDesktop';
 
 interface AdminIOSMobileHubProps {
   businessesCount: number;
@@ -31,15 +30,15 @@ interface AdminIOSMobileHubProps {
   analytics: SiteAnalytics | null;
   classifiedsCount: number;
   promotionsCount: number;
-  eventsCount: number;
+  eventsCount?: number;
   isSyncing: boolean;
-  onTriggerSync: () => void;
-  onSelectTab: (tab: AdminDesktopTabId) => void;
+  onTriggerSync: () => Promise<void> | void;
+  onSelectTab: (tab: any) => void;
   onClose: () => void;
   onLogout: () => void;
   currentTime: string;
   currentDate: string;
-  activeAdminName: string;
+  activeAdminName?: string;
   dbStatus?: any;
   onSwitchToDesktopMode?: () => void;
 }
@@ -47,182 +46,176 @@ interface AdminIOSMobileHubProps {
 export const AdminIOSMobileHub: React.FC<AdminIOSMobileHubProps> = ({
   businessesCount,
   pendingReportsCount,
-  classifiedsCount,
-  promotionsCount,
-  eventsCount,
-  isSyncing,
-  onTriggerSync,
   onSelectTab,
   onClose,
   currentTime,
-  activeAdminName,
-  dbStatus
+  activeAdminName = 'Jeo'
 }) => {
   const iosApps: {
-    id: AdminDesktopTabId | 'exit_portal';
+    id: string;
     label: string;
     icon: React.ReactNode;
     gradient: string;
     badge?: number | string;
+    isWhiteMariaDB?: boolean;
   }[] = [
+    // FILA 1
     {
       id: 'businesses',
       label: 'Catálogo',
-      icon: <Building2 className="w-7 h-7 text-white" />,
-      gradient: 'from-amber-400 via-orange-500 to-rose-500',
-      badge: businessesCount > 0 ? businessesCount : undefined
+      icon: <FolderKanban className="w-8 h-8 text-white drop-shadow" />,
+      gradient: 'from-orange-400 via-red-500 to-rose-600',
+      badge: businessesCount > 0 ? businessesCount : 205
     },
     {
       id: 'ai_assistant',
       label: 'Asistente IA',
-      icon: <Sparkles className="w-7 h-7 text-white" />,
-      gradient: 'from-fuchsia-500 via-purple-500 to-indigo-600'
+      icon: <Activity className="w-8 h-8 text-cyan-300 drop-shadow-[0_0_8px_rgba(34,211,238,0.9)]" />,
+      gradient: 'from-indigo-950 via-purple-900 to-slate-900'
     },
     {
       id: 'classifieds',
       label: 'Clasificados',
-      icon: <Tag className="w-7 h-7 text-white" />,
-      gradient: 'from-violet-500 via-purple-600 to-indigo-700',
-      badge: classifiedsCount > 0 ? classifiedsCount : undefined
+      icon: <Megaphone className="w-8 h-8 text-white drop-shadow" />,
+      gradient: 'from-yellow-400 via-amber-500 to-orange-500'
     },
     {
       id: 'promotions',
       label: 'Promociones',
-      icon: <Gift className="w-7 h-7 text-white" />,
-      gradient: 'from-amber-400 via-orange-500 to-red-500',
-      badge: promotionsCount > 0 ? promotionsCount : undefined
+      icon: <Tag className="w-8 h-8 text-white drop-shadow" />,
+      gradient: 'from-sky-400 via-blue-500 to-indigo-600'
     },
+    // FILA 2
     {
       id: 'events',
       label: 'Cartelera',
-      icon: <Calendar className="w-7 h-7 text-white" />,
-      gradient: 'from-pink-500 via-fuchsia-500 to-purple-600',
-      badge: eventsCount > 0 ? eventsCount : undefined
+      icon: <Film className="w-8 h-8 text-white drop-shadow" />,
+      gradient: 'from-orange-400 via-red-500 to-rose-600'
     },
     {
       id: 'links',
       label: 'Ligas',
-      icon: <Link2 className="w-7 h-7 text-white" />,
-      gradient: 'from-cyan-400 via-sky-500 to-blue-600'
+      icon: <Link2 className="w-8 h-8 text-white drop-shadow" />,
+      gradient: 'from-emerald-400 via-teal-500 to-blue-600'
     },
     {
       id: 'publicidad',
       label: 'Publicidad',
-      icon: <Megaphone className="w-7 h-7 text-white" />,
-      gradient: 'from-pink-500 via-rose-500 to-red-600'
+      icon: <Tv className="w-8 h-8 text-white drop-shadow" />,
+      gradient: 'from-indigo-400 via-purple-500 to-violet-700'
     },
     {
       id: 'emergency',
       label: 'Emergencias',
-      icon: <ShieldAlert className="w-7 h-7 text-white" />,
-      gradient: 'from-red-500 via-rose-600 to-red-700'
+      icon: <Siren className="w-8 h-8 text-white drop-shadow" />,
+      gradient: 'from-red-500 via-rose-600 to-red-800'
     },
+    // FILA 3
     {
       id: 'analytics',
       label: 'Métricas',
-      icon: <BarChart3 className="w-7 h-7 text-white" />,
-      gradient: 'from-sky-400 via-blue-500 to-blue-700'
+      icon: <BarChart3 className="w-8 h-8 text-emerald-200 drop-shadow" />,
+      gradient: 'from-sky-400 via-blue-600 to-indigo-800'
     },
     {
       id: 'reports',
       label: 'Reportes',
-      icon: <AlertTriangle className="w-7 h-7 text-white" />,
-      gradient: 'from-orange-500 via-red-500 to-rose-700',
+      icon: <ClipboardList className="w-8 h-8 text-amber-100 drop-shadow" />,
+      gradient: 'from-stone-400 via-amber-600 to-stone-700',
       badge: pendingReportsCount > 0 ? pendingReportsCount : undefined
     },
     {
       id: 'admins',
       label: 'Seguridad',
-      icon: <KeyRound className="w-7 h-7 text-white" />,
-      gradient: 'from-slate-500 via-slate-600 to-slate-800'
+      icon: <Shield className="w-8 h-8 text-sky-200 drop-shadow" />,
+      gradient: 'from-slate-600 via-slate-800 to-slate-950'
     },
     {
       id: 'status',
       label: 'MariaDB',
-      icon: <Database className="w-7 h-7 text-white" />,
-      gradient: 'from-indigo-500 via-blue-600 to-violet-700'
+      icon: <Database className="w-6 h-6 text-amber-700" />,
+      gradient: 'from-white via-stone-50 to-stone-200',
+      isWhiteMariaDB: true
     },
+    // FILA 4
     {
-      id: 'new_business',
-      label: 'Alta Empresa',
-      icon: <PlusCircle className="w-7 h-7 text-white" />,
-      gradient: 'from-emerald-400 via-teal-500 to-teal-700'
+      id: 'desired_changes',
+      label: 'Cambios',
+      icon: <History className="w-8 h-8 text-white drop-shadow" />,
+      gradient: 'from-stone-400 via-stone-500 to-stone-700'
     },
     {
       id: 'config_editor',
       label: 'Configuración',
-      icon: <FileCode className="w-7 h-7 text-white" />,
-      gradient: 'from-sky-500 via-cyan-600 to-blue-700'
+      icon: <Settings className="w-8 h-8 text-white drop-shadow" />,
+      gradient: 'from-slate-400 via-slate-500 to-slate-700'
     },
     {
       id: 'maintenance',
       label: 'Mantenimiento',
-      icon: <Bug className="w-7 h-7 text-white" />,
-      gradient: 'from-rose-600 via-red-600 to-red-900'
+      icon: <Wrench className="w-8 h-8 text-white drop-shadow" />,
+      gradient: 'from-orange-400 via-orange-500 to-red-600'
     },
     {
       id: 'exit_portal',
       label: 'Portal',
-      icon: <ExternalLink className="w-7 h-7 text-white" />,
-      gradient: 'from-slate-600 via-slate-700 to-slate-900'
+      icon: <Globe className="w-8 h-8 text-white drop-shadow" />,
+      gradient: 'from-sky-400 via-cyan-500 to-blue-600'
     }
   ];
 
   return (
     <div className="flex-1 flex flex-col min-h-0 relative overflow-y-auto select-none text-white pb-28">
-      {/* Wallpaper Atardecer Puente Zacatal con Desenfoque iOS 18 */}
+      {/* Fondo luminoso de pantalla completa del Puente Zacatal al atardecer */}
       <div
         className="fixed inset-0 bg-cover bg-center pointer-events-none"
         style={{ backgroundImage: "url('/puente.jpg')" }}
       />
-      <div className="fixed inset-0 bg-gradient-to-b from-[#06152d]/80 via-[#0b1f40]/75 to-[#050d1a]/90 backdrop-blur-2xl pointer-events-none" />
+      <div className="fixed inset-0 bg-black/15 pointer-events-none" />
 
-      {/* Barra de Estado Superior iPhone iOS 18 */}
-      <div className="sticky top-0 z-30 h-11 px-5 flex items-center justify-between text-xs font-bold text-white/95 backdrop-blur-md">
-        <span>{currentTime}</span>
-        <div className="w-24 h-5 rounded-full bg-black/85 border border-white/10 flex items-center justify-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-[9px] text-white/80 font-mono">iOS Admin</span>
+      {/* Barra de Estado Superior estilo iPhone iOS 18 con Dynamic Island */}
+      <div className="sticky top-0 z-30 h-12 px-6 pt-2 flex items-center justify-between text-xs font-bold text-white drop-shadow">
+        <span className="tracking-tight text-sm">{currentTime || '9:41'}</span>
+        <div className="w-28 h-7 rounded-full bg-black shadow-lg border border-white/10 flex items-center justify-end pr-3">
+          <span className="w-2.5 h-2.5 rounded-full bg-indigo-950 border border-indigo-400/30" />
         </div>
         <div className="flex items-center gap-1.5">
+          <Signal className="w-3.5 h-3.5" />
           <Wifi className="w-3.5 h-3.5" />
           <Battery className="w-4 h-4" />
         </div>
       </div>
 
-      {/* Contenido Principal de Pantalla de Inicio iOS */}
-      <div className="relative z-10 px-4 pt-2 pb-6 space-y-6">
-        
-        {/* Widget Superior de Cristal iOS 18 */}
-        <div className="p-4 rounded-[28px] bg-white/15 backdrop-blur-3xl border border-white/25 shadow-2xl flex items-center justify-between">
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-extrabold uppercase tracking-wider text-amber-300">
-                encarmen.org OS
-              </span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/25 text-emerald-200 border border-emerald-400/30">
-                {dbStatus?.mariadb?.connected ? 'MariaDB Online' : 'Sync Activo'}
-              </span>
+      {/* Contenido Principal de Pantalla de Inicio iPhone */}
+      <div className="relative z-10 px-5 pt-3 pb-6 space-y-6 max-w-md mx-auto w-full">
+        {/* Widget Superior en Cristal Esmerilado (3 filas + punto verde activo) */}
+        <div
+          className="p-4 sm:p-5 rounded-[26px] border border-white/40 shadow-[0_18px_40px_rgba(0,0,0,0.35)] flex items-end justify-between"
+          style={{
+            background: 'rgba(255, 255, 255, 0.28)',
+            backdropFilter: 'blur(28px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(28px) saturate(180%)'
+          }}
+        >
+          <div className="space-y-1.5 text-white drop-shadow">
+            <div className="flex items-center gap-2.5 text-sm sm:text-base font-bold">
+              <User className="w-4 h-4 text-white/90 shrink-0" />
+              <span>Admin: {activeAdminName}</span>
             </div>
-            <h2 className="text-lg font-extrabold text-white">
-              Admin: {activeAdminName} · {businessesCount} Empresas
-            </h2>
-            <p className="text-[11px] text-sky-100/80">
-              Toca cualquier aplicación para administrar el portal
-            </p>
+            <div className="flex items-center gap-2.5 text-sm sm:text-base font-bold">
+              <Building2 className="w-4 h-4 text-white/90 shrink-0" />
+              <span>{businessesCount} Empresas</span>
+            </div>
+            <div className="flex items-center gap-2.5 text-sm sm:text-base font-bold">
+              <Database className="w-4 h-4 text-white/90 shrink-0" />
+              <span>MariaDB Online</span>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={onTriggerSync}
-            disabled={isSyncing}
-            className="w-11 h-11 rounded-2xl bg-white/20 hover:bg-white/30 border border-white/30 flex items-center justify-center text-white active:scale-95 transition-all cursor-pointer shrink-0"
-            title="Sincronizar"
-          >
-            <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin text-amber-300' : ''}`} />
-          </button>
+
+          <span className="w-3.5 h-3.5 rounded-full bg-[#22c55e] shadow-[0_0_12px_#22c55e] border border-white/60 mb-1" />
         </div>
 
-        {/* Cuadrícula 4x4 de Aplicaciones iOS con Nombre Claro Debajo */}
+        {/* Cuadrícula 4x4 de las 16 Aplicaciones estilo iOS 18 */}
         <div className="grid grid-cols-4 gap-x-3 gap-y-5 pt-1">
           {iosApps.map((app) => (
             <button
@@ -238,17 +231,22 @@ export const AdminIOSMobileHub: React.FC<AdminIOSMobileHubProps> = ({
               className="flex flex-col items-center gap-1.5 active:scale-90 transition-transform cursor-pointer"
             >
               <div
-                className={`relative w-[62px] h-[62px] rounded-[18px] bg-gradient-to-br ${app.gradient} flex items-center justify-center shadow-[0_10px_25px_rgba(0,0,0,0.45)] border border-white/35`}
+                className={`relative w-[64px] h-[64px] rounded-[18px] bg-gradient-to-b ${app.gradient} flex flex-col items-center justify-center shadow-[0_10px_22px_rgba(0,0,0,0.42)] border border-white/45`}
               >
-                <div className="absolute inset-x-0 top-0 h-1/2 rounded-t-[18px] bg-gradient-to-b from-white/35 to-transparent pointer-events-none" />
+                <div className="absolute inset-x-0 top-0 h-1/2 rounded-t-[18px] bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
                 {app.icon}
+                {app.isWhiteMariaDB && (
+                  <span className="text-[9px] font-black text-slate-800 tracking-tighter leading-none mt-0.5">
+                    MariaDB
+                  </span>
+                )}
                 {app.badge !== undefined && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-[20px] px-1 rounded-full bg-rose-600 text-white font-black text-[10px] flex items-center justify-center border-2 border-white shadow-md">
+                  <span className="absolute -top-2 -right-2 min-w-[24px] h-[22px] px-1.5 rounded-full bg-[#FF3B30] text-white font-extrabold text-[11px] flex items-center justify-center border border-white/80 shadow-md">
                     {app.badge}
                   </span>
                 )}
               </div>
-              <span className="text-[11px] font-semibold text-white text-center leading-tight line-clamp-1 drop-shadow">
+              <span className="text-[11px] font-semibold text-white text-center leading-tight line-clamp-1 drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]">
                 {app.label}
               </span>
             </button>
