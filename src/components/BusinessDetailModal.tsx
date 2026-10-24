@@ -1,766 +1,568 @@
-import React, { useState } from 'react';
-import {
-  X,
-  Phone,
-  MessageSquare,
-  MapPin,
-  Clock,
-  ExternalLink,
-  Bookmark,
-  Share2,
-  AlertTriangle,
-  QrCode,
-  Edit2,
-  Trash2,
-  Check,
-  Copy,
-  Building2,
-  Truck,
-  CreditCard,
-  Star,
-  CheckCircle,
-  Tag,
-  KeyRound,
-  ShieldCheck,
-  Facebook,
-  Globe,
-  Instagram
+import React, { useState, useEffect } from 'react';
+import { 
+  X, Bookmark, Share2, MapPin, Phone, MessageSquare, 
+  QrCode, ExternalLink, Star, ShieldCheck, Award, 
+  Edit3, Trash2, Key, CheckCircle2, ChevronDown, ChevronUp,
+  Ticket, KeyRound, ShieldAlert
 } from 'lucide-react';
-import { BusinessGalleryGrid } from './BusinessGalleryGrid';
-import { Business, Promotion } from '../types';
-import {
-  getBusinessPrimaryCategory,
-  getBusinessImageUrl,
-  getBusinessPublicUrl
-} from '../utils/businessUrl';
-import { getWhatsAppUrl, formatPhoneNumber } from '../utils/phone';
-import { trackAnalyticsEvent, reportBusinessIssue, verifyBusinessEditPin, generateBusinessEditPin } from '../services/api';
-import { StarRatingWidget } from './StarRatingWidget';
+import { Business } from './BusinessCard';
+import { formatBusinessName, formatAddressText } from '../utils/textUtils';
+import { verifyBusinessEditPin } from '../services/api';
 
 interface BusinessDetailModalProps {
   business: Business | null;
   isOpen: boolean;
   onClose: () => void;
-  onToggleFavorite: (b: Business) => void;
-  isFavorite: boolean;
-  onOpenDigitalCard?: (b: Business) => void;
-  onOpenEditModal?: (b: Business, editPin: string) => void;
-  onOpenReportModal?: (b: Business) => void;
-  onOpenClaimCouponModal?: (p: Promotion) => void;
-  activePromotion?: Promotion;
-  isAdmin?: boolean;
-  onEditBusiness?: (b: Business) => void;
-  onOpenClientPage?: (b: Business) => void;
-  onOpenPromotion?: (p: Promotion) => void;
-  onToggleTop?: (b: Business) => void;
-  onToggleRecommended?: (b: Business) => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: (() => void) | ((b: Business) => void);
+  onDelete?: () => void;
   onDeleteBusiness?: (b: Business) => void;
+  onEdit?: (business: Business) => void;
+  onEditBusiness?: (b: Business) => void;
+  onToggleTop?: ((id: string | number) => void) | ((b: Business) => void);
+  onToggleRecommended?: ((id: string | number) => void) | ((b: Business) => void);
+  isAdmin?: boolean;
+  activePromotion?: any;
+  onOpenClaimCouponModal?: (p: any) => void;
+  onOpenDigitalCard?: (b: Business) => void;
+  onOpenClientPage?: (b: Business) => void;
 }
 
-export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
+const appleGlassStyle = {
+  background: 'rgba(255, 255, 255, 0.88)',
+  backdropFilter: 'blur(30px) saturate(180%)',
+  WebkitBackdropFilter: 'blur(30px) saturate(180%)',
+  border: '1.5px solid rgba(255, 255, 255, 0.75)',
+  boxShadow: '0 30px 60px -15px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+};
+
+const innerGlassCard = {
+  background: 'rgba(255, 255, 255, 0.65)',
+  backdropFilter: 'blur(16px)',
+  WebkitBackdropFilter: 'blur(16px)',
+  border: '1px solid rgba(255, 255, 255, 0.85)',
+};
+
+export function BusinessDetailModal({
   business,
   isOpen,
   onClose,
+  isFavorite = false,
   onToggleFavorite,
-  isFavorite,
-  onOpenDigitalCard,
-  onOpenEditModal,
-  activePromotion,
-  onOpenClaimCouponModal,
-  isAdmin = false,
+  onDelete,
+  onDeleteBusiness,
+  onEdit,
   onEditBusiness,
-  onOpenClientPage,
   onToggleTop,
   onToggleRecommended,
-  onDeleteBusiness
-}) => {
-  const [copiedAddress, setCopiedAddress] = useState(false);
-  const [isReportOpen, setIsReportOpen] = useState(false);
-  const [reportReason, setReportReason] = useState<string>('whatsapp_inactive');
-  const [reportDetails, setReportDetails] = useState('');
-  const [reportSent, setReportSent] = useState(false);
-
-  // 10-digit owner pin dialog
-  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
-  const [enteredPin, setEnteredPin] = useState('');
-  const [pinError, setPinError] = useState<string | null>(null);
+  isAdmin = false,
+  activePromotion,
+  onOpenClaimCouponModal,
+  onOpenDigitalCard,
+  onOpenClientPage
+}: BusinessDetailModalProps) {
+  const [imgError, setImgError] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(true);
+  const [showOwnerSection, setShowOwnerSection] = useState(false);
+  const [ownerPin, setOwnerPin] = useState('');
+  const [ownerPinError, setOwnerPinError] = useState<string | null>(null);
   const [isVerifyingPin, setIsVerifyingPin] = useState(false);
-  const [isGeneratingPin, setIsGeneratingPin] = useState(false);
-  const [pinSuccessNotice, setPinSuccessNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    setImgError(false);
+    setShowAdminPanel(true);
+    setShowOwnerSection(false);
+    setOwnerPin('');
+    setOwnerPinError(null);
+  }, [business?.id]);
 
   if (!isOpen || !business) return null;
 
-  const handleAdminGeneratePin = async () => {
-    setIsGeneratingPin(true);
-    setPinError(null);
-    setPinSuccessNotice(null);
-    try {
-      const res = await generateBusinessEditPin(business.id);
-      if (res.success && res.pin) {
-        setEnteredPin(res.pin);
-        if (navigator.clipboard) {
-          navigator.clipboard.writeText(res.pin).catch(() => {});
-        }
-        setPinSuccessNotice(`PIN ${res.pin} generado con éxito.`);
-      } else {
-        setPinError(res.message || 'No se pudo generar el PIN.');
-      }
-    } catch (err: any) {
-      setPinError(err.message || 'Error al generar el PIN.');
-    } finally {
-      setIsGeneratingPin(false);
+  const cleanDescription = (text?: string) => {
+    if (!text) return 'Consulta los productos y servicios comunicándote directamente con esta empresa.';
+    return text
+      .replace(/https?:\/\/[^\s]+?\.(mp4|webm|mov|m4v|jpg|png|webp|gif)(\?[^\s]*)?/gi, '')
+      .replace(/https?:\/\/[^\s]+/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  const handleShare = () => {
+    const url = typeof window !== 'undefined' ? window.location.href : 'https://encarmen.org';
+    if (navigator.share) {
+      navigator.share({
+        title: business.name,
+        text: `Conoce ${business.name} en encarmen.org`,
+        url,
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(url);
+      alert('¡Enlace copiado al portapapeles!');
     }
   };
 
-  const categoryName = getBusinessPrimaryCategory(business);
-  const logoUrl = getBusinessImageUrl(business);
-  const waUrl = getWhatsAppUrl(
-    business.whatsapp || business.phone,
-    `Hola, encontré su negocio "${business.name}" en el directorio Empresas en Carmen y deseo solicitar informes.`
-  );
+  const cleanPhone = business.phone ? business.phone.replace(/\D/g, '') : '';
+  const cleanWhatsApp = (business.whatsapp || business.phone || '').replace(/\D/g, '');
+  
+  const logoUrl = (business as any).logo_url || business.image || (business as any).imageUrl;
+  const isTop = Boolean((business as any).is_top ?? business.isTopBusiness);
+  const isRecommended = Boolean((business as any).is_recommended ?? business.isRecommended);
+  const prevName = (business as any).previous_name || (Array.isArray(business.previousNames) && business.previousNames.length > 0 ? business.previousNames.join(', ') : '');
+  const primaryCategory = business.category || (Array.isArray(business.categories) && business.categories[0]) || 'Directorio Comercial';
+  const displayAddress = formatAddressText(business.address || (business.colonia ? `Col. ${business.colonia}, Cd. del Carmen` : 'Ciudad del Carmen, Campeche'));
+  const formattedName = formatBusinessName(business.name);
 
-  const mapsUrl =
-    business.mapsUrl ||
-    (business.address
-      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-          `${business.name}, ${business.address}, Ciudad del Carmen`
-        )}`
-      : null);
+  const handleEdit = () => {
+    if (onEdit) onEdit(business);
+    else if (onEditBusiness) onEditBusiness(business);
+  };
 
-  const handleCopyAddress = () => {
-    if (business.address) {
-      navigator.clipboard.writeText(business.address);
-      setCopiedAddress(true);
-      setTimeout(() => setCopiedAddress(false), 2000);
+  const handleDelete = () => {
+    if (window.confirm(`¿Estás seguro de eliminar permanentemente "${business.name}"?`)) {
+      if (onDelete) onDelete();
+      else if (onDeleteBusiness) onDeleteBusiness(business);
+      onClose();
     }
   };
 
-  const handleSendReport = async (e: React.FormEvent) => {
+  const handleToggleTopAction = () => {
+    if (onToggleTop) {
+      (onToggleTop as any)(business.id);
+    }
+  };
+
+  const handleToggleRecommendedAction = () => {
+    if (onToggleRecommended) {
+      (onToggleRecommended as any)(business.id);
+    }
+  };
+
+  const handleToggleFav = () => {
+    if (onToggleFavorite) {
+      (onToggleFavorite as any)(business);
+    }
+  };
+
+  const handleVerifyOwnerPin = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      await reportBusinessIssue({
-        businessId: business.id,
-        businessName: business.name,
-        reason: reportReason,
-        details: reportDetails
-      });
-      setReportSent(true);
-      setTimeout(() => {
-        setIsReportOpen(false);
-        setReportSent(false);
-      }, 3000);
-    } catch {
-      setReportSent(true);
-    }
-  };
-
-  const handleVerifyPinSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPinError(null);
-    const cleanPin = enteredPin.replace(/\D/g, '');
+    setOwnerPinError(null);
+    const cleanPin = ownerPin.replace(/\D/g, '').trim();
     if (cleanPin.length !== 10) {
-      setPinError('El código debe tener exactamente 10 dígitos.');
+      setOwnerPinError('El código debe tener exactamente 10 dígitos.');
       return;
     }
 
     setIsVerifyingPin(true);
     try {
-      const res = await verifyBusinessEditPin(business.id, cleanPin);
-      if (res.success && res.valid) {
-        setIsPinModalOpen(false);
-        onClose();
-        if (onOpenEditModal) {
-          onOpenEditModal(business, cleanPin);
-        } else if (onEditBusiness) {
-          onEditBusiness(business);
-        }
+      const res = await verifyBusinessEditPin(Number(business.id), cleanPin);
+      if (res && res.success && res.valid) {
+        setOwnerPin('');
+        setOwnerPinError(null);
+        handleEdit();
       } else {
-        setPinError(res.message || 'Código incorrecto o expirado.');
+        setOwnerPinError(res?.message || 'Código incorrecto o no generado. Solicítalo por WhatsApp.');
       }
     } catch (err: any) {
-      setPinError(err.message || 'Error de verificación');
+      setOwnerPinError(err?.message || 'Error de conexión al verificar el código.');
     } finally {
       setIsVerifyingPin(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-white rounded-3xl border border-stone-200 shadow-2xl overflow-hidden my-auto max-h-[90vh] flex flex-col">
-        {/* Sticky Header */}
-        <div className="p-4 sm:p-5 flex items-center justify-between border-b border-stone-100 bg-stone-50/80 sticky top-0 z-10">
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold text-xs uppercase tracking-wider">
-              {categoryName}
-            </span>
-            {business.isTopBusiness && (
-              <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-stone-950 font-black text-xs">
-                ★ TOP
-              </span>
-            )}
-            {business.isRecommended && (
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white font-bold text-xs">
-                ✓ Recomendada
-              </span>
-            )}
-          </div>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 overflow-y-auto">
+      <div 
+        className="fixed inset-0 transition-opacity duration-300"
+        style={{
+          background: 'rgba(15, 23, 42, 0.50)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+        }}
+        onClick={onClose}
+      />
 
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => onToggleFavorite(business)}
-              className={`p-2 rounded-full transition-colors cursor-pointer ${
-                isFavorite
-                  ? 'bg-amber-100 text-amber-600'
-                  : 'hover:bg-stone-200 text-stone-400 hover:text-stone-700'
-              }`}
-              title={isFavorite ? 'Quitar de guardados' : 'Guardar negocio'}
-            >
-              <Bookmark className={`w-5 h-5 ${isFavorite ? 'fill-amber-600' : ''}`} />
-            </button>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-full hover:bg-stone-200 text-stone-500 hover:text-stone-900 transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
+      <div 
+        className="relative w-full max-w-xl md:max-w-4xl lg:max-w-5xl max-h-[92vh] overflow-y-auto rounded-t-[36px] sm:rounded-[36px] text-stone-900 transition-all duration-300 flex flex-col scrollbar-none z-10"
+        style={appleGlassStyle}
+      >
+        <div className="sm:hidden w-12 h-1.5 bg-stone-300/80 rounded-full mx-auto mt-3 mb-1 shrink-0" />
 
-        {/* Scrollable Content */}
-        <div className="p-5 sm:p-8 space-y-6 overflow-y-auto flex-1">
-          {/* Main Top: Logo, Name, Subtitle */}
-          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 text-center sm:text-left">
-            {logoUrl && (
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl border border-stone-200 p-2 bg-white shadow-sm overflow-hidden shrink-0 flex items-center justify-center">
+        <div className="p-5 sm:p-7 md:p-8 md:grid md:grid-cols-12 md:gap-8 items-start">
+          <div className="md:col-span-5 space-y-4">
+            <div className="relative w-full aspect-4/3 rounded-3xl bg-white p-4 border border-white/80 shadow-md flex items-center justify-center overflow-hidden">
+              {logoUrl && !imgError ? (
                 <img
                   src={logoUrl}
-                  alt={business.name}
-                  className="max-h-full max-w-full object-contain"
+                  alt={formattedName}
+                  onError={() => setImgError(true)}
+                  className="w-full h-full object-contain transition-transform duration-300 hover:scale-105"
                 />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-amber-50 to-orange-100 text-amber-800 rounded-2xl flex items-center justify-center font-black text-4xl">
+                  {formattedName.slice(0, 2).toUpperCase()}
+                </div>
+              )}
+
+              <div className="absolute top-3 left-3 flex flex-col gap-1.5 items-start">
+                {isTop && (
+                  <span className="px-3 py-1 rounded-full text-[11px] font-black uppercase bg-amber-500 text-white shadow-md flex items-center gap-1">
+                    <Star className="w-3 h-3 fill-white text-white" /> TOP
+                  </span>
+                )}
+                {isRecommended && (
+                  <span className="px-3 py-1 rounded-full text-[11px] font-black uppercase bg-emerald-600 text-white shadow-md flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-white" /> Recomendada
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-white/70 border border-white/80 flex items-start gap-2.5 shadow-2xs">
+              <MapPin className="w-4 h-4 text-stone-800 shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide block">Ubicación</span>
+                <p className="text-xs font-bold text-stone-800 leading-snug">
+                  {displayAddress}
+                </p>
+              </div>
+            </div>
+
+            {/* Banner de Promoción Activa si existe */}
+            {activePromotion && (
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 text-white font-bold flex items-center justify-between shadow-md">
+                <div className="min-w-0 pr-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-black/20 px-2 py-0.5 rounded-full inline-block">
+                    🔥 Promoción Activa
+                  </span>
+                  <p className="text-xs font-extrabold truncate mt-0.5">{activePromotion.title}</p>
+                </div>
+                {onOpenClaimCouponModal && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenClaimCouponModal(activePromotion)}
+                    className="px-3 py-1.5 rounded-xl bg-white text-stone-900 font-black text-[11px] shrink-0 shadow-xs hover:bg-stone-100 transition active:scale-95 cursor-pointer"
+                  >
+                    Obtener Cupón
+                  </button>
+                )}
               </div>
             )}
-            <div className="space-y-1.5 flex-1 min-w-0">
-              <h2 className="text-xl sm:text-3xl font-black text-stone-900 tracking-tight">
-                {business.name}
-              </h2>
-              {Array.isArray(business.previousNames) && business.previousNames.length > 0 && (
-                <p className="text-xs text-amber-700 font-medium">
-                  Anteriormente conocido como: {business.previousNames.join(', ')}
-                </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-2 pt-1">
+              {cleanWhatsApp && (
+                <a
+                  href={`https://wa.me/52${cleanWhatsApp}?text=Hola,%20vi%20su%20negocio%20en%20encarmen.org`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-3.5 px-4 rounded-2xl font-black text-sm text-white flex items-center justify-center gap-2 shadow-lg hover:brightness-105 transition active:scale-98"
+                  style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)' }}
+                >
+                  <MessageSquare className="w-4 h-4 fill-white" />
+                  <span>Enviar WhatsApp</span>
+                </a>
               )}
-              <p className="text-xs sm:text-sm text-stone-500 flex items-center justify-center sm:justify-start gap-1">
-                <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-                <span>
-                  {business.colonia
-                    ? `Col. ${business.colonia}, Ciudad del Carmen`
-                    : 'Ciudad del Carmen, Campeche'}
-                </span>
-              </p>
+
+              {cleanPhone && (
+                <a
+                  href={`tel:${cleanPhone}`}
+                  className="w-full py-3.5 px-4 rounded-2xl font-black text-sm text-white flex items-center justify-center gap-2 shadow-lg hover:brightness-105 transition active:scale-98"
+                  style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}
+                >
+                  <Phone className="w-4 h-4 fill-white" />
+                  <span>Llamar al {business.phone}</span>
+                </a>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenDigitalCard) onOpenDigitalCard(business);
+                  else alert(`Tarjeta Digital QR de ${formattedName}`);
+                }}
+                className="py-2.5 px-3 rounded-2xl bg-white/80 hover:bg-white text-stone-800 border border-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer active:scale-95"
+              >
+                <QrCode className="w-4 h-4 text-amber-600" />
+                <span>Tarjeta QR</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenClientPage) {
+                    onOpenClientPage(business);
+                  } else {
+                    window.open(`/negocio/${business.slug || business.id}`, '_blank');
+                  }
+                }}
+                className="py-2.5 px-3 rounded-2xl bg-white/80 hover:bg-white text-stone-800 border border-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer active:scale-95"
+              >
+                <ExternalLink className="w-4 h-4 text-sky-600" />
+                <span>Landing Page</span>
+              </button>
             </div>
           </div>
 
-          {/* Action Row: QR Card, Owner Edit, Admin Buttons */}
-          <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-stone-50 rounded-2xl border border-stone-200">
-            {onOpenDigitalCard && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenDigitalCard(business);
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition-colors cursor-pointer shadow-xs"
-              >
-                <QrCode className="w-4 h-4" />
-                <span>Tarjeta Digital con QR</span>
-              </button>
-            )}
+          <div className="md:col-span-7 space-y-4 mt-6 md:mt-0">
+            <div className="flex items-center justify-between pb-1">
+              <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wide bg-amber-500/15 text-amber-900 border border-amber-500/25">
+                {primaryCategory}
+              </span>
 
-            {onOpenClientPage && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenClientPage(business);
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs transition-colors cursor-pointer shadow-xs"
-                title="Abrir la Landing Page oficial e independiente de este negocio"
-              >
-                <Globe className="w-4 h-4 text-amber-400" />
-                <span>Abrir Landing Page</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setIsPinModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-xs transition-colors cursor-pointer"
-            >
-              <KeyRound className="w-3.5 h-3.5 text-stone-600" />
-              <span>Soy el dueño (Editar con PIN)</span>
-            </button>
-
-            {isAdmin && (
-              <div className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0">
-                {/* 1. Editar Datos */}
-                {onEditBusiness && (
+              <div className="flex items-center gap-1.5">
+                {onToggleFavorite && (
                   <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onEditBusiness(business);
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-black text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                    title="Editar todos los datos, fotos, horarios y teléfonos de la empresa"
+                    onClick={handleToggleFav}
+                    className="w-9 h-9 rounded-full bg-white hover:bg-stone-100 text-stone-700 flex items-center justify-center transition shadow-xs active:scale-90 cursor-pointer"
+                    title="Favoritos"
                   >
-                    <Edit2 className="w-3.5 h-3.5" />
-                    <span>Editar Empresa</span>
+                    <Bookmark className={`w-4 h-4 ${isFavorite ? 'fill-amber-500 text-amber-500' : ''}`} />
                   </button>
                 )}
-
-                {/* 2. Toggle Recomendada */}
-                {onToggleRecommended && (
-                  <button
-                    type="button"
-                    onClick={() => onToggleRecommended(business)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
-                      business.isRecommended
-                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm'
-                        : 'bg-white text-stone-700 hover:bg-emerald-50 border-stone-200'
-                    }`}
-                    title={business.isRecommended ? 'Quitar distintivo de recomendada' : 'Marcar como Empresa Recomendada'}
-                  >
-                    <CheckCircle className={`w-3.5 h-3.5 ${business.isRecommended ? 'text-white' : 'text-emerald-600'}`} />
-                    <span>{business.isRecommended ? '✓ Recomendada (Quitar)' : 'Poner Recomendada'}</span>
-                  </button>
-                )}
-
-                {/* 3. Toggle TOP */}
-                {onToggleTop && (
-                  <button
-                    type="button"
-                    onClick={() => onToggleTop(business)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
-                      business.isTopBusiness
-                        ? 'bg-amber-500 text-stone-950 font-black border-amber-600 shadow-sm'
-                        : 'bg-white text-stone-700 hover:bg-amber-50 border-stone-200'
-                    }`}
-                    title={business.isTopBusiness ? 'Quitar condición de Empresa TOP' : 'Marcar como Empresa TOP'}
-                  >
-                    <Star className={`w-3.5 h-3.5 ${business.isTopBusiness ? 'fill-stone-950 text-stone-950' : 'text-amber-500'}`} />
-                    <span>{business.isTopBusiness ? '★ TOP Activo (Quitar)' : 'Poner TOP'}</span>
-                  </button>
-                )}
-
-                {/* 4. Eliminar Empresa */}
-                {onDeleteBusiness && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm(`¿Estás seguro de que deseas eliminar permanentemente a "${business.name}" del directorio?`)) {
-                        onClose();
-                        onDeleteBusiness(business);
-                      }
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
-                    title="Dar de baja y eliminar esta empresa"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                    <span>Eliminar</span>
-                  </button>
-                )}
+                <button
+                  onClick={handleShare}
+                  className="w-9 h-9 rounded-full bg-white hover:bg-stone-100 text-stone-700 flex items-center justify-center transition shadow-xs active:scale-90 cursor-pointer"
+                  title="Compartir"
+                >
+                  <Share2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={onClose}
+                  className="w-9 h-9 rounded-full bg-stone-200/80 hover:bg-stone-300 text-stone-800 flex items-center justify-center transition shadow-xs active:scale-90 ml-1 cursor-pointer"
+                  aria-label="Cerrar"
+                >
+                  <X className="w-4 h-4 stroke-[2.5]" />
+                </button>
               </div>
-            )}
-          </div>
+            </div>
 
-          {/* Primary Action Buttons: WhatsApp & Call */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {waUrl && (
-              <a
-                href={waUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() =>
-                  trackAnalyticsEvent({
-                    type: 'whatsapp',
-                    businessId: business.id,
-                    businessName: business.name
-                  })
-                }
-                className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-              >
-                <MessageSquare className="w-4 h-4" />
-                <span>Enviar mensaje de WhatsApp</span>
-              </a>
-            )}
-
-            {business.phone && (
-              <a
-                href={`tel:${business.phone}`}
-                onClick={() =>
-                  trackAnalyticsEvent({
-                    type: 'call',
-                    businessId: business.id,
-                    businessName: business.name
-                  })
-                }
-                className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-sm font-bold shadow-md transition-all cursor-pointer"
-              >
-                <Phone className="w-4 h-4" />
-                <span>Llamar al {formatPhoneNumber(business.phone)}</span>
-              </a>
-            )}
-          </div>
-
-          {/* Active Promotion Banner */}
-          {activePromotion && (
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-stone-950 font-medium flex items-center justify-between shadow-md">
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-black uppercase tracking-wider bg-black/15 px-2 py-0.5 rounded-md">
-                  Promoción Activa
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-black text-stone-900 tracking-tight leading-tight">
+                {formattedName}
+              </h2>
+              {prevName && (
+                <p className="text-xs text-stone-500 font-semibold mt-1">
+                  Anteriormente: {prevName}
+                </p>
+              )}
+              <div className="flex items-center gap-1.5 mt-2">
+                <div className="flex text-amber-500">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="w-4 h-4 fill-amber-500 text-amber-500" />
+                  ))}
+                </div>
+                <span className="text-sm font-black text-stone-800 ml-1">
+                  {typeof business.rating === 'number' && business.rating > 0 ? business.rating.toFixed(1) : '5.0'}
                 </span>
-                <h4 className="font-extrabold text-sm sm:text-base text-stone-950">
-                  {activePromotion.title}
-                </h4>
-                <p className="text-xs text-stone-900 line-clamp-1">{activePromotion.description}</p>
+                <span className="text-xs text-stone-400 font-medium">· Excelente reputación</span>
               </div>
-              {onOpenClaimCouponModal && (
+            </div>
+
+            <div className="rounded-3xl p-5 space-y-3" style={innerGlassCard}>
+              <h3 className="text-xs font-black uppercase text-stone-500 tracking-wider">
+                Descripción y Servicios
+              </h3>
+              <p className="text-sm text-stone-700 leading-relaxed font-normal whitespace-pre-line">
+                {cleanDescription(business.description)}
+              </p>
+
+              <div className="pt-2 flex flex-wrap gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-stone-800 text-xs font-semibold border border-stone-200/80 shadow-2xs">
+                  💳 {business.payment || (business.paymentMethods && business.paymentMethods.length > 0 ? business.paymentMethods.join(', ') : 'Efectivo y Transferencia')}
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-stone-800 text-xs font-semibold border border-stone-200/80 shadow-2xs">
+                  🚚 {business.delivery || business.deliveryOption || 'Envío a Domicilio'}
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-stone-800 text-xs font-semibold border border-stone-200/80 shadow-2xs">
+                  🏪 {business.schedule || business.openingHours || 'Atención en Local'}
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-3xl p-4.5 flex items-center justify-between" style={innerGlassCard}>
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-700 flex items-center justify-center font-bold">
+                  <Award className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-extrabold text-stone-900 leading-tight">
+                    Calificación de la Comunidad
+                  </h4>
+                  <p className="text-[11px] text-stone-500">Opiniones verificadas de clientes</p>
+                </div>
+              </div>
+
+              {Number(business.reviewCount) > 0 && Number(business.rating) > 0 ? (
+                <div className="flex items-center gap-1.5 bg-white px-3.5 py-1.5 rounded-2xl border border-stone-200/60 shadow-2xs">
+                  <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
+                  <span className="text-base font-black text-stone-900">
+                    {Number(business.rating).toFixed(1)}
+                  </span>
+                  <span className="text-xs text-stone-400">/ 5 ({business.reviewCount})</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-2xl border border-amber-200 text-xs font-bold text-amber-800">
+                  <Star className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Sin calificar aún</span>
+                </div>
+              )}
+            </div>
+
+            {/* 1. GESTIÓN DEL ADMINISTRADOR (VISIBLE ÚNICAMENTE PARA ADMINISTRADOR LOGUEADO) */}
+            {isAdmin && (
+              <div className="rounded-3xl overflow-hidden border border-amber-300/80 shadow-xs" style={{ background: 'rgba(254, 252, 232, 0.90)' }}>
                 <button
                   type="button"
-                  onClick={() => onOpenClaimCouponModal(activePromotion)}
-                  className="px-3.5 py-2 rounded-xl bg-stone-950 hover:bg-stone-900 text-white font-bold text-xs shrink-0 cursor-pointer shadow-xs"
+                  onClick={() => setShowAdminPanel(!showAdminPanel)}
+                  className="w-full px-4 py-3 flex items-center justify-between text-xs font-extrabold text-stone-900 hover:bg-amber-100/60 transition cursor-pointer"
                 >
-                  Obtener Cupón
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Description */}
-          {business.description && (
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-400">
-                Descripción y Servicios
-              </h4>
-              <p className="text-stone-700 text-sm sm:text-base leading-relaxed bg-stone-50/70 p-4 rounded-2xl border border-stone-100 whitespace-pre-line">
-                {business.description}
-              </p>
-            </div>
-          )}
-
-          {/* Calificación de Negocios de 1 a 5 Estrellas */}
-          <StarRatingWidget
-            businessId={business.id}
-            businessName={business.name}
-            initialRating={business.rating}
-            initialReviewCount={business.reviewCount}
-          />
-
-          {/* Business Details Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {(business.schedule || business.openingHours) && (
-              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200/60 space-y-1">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-500">
-                  <Clock className="w-4 h-4 text-amber-500" />
-                  <span>Horario de Atención</span>
-                </div>
-                <p className="text-xs sm:text-sm font-medium text-stone-900">
-                  {business.schedule || business.openingHours}
-                </p>
-              </div>
-            )}
-
-            {(business.payment || (business.paymentMethods && business.paymentMethods.length > 0)) && (
-              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200/60 space-y-1">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-500">
-                  <CreditCard className="w-4 h-4 text-indigo-500" />
-                  <span>Métodos de Pago</span>
-                </div>
-                <p className="text-xs sm:text-sm font-medium text-stone-900">
-                  {business.payment || business.paymentMethods?.join(', ')}
-                </p>
-              </div>
-            )}
-
-            {(business.delivery || (business.deliveryOption && business.deliveryOption !== 'No Aplica')) && (
-              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200/60 space-y-1">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-500">
-                  <Truck className="w-4 h-4 text-emerald-500" />
-                  <span>Modalidad de Atención / Entrega</span>
-                </div>
-                <p className="text-xs sm:text-sm font-medium text-stone-900">
-                  {business.delivery || business.deliveryOption}
-                </p>
-              </div>
-            )}
-
-            {business.address && (
-              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200/60 space-y-1.5 sm:col-span-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-500">
-                    <MapPin className="w-4 h-4 text-rose-500" />
-                    <span>Dirección Física</span>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-amber-500 text-stone-950 font-black px-1.5 py-0.5 rounded text-[10px] tracking-wide shadow-2xs">
+                      ADMIN
+                    </span>
+                    <ShieldCheck className="w-4 h-4 text-amber-700" />
+                    <span>Gestión del administrador</span>
                   </div>
-                  <button
-                    onClick={handleCopyAddress}
-                    className="flex items-center gap-1 text-[11px] font-semibold text-stone-600 hover:text-stone-900 py-0.5 px-2 rounded-md hover:bg-stone-200/60 transition-colors cursor-pointer"
-                  >
-                    {copiedAddress ? (
-                      <>
-                        <Check className="w-3 h-3 text-emerald-600" />
-                        <span className="text-emerald-700">¡Copiada!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3 h-3" />
-                        <span>Copiar dirección</span>
-                      </>
+                  {showAdminPanel ? <ChevronUp className="w-4 h-4 text-stone-600" /> : <ChevronDown className="w-4 h-4 text-stone-600" />}
+                </button>
+
+                {showAdminPanel && (
+                  <div className="p-4 pt-1 border-t border-amber-200/80 space-y-2.5">
+                    {(onEdit || onEditBusiness) && (
+                      <button
+                        type="button"
+                        onClick={handleEdit}
+                        className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-stone-50 text-stone-900 font-bold text-xs flex items-center justify-center gap-2 border border-stone-200 shadow-2xs transition cursor-pointer active:scale-98"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Editar Datos del Negocio</span>
+                      </button>
                     )}
-                  </button>
-                </div>
-                <p className="text-xs sm:text-sm font-medium text-stone-800">{business.address}</p>
-                {mapsUrl && (
-                  <div className="pt-1">
-                    <a
-                      href={mapsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline"
-                    >
-                      <span>Abrir esta dirección en Google Maps (Ruta GPS)</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      {onToggleRecommended && (
+                        <button
+                          type="button"
+                          onClick={handleToggleRecommendedAction}
+                          className="py-2 px-2.5 rounded-xl bg-white hover:bg-stone-50 text-stone-800 font-semibold text-[11px] flex items-center justify-center gap-1.5 border border-stone-200 cursor-pointer active:scale-95 shadow-2xs"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>{isRecommended ? 'Quitar Recomendada' : 'Hacer Recomendada'}</span>
+                        </button>
+                      )}
+                      {onToggleTop && (
+                        <button
+                          type="button"
+                          onClick={handleToggleTopAction}
+                          className="py-2 px-2.5 rounded-xl bg-white hover:bg-stone-50 text-stone-800 font-semibold text-[11px] flex items-center justify-center gap-1.5 border border-stone-200 cursor-pointer active:scale-95 shadow-2xs"
+                        >
+                          <Star className="w-3.5 h-3.5 text-amber-500" />
+                          <span>{isTop ? 'Quitar TOP' : 'Marcar TOP'}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {(onDelete || onDeleteBusiness) && (
+                      <button
+                        type="button"
+                        onClick={handleDelete}
+                        className="w-full py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center justify-center gap-2 border border-rose-200/80 transition cursor-pointer active:scale-98 shadow-2xs"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                        <span>Eliminar Empresa del Directorio</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
             )}
-          </div>
 
-          {/* Social Links */}
-          {(business.website || business.facebook || business.instagram) && (
-            <div className="flex flex-wrap gap-2 pt-2">
-              {business.website && (
-                <a
-                  href={business.website.startsWith('http') ? business.website : `https://${business.website}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-xs font-semibold text-stone-700"
+            {/* 2. PANEL PARA EL PROPIETARIO (VISIBLE CUANDO EL ADMINISTRADOR NO ESTÁ LOGUEADO) */}
+            {!isAdmin && (
+              <div className="rounded-3xl overflow-hidden border border-stone-200/80 shadow-xs" style={{ background: 'rgba(245, 245, 244, 0.85)' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowOwnerSection(!showOwnerSection)}
+                  className="w-full px-4 py-3 flex items-center justify-between text-xs font-extrabold text-stone-700 hover:text-stone-900 transition cursor-pointer"
                 >
-                  <Globe className="w-3.5 h-3.5 text-blue-500" />
-                  <span>Sitio Web Oficial</span>
-                  <ExternalLink className="w-3 h-3 text-stone-400" />
-                </a>
-              )}
-              {business.facebook && (
-                <a
-                  href={business.facebook.startsWith('http') ? business.facebook : `https://facebook.com/${business.facebook.replace('@', '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-xs font-semibold text-blue-800"
-                >
-                  <Facebook className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Facebook</span>
-                  <ExternalLink className="w-3 h-3 text-blue-500" />
-                </a>
-              )}
-              {business.instagram && (
-                <a
-                  href={business.instagram.startsWith('http') ? business.instagram : `https://instagram.com/${business.instagram.replace('@', '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-pink-50 hover:bg-pink-100 border border-pink-200 text-xs font-semibold text-pink-800"
-                >
-                  <Instagram className="w-3.5 h-3.5 text-pink-600" />
-                  <span>Instagram</span>
-                  <ExternalLink className="w-3 h-3 text-pink-500" />
-                </a>
-              )}
-            </div>
-          )}
-
-          {/* Photo Gallery Grid (if photos are available) */}
-          {business.gallery && business.gallery.length > 0 && (
-            <div className="space-y-2 pt-2 border-t border-stone-100">
-              <BusinessGalleryGrid
-                gallery={business.gallery}
-                businessName={business.name}
-                title="Galería de Productos, Menú e Instalaciones"
-              />
-            </div>
-          )}
-
-          {/* Citizen Report Section */}
-          <div className="pt-4 border-t border-stone-100">
-            {isReportOpen ? (
-              <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3.5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
-                    <AlertTriangle className="w-4 h-4 text-amber-600" />
-                    <span>Reportar problema con este negocio</span>
+                  <div className="flex items-center gap-2 text-stone-800">
+                    <Key className="w-3.5 h-3.5 text-amber-600" />
+                    <span>¿Eres el propietario? Cambia los datos aquí</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsReportOpen(false)}
-                    className="text-xs text-stone-500 hover:text-stone-800 cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                </div>
+                  {showOwnerSection ? <ChevronUp className="w-4 h-4 text-stone-500" /> : <ChevronDown className="w-4 h-4 text-stone-500" />}
+                </button>
 
-                {reportSent ? (
-                  <div className="flex items-center gap-2 p-2.5 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-semibold">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>¡Gracias por el reporte! Se ha registrado para revisión.</span>
-                  </div>
-                ) : (
-                  <form onSubmit={handleSendReport} className="space-y-2.5">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setReportReason('whatsapp_inactive')}
-                        className={`py-1.5 px-2 rounded-lg border text-left font-medium transition-all cursor-pointer ${
-                          reportReason === 'whatsapp_inactive'
-                            ? 'bg-amber-600 text-white border-amber-600'
-                            : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
-                        }`}
-                      >
-                        📵 WhatsApp dado de baja
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setReportReason('closed')}
-                        className={`py-1.5 px-2 rounded-lg border text-left font-medium transition-all cursor-pointer ${
-                          reportReason === 'closed'
-                            ? 'bg-amber-600 text-white border-amber-600'
-                            : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
-                        }`}
-                      >
-                        🔒 Negocio cerrado
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setReportReason('wrong_info')}
-                        className={`py-1.5 px-2 rounded-lg border text-left font-medium transition-all cursor-pointer ${
-                          reportReason === 'wrong_info'
-                            ? 'bg-amber-600 text-white border-amber-600'
-                            : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
-                        }`}
-                      >
-                        ✏️ Dirección / dato erróneo
-                      </button>
-                    </div>
+                {showOwnerSection && (
+                  <div className="p-4 pt-1 border-t border-stone-200/60 space-y-3">
+                    <p className="text-[11px] text-stone-600 font-medium leading-relaxed">
+                      Para proteger tu ficha, ingresa tu <strong>código de edición de 10 dígitos</strong> o solicítalo directamente al equipo de administración por WhatsApp.
+                    </p>
 
-                    <input
-                      type="text"
-                      placeholder="Detalle opcional (ej: ya no contestan en este número)..."
-                      value={reportDetails}
-                      onChange={e => setReportDetails(e.target.value)}
-                      className="w-full text-xs py-2 px-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 text-stone-800"
-                    />
+                    <form onSubmit={handleVerifyOwnerPin} className="space-y-2">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={10}
+                          placeholder="Código de 10 dígitos"
+                          value={ownerPin}
+                          onChange={(e) => {
+                            setOwnerPin(e.target.value.replace(/\D/g, ''));
+                            setOwnerPinError(null);
+                          }}
+                          className="w-full text-center tracking-widest font-mono font-bold text-sm py-2 px-3 rounded-xl border border-stone-300 bg-white text-stone-900 outline-none focus:border-amber-500 shadow-2xs"
+                        />
+                      </div>
 
-                    <div className="flex justify-end">
+                      {ownerPinError && (
+                        <p className="text-[11px] font-bold text-rose-600 text-center">
+                          {ownerPinError}
+                        </p>
+                      )}
+
                       <button
                         type="submit"
-                        className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                        disabled={isVerifyingPin || ownerPin.length !== 10}
+                        className="w-full py-2.5 px-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs active:scale-98"
                       >
-                        Enviar Reporte
+                        {isVerifyingPin ? (
+                          <>
+                            <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+                            <span>Verificando código...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Key className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Verificar código y editar</span>
+                          </>
+                        )}
                       </button>
+                    </form>
+
+                    {/* Botón para solicitar código de edición de la empresa por WhatsApp */}
+                    <div className="pt-2 border-t border-stone-200/70 text-center">
+                      <a
+                        href={`https://api.whatsapp.com/send/?phone=%2B5219383895009&text=${encodeURIComponent(`Hola, soy el propietario de "${business.name}" y solicito mi código de edición de 10 dígitos para actualizar mi información en encarmen.org`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-2xs transition active:scale-98 cursor-pointer"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-white" />
+                        <span>Solicitar código de edición de la empresa</span>
+                      </a>
+                      <p className="text-[10px] text-stone-400 mt-1">
+                        Atención directa para propietarios en Ciudad del Carmen
+                      </p>
                     </div>
-                  </form>
+                  </div>
                 )}
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setIsReportOpen(true)}
-                className="text-xs text-stone-400 hover:text-stone-600 font-medium flex items-center gap-1 cursor-pointer"
-              >
-                <AlertTriangle className="w-3.5 h-3.5" />
-                <span>¿Información incorrecta o teléfono dado de baja? Reportar aquí</span>
-              </button>
             )}
+
           </div>
         </div>
       </div>
-
-      {/* Owner PIN Modal */}
-      {isPinModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="relative w-full max-w-sm bg-white rounded-3xl p-6 border border-stone-200 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-stone-100">
-              <div className="flex items-center gap-2">
-                <KeyRound className="w-5 h-5 text-amber-600" />
-                <h4 className="font-bold text-sm text-stone-900">Editar con Código de Propietario</h4>
-              </div>
-              <button
-                onClick={() => setIsPinModalOpen(false)}
-                className="p-1 rounded-full text-stone-400 hover:text-stone-700"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-stone-600 leading-relaxed">
-              Ingresa el <strong>código de 10 dígitos</strong> otorgado por el administrador para modificar
-              los datos de tu empresa.
-            </p>
-
-            <form onSubmit={handleVerifyPinSubmit} className="space-y-3">
-              <input
-                type="text"
-                maxLength={10}
-                placeholder="Ej. 8493029184"
-                value={enteredPin}
-                onChange={e => setEnteredPin(e.target.value)}
-                className="w-full text-center tracking-widest font-mono font-bold text-lg py-2.5 px-3 rounded-xl border border-stone-200 bg-stone-50 outline-none focus:border-amber-500"
-              />
-
-              {pinError && (
-                <p className="text-xs text-rose-600 font-medium text-center">{pinError}</p>
-              )}
-
-              {pinSuccessNotice && (
-                <p className="text-xs text-emerald-600 font-medium text-center">{pinSuccessNotice}</p>
-              )}
-
-              <button
-                type="submit"
-                disabled={isVerifyingPin || enteredPin.length !== 10}
-                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs cursor-pointer disabled:opacity-50"
-              >
-                {isVerifyingPin ? 'Verificando...' : 'Verificar y Editar'}
-              </button>
-            </form>
-
-            {/* Admin PIN quick generate */}
-            {isAdmin && (
-              <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
-                <span className="text-[11px] font-medium text-purple-900">Admin:</span>
-                <button
-                  type="button"
-                  onClick={handleAdminGeneratePin}
-                  disabled={isGeneratingPin}
-                  className="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 text-[11px] font-bold cursor-pointer disabled:opacity-50 flex items-center gap-1.5 transition-colors"
-                >
-                  <KeyRound className={`w-3.5 h-3.5 ${isGeneratingPin ? 'animate-spin' : ''}`} />
-                  <span>{isGeneratingPin ? 'Generando...' : 'Generar PIN Dueño'}</span>
-                </button>
-              </div>
-            )}
-
-            {/* Request PIN via WhatsApp for owner */}
-            <div className="text-center pt-1 border-t border-stone-100">
-              <a
-                href={`https://wa.me/529381591557?text=${encodeURIComponent(`Hola, solicito el código PIN de 10 dígitos para actualizar los datos de mi negocio "${business.name}" en el directorio oficial encarmen.org`)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[11px] text-amber-600 hover:text-amber-800 underline font-medium inline-block"
-              >
-                ¿No tienes tu código PIN? Solicítalo por WhatsApp
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
-};
+}

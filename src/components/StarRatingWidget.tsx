@@ -125,9 +125,17 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
   }
 
   return (
-    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-50/60 via-stone-50 to-stone-100/80 border border-amber-200/60 space-y-4">
+    <div
+      className="p-4 sm:p-5 rounded-2xl space-y-4 shadow-xs"
+      style={{
+        background: 'rgba(255, 255, 255, 0.55)',
+        backdropFilter: 'blur(25px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(25px) saturate(180%)',
+        border: '1.5px solid rgba(255, 255, 255, 0.85)',
+      }}
+    >
       {/* Header with Average & Count */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-200/70 pb-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-200/50 pb-3">
         <div>
           <h4 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
             <Award className="w-4 h-4 text-amber-600" />
@@ -138,7 +146,13 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto bg-white px-3 py-1.5 rounded-xl border border-amber-300/60 shadow-xs">
+        <div
+          className="flex items-center gap-2 self-start sm:self-auto px-3 py-1.5 rounded-xl shadow-xs"
+          style={{
+            background: 'rgba(255, 255, 255, 0.80)',
+            border: '1px solid rgba(255, 255, 255, 0.95)',
+          }}
+        >
           <Star className="w-5 h-5 fill-amber-400 text-amber-500" />
           <div className="flex items-baseline gap-1">
             <span className="text-lg font-black text-stone-900">

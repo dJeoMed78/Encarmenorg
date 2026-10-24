@@ -1,0 +1,19 @@
+{
+  "siteName": "Empresas en Carmen",
+  "domain": "empresasencarmen.com",
+  "tagline": "Directorio empresarial interactivo de Ciudad del Carmen, Campeche.",
+  "logoUrl": "/images/logo-oficial.png",
+  "bannerUrl": "/images/banner-empresas-en-carmen.png",
+  "portal_notes": {
+    "cambios_al_portal": "",
+    "fallas_del_portal": ""
+  },
+  "contact": {
+    "whatsapp": "9381522623",
+    "phone": "9381522623",
+    "email": "contacto@empresasencarmen.com",
+    "facebookGroup": "https://www.facebook.com/groups/506440126097710",
+    "facebookPage": "https://www.facebook.com/empresasencarmen"
+  },
+  "lastUpdated": "2026-10-21T12:06:03.054Z"
+}

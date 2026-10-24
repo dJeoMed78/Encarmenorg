@@ -67,6 +67,8 @@ export const AdminEmergencyTab: React.FC = () => {
   });
 
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [serviceToDelete, setServiceToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const loadData = () => {
     setServices(getEmergencyServices());
@@ -129,16 +131,25 @@ export const AdminEmergencyTab: React.FC = () => {
   };
 
   const handleDelete = (id: string, name: string) => {
-    if (!window.confirm(`¿Seguro que deseas eliminar "${name}" de la Guía de Emergencias?`)) return;
-    deleteEmergencyService(id);
-    setMessage({ text: `"${name}" fue eliminado correctamente.`, type: 'success' });
+    setServiceToDelete({ id, name });
+  };
+
+  const confirmDeleteService = () => {
+    if (!serviceToDelete) return;
+    deleteEmergencyService(serviceToDelete.id);
+    setMessage({ text: `"${serviceToDelete.name}" fue eliminado correctamente.`, type: 'success' });
+    setServiceToDelete(null);
     setTimeout(() => setMessage(null), 4000);
   };
 
   const handleResetDefaults = () => {
-    if (!window.confirm('¿Deseas restaurar la lista oficial predeterminada de emergencias de Ciudad del Carmen?')) return;
+    setShowResetConfirm(true);
+  };
+
+  const confirmResetDefaults = () => {
     resetEmergencyServicesToDefault();
     setMessage({ text: 'Lista oficial de emergencias restaurada.', type: 'success' });
+    setShowResetConfirm(false);
     setTimeout(() => setMessage(null), 4000);
   };
 
@@ -323,27 +334,43 @@ export const AdminEmergencyTab: React.FC = () => {
         )}
       </div>
 
-      {/* Modal Form for Add/Edit */}
+      {/* Modal Form for Add/Edit (iOS Liquid Glass Design) */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 text-white shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5 text-rose-500" />
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fadeIn"
+          style={{
+            background: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(25px)',
+            WebkitBackdropFilter: 'blur(25px)'
+          }}
+        >
+          <div
+            className="rounded-3xl max-w-lg w-full p-6 text-stone-900 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-scaleUp"
+            style={{
+              background: 'rgba(255, 255, 255, 0.86)',
+              backdropFilter: 'blur(40px) saturate(190%)',
+              WebkitBackdropFilter: 'blur(40px) saturate(190%)',
+              border: '1.5px solid rgba(255, 255, 255, 0.95)',
+              boxShadow: '0 30px 70px -15px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.95)'
+            }}
+          >
+            <div className="flex items-center justify-between border-b border-stone-200/60 pb-3">
+              <h3 className="text-base font-black text-stone-900 flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-rose-600" />
                 <span>{editingId ? 'Editar Servicio de Emergencia' : 'Nuevo Servicio de Emergencia'}</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                className="p-1.5 rounded-full text-stone-500 hover:text-stone-900 hover:bg-white/80 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+            <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">
+                <label className="block text-stone-900 font-extrabold mb-1">
                   Nombre del Organismo / Servicio *
                 </label>
                 <input
@@ -352,13 +379,20 @@ export const AdminEmergencyTab: React.FC = () => {
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
                   placeholder="ej. Cruz Roja Mexicana Delegación Carmen"
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-rose-500"
+                  className="w-full px-3.5 py-2.5 rounded-2xl text-stone-900 text-xs font-semibold placeholder:text-stone-400 outline-none transition-all focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.70)',
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                    border: '1.5px solid rgba(255, 255, 255, 0.90)',
+                    boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.04)'
+                  }}
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
+                  <label className="block text-stone-900 font-extrabold mb-1">
                     Categoría *
                   </label>
                   <input
@@ -367,12 +401,19 @@ export const AdminEmergencyTab: React.FC = () => {
                     value={formData.category}
                     onChange={e => setFormData({ ...formData, category: e.target.value })}
                     placeholder="ej. Ambulancias y Urgencias"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-rose-500"
+                    className="w-full px-3.5 py-2.5 rounded-2xl text-stone-900 text-xs font-semibold placeholder:text-stone-400 outline-none transition-all focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.70)',
+                      backdropFilter: 'blur(10px)',
+                      WebkitBackdropFilter: 'blur(10px)',
+                      border: '1.5px solid rgba(255, 255, 255, 0.90)',
+                      boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.04)'
+                    }}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
+                  <label className="block text-stone-900 font-extrabold mb-1">
                     Insignia / Badge
                   </label>
                   <input
@@ -380,14 +421,21 @@ export const AdminEmergencyTab: React.FC = () => {
                     value={formData.badge}
                     onChange={e => setFormData({ ...formData, badge: e.target.value })}
                     placeholder="ej. 24 Horas / Urgencias"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-rose-500"
+                    className="w-full px-3.5 py-2.5 rounded-2xl text-stone-900 text-xs font-semibold placeholder:text-stone-400 outline-none transition-all focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.70)',
+                      backdropFilter: 'blur(10px)',
+                      WebkitBackdropFilter: 'blur(10px)',
+                      border: '1.5px solid rgba(255, 255, 255, 0.90)',
+                      boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.04)'
+                    }}
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
+                  <label className="block text-stone-900 font-extrabold mb-1">
                     Teléfono directo *
                   </label>
                   <input
@@ -396,12 +444,19 @@ export const AdminEmergencyTab: React.FC = () => {
                     value={formData.phone}
                     onChange={e => setFormData({ ...formData, phone: e.target.value })}
                     placeholder="ej. 9383821520 o 911"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono outline-none focus:border-rose-500"
+                    className="w-full px-3.5 py-2.5 rounded-2xl text-stone-900 font-mono text-xs font-bold placeholder:text-stone-400 outline-none transition-all focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.70)',
+                      backdropFilter: 'blur(10px)',
+                      WebkitBackdropFilter: 'blur(10px)',
+                      border: '1.5px solid rgba(255, 255, 255, 0.90)',
+                      boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.04)'
+                    }}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
+                  <label className="block text-stone-900 font-extrabold mb-1">
                     WhatsApp (Opcional)
                   </label>
                   <input
@@ -409,13 +464,20 @@ export const AdminEmergencyTab: React.FC = () => {
                     value={formData.whatsapp || ''}
                     onChange={e => setFormData({ ...formData, whatsapp: e.target.value })}
                     placeholder="ej. 9383821520"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono outline-none focus:border-rose-500"
+                    className="w-full px-3.5 py-2.5 rounded-2xl text-stone-900 font-mono text-xs font-bold placeholder:text-stone-400 outline-none transition-all focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.70)',
+                      backdropFilter: 'blur(10px)',
+                      WebkitBackdropFilter: 'blur(10px)',
+                      border: '1.5px solid rgba(255, 255, 255, 0.90)',
+                      boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.04)'
+                    }}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">
+                <label className="block text-stone-900 font-extrabold mb-1">
                   Dirección o Referencia
                 </label>
                 <input
@@ -423,13 +485,20 @@ export const AdminEmergencyTab: React.FC = () => {
                   value={formData.address}
                   onChange={e => setFormData({ ...formData, address: e.target.value })}
                   placeholder="ej. Calle 47 entre 36 y 38, Col. Fátima, Cd. del Carmen"
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-rose-500"
+                  className="w-full px-3.5 py-2.5 rounded-2xl text-stone-900 text-xs font-semibold placeholder:text-stone-400 outline-none transition-all focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.70)',
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                    border: '1.5px solid rgba(255, 255, 255, 0.90)',
+                    boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.04)'
+                  }}
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
+                  <label className="block text-stone-900 font-extrabold mb-1">
                     Horario de Atención
                   </label>
                   <input
@@ -437,18 +506,32 @@ export const AdminEmergencyTab: React.FC = () => {
                     value={formData.schedule}
                     onChange={e => setFormData({ ...formData, schedule: e.target.value })}
                     placeholder="ej. 24 Horas / 365 días"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-rose-500"
+                    className="w-full px-3.5 py-2.5 rounded-2xl text-stone-900 text-xs font-semibold placeholder:text-stone-400 outline-none transition-all focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.70)',
+                      backdropFilter: 'blur(10px)',
+                      WebkitBackdropFilter: 'blur(10px)',
+                      border: '1.5px solid rgba(255, 255, 255, 0.90)',
+                      boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.04)'
+                    }}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
+                  <label className="block text-stone-900 font-extrabold mb-1">
                     Icono Representativo
                   </label>
                   <select
                     value={formData.icon}
                     onChange={e => setFormData({ ...formData, icon: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-rose-500 cursor-pointer"
+                    className="w-full px-3.5 py-2.5 rounded-2xl text-stone-900 text-xs font-semibold outline-none transition-all focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 cursor-pointer"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.70)',
+                      backdropFilter: 'blur(10px)',
+                      WebkitBackdropFilter: 'blur(10px)',
+                      border: '1.5px solid rgba(255, 255, 255, 0.90)',
+                      boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.04)'
+                    }}
                   >
                     {AVAILABLE_ICONS.map(i => (
                       <option key={i.name} value={i.name}>{i.label}</option>
@@ -458,7 +541,7 @@ export const AdminEmergencyTab: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">
+                <label className="block text-stone-900 font-extrabold mb-1">
                   Descripción del servicio o recomendaciones
                 </label>
                 <textarea
@@ -466,7 +549,14 @@ export const AdminEmergencyTab: React.FC = () => {
                   value={formData.description}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}
                   placeholder="ej. Servicio de ambulancia de rescate, atención médica inmediata..."
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-rose-500 resize-none"
+                  className="w-full px-3.5 py-2.5 rounded-2xl text-stone-900 text-xs font-semibold placeholder:text-stone-400 outline-none transition-all focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 resize-none"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.70)',
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                    border: '1.5px solid rgba(255, 255, 255, 0.90)',
+                    boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.04)'
+                  }}
                 />
               </div>
 
@@ -476,29 +566,135 @@ export const AdminEmergencyTab: React.FC = () => {
                   id="isUrgent"
                   checked={formData.isUrgent}
                   onChange={e => setFormData({ ...formData, isUrgent: e.target.checked })}
-                  className="w-4 h-4 rounded text-rose-600 bg-slate-800 border-slate-700 cursor-pointer"
+                  className="w-4 h-4 rounded text-rose-600 bg-white/80 border-stone-300 cursor-pointer"
                 />
-                <label htmlFor="isUrgent" className="text-slate-300 font-semibold cursor-pointer select-none">
-                  Marcar como servicio crítico / de alta urgencia (Borde rojo y prioridad)
+                <label htmlFor="isUrgent" className="text-stone-900 font-bold cursor-pointer select-none">
+                  Marcar como servicio crítico / de alta urgencia (Prioridad)
                 </label>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-stone-200/60">
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors"
+                  className="px-4 py-2.5 rounded-2xl bg-stone-200/80 hover:bg-stone-300 text-stone-800 font-bold text-xs transition-colors cursor-pointer active:scale-95"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md shadow-rose-600/30 transition-all cursor-pointer"
+                  className="px-5 py-2.5 rounded-2xl bg-[#FF3B30] hover:bg-[#E02E24] text-white font-black text-xs shadow-md shadow-red-500/30 transition-all cursor-pointer active:scale-95"
                 >
                   {editingId ? 'Guardar Cambios' : 'Registrar Servicio'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Deleting Service */}
+      {serviceToDelete && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center p-4"
+          style={{
+            background: 'rgba(15, 23, 42, 0.4)',
+            backdropFilter: 'blur(25px)',
+            WebkitBackdropFilter: 'blur(25px)'
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4 animate-scaleUp"
+            style={{
+              background: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(35px) saturate(190%)',
+              WebkitBackdropFilter: 'blur(35px) saturate(190%)',
+              border: '1.5px solid rgba(255, 255, 255, 0.95)',
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)'
+            }}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto shadow-sm">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h4 className="text-base font-extrabold text-stone-900">
+                ¿Eliminar número de emergencia?
+              </h4>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                ¿Seguro que deseas eliminar <strong className="text-stone-950 font-bold">{serviceToDelete.name}</strong> de la Guía de Emergencias?
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setServiceToDelete(null)}
+                className="py-2.5 px-3 rounded-2xl bg-stone-200/80 hover:bg-stone-300 active:scale-95 text-stone-800 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteService}
+                className="py-2.5 px-3 rounded-2xl bg-[#e11d48] hover:bg-[#be123c] active:scale-95 text-white text-xs font-bold shadow-md shadow-rose-600/30 transition-all cursor-pointer"
+              >
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Resetting Defaults */}
+      {showResetConfirm && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center p-4"
+          style={{
+            background: 'rgba(15, 23, 42, 0.4)',
+            backdropFilter: 'blur(25px)',
+            WebkitBackdropFilter: 'blur(25px)'
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4 animate-scaleUp"
+            style={{
+              background: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(35px) saturate(190%)',
+              WebkitBackdropFilter: 'blur(35px) saturate(190%)',
+              border: '1.5px solid rgba(255, 255, 255, 0.95)',
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)'
+            }}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto shadow-sm">
+              <RotateCcw className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h4 className="text-base font-extrabold text-stone-900">
+                ¿Restaurar guía oficial?
+              </h4>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                ¿Deseas restaurar la lista oficial predeterminada de emergencias de Ciudad del Carmen?
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(false)}
+                className="py-2.5 px-3 rounded-2xl bg-stone-200/80 hover:bg-stone-300 active:scale-95 text-stone-800 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmResetDefaults}
+                className="py-2.5 px-3 rounded-2xl bg-[#007AFF] hover:bg-[#0062cc] active:scale-95 text-white text-xs font-bold shadow-md shadow-blue-500/30 transition-all cursor-pointer"
+              >
+                Restaurar
+              </button>
+            </div>
           </div>
         </div>
       )}

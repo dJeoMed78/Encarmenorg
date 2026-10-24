@@ -31,6 +31,7 @@ import { trackAnalyticsEvent, verifyBusinessEditPin } from '../services/api';
 import { getBrandConfig } from '../utils/brand';
 import { BusinessGalleryGrid } from './BusinessGalleryGrid';
 import { getWhatsAppUrl, formatMexicanPhone } from '../utils/phone';
+import { formatBusinessName, formatAddressText } from '../utils/textUtils';
 import {
   getBusinessPublicUrl,
   getBusinessDisplayUrl,
@@ -75,6 +76,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isOwnerPinModalOpen, setIsOwnerPinModalOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [enteredPin, setEnteredPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
   const [isVerifyingPin, setIsVerifyingPin] = useState(false);
@@ -160,16 +162,32 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 flex flex-col justify-between">
-      {/* 1. DISCREET TOP SEARCH HEADER */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200/90 shadow-xs">
+    <div className="min-h-screen relative font-sans text-stone-900 flex flex-col bg-[#f0f4f8] overflow-x-hidden justify-between">
+      {/* Ambient background light spheres for translucent glass refraction */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <div className="absolute top-[18%] -left-32 w-[550px] h-[550px] bg-sky-200/50 rounded-full blur-[110px]" />
+        <div className="absolute top-[45%] -right-32 w-[600px] h-[600px] bg-amber-200/45 rounded-full blur-[130px]" />
+        <div className="absolute bottom-[10%] left-[20%] w-[550px] h-[550px] bg-teal-100/50 rounded-full blur-[120px]" />
+      </div>
+
+      {/* 1. TRANSLUCENT FROSTED GLASS HEADER */}
+      <header
+        className="sticky top-0 z-40"
+        style={{
+          background: 'rgba(255, 255, 255, 0.65)',
+          backdropFilter: 'blur(25px) saturate(190%)',
+          WebkitBackdropFilter: 'blur(25px) saturate(190%)',
+          borderBottom: '1.5px solid rgba(255, 255, 255, 0.85)',
+          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+        }}
+      >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 sm:py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
           {/* Brand Logo & Back Button */}
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
             <button
               onClick={onBackToDirectory}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-amber-100 hover:text-amber-900 text-stone-700 text-xs font-bold transition-all shadow-xs cursor-pointer"
-              title="Volver a la búsqueda principal"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/80 hover:bg-white text-stone-900 text-xs font-black transition-all shadow-xs border border-white/90 cursor-pointer active:scale-95"
+              title="Volver a la portada principal del directorio"
             >
               <ArrowLeft className="w-4 h-4 text-amber-600" />
               <span>Directorio Completo</span>
@@ -181,7 +199,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                 e.preventDefault();
                 onBackToDirectory();
               }}
-              className="flex items-center gap-2 text-stone-900 font-extrabold text-sm hover:text-amber-600 transition-colors"
+              className="flex items-center gap-2 text-stone-950 font-black text-sm hover:text-amber-600 transition-colors"
             >
               <img
                 src={brand.logoUrl}
@@ -191,7 +209,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                   (e.target as HTMLImageElement).src = brand.fallbackLogoUrl;
                 }}
               />
-              <span className="hidden md:inline text-xs font-bold text-stone-500">
+              <span className="hidden md:inline text-xs font-black text-stone-800">
                 | Ficha Comercial
               </span>
             </a>
@@ -202,17 +220,17 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
             onSubmit={handleSearchSubmit}
             className="w-full sm:w-auto flex-1 max-w-md relative flex items-center"
           >
-            <Search className="w-4 h-4 text-stone-400 absolute left-3 pointer-events-none" />
+            <Search className="w-4 h-4 text-stone-600 absolute left-3.5 pointer-events-none" />
             <input
               type="text"
               value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
-              placeholder="Buscar otra empresa, producto o servicio en Carmen..."
-              className="w-full pl-9 pr-20 py-2 rounded-xl border border-stone-200 bg-stone-100/80 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-xs text-stone-800 placeholder-stone-400 outline-none transition-all"
+              placeholder="Buscar otra empresa, servicio o comida en Carmen..."
+              className="w-full pl-10 pr-20 py-2.5 rounded-xl border border-white/90 bg-white/70 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-xs text-stone-900 font-semibold placeholder-stone-500 outline-none transition-all shadow-xs"
             />
             <button
               type="submit"
-              className="absolute right-1.5 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-[11px] shadow-xs transition-colors cursor-pointer"
+              className="absolute right-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 active:scale-95 text-stone-950 font-black text-[11px] shadow-xs transition-colors cursor-pointer"
             >
               Buscar
             </button>
@@ -221,7 +239,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
 
         {/* Admin Quick Action Banner (Visible only for authenticated admin) */}
         {isAdmin && (
-          <div className="bg-stone-900 text-stone-100 border-t border-stone-800 px-4 py-2">
+          <div className="bg-stone-950 text-stone-100 border-t border-stone-800 px-4 py-2">
             <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
               <div className="flex items-center gap-1.5 font-bold">
                 <span className="px-2 py-0.5 rounded bg-amber-500 text-stone-950 font-black text-[10px] uppercase">
@@ -281,7 +299,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                 {onDeleteBusiness && (
                   <button
                     type="button"
-                    onClick={() => onDeleteBusiness(business)}
+                    onClick={() => setShowDeleteConfirm(true)}
                     className="px-2.5 py-1 rounded-lg bg-rose-950 hover:bg-rose-900 text-rose-200 border border-rose-800 font-bold text-xs flex items-center gap-1 cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5 text-rose-400" />
@@ -294,24 +312,33 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
         )}
       </header>
 
-      {/* 2. MAIN CLIENT MINI PAGE CONTENT */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-8 flex-1 w-full">
+      {/* 2. MAIN CLIENT MINI PAGE CONTENT WITH GLASS SYSTEM */}
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-8 flex-1 w-full relative z-10">
         {/* Breadcrumbs */}
-        <nav className="flex items-center gap-2 text-xs text-stone-500 font-medium overflow-x-auto pb-1">
+        <nav className="flex items-center gap-2 text-xs text-stone-800 font-bold overflow-x-auto pb-1">
           <button
             onClick={onBackToDirectory}
-            className="hover:text-amber-600 hover:underline cursor-pointer"
+            className="text-stone-900 hover:text-amber-700 hover:underline cursor-pointer"
           >
             Inicio
           </button>
-          <span>/</span>
-          <span className="text-amber-800 font-semibold">{primaryCategory}</span>
-          <span>/</span>
-          <span className="text-stone-800 font-bold truncate max-w-xs">{business.name}</span>
+          <span className="text-stone-400">/</span>
+          <span className="text-amber-900 font-extrabold">{primaryCategory}</span>
+          <span className="text-stone-400">/</span>
+          <span className="text-stone-950 font-black truncate max-w-xs">{business.name}</span>
         </nav>
 
-        {/* Hero Card Showcase */}
-        <div className="bg-white rounded-3xl border border-stone-200/90 shadow-xl overflow-hidden">
+        {/* Hero Card Showcase (Frosted macOS Glass Container) */}
+        <div
+          className="rounded-3xl overflow-hidden transition-all duration-300 shadow-xl"
+          style={{
+            background: 'rgba(255, 255, 255, 0.65)',
+            backdropFilter: 'blur(35px) saturate(190%)',
+            WebkitBackdropFilter: 'blur(35px) saturate(190%)',
+            border: '1.5px solid rgba(255, 255, 255, 0.90)',
+            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.18), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+          }}
+        >
           {/* Media Header Banner */}
           <div className="relative aspect-[16/8] sm:aspect-[21/9] w-full bg-stone-900 overflow-hidden">
             {displayImage ? (
@@ -328,7 +355,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                     target.dataset.triedLive = 'true';
                     const parts = target.src.split('/uploads/');
                     const filename = parts[parts.length - 1];
-                    target.src = `https://empresasencarmen.com/wp-content/uploads/2026/10/${filename}`;
+                    target.src = `/wp-content/uploads/2026/10/${filename}`;
                   } else {
                     target.onerror = null;
                     target.style.display = 'none';
@@ -341,12 +368,12 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                 <span className="text-base sm:text-lg font-bold text-white uppercase tracking-wider">
                   {business.name}
                 </span>
-                <span className="text-xs text-stone-400 mt-1">
+                <span className="text-xs text-stone-300 mt-1">
                   Empresa registrada en Ciudad del Carmen
                 </span>
               </div>
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-stone-950/80 via-stone-950/20 to-transparent pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-t from-stone-950/85 via-stone-950/25 to-transparent pointer-events-none" />
 
             {/* Badges Floating on Top Left */}
             <div className="absolute top-4 left-4 flex flex-col gap-1.5 z-10">
@@ -361,15 +388,15 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                 </button>
               )}
               {business.isTopBusiness && (
-                <div className="px-3 py-1 rounded-full bg-amber-500 text-stone-950 font-black text-xs uppercase tracking-wider shadow-lg flex items-center gap-1.5">
+                <div className="px-3 py-1 rounded-full bg-[#f59e0b] text-stone-950 font-black text-xs uppercase tracking-wider shadow-lg flex items-center gap-1.5">
                   <Star className="w-3.5 h-3.5 fill-stone-950 text-stone-950" />
-                  <span>Empresa TOP</span>
+                  <span>★ TOP</span>
                 </div>
               )}
               {business.isRecommended && (
-                <div className="px-3 py-1 rounded-full bg-emerald-600 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg flex items-center gap-1.5">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-200" />
-                  <span>Empresa Recomendada</span>
+                <div className="px-3 py-1 rounded-full bg-[#00875a] text-white font-extrabold text-xs uppercase tracking-wider shadow-lg flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5 text-white" />
+                  <span>✓ Recomendada</span>
                 </div>
               )}
               {business.isNewSubmission && !business.isRecommended && (
@@ -380,13 +407,13 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
               )}
             </div>
 
-            {/* Top Right Floating Actions (Favorite + Share) */}
+            {/* Top Right Floating Actions (Favorite + Tarjeta Digital + Dueño) */}
             <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
               {onToggleFavorite && (
                 <button
                   type="button"
                   onClick={() => onToggleFavorite(business)}
-                  className="p-2.5 rounded-full bg-white/90 hover:bg-white text-stone-800 shadow-md backdrop-blur-md transition-all cursor-pointer"
+                  className="p-2.5 rounded-full bg-white/85 hover:bg-white text-stone-900 shadow-md backdrop-blur-md transition-all cursor-pointer active:scale-95"
                   title={isFavorite ? 'Quitar de guardados' : 'Guardar negocio'}
                 >
                   {isFavorite ? (
@@ -399,20 +426,20 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenDigitalCard(business)}
-                className="p-2.5 rounded-full bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold shadow-md transition-all cursor-pointer flex items-center gap-1.5 text-xs px-3"
+                className="p-2.5 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-white font-black shadow-md transition-all cursor-pointer flex items-center gap-1.5 text-xs px-3.5 active:scale-95"
                 title="Abrir y compartir tarjeta digital de presentación"
               >
-                <QrCode className="w-4 h-4" />
-                <span className="hidden sm:inline">Tarjeta Digital</span>
+                <QrCode className="w-4 h-4 text-white" />
+                <span className="hidden sm:inline">Tarjeta Digital con QR</span>
               </button>
               {onEditBusiness && (
                 <button
                   type="button"
                   onClick={() => setIsOwnerPinModalOpen(true)}
-                  className="p-2.5 rounded-full bg-white/95 hover:bg-white text-stone-900 font-bold shadow-md transition-all cursor-pointer flex items-center gap-1.5 text-xs px-3"
+                  className="p-2.5 rounded-xl bg-white/90 hover:bg-white text-stone-900 font-black shadow-md transition-all cursor-pointer flex items-center gap-1.5 text-xs px-3.5 active:scale-95 border border-white"
                   title="Acceso para el propietario del negocio mediante código PIN de 10 dígitos"
                 >
-                  <KeyRound className="w-4 h-4 text-amber-600" />
+                  <KeyRound className="w-4 h-4 text-stone-700" />
                   <span className="hidden sm:inline">Soy el dueño</span>
                 </button>
               )}
@@ -420,29 +447,29 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
 
             {/* Bottom Title on Image */}
             <div className="absolute bottom-4 left-4 right-4 text-white">
-              <span className="inline-block px-2.5 py-0.5 rounded-md bg-amber-500/90 text-stone-950 font-black text-[11px] uppercase tracking-wider mb-1.5">
+              <span className="inline-block px-3 py-1 rounded-full bg-[#fef9c3] border border-[#fef08a] text-[#854d0e] font-black text-xs uppercase tracking-wider mb-2 shadow-xs">
                 {primaryCategory}
               </span>
-              <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight uppercase drop-shadow-md">
-                {business.name}
+              <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight drop-shadow-md">
+                {formatBusinessName(business.name)}
               </h1>
               {Array.isArray(business.previousNames) && business.previousNames.length > 0 && (
-                <p className="text-xs sm:text-sm text-amber-300 font-semibold mt-0.5 drop-shadow-xs">
+                <p className="text-xs sm:text-sm text-amber-300 font-bold mt-0.5 drop-shadow-xs">
                   (Antes: {business.previousNames.join(', ')})
                 </p>
               )}
               {business.colonia && (
-                <p className="text-xs sm:text-sm text-stone-200 flex items-center gap-1 mt-1 drop-shadow-xs">
-                  <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                <p className="text-xs sm:text-sm text-white font-semibold flex items-center gap-1.5 mt-1 drop-shadow-xs">
+                  <MapPin className="w-4 h-4 text-rose-500" />
                   <span>Colonia {business.colonia}, Ciudad del Carmen, Campeche</span>
                 </p>
               )}
             </div>
           </div>
 
-          {/* Gallery Thumbnails Strip (directly under the main header photo) */}
+          {/* Gallery Strip */}
           {business.gallery && business.gallery.length > 0 && (
-            <div className="p-4 sm:p-5 bg-stone-900 border-b border-stone-800">
+            <div className="p-4 sm:p-5 bg-stone-950 border-b border-stone-800">
               <BusinessGalleryGrid
                 gallery={business.gallery}
                 businessName={business.name}
@@ -490,7 +517,13 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
           )}
 
           {/* Quick Action Contact Bar */}
-          <div className="p-4 sm:p-6 bg-stone-50/80 border-b border-stone-200/80">
+          <div
+            className="p-4 sm:p-6 border-b"
+            style={{
+              background: 'rgba(255, 255, 255, 0.45)',
+              borderColor: 'rgba(255, 255, 255, 0.80)',
+            }}
+          >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* WhatsApp Button */}
               {waLink && (
@@ -505,7 +538,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                       businessName: business.name
                     });
                   }}
-                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold text-sm shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.01]"
+                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#00875a] hover:bg-[#00704a] active:scale-95 text-white font-black text-sm shadow-md shadow-emerald-700/20 transition-all cursor-pointer"
                 >
                   <MessageSquare className="w-5 h-5" />
                   <span>Contactar por WhatsApp</span>
@@ -523,9 +556,9 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                       businessName: business.name
                     });
                   }}
-                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-stone-900 hover:bg-stone-800 active:bg-stone-950 text-white font-extrabold text-sm shadow-md transition-all hover:scale-[1.01]"
+                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#007AFF] hover:bg-[#0062cc] active:scale-95 text-white font-black text-sm shadow-md shadow-blue-500/25 transition-all cursor-pointer"
                 >
-                  <Phone className="w-5 h-5" />
+                  <Phone className="w-5 h-5 text-white" />
                   <span>Llamar al {business.phone}</span>
                 </a>
               )}
@@ -542,7 +575,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                     businessName: business.name
                   });
                 }}
-                className="flex items-center justify-center gap-2 py-3 px-4 rounded-2xl border-2 border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-950 font-extrabold text-sm shadow-xs transition-all hover:scale-[1.01]"
+                className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl border border-rose-300 bg-white/90 hover:bg-white text-rose-950 font-black text-sm shadow-xs transition-all active:scale-95 cursor-pointer"
               >
                 <MapPin className="w-5 h-5 text-rose-600" />
                 <span>Cómo Llegar (GPS)</span>
@@ -554,20 +587,28 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
           <div className="p-5 sm:p-8 space-y-6 sm:space-y-8">
             {/* Description & Services */}
             <div className="space-y-2">
-              <h2 className="text-xs font-black uppercase tracking-wider text-stone-400">
+              <h2 className="text-xs font-black uppercase tracking-wider text-stone-950">
                 Descripción y Servicios Ofrecidos
               </h2>
-              <div className="p-5 sm:p-6 bg-stone-50 rounded-2xl border border-stone-200/80 text-stone-800 text-sm sm:text-base leading-relaxed space-y-3 font-normal">
+              <div
+                className="p-5 sm:p-6 rounded-2xl text-stone-950 text-sm sm:text-base leading-relaxed space-y-3 font-semibold shadow-xs"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.65)',
+                  backdropFilter: 'blur(20px) saturate(180%)',
+                  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                  border: '1.5px solid rgba(255, 255, 255, 0.90)',
+                }}
+              >
                 <p>
                   {business.description || 'Consulta directamente con la empresa para conocer el catálogo de productos y servicios disponibles en Ciudad del Carmen.'}
                 </p>
                 {business.categories && business.categories.length > 1 && (
                   <div className="pt-2 flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold text-stone-500">Giros relacionados:</span>
+                    <span className="text-xs font-black text-stone-800">Giros relacionados:</span>
                     {business.categories.map((c, i) => (
                       <span
                         key={i}
-                        className="px-2.5 py-0.5 rounded-lg bg-white border border-stone-200 text-stone-700 text-xs font-semibold"
+                        className="px-2.5 py-0.5 rounded-lg bg-white/90 border border-stone-200 text-stone-900 text-xs font-bold"
                       >
                         {typeof c === 'object' && c ? (c as any).name : String(c)}
                       </span>
@@ -588,36 +629,60 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
             {/* Operational Details Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {business.schedule && (
-                <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/80 space-y-1">
-                  <div className="flex items-center gap-2 text-xs font-bold text-stone-500">
+                <div
+                  className="p-4 rounded-2xl space-y-1.5 shadow-xs"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.65)',
+                    backdropFilter: 'blur(20px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                    border: '1.5px solid rgba(255, 255, 255, 0.90)',
+                  }}
+                >
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-stone-900">
                     <Clock className="w-4 h-4 text-amber-500" />
                     <span>Horario de Atención</span>
                   </div>
-                  <p className="text-xs sm:text-sm font-semibold text-stone-900">
+                  <p className="text-xs sm:text-sm font-bold text-stone-950">
                     {business.schedule}
                   </p>
                 </div>
               )}
 
               {business.payment && (
-                <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/80 space-y-1">
-                  <div className="flex items-center gap-2 text-xs font-bold text-stone-500">
+                <div
+                  className="p-4 rounded-2xl space-y-1.5 shadow-xs"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.65)',
+                    backdropFilter: 'blur(20px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                    border: '1.5px solid rgba(255, 255, 255, 0.90)',
+                  }}
+                >
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-stone-900">
                     <CreditCard className="w-4 h-4 text-indigo-500" />
                     <span>Métodos de Pago</span>
                   </div>
-                  <p className="text-xs sm:text-sm font-semibold text-stone-900">
+                  <p className="text-xs sm:text-sm font-bold text-stone-950">
                     {business.payment}
                   </p>
                 </div>
               )}
 
               {business.delivery && business.delivery !== 'No Aplica' && (
-                <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/80 space-y-1">
-                  <div className="flex items-center gap-2 text-xs font-bold text-stone-500">
+                <div
+                  className="p-4 rounded-2xl space-y-1.5 shadow-xs"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.65)',
+                    backdropFilter: 'blur(20px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                    border: '1.5px solid rgba(255, 255, 255, 0.90)',
+                  }}
+                >
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-stone-900">
                     <Truck className="w-4 h-4 text-emerald-500" />
                     <span>Modalidad de Atención / Entrega</span>
                   </div>
-                  <p className="text-xs sm:text-sm font-semibold text-stone-900">
+                  <p className="text-xs sm:text-sm font-bold text-stone-950">
                     {business.delivery}
                   </p>
                 </div>
@@ -625,21 +690,29 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
 
               {/* Physical Address Card */}
               {business.address && (
-                <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/80 space-y-2 sm:col-span-2 lg:col-span-3">
+                <div
+                  className="p-4 rounded-2xl space-y-2 sm:col-span-2 lg:col-span-3 shadow-xs"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.65)',
+                    backdropFilter: 'blur(20px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                    border: '1.5px solid rgba(255, 255, 255, 0.90)',
+                  }}
+                >
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs font-bold text-stone-500">
+                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-stone-900">
                       <MapPin className="w-4 h-4 text-rose-500" />
                       <span>Ubicación y Dirección</span>
                     </div>
                     <button
                       type="button"
                       onClick={handleCopyAddress}
-                      className="flex items-center gap-1 text-[11px] font-bold text-stone-700 bg-white hover:bg-stone-200/80 border border-stone-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                      className="flex items-center gap-1.5 text-xs font-black text-stone-900 bg-white/90 hover:bg-white border border-stone-200 px-3 py-1.5 rounded-lg transition-colors cursor-pointer shadow-xs active:scale-95"
                     >
                       {copiedAddress ? (
                         <>
                           <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          <span className="text-emerald-700">¡Dirección Copiada!</span>
+                          <span className="text-emerald-700 font-black">¡Dirección Copiada!</span>
                         </>
                       ) : (
                         <>
@@ -649,14 +722,14 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                       )}
                     </button>
                   </div>
-                  <p className="text-xs sm:text-sm font-medium text-stone-800 leading-snug">
+                  <p className="text-xs sm:text-sm font-bold text-stone-950 leading-snug">
                     {business.address}
                   </p>
                   <a
                     href={mapsUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline pt-1"
+                    className="inline-flex items-center gap-1.5 text-xs font-black text-rose-700 hover:text-rose-900 hover:underline pt-1"
                   >
                     <span>Ver mapa en pantalla completa (Google Maps)</span>
                     <ExternalLink className="w-3 h-3" />
@@ -665,22 +738,29 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
               )}
             </div>
 
-            {/* OFFICIAL DIRECT LINK & SHARE BOX (Pointing to ai.empresasencarmen.com) */}
+            {/* OFFICIAL DIRECT LINK & SHARE BOX */}
             <div className="pt-2">
-              <div className="p-4 bg-amber-500/10 rounded-2xl border border-amber-300/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2.5 text-stone-800 w-full sm:w-auto">
-                  <div className="p-2 rounded-xl bg-amber-500 text-stone-950 font-bold shrink-0">
+              <div
+                className="p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shadow-xs"
+                style={{
+                  background: 'rgba(254, 243, 199, 0.70)',
+                  backdropFilter: 'blur(20px)',
+                  border: '1.5px solid rgba(245, 158, 11, 0.40)',
+                }}
+              >
+                <div className="flex items-center gap-3 text-stone-900 w-full sm:w-auto">
+                  <div className="p-2.5 rounded-xl bg-amber-500 text-stone-950 font-black shrink-0 shadow-xs">
                     <Globe className="w-4 h-4" />
                   </div>
                   <div className="overflow-hidden">
-                    <p className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+                    <p className="text-[11px] font-black text-amber-950 uppercase tracking-wider">
                       Enlace oficial del negocio:
                     </p>
                     <a
                       href={displayUrl.startsWith('http') ? displayUrl : `https://${displayUrl}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs sm:text-sm font-black text-amber-900 hover:text-amber-950 hover:underline font-mono tracking-tight flex items-center gap-1.5 truncate cursor-pointer transition-colors"
+                      className="text-xs sm:text-sm font-black text-amber-950 hover:underline font-mono tracking-tight flex items-center gap-1.5 truncate cursor-pointer transition-colors"
                       title="Abrir enlace oficial en nueva pestaña"
                     >
                       <span className="truncate">{displayUrl}</span>
@@ -694,7 +774,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                     href={displayUrl.startsWith('http') ? displayUrl : `https://${displayUrl}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold border border-amber-400 transition-colors shadow-xs cursor-pointer text-xs"
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-stone-950 font-black border border-amber-400 transition-colors shadow-xs cursor-pointer text-xs"
                     title="Abrir página oficial del negocio"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -704,7 +784,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                   <button
                     type="button"
                     onClick={handleCopyLink}
-                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-amber-100 text-stone-900 font-bold border border-amber-300 transition-colors shadow-xs cursor-pointer text-xs"
+                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-amber-100 active:scale-95 text-stone-900 font-black border border-amber-300 transition-colors shadow-xs cursor-pointer text-xs"
                     title="Copiar enlace oficial de esta empresa"
                   >
                     {copiedLink ? (
@@ -714,7 +794,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                       </>
                     ) : (
                       <>
-                        <Copy className="w-3.5 h-3.5 text-stone-600" />
+                        <Copy className="w-3.5 h-3.5 text-stone-700" />
                         <span>Copiar Liga</span>
                       </>
                     )}
@@ -723,7 +803,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                   <button
                     type="button"
                     onClick={handleShareWhatsApp}
-                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-colors shadow-xs cursor-pointer text-xs"
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#00875a] hover:bg-[#00704a] active:scale-95 text-white font-black transition-colors shadow-xs cursor-pointer text-xs"
                     title="Enviar enlace por WhatsApp"
                   >
                     <MessageSquare className="w-3.5 h-3.5" />
@@ -733,15 +813,15 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
               </div>
             </div>
 
-            {/* EMBEDDED DIGITAL BUSINESS CARD SHOWCASE (Exact blueprint layout from user) */}
-            <div className="pt-4 border-t border-stone-200">
+            {/* EMBEDDED DIGITAL BUSINESS CARD SHOWCASE */}
+            <div className="pt-4 border-t border-stone-200/80">
               <div className="flex items-center justify-between pb-3 flex-wrap gap-2">
                 <div>
-                  <h3 className="text-base sm:text-lg font-extrabold text-stone-900 flex items-center gap-2">
+                  <h3 className="text-base sm:text-lg font-black text-stone-950 flex items-center gap-2">
                     <QrCode className="w-5 h-5 text-amber-500" />
                     <span>Tarjeta Digital de Presentación Oficial</span>
                   </h3>
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-stone-800 font-semibold">
                     Código QR directo a esta ficha. Escanéalo o compártelo en redes sociales.
                   </p>
                 </div>
@@ -750,7 +830,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                   <button
                     type="button"
                     onClick={handleShareWhatsApp}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    className="px-3.5 py-2 rounded-xl bg-[#00875a] hover:bg-[#00704a] active:scale-95 text-white font-black text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
                   >
                     <MessageSquare className="w-3.5 h-3.5" />
                     <span>WhatsApp</span>
@@ -758,7 +838,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                   <button
                     type="button"
                     onClick={() => onOpenDigitalCard(business)}
-                    className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    className="px-3.5 py-2 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] active:scale-95 text-white font-black text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
                   >
                     <Share2 className="w-3.5 h-3.5" />
                     <span>Compartir Tarjeta</span>
@@ -767,7 +847,14 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
               </div>
 
               {/* Card Container */}
-              <div className="max-w-md mx-auto bg-white rounded-2xl border-4 border-stone-900 p-5 sm:p-6 shadow-2xl space-y-4 text-stone-900">
+              <div
+                className="max-w-md mx-auto rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 text-stone-900"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.85)',
+                  backdropFilter: 'blur(25px)',
+                  border: '2px solid rgba(24, 24, 27, 0.90)',
+                }}
+              >
                 {/* Header */}
                 <div className="flex items-center justify-between gap-3 border-b-2 border-stone-200 pb-3">
                   <div className="w-24 sm:w-28 h-12 rounded-lg bg-white flex items-center justify-start overflow-hidden">
@@ -805,16 +892,16 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                 {/* Company details */}
                 <div className="space-y-1 text-left">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-extrabold text-[9px] uppercase tracking-wider">
+                    <span className="px-2 py-0.5 rounded-full bg-[#fef9c3] border border-[#fef08a] text-[#854d0e] font-black text-[9px] uppercase tracking-wider">
                       {primaryCategory}
                     </span>
                     {business.isTopBusiness && (
-                      <span className="px-2 py-0.5 rounded-full bg-amber-500 text-stone-950 font-black text-[9px] uppercase tracking-wider">
+                      <span className="px-2 py-0.5 rounded-full bg-[#f59e0b] text-stone-950 font-black text-[9px] uppercase tracking-wider">
                         ★ TOP
                       </span>
                     )}
                     {business.isRecommended && (
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white font-extrabold text-[9px] uppercase tracking-wider">
+                      <span className="px-2 py-0.5 rounded-full bg-[#00875a] text-white font-extrabold text-[9px] uppercase tracking-wider">
                         ✓ Recomendada
                       </span>
                     )}
@@ -824,21 +911,21 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                     {business.name}
                   </h3>
 
-                  <div className="text-xs font-semibold text-stone-700 space-y-0.5">
+                  <div className="text-xs font-bold text-stone-800 space-y-0.5">
                     {business.address && (
                       <p className="flex items-center gap-1 line-clamp-1">
-                        <MapPin className="w-3 h-3 text-stone-900 shrink-0" />
+                        <MapPin className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                         <span>{business.address}</span>
                       </p>
                     )}
-                    <p className="flex items-center gap-1 text-stone-950 font-bold">
-                      <Phone className="w-3 h-3 text-stone-900 shrink-0" />
+                    <p className="flex items-center gap-1 text-stone-950 font-black">
+                      <Phone className="w-3.5 h-3.5 text-stone-900 shrink-0" />
                       <span>{formatMexicanPhone(business.phone || business.whatsapp) || 'Contacto disponible en web'}</span>
                     </p>
                   </div>
                 </div>
 
-                {/* URL Directa Oficial (Centrado y que resalta) */}
+                {/* URL Directa Oficial */}
                 <div className="w-full my-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-100 via-amber-200/90 to-amber-100 border-2 border-amber-400 text-center shadow-xs space-y-0.5">
                   <span className="text-[10px] font-black text-amber-950 uppercase tracking-wider block">
                     🌐 Página Web:
@@ -849,31 +936,31 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                 </div>
 
                 {/* Services box */}
-                <div className="rounded-xl border-2 border-stone-900 p-3 bg-stone-50 text-left">
-                  <p className="text-[9px] font-black uppercase text-stone-500 tracking-wider">
+                <div className="rounded-xl border border-stone-300 p-3 bg-stone-50 text-left">
+                  <p className="text-[9px] font-black uppercase text-stone-700 tracking-wider">
                     Servicios y Productos
                   </p>
-                  <p className="text-xs text-stone-800 font-medium line-clamp-3 leading-relaxed">
+                  <p className="text-xs text-stone-950 font-semibold line-clamp-3 leading-relaxed">
                     {business.description || 'Consulta los servicios que ofrecemos en Ciudad del Carmen.'}
                   </p>
                 </div>
 
                 {/* QR Code */}
                 <div className="flex flex-col items-center justify-center pt-1 text-center space-y-1">
-                  <div className="p-2 bg-white rounded-xl border-2 border-stone-900 shadow-sm inline-block">
+                  <div className="p-2 bg-white rounded-xl border border-stone-300 shadow-sm inline-block">
                     <img
                       src={qrCodeUrl}
                       alt={`QR de ${business.name}`}
                       className="w-24 h-24 object-contain"
                     />
                   </div>
-                  <p className="text-[10px] font-black text-stone-900 uppercase tracking-wider">
+                  <p className="text-[10px] font-black text-stone-950 uppercase tracking-wider">
                     Escanea para ver perfil y contacto
                   </p>
                 </div>
 
-                <div className="border-t border-stone-200 pt-2 text-center text-[10px] text-stone-500">
-                  Directorio Comercial Oficial: <strong className="text-stone-900 font-bold">encarmen.org</strong>
+                <div className="border-t border-stone-200 pt-2 text-center text-[10px] text-stone-700 font-semibold">
+                  Directorio Comercial Oficial: <strong className="text-stone-950 font-black">encarmen.org</strong>
                 </div>
               </div>
             </div>
@@ -881,39 +968,46 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
         </div>
       </main>
 
-      {/* 3. NORMAL FOOTER OF THE SITE */}
-      <footer className="mt-12 bg-stone-950 text-stone-400 border-t border-stone-800 py-8 px-4 sm:px-6">
+      {/* 3. FOOTER */}
+      <footer
+        className="mt-12 text-stone-900 border-t py-8 px-4 sm:px-6 relative z-10"
+        style={{
+          background: 'rgba(255, 255, 255, 0.65)',
+          backdropFilter: 'blur(20px)',
+          borderColor: 'rgba(255, 255, 255, 0.85)',
+        }}
+      >
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
           <div className="flex items-center gap-3">
             <img
               src={brand.logoUrl}
               alt={brand.name}
-              className="h-8 w-auto object-contain brightness-200 contrast-125"
+              className="h-8 w-auto object-contain"
               onError={e => {
                 (e.target as HTMLImageElement).src = brand.fallbackLogoUrl;
               }}
             />
             <div>
-              <p className="font-bold text-stone-200">
+              <p className="font-black text-stone-950">
                 {brand.name}
               </p>
-              <p className="text-[11px] text-stone-500">
+              <p className="text-[11px] text-stone-700 font-semibold">
                 {brand.tagline}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 text-xs font-semibold">
+          <div className="flex items-center gap-4 text-xs font-bold">
             <button
               onClick={onBackToDirectory}
-              className="text-amber-400 hover:underline cursor-pointer"
+              className="text-amber-800 hover:text-amber-950 hover:underline cursor-pointer"
             >
               Explorar todo el directorio
             </button>
-            <span className="text-stone-700">·</span>
+            <span className="text-stone-400">·</span>
             <button
               onClick={() => onOpenDigitalCard(business)}
-              className="text-stone-300 hover:text-white cursor-pointer"
+              className="text-stone-800 hover:text-black cursor-pointer"
             >
               Compartir Tarjeta Digital
             </button>
@@ -923,23 +1017,23 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
 
       {/* Owner PIN Verification Modal */}
       {isOwnerPinModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="relative w-full max-w-sm bg-white rounded-3xl p-6 border border-stone-200 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-stone-100">
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="relative w-full max-w-sm bg-white/95 backdrop-blur-2xl rounded-3xl p-6 border border-white/80 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-stone-200">
               <div className="flex items-center gap-2">
                 <KeyRound className="w-5 h-5 text-amber-600" />
-                <h4 className="font-bold text-sm text-stone-900">Editar con Código de Dueño</h4>
+                <h4 className="font-black text-sm text-stone-950">Editar con Código de Dueño</h4>
               </div>
               <button
                 type="button"
                 onClick={() => setIsOwnerPinModalOpen(false)}
-                className="p-1 rounded-full text-stone-400 hover:text-stone-700 cursor-pointer"
+                className="p-1 rounded-full text-stone-600 hover:text-stone-950 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-stone-600 leading-relaxed">
+            <p className="text-xs text-stone-800 font-medium leading-relaxed">
               Ingresa el <strong>código de 10 dígitos</strong> otorgado por el administrador para modificar
               los datos, fotos y teléfonos de tu empresa.
             </p>
@@ -951,17 +1045,17 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                 placeholder="Ej. 8493029184"
                 value={enteredPin}
                 onChange={e => setEnteredPin(e.target.value)}
-                className="w-full text-center tracking-widest font-mono font-bold text-lg py-2.5 px-3 rounded-xl border border-stone-200 bg-stone-50 outline-none focus:border-amber-500"
+                className="w-full text-center tracking-widest font-mono font-black text-lg py-2.5 px-3 rounded-xl border border-stone-300 bg-white outline-none focus:border-amber-500 shadow-xs"
               />
 
               {pinError && (
-                <p className="text-xs text-rose-600 font-medium text-center">{pinError}</p>
+                <p className="text-xs text-rose-600 font-bold text-center">{pinError}</p>
               )}
 
               <button
                 type="submit"
                 disabled={isVerifyingPin || enteredPin.length !== 10}
-                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs cursor-pointer disabled:opacity-50"
+                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-stone-950 font-black text-xs cursor-pointer disabled:opacity-50 transition shadow-sm"
               >
                 {isVerifyingPin ? 'Verificando...' : 'Verificar y Editar'}
               </button>
@@ -972,10 +1066,46 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                 href={`https://wa.me/529381591557?text=${encodeURIComponent(`Hola, solicito el código PIN de 10 dígitos para actualizar mi negocio "${business.name}" en el directorio oficial encarmen.org`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[11px] text-amber-600 hover:text-amber-800 underline font-medium inline-block"
+                className="text-[11px] text-amber-700 hover:text-amber-900 underline font-bold inline-block"
               >
                 ¿No tienes tu código PIN? Solicítalo por WhatsApp
               </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DIÁLOGO EN APP PARA CONFIRMAR ELIMINACIÓN DE EMPRESA (SIN window.confirm) */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="w-full max-w-md p-6 rounded-3xl bg-white border border-stone-200 shadow-2xl text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 mx-auto flex items-center justify-center text-2xl font-bold">
+              <Trash2 className="w-7 h-7 text-rose-600" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-xl font-black text-stone-950">¿Confirmas eliminar esta empresa?</h4>
+              <p className="text-sm text-stone-700">
+                Se dará de baja <strong className="text-rose-600">{business.name}</strong> definitivamente del directorio.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-5 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  if (onDeleteBusiness) onDeleteBusiness(business);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition shadow-lg shadow-rose-600/30 cursor-pointer"
+              >
+                Sí, eliminar
+              </button>
             </div>
           </div>
         </div>

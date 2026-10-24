@@ -60,6 +60,8 @@ export const AdminEventsTab: React.FC = () => {
   const [filterSource, setFilterSource] = useState<'all' | 'ai' | 'manual'>('all');
   const [isScanningRadar, setIsScanningRadar] = useState(false);
   const [radarStatus, setRadarStatus] = useState<AIRadarStatus | null>(null);
+  const [eventToDelete, setEventToDelete] = useState<{ id: string; title: string } | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // AI Event Search Modal State
   const [isAiSearchModalOpen, setIsAiSearchModalOpen] = useState(false);
@@ -301,17 +303,26 @@ export const AdminEventsTab: React.FC = () => {
     setIsFormOpen(true);
   };
 
-  const handleDelete = async (id: string, title: string) => {
-    if (!window.confirm(`¿Seguro que deseas eliminar el evento "${title}" de la cartelera?`)) return;
-    await deleteEventItem(id);
-    setMessage({ text: `Evento "${title}" eliminado.`, type: 'success' });
+  const handleDelete = (id: string, title: string) => {
+    setEventToDelete({ id, title });
+  };
+
+  const confirmDeleteEvent = async () => {
+    if (!eventToDelete) return;
+    await deleteEventItem(eventToDelete.id);
+    setMessage({ text: `Evento "${eventToDelete.title}" eliminado.`, type: 'success' });
+    setEventToDelete(null);
     setTimeout(() => setMessage(null), 4000);
   };
 
-  const handleResetDefaults = async () => {
-    if (!window.confirm('¿Deseas restaurar los eventos oficiales predeterminados de Ciudad del Carmen?')) return;
+  const handleResetDefaults = () => {
+    setShowResetConfirm(true);
+  };
+
+  const confirmResetDefaults = async () => {
     await resetEventsDataToDefault();
     setMessage({ text: 'Cartelera de eventos restaurada.', type: 'success' });
+    setShowResetConfirm(false);
     setTimeout(() => setMessage(null), 4000);
   };
 
@@ -800,25 +811,56 @@ export const AdminEventsTab: React.FC = () => {
 
       {/* Modal Form for Add/Edit */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 text-white shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-amber-400" />
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+          style={{
+            background: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(25px)',
+            WebkitBackdropFilter: 'blur(25px)',
+          }}
+          onClick={() => setIsFormOpen(false)}
+        >
+          <div
+            className="rounded-3xl max-w-lg w-full text-stone-900 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
+            style={{
+              background: 'rgba(255, 255, 255, 0.88)',
+              backdropFilter: 'blur(40px) saturate(190%)',
+              WebkitBackdropFilter: 'blur(40px) saturate(190%)',
+              border: '1.5px solid rgba(255, 255, 255, 0.95)',
+              boxShadow: '0 30px 70px -15px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              className="flex items-center justify-between px-6 py-4 sticky top-0 z-10"
+              style={{
+                background: 'rgba(255, 255, 255, 0.75)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                borderBottom: '1.5px solid rgba(255, 255, 255, 0.85)',
+              }}
+            >
+              <h3 className="text-base font-black text-stone-900 flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-stone-950 flex items-center justify-center font-bold shadow-xs">
+                  <Calendar className="w-4 h-4" />
+                </div>
                 <span>{editingId ? 'Editar Evento de la Cartelera' : 'Publicar Nuevo Evento'}</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                className="p-1.5 rounded-full text-stone-500 hover:text-stone-900 hover:bg-stone-200/60 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+            <form onSubmit={handleSubmit} className="p-6 pt-2 space-y-3.5 text-xs">
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">
+                <label className="block text-stone-800 font-bold mb-1">
                   Título del Evento o Actividad *
                 </label>
                 <input
@@ -827,30 +869,37 @@ export const AdminEventsTab: React.FC = () => {
                   value={formData.title}
                   onChange={e => setFormData({ ...formData, title: e.target.value })}
                   placeholder="ej. Bazar Emprendedor & Artesanal Playero"
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-amber-500"
+                  className="w-full px-3.5 py-2.5 rounded-2xl text-stone-900 text-xs font-semibold placeholder:text-stone-400 outline-none transition-all focus:ring-2 focus:ring-amber-500/50"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.70)',
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                    border: '1.5px solid rgba(255, 255, 255, 0.90)',
+                    boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.04)',
+                  }}
                 />
               </div>
 
               {/* Imagen del Evento */}
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">
+                <label className="block text-stone-800 font-bold mb-1">
                   Foto o Cartel Promocional (Opcional)
                 </label>
                 <div className="space-y-2">
                   {formData.image ? (
-                    <div className="relative rounded-2xl overflow-hidden border border-slate-700 bg-slate-800/80 p-2 flex items-center gap-3">
+                    <div className="relative rounded-2xl overflow-hidden border border-white/80 bg-white/70 p-2 flex items-center gap-3 shadow-xs">
                       <img
                         src={formData.image}
                         alt="Vista previa"
-                        className="w-16 h-14 object-cover rounded-xl border border-slate-600 shrink-0"
+                        className="w-16 h-14 object-cover rounded-xl border border-stone-200 shrink-0"
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-white">Imagen adjunta</p>
-                        <p className="text-[10px] text-slate-400 truncate">{formData.image}</p>
+                        <p className="text-xs font-bold text-stone-900">Imagen adjunta</p>
+                        <p className="text-[10px] text-stone-500 truncate">{formData.image}</p>
                         <button
                           type="button"
                           onClick={() => setFormData(prev => ({ ...prev, image: '' }))}
-                          className="text-[11px] text-rose-400 hover:text-rose-300 font-semibold mt-0.5 cursor-pointer"
+                          className="text-[11px] text-rose-600 hover:text-rose-800 font-bold mt-0.5 cursor-pointer"
                         >
                           Quitar imagen
                         </button>
@@ -869,16 +918,16 @@ export const AdminEventsTab: React.FC = () => {
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isUploadingImage}
-                        className="flex-1 py-2 px-3 rounded-xl border-2 border-dashed border-slate-700 hover:border-amber-500 bg-slate-800/60 hover:bg-slate-800 text-slate-300 font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                        className="flex-1 py-2.5 px-3 rounded-2xl border-2 border-dashed border-stone-300 hover:border-amber-500 bg-white/60 hover:bg-white/90 text-stone-700 font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
                       >
                         {isUploadingImage ? (
                           <>
-                            <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                            <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
                             <span>Subiendo imagen...</span>
                           </>
                         ) : (
                           <>
-                            <Upload className="w-4 h-4 text-amber-400" />
+                            <Upload className="w-4 h-4 text-amber-600" />
                             <span>Seleccionar imagen</span>
                           </>
                         )}
@@ -891,7 +940,7 @@ export const AdminEventsTab: React.FC = () => {
                     value={formData.image || ''}
                     onChange={e => setFormData({ ...formData, image: e.target.value })}
                     placeholder="O URL directa (https://...)"
-                    className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-slate-300 text-[11px] outline-none focus:border-amber-500"
+                    className="w-full px-3 py-2 rounded-xl text-stone-800 text-[11px] font-medium outline-none border border-stone-200 bg-white/70 focus:border-amber-500"
                   />
                 </div>
               </div>
@@ -899,10 +948,10 @@ export const AdminEventsTab: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-slate-300 font-semibold">
+                    <label className="text-stone-800 font-bold">
                       Categoría (Datacombo) *
                     </label>
-                    <span className="text-[10px] text-amber-400">Ver opciones en lista</span>
+                    <span className="text-[10px] text-amber-600 font-bold">Ver opciones</span>
                   </div>
                   <input
                     type="text"
@@ -919,7 +968,7 @@ export const AdminEventsTab: React.FC = () => {
                       setFormData({ ...formData, category: val, categorySlug: slug });
                     }}
                     placeholder="Elige o escribe categoría..."
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-amber-500 font-medium"
+                    className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 font-semibold"
                   />
                   <datalist id="event-category-options">
                     <option value="Cultura & Música" />
@@ -930,7 +979,6 @@ export const AdminEventsTab: React.FC = () => {
                     <option value="Entretenimiento & Familia" />
                     <option value="Infantil & Comunitario" />
                   </datalist>
-                  {/* Select directo alternativo para ver todas las opciones en un clic */}
                   <select
                     value={formData.category || ''}
                     onChange={e => {
@@ -943,9 +991,9 @@ export const AdminEventsTab: React.FC = () => {
                       else if (val.toLowerCase().includes('feria') || val.toLowerCase().includes('expo')) slug = 'ferias';
                       setFormData({ ...formData, category: val, categorySlug: slug });
                     }}
-                    className="w-full mt-1 px-2.5 py-1 bg-slate-850 border border-slate-700/80 rounded-lg text-slate-300 text-[11px] outline-none focus:border-amber-500 cursor-pointer"
+                    className="w-full mt-1 px-2.5 py-1 bg-white/80 border border-stone-200 rounded-lg text-stone-700 text-[11px] outline-none focus:border-amber-500 cursor-pointer font-medium"
                   >
-                    <option value="">▼ O selecciona del listado disponible...</option>
+                    <option value="">▼ O selecciona del listado...</option>
                     <option value="Cultura & Música">Cultura & Música</option>
                     <option value="Ferias, Exposiciones y Tradición">Ferias, Exposiciones y Tradición</option>
                     <option value="Deportes & Rodadas">Deportes & Rodadas</option>
@@ -958,10 +1006,10 @@ export const AdminEventsTab: React.FC = () => {
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-slate-300 font-semibold">
-                      Insignia / Badge (Datacombo)
+                    <label className="text-stone-800 font-bold">
+                      Insignia / Badge
                     </label>
-                    <span className="text-[10px] text-amber-400">Ver distintivos</span>
+                    <span className="text-[10px] text-amber-600 font-bold">Ver distintivos</span>
                   </div>
                   <input
                     type="text"
@@ -969,7 +1017,7 @@ export const AdminEventsTab: React.FC = () => {
                     value={formData.badge}
                     onChange={e => setFormData({ ...formData, badge: e.target.value })}
                     placeholder="Elige o escribe distintivo..."
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-amber-500 font-medium"
+                    className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 font-semibold"
                   />
                   <datalist id="event-badge-options">
                     <option value="GRATUITO" />
@@ -984,14 +1032,13 @@ export const AdminEventsTab: React.FC = () => {
                     <option value="ProEventos" />
                     <option value="Dashport" />
                   </datalist>
-                  {/* Select directo alternativo para ver insignias en un clic */}
                   <select
                     value={formData.badge || ''}
                     onChange={e => {
                       if (!e.target.value) return;
                       setFormData({ ...formData, badge: e.target.value });
                     }}
-                    className="w-full mt-1 px-2.5 py-1 bg-slate-850 border border-slate-700/80 rounded-lg text-slate-300 text-[11px] outline-none focus:border-amber-500 cursor-pointer"
+                    className="w-full mt-1 px-2.5 py-1 bg-white/80 border border-stone-200 rounded-lg text-stone-700 text-[11px] outline-none focus:border-amber-500 cursor-pointer font-medium"
                   >
                     <option value="">▼ O selecciona insignia sugerida...</option>
                     <option value="GRATUITO">GRATUITO (Entrada libre)</option>
@@ -1011,7 +1058,7 @@ export const AdminEventsTab: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
+                  <label className="block text-stone-800 font-bold mb-1">
                     Fecha o Días *
                   </label>
                   <input
@@ -1020,12 +1067,12 @@ export const AdminEventsTab: React.FC = () => {
                     value={formData.date}
                     onChange={e => setFormData({ ...formData, date: e.target.value })}
                     placeholder="ej. Sábado y Domingo"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-amber-500"
+                    className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 font-semibold"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
+                  <label className="block text-stone-800 font-bold mb-1">
                     Horario *
                   </label>
                   <input
@@ -1034,13 +1081,13 @@ export const AdminEventsTab: React.FC = () => {
                     value={formData.time}
                     onChange={e => setFormData({ ...formData, time: e.target.value })}
                     placeholder="ej. 5:00 PM - 10:30 PM"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-amber-500"
+                    className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 font-semibold"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">
+                <label className="block text-stone-800 font-bold mb-1">
                   Ubicación / Punto de Encuentro *
                 </label>
                 <input
@@ -1049,13 +1096,13 @@ export const AdminEventsTab: React.FC = () => {
                   value={formData.location}
                   onChange={e => setFormData({ ...formData, location: e.target.value })}
                   placeholder="ej. Playa Norte (Junto al Barco Galeón), Ciudad del Carmen"
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-amber-500"
+                  className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 font-semibold"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
+                  <label className="block text-stone-800 font-bold mb-1">
                     Costo / Entrada
                   </label>
                   <input
@@ -1063,12 +1110,12 @@ export const AdminEventsTab: React.FC = () => {
                     value={formData.cost}
                     onChange={e => setFormData({ ...formData, cost: e.target.value })}
                     placeholder="ej. Entrada Libre"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-amber-500"
+                    className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 font-semibold"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
+                  <label className="block text-stone-800 font-bold mb-1">
                     Organizador
                   </label>
                   <input
@@ -1076,18 +1123,18 @@ export const AdminEventsTab: React.FC = () => {
                     value={formData.organizer}
                     onChange={e => setFormData({ ...formData, organizer: e.target.value })}
                     placeholder="ej. Colectivo Emprendedores"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-amber-500"
+                    className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 font-semibold"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
+                  <label className="block text-stone-800 font-bold mb-1">
                     Icono
                   </label>
                   <select
                     value={formData.icon}
                     onChange={e => setFormData({ ...formData, icon: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-amber-500 cursor-pointer"
+                    className="w-full px-3 py-2 bg-white/80 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 cursor-pointer font-semibold"
                   >
                     {AVAILABLE_ICONS.map(i => (
                       <option key={i.name} value={i.name}>{i.label}</option>
@@ -1097,7 +1144,7 @@ export const AdminEventsTab: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">
+                <label className="block text-stone-800 font-bold mb-1">
                   Descripción del Evento
                 </label>
                 <textarea
@@ -1105,12 +1152,12 @@ export const AdminEventsTab: React.FC = () => {
                   value={formData.description}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}
                   placeholder="ej. Más de 40 marcas locales, artesanías carmelitas, repostería y música..."
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-amber-500 resize-none"
+                  className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 resize-none font-medium"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">
+                <label className="block text-stone-800 font-bold mb-1">
                   Enlace de Fuente Oficial / Referencia Web (opcional)
                 </label>
                 <input
@@ -1118,21 +1165,21 @@ export const AdminEventsTab: React.FC = () => {
                   value={formData.sourceUrl || ''}
                   onChange={e => setFormData({ ...formData, sourceUrl: e.target.value })}
                   placeholder="https://carmen.gob.mx o https://facebook.com/..."
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-amber-500 text-xs"
+                  className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 text-xs font-semibold"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-stone-200/70">
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors"
+                  className="px-4 py-2.5 rounded-2xl border border-stone-300/80 hover:bg-stone-200/60 active:scale-95 text-stone-700 font-bold text-xs transition-all cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+                  className="px-6 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-stone-950 font-black text-xs shadow-md transition-all cursor-pointer"
                 >
                   {editingId ? 'Guardar Cambios' : 'Publicar en Cartelera'}
                 </button>
@@ -1144,8 +1191,28 @@ export const AdminEventsTab: React.FC = () => {
 
       {/* MODAL DE BÚSQUEDA AVANZADA CON IA (GOOGLE GEMINI & RADAR) */}
       {isAiSearchModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#0b1329] border border-purple-500/40 rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200"
+          style={{
+            background: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(25px)',
+            WebkitBackdropFilter: 'blur(25px)',
+          }}
+          onClick={() => setIsAiSearchModalOpen(false)}
+        >
+          <div
+            className="rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden"
+            style={{
+              background: 'rgba(15, 23, 42, 0.90)',
+              backdropFilter: 'blur(40px) saturate(190%)',
+              WebkitBackdropFilter: 'blur(40px) saturate(190%)',
+              border: '1.5px solid rgba(168, 85, 247, 0.35)',
+              boxShadow: '0 30px 70px -15px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.15)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-purple-500/20 bg-gradient-to-r from-purple-950/80 via-slate-900 to-indigo-950/80 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1454,6 +1521,112 @@ export const AdminEventsTab: React.FC = () => {
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Deleting Event */}
+      {eventToDelete && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center p-4"
+          style={{
+            background: 'rgba(15, 23, 42, 0.4)',
+            backdropFilter: 'blur(25px)',
+            WebkitBackdropFilter: 'blur(25px)'
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4 animate-scaleUp"
+            style={{
+              background: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(35px) saturate(190%)',
+              WebkitBackdropFilter: 'blur(35px) saturate(190%)',
+              border: '1.5px solid rgba(255, 255, 255, 0.95)',
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)'
+            }}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto shadow-sm">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h4 className="text-base font-extrabold text-stone-900">
+                ¿Eliminar evento?
+              </h4>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                ¿Seguro que deseas eliminar <strong className="text-stone-950 font-bold">{eventToDelete.title}</strong> de la cartelera oficial?
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setEventToDelete(null)}
+                className="py-2.5 px-3 rounded-2xl bg-stone-200/80 hover:bg-stone-300 active:scale-95 text-stone-800 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteEvent}
+                className="py-2.5 px-3 rounded-2xl bg-[#e11d48] hover:bg-[#be123c] active:scale-95 text-white text-xs font-bold shadow-md shadow-rose-600/30 transition-all cursor-pointer"
+              >
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Resetting Events Defaults */}
+      {showResetConfirm && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center p-4"
+          style={{
+            background: 'rgba(15, 23, 42, 0.4)',
+            backdropFilter: 'blur(25px)',
+            WebkitBackdropFilter: 'blur(25px)'
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4 animate-scaleUp"
+            style={{
+              background: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(35px) saturate(190%)',
+              WebkitBackdropFilter: 'blur(35px) saturate(190%)',
+              border: '1.5px solid rgba(255, 255, 255, 0.95)',
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)'
+            }}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto shadow-sm">
+              <RotateCcw className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h4 className="text-base font-extrabold text-stone-900">
+                ¿Restaurar cartelera oficial?
+              </h4>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                ¿Deseas restaurar la lista oficial de eventos predeterminados de Ciudad del Carmen?
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(false)}
+                className="py-2.5 px-3 rounded-2xl bg-stone-200/80 hover:bg-stone-300 active:scale-95 text-stone-800 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmResetDefaults}
+                className="py-2.5 px-3 rounded-2xl bg-[#007AFF] hover:bg-[#0062cc] active:scale-95 text-white text-xs font-bold shadow-md shadow-blue-500/30 transition-all cursor-pointer"
+              >
+                Restaurar
+              </button>
             </div>
           </div>
         </div>

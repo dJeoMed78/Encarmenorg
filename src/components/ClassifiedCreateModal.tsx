@@ -236,19 +236,47 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-3 sm:p-4 bg-stone-950/80 backdrop-blur-sm overflow-y-auto animate-fadeIn">
-      <div className="relative w-full max-w-3xl bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden my-auto max-h-[92vh] flex flex-col">
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[90] flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200"
+      style={{
+        background: 'rgba(15, 23, 42, 0.45)',
+        backdropFilter: 'blur(25px)',
+        WebkitBackdropFilter: 'blur(25px)',
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-3xl rounded-3xl overflow-hidden my-auto max-h-[92vh] flex flex-col"
+        style={{
+          background: 'rgba(255, 255, 255, 0.88)',
+          backdropFilter: 'blur(40px) saturate(190%)',
+          WebkitBackdropFilter: 'blur(40px) saturate(190%)',
+          border: '1.5px solid rgba(255, 255, 255, 0.95)',
+          boxShadow: '0 30px 70px -15px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="px-6 py-4 bg-stone-900 text-white flex items-center justify-between border-b border-stone-800">
+        <div
+          className="px-6 py-4 flex items-center justify-between sticky top-0 z-10"
+          style={{
+            background: 'rgba(255, 255, 255, 0.75)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderBottom: '1.5px solid rgba(255, 255, 255, 0.85)',
+          }}
+        >
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500 text-stone-950 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-xl bg-amber-500 text-stone-950 flex items-center justify-center font-bold shadow-xs">
               <Tag className="w-4 h-4 stroke-[2.5]" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
+              <h2 className="text-base sm:text-lg font-black tracking-tight text-stone-900">
                 {editingAd ? 'Editar Anuncio Clasificado' : 'Publicar Nuevo Anuncio Clasificado'}
               </h2>
-              <p className="text-xs text-stone-400">
+              <p className="text-xs text-stone-500 font-semibold">
                 Ciudad del Carmen · Gratis e interactivo
               </p>
             </div>
@@ -256,7 +284,7 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl bg-stone-800 hover:bg-rose-600 text-stone-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-full hover:bg-stone-200/60 text-stone-500 hover:text-stone-900 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -688,18 +716,18 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
           </div>
 
           {/* Footer Submit Button */}
-          <div className="pt-4 border-t border-stone-200 flex items-center justify-end gap-3">
+          <div className="pt-4 border-t border-stone-200/70 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-50 font-bold text-xs"
+              className="px-4 py-2.5 rounded-2xl border border-stone-300/80 hover:bg-stone-200/60 active:scale-95 text-stone-700 font-bold text-xs transition-all cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-stone-950 font-extrabold text-xs shadow-md shadow-amber-500/25 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+              className="px-6 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-stone-950 font-black text-xs shadow-md shadow-amber-500/25 flex items-center gap-2 disabled:opacity-50 cursor-pointer transition-all"
             >
               {isSubmitting ? (
                 <span>Guardando...</span>

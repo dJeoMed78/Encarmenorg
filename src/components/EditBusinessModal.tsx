@@ -18,6 +18,7 @@ import {
 import { Business, Category } from '../types';
 import { uploadBusinessLogo } from '../services/api';
 import { cleanPhoneNumber } from '../utils/phone';
+import { formatBusinessName, formatAddressText } from '../utils/textUtils';
 import { DELIVERY_OPTIONS, normalizeDeliveryOption } from '../constants/delivery';
 import {
   ALL_POSTAL_CODES,
@@ -256,6 +257,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
     setIsSaving(true);
     setErrorMsg(null);
     try {
+      const cleanName = formatBusinessName(formData.name.trim());
+      const cleanAddress = formatAddressText(formData.address || '');
       const cleanPhone = cleanPhoneNumber(formData.phone);
       const cleanWa = cleanPhoneNumber(formData.whatsapp) || cleanPhone;
       const cleanDelivery = selectedDeliveryOptions.length > 0
@@ -263,6 +266,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         : (normalizeDeliveryOption(formData.delivery) || 'Atención en el Local de la empresa');
       const res = await onSave(business.id, {
         ...formData,
+        name: cleanName,
+        address: cleanAddress,
         phone: cleanPhone,
         whatsapp: cleanWa,
         delivery: cleanDelivery,
@@ -285,31 +290,51 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[100] overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] overflow-y-auto flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
+      style={{
+        background: 'rgba(15, 23, 42, 0.45)',
+        backdropFilter: 'blur(25px)',
+        WebkitBackdropFilter: 'blur(25px)',
+      }}
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-stone-200 flex flex-col my-auto max-h-[92vh]"
+        className="relative w-full max-w-2xl rounded-3xl overflow-hidden flex flex-col my-auto max-h-[92vh]"
+        style={{
+          background: 'rgba(255, 255, 255, 0.88)',
+          backdropFilter: 'blur(40px) saturate(190%)',
+          WebkitBackdropFilter: 'blur(40px) saturate(190%)',
+          border: '1.5px solid rgba(255, 255, 255, 0.95)',
+          boxShadow: '0 30px 70px -15px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+        }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-100 bg-stone-50/80 sticky top-0 z-10">
+        <div
+          className="flex items-center justify-between px-6 py-4 sticky top-0 z-10"
+          style={{
+            background: 'rgba(255, 255, 255, 0.75)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderBottom: '1.5px solid rgba(255, 255, 255, 0.85)',
+          }}
+        >
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-amber-500 text-stone-950 flex items-center justify-center font-bold">
+            <div className="w-9 h-9 rounded-2xl bg-amber-500 text-stone-950 flex items-center justify-center font-bold shadow-xs">
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-stone-900 leading-tight">
+              <h3 className="font-black text-base text-stone-900 leading-tight">
                 Editar Datos de la Empresa
               </h3>
-              <p className="text-xs text-stone-500">
+              <p className="text-xs text-stone-600 font-semibold">
                 ID: {business.id} • {business.name}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-stone-200/60 text-stone-400 hover:text-stone-700 transition-colors"
+            className="p-2 rounded-full hover:bg-stone-200/60 text-stone-500 hover:text-stone-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -362,6 +387,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 type="text"
                 value={formData.name || ''}
                 onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                onBlur={() => setFormData(prev => ({ ...prev, name: formatBusinessName(prev.name || '') }))}
                 className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm font-bold text-stone-900 focus:border-amber-500 outline-none"
                 required
               />
@@ -831,18 +857,18 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
               <span>{errorMsg}</span>
             </div>
           )}
-          <div className="pt-4 border-t border-stone-200 flex items-center justify-end gap-2">
+          <div className="pt-4 border-t border-stone-200/70 flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-stone-200 hover:bg-stone-100 text-stone-700 text-xs font-bold transition-colors cursor-pointer"
+              className="px-4 py-2.5 rounded-2xl border border-stone-300/80 hover:bg-stone-200/60 active:scale-95 text-stone-700 text-xs font-bold transition-all cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isSaving}
-              className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-stone-950 font-extrabold text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
+              className="px-6 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-stone-950 font-black text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
             >
               {isSaving ? 'Guardando...' : 'Guardar Cambios'}
             </button>

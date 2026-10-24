@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
-import express, { Request, Response, NextFunction } from 'express';
+import express from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -45,7 +46,7 @@ import {
   dbGetUploadedFile,
   dbSaveDismissedCandidate,
   dbLoadDismissedCandidates
-} from './src/db/mariadb';
+} from './src/db/mariadb.ts';
 
 let _filenameStr = '';
 let _dirnameStr = process.cwd();
@@ -192,13 +193,79 @@ app.get('/images/:filename', async (req: Request, res: Response, next) => {
   next();
 });
 
-// Fallback to MariaDB uploaded_files table for /uploads/:filename across restarts and deployments
+function sendImagePlaceholder(res: Response, label: string = 'Empresas en Carmen') {
+  const fnLower = (label || '').toLowerCase();
+  
+  let targetPath = 'public/images/categories/servicios-del-hogar-y-oficios.jpg';
+
+  if (/plomer|electr|manten|clim|profix|pintur|hogar|albanil|herreria|mtto/i.test(fnLower)) {
+    targetPath = 'public/images/categories/servicios-del-hogar-y-oficios.jpg';
+  } else if (/ling|idiom|ingles|escuel|educa|cur|coleg|tutor|salud|clinic|medic|dent|farmac|hospital/i.test(fnLower)) {
+    targetPath = 'public/images/categories/salud-bienestar-y-educacion.jpg';
+  } else if (/belleza|estetic|peluqu|barber|unas|pestanas|cosmet|spa|keratin/i.test(fnLower)) {
+    targetPath = 'public/images/categories/cuidado-y-belleza-personal.jpg';
+  } else if (/auto|moto|taller|mecan|llanta|refacc/i.test(fnLower)) {
+    targetPath = 'public/images/categories/automotriz-y-motocicletas.jpg';
+  } else if (/churro|buñuel|taco|comida|food|restaur|cocin|cafe|postre|antojit|burger|alitas|marisc|alimen/i.test(fnLower)) {
+    targetPath = 'public/uploads/wc-marisqueria-padrino.jpg';
+  } else if (/industr|petrol|soldad|torno|seguridad|marin/i.test(fnLower)) {
+    targetPath = 'public/images/categories/sector-industrial-petrolero-y-construccion.jpg';
+  } else if (/compu|celul|tecno|imprent|papel|copia|electronic/i.test(fnLower)) {
+    targetPath = 'public/images/categories/tecnologia-imprentas-y-comercio-al-menudeo.jpg';
+  } else if (/inmuebl|renta|casa|depart|mascot|veterin/i.test(fnLower)) {
+    targetPath = 'public/images/categories/renta-de-inmuebles-espacios-y-mascotas.jpg';
+  } else {
+    const list = [
+      'public/images/categories/servicios-del-hogar-y-oficios.jpg',
+      'public/images/categories/salud-bienestar-y-educacion.jpg',
+      'public/images/categories/cuidado-y-belleza-personal.jpg',
+      'public/images/categories/automotriz-y-motocicletas.jpg',
+      'public/images/categories/sector-industrial-petrolero-y-construccion.jpg',
+      'public/images/categories/tecnologia-imprentas-y-comercio-al-menudeo.jpg',
+      'public/images/categories/renta-de-inmuebles-espacios-y-mascotas.jpg',
+      'public/uploads/wc-marisqueria-padrino.jpg',
+      'public/uploads/expocamaron.jpg'
+    ];
+    let hash = 0;
+    for (let i = 0; i < fnLower.length; i++) hash = (hash << 5) - hash + fnLower.charCodeAt(i);
+    targetPath = list[Math.abs(hash) % list.length];
+  }
+
+  const absPath = path.resolve(__dirname, targetPath);
+  if (fs.existsSync(absPath)) {
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    return res.sendFile(absPath);
+  }
+
+  const fallbackLogo = path.resolve(__dirname, 'public/images/BANNER-NUEVO-EMPRESAS-EN-CARMEN.png');
+  if (fs.existsSync(fallbackLogo)) {
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.sendFile(fallbackLogo);
+  }
+
+  return res.status(404).end();
+}
+
+// Fallback to local uploads and MariaDB uploaded_files table for /uploads/:filename
 app.get('/uploads/:filename', async (req: Request, res: Response) => {
-  const filename = req.params.filename;
+  const filename = decodeURIComponent(req.params.filename);
   const localPath = path.resolve(__dirname, 'public/uploads', filename);
-  if (fs.existsSync(localPath)) {
+  if (fs.existsSync(localPath) && !fs.statSync(localPath).isDirectory()) {
     return res.sendFile(localPath);
   }
+
+  // Check in local public/wp-content/uploads subdirectories
+  const possibleYears = ['2026/10', '2026/01', '2026/09', '2024/07', '2024/08', '2024/09', '2024/10', '2024/11', '2024/12', '2025/01', '2025/02', '2025/03'];
+  for (const yr of possibleYears) {
+    const candidatePath = path.resolve(__dirname, 'public/wp-content/uploads', yr, filename);
+    if (fs.existsSync(candidatePath) && !fs.statSync(candidatePath).isDirectory()) {
+      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+      return res.sendFile(candidatePath);
+    }
+  }
+
   if (isMariaDbActive()) {
     try {
       const file = await dbGetUploadedFile(filename);
@@ -215,55 +282,109 @@ app.get('/uploads/:filename', async (req: Request, res: Response) => {
       console.warn('[MariaDB uploads fallback] Error:', e.message);
     }
   }
-  // Automatic proxy & cache from WordPress uploads or encarmen.org
-  const fallbackSources = [
-    `https://empresasencarmen.com/wp-content/uploads/2026/10/${encodeURIComponent(filename)}`,
-    `https://empresasencarmen.com/wp-content/uploads/2026/09/${encodeURIComponent(filename)}`,
-    `https://empresasencarmen.com/wp-content/uploads/2024/07/${encodeURIComponent(filename)}`,
-    `https://encarmen.org/uploads/${encodeURIComponent(filename)}`
-  ];
 
-  for (const upstreamUrl of fallbackSources) {
+  return sendImagePlaceholder(res, filename);
+});
+
+// Autonomous WordPress uploads handler: serves 1,000+ local assets with zero external dependency
+app.get('/wp-content/uploads/*', async (req: Request, res: Response) => {
+  const rawSubpath = req.params[0] || '';
+  const decodedSubpath = decodeURIComponent(rawSubpath).replace(/^\/+/, '');
+  const localPath = path.resolve(__dirname, 'public/wp-content/uploads', decodedSubpath);
+
+  if (fs.existsSync(localPath) && !fs.statSync(localPath).isDirectory()) {
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    return res.sendFile(localPath);
+  }
+
+  // Subpath might have matched with different month/year structure
+  const basename = path.basename(decodedSubpath);
+  const possibleYears = ['2026/10', '2026/01', '2026/09', '2024/07', '2024/08', '2024/09', '2024/10', '2024/11', '2024/12', '2025/01', '2025/02', '2025/03'];
+  for (const yr of possibleYears) {
+    const candidatePath = path.resolve(__dirname, 'public/wp-content/uploads', yr, basename);
+    if (fs.existsSync(candidatePath) && !fs.statSync(candidatePath).isDirectory()) {
+      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+      return res.sendFile(candidatePath);
+    }
+  }
+
+  // MariaDB fallback if stored in cloud database
+  if (isMariaDbActive()) {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
-      const remoteRes = await fetch(upstreamUrl, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (remoteRes.ok) {
-        const buf = Buffer.from(await remoteRes.arrayBuffer());
-        const contentType = remoteRes.headers.get('content-type') || 'image/jpeg';
-        try {
-          fs.mkdirSync(path.dirname(localPath), { recursive: true });
-          fs.writeFileSync(localPath, buf);
-        } catch (_) {}
-        res.setHeader('Content-Type', contentType);
+      const file = await dbGetUploadedFile(basename);
+      if (file && file.data) {
+        res.setHeader('Content-Type', file.mimeType || 'image/jpeg');
         res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
-        return res.send(buf);
+        return res.send(file.data);
       }
     } catch (_) {}
   }
 
-  return res.status(404).send('Image not found');
+  return sendImagePlaceholder(res, basename);
 });
 
-// Fallback for missing wp-content/uploads when requested on non-production domains (e.g. dev/preview/Cloud Run)
-app.get('/wp-content/uploads/*', (req: Request, res: Response) => {
-  const host = (req.hostname || req.headers.host || '').toLowerCase();
-  if (!host.includes('empresasencarmen.com')) {
-    const subpath = req.params[0];
-    return res.redirect(302, `https://empresasencarmen.com/wp-content/uploads/${subpath}`);
-  }
-  return res.status(404).send('Image not found');
-});
-
-// Fallback for legacy /media/* requests
+// Legacy /media/* requests - mapped directly to local public/wp-content/uploads
 app.get('/media/*', (req: Request, res: Response) => {
-  const host = (req.hostname || req.headers.host || '').toLowerCase();
-  const subpath = req.params[0];
-  if (!host.includes('empresasencarmen.com')) {
-    return res.redirect(302, `https://empresasencarmen.com/wp-content/uploads/${subpath}`);
+  const rawSubpath = req.params[0] || '';
+  const decodedSubpath = decodeURIComponent(rawSubpath).replace(/^\/+/, '');
+  const localPath = path.resolve(__dirname, 'public/wp-content/uploads', decodedSubpath);
+  if (fs.existsSync(localPath) && !fs.statSync(localPath).isDirectory()) {
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    return res.sendFile(localPath);
   }
-  return res.redirect(301, `/wp-content/uploads/${subpath}`);
+  return res.redirect(301, `/wp-content/uploads/${encodeURIComponent(decodedSubpath)}`);
+});
+
+// Direct download routes for all-in-one Hostinger master ZIP
+app.get([
+  '/api/backup/sitio-completo-hostinger.zip',
+  '/sitio-completo-hostinger.zip',
+  '/empresasencarmen-hostinger-completo.zip',
+  '/descargar-sitio-completo.zip',
+  '/api/download-hostinger-zip',
+  '/todo-en-uno-hostinger.zip',
+  '/sitio-completo.zip'
+], (req: Request, res: Response) => {
+  const masterZipPath = path.resolve(__dirname, 'public/sitio-completo-hostinger.zip');
+  if (fs.existsSync(masterZipPath)) {
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="sitio-completo-hostinger.zip"');
+    return res.download(masterZipPath, 'sitio-completo-hostinger.zip');
+  }
+  return res.status(404).json({ error: 'Archivo de sitio completo aún no generado' });
+});
+
+// Direct download routes for full image backup ZIP and SQL script (Supporting all direct URL variants)
+app.get([
+  '/api/backup/images-zip',
+  '/api/backup/respaldo_imagenes_encarmen_completo.zip',
+  '/respaldo_imagenes_encarmen_completo.zip',
+  '/public/respaldo_imagenes_encarmen_completo.zip',
+  '/imagenes.zip',
+  '/backup-imagenes.zip'
+], (req: Request, res: Response) => {
+  const zipPath = path.resolve(__dirname, 'public/respaldo_imagenes_encarmen_completo.zip');
+  if (fs.existsSync(zipPath)) {
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="respaldo_imagenes_encarmen_completo.zip"');
+    return res.download(zipPath, 'respaldo_imagenes_encarmen_completo.zip');
+  }
+  return res.status(404).json({ error: 'Archivo de respaldo no encontrado en disco' });
+});
+
+app.get([
+  '/api/backup/migrate-sql',
+  '/api/backup/mariadb_migrate_images.sql',
+  '/mariadb_migrate_images.sql',
+  '/public/mariadb_migrate_images.sql'
+], (req: Request, res: Response) => {
+  const sqlPath = path.resolve(__dirname, 'public/mariadb_migrate_images.sql');
+  if (fs.existsSync(sqlPath)) {
+    res.setHeader('Content-Type', 'application/sql');
+    res.setHeader('Content-Disposition', 'attachment; filename="mariadb_migrate_images.sql"');
+    return res.download(sqlPath, 'mariadb_migrate_images.sql');
+  }
+  return res.status(404).json({ error: 'Archivo SQL no encontrado' });
 });
 
 // ==========================================
@@ -300,7 +421,16 @@ app.get('/api/img', async (req: Request, res: Response) => {
 
   try {
     let inputBuffer: Buffer | null = null;
-    const decodedUrl = decodeURIComponent(rawUrl).trim();
+    let decodedUrl = decodeURIComponent(rawUrl).trim();
+
+    // Map any lingering empresasencarmen.com URLs to local disk files
+    if (decodedUrl.includes('empresasencarmen.com/wp-content/')) {
+      decodedUrl = decodedUrl.substring(decodedUrl.indexOf('/wp-content/'));
+    } else if (decodedUrl.includes('empresasencarmen.com/media/')) {
+      decodedUrl = '/wp-content/uploads/' + decodedUrl.substring(decodedUrl.indexOf('/media/') + 7);
+    } else if (decodedUrl.includes('empresasencarmen.com/uploads/')) {
+      decodedUrl = '/wp-content/uploads/2026/10/' + decodedUrl.substring(decodedUrl.indexOf('/uploads/') + 9);
+    }
 
     // 1. Check local public file system
     if (decodedUrl.startsWith('/')) {
@@ -311,9 +441,22 @@ app.get('/api/img', async (req: Request, res: Response) => {
       }
     }
 
-    // 2. Fallback to MariaDB uploaded_files for /uploads/ if missing on disk
-    if (!inputBuffer && decodedUrl.includes('/uploads/')) {
-      const fn = decodedUrl.split('/uploads/').pop();
+    // 2. Search all wp-content/uploads subdirectories if filename didn't match the exact month/year
+    if (!inputBuffer && (decodedUrl.includes('/wp-content/uploads/') || decodedUrl.includes('/uploads/'))) {
+      const baseFn = path.basename(decodedUrl.split('?')[0]);
+      const possibleYears = ['2026/10', '2026/01', '2026/09', '2024/07', '2024/08', '2024/09', '2024/10', '2024/11', '2024/12', '2025/01', '2025/02', '2025/03'];
+      for (const yr of possibleYears) {
+        const candidate = path.resolve(__dirname, 'public/wp-content/uploads', yr, baseFn);
+        if (fs.existsSync(candidate) && !fs.statSync(candidate).isDirectory()) {
+          inputBuffer = fs.readFileSync(candidate);
+          break;
+        }
+      }
+    }
+
+    // 3. Fallback to MariaDB uploaded_files for /uploads/ or WordPress assets
+    if (!inputBuffer && (decodedUrl.includes('/uploads/') || decodedUrl.includes('/wp-content/'))) {
+      const fn = path.basename(decodedUrl.split('?')[0]);
       if (fn && isMariaDbActive()) {
         try {
           const file = await dbGetUploadedFile(fn);
@@ -324,38 +467,28 @@ app.get('/api/img', async (req: Request, res: Response) => {
       }
     }
 
-    // 3. Fallback to fetch from remote (empresasencarmen.com or other http/https)
-    if (!inputBuffer) {
-      let targetFetchUrl = decodedUrl;
-      if (decodedUrl.startsWith('/wp-content/')) {
-        targetFetchUrl = `https://empresasencarmen.com${decodedUrl}`;
-      } else if (decodedUrl.startsWith('/uploads/')) {
-        targetFetchUrl = `https://empresasencarmen.com/wp-content/uploads/2026/10/${encodeURIComponent(decodedUrl.replace('/uploads/', ''))}`;
-      }
-
-      if (targetFetchUrl.startsWith('http://') || targetFetchUrl.startsWith('https://')) {
-        try {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 7000);
-          const remoteRes = await fetch(targetFetchUrl, {
-            signal: controller.signal,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-          });
-          clearTimeout(timeout);
-          if (remoteRes.ok) {
-            inputBuffer = Buffer.from(await remoteRes.arrayBuffer());
+    // 4. Remote fetch only for other external non-empresasencarmen domains (e.g. CDNs, Google, Unsplash)
+    if (!inputBuffer && (decodedUrl.startsWith('http://') || decodedUrl.startsWith('https://')) && !decodedUrl.includes('empresasencarmen.com')) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 7000);
+        const remoteRes = await fetch(decodedUrl, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
           }
-        } catch (_) {}
-      }
+        });
+        clearTimeout(timeout);
+        if (remoteRes.ok) {
+          inputBuffer = Buffer.from(await remoteRes.arrayBuffer());
+        }
+      } catch (_) {}
     }
 
     if (!inputBuffer) {
-      if (decodedUrl.startsWith('http://') || decodedUrl.startsWith('https://')) {
-        return res.redirect(302, decodedUrl);
-      }
-      return res.status(404).send('Image source not found');
+      // Return clean fallback placeholder image instead of failing
+      const baseFn = path.basename(decodedUrl.split('?')[0]) || 'Empresa';
+      return sendImagePlaceholder(res, baseFn);
     }
 
     // Process and optimize with Sharp
@@ -970,18 +1103,17 @@ let adminAccounts = [
 
 // Helper: Resolve dynamic base URL based on incoming host
 function getRequestBaseUrl(req: Request): string {
-  const hostHeader = (req.get('x-forwarded-host') || req.get('host') || 'empresasencarmen.com').toLowerCase();
-  let domain = 'empresasencarmen.com';
+  const rawHost = req.get('x-forwarded-host') || req.get('host') || 'empresasencarmen.com';
+  const hostHeader = rawHost.toLowerCase().split(':')[0];
+  let domain = hostHeader;
   if (hostHeader.includes('encarmen.org')) {
-    domain = 'encarmen.org';
-  } else if (hostHeader.includes('encarmen.com')) {
-    domain = 'encarmen.com';
-  } else if (hostHeader.includes('encarmen.mx')) {
-    domain = 'encarmen.mx';
+    domain = hostHeader.startsWith('www.') ? 'www.encarmen.org' : 'encarmen.org';
   } else if (hostHeader.includes('empresasencarmen.com')) {
-    domain = 'empresasencarmen.com';
-  } else {
-    domain = hostHeader.split(':')[0];
+    domain = hostHeader.startsWith('www.') ? 'www.empresasencarmen.com' : 'empresasencarmen.com';
+  } else if (hostHeader.includes('encarmen.com')) {
+    domain = hostHeader.startsWith('www.') ? 'www.encarmen.com' : 'encarmen.com';
+  } else if (hostHeader.includes('encarmen.mx')) {
+    domain = hostHeader.startsWith('www.') ? 'www.encarmen.mx' : 'encarmen.mx';
   }
   const proto = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
   return `${proto}://${domain}`;
@@ -1689,8 +1821,17 @@ app.get('/api/version', (_req: Request, res: Response) => {
   res.json({ success: true, version, serverTime: new Date().toISOString() });
 });
 
-// Download complete project ZIP backup for Google Cloud Shell deployment & Admin Download
-app.get(['/api/admin/download-source-zip', '/api/download-backup', '/codigo-fuente-empresasencarmen.zip'], (req: Request, res: Response) => {
+// Download complete project ZIP backup for Hostinger deployment & Admin Download
+app.get([
+  '/api/admin/download-source-zip',
+  '/api/download-backup',
+  '/codigo-fuente-empresasencarmen.zip',
+  '/codigo-fuente-completo.zip',
+  '/sitio-completo.zip',
+  '/proyecto-completo.zip',
+  '/api/backup/sitio-completo.zip',
+  '/api/backup/codigo-fuente.zip'
+], (req: Request, res: Response) => {
   try {
     let version = '061026-0915';
     try {
@@ -2343,8 +2484,13 @@ function buildWooCommerceImagesPayload(biz: any): { src: string }[] {
   return images;
 }
 
+// Flag de sincronización externa con WordPress/WooCommerce
+// Por defecto FALSE: El portal opera en modo 100% autónomo (cero dependencias externas y cero envíos a WordPress)
+const IS_WP_SYNC_ENABLED = process.env.ENABLE_WP_SYNC === 'true';
+
 // Helper to purge LiteSpeed and WordPress cache on empresasencarmen.com
 async function purgeWordPressCache(slugs: string[] = []): Promise<void> {
+  if (!IS_WP_SYNC_ENABLED) return;
   try {
     // 1. Purge general cache and homepage on empresasencarmen.com
     fetch('https://empresasencarmen.com/', {
@@ -2371,6 +2517,9 @@ async function purgeWordPressCache(slugs: string[] = []): Promise<void> {
 
 // Helper to push a business to WordPress WooCommerce via REST API
 async function exportBusinessToWooCommerce(biz: any, authHeader: string): Promise<{ success: boolean; wpId?: number; permalink?: string; slug?: string; error?: string }> {
+  if (!IS_WP_SYNC_ENABLED) {
+    return { success: true, slug: biz.slug };
+  }
   try {
     const meta_data = [
       { key: 'telefono', value: String(biz.phone || '') },
@@ -2454,6 +2603,9 @@ async function exportBusinessToWooCommerce(biz: any, authHeader: string): Promis
 
 // Helper to get WordPress / WooCommerce auth headers from Secrets
 function getWpAuthHeader(): string | null {
+  if (!IS_WP_SYNC_ENABLED) {
+    return null;
+  }
   const wcKey = process.env.WC_CONSUMER_KEY;
   const wcSecret = process.env.WC_CONSUMER_SECRET;
   if (wcKey && wcSecret) {
@@ -2470,9 +2622,13 @@ function getWpAuthHeader(): string | null {
 }
 
 // Full bidirectional sync helper:
-// 1. Pulls all products from WordPress WooCommerce (empresasencarmen.com) into MariaDB / cache
-// 2. Finds businesses in local DB that do not exist in WooCommerce (like new registrations) and pushes them to WordPress!
+// 1. Pulls all products from WordPress WooCommerce into MariaDB / cache
+// 2. Finds businesses in local DB that do not exist in WooCommerce and pushes them to WordPress (Disabled in autonomous mode)
 async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: number; pushedToWpCount: number }> {
+  if (!IS_WP_SYNC_ENABLED) {
+    console.info('[WooCommerce Sync] Modo autónomo activo: Sincronización cruzada con WordPress desactivada.');
+    return { count: businessesCache.length, newCount: 0, pushedToWpCount: 0 };
+  }
   const authHeader = getWpAuthHeader();
   if (!authHeader) {
     return { count: businessesCache.length, newCount: 0, pushedToWpCount: 0 };
@@ -2784,8 +2940,8 @@ async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: 
   }
 }
 
-// Initial background sync from WooCommerce on startup (runs once safely without duplicating images)
-if (!process.env.VERCEL) {
+// Initial background sync from WooCommerce on startup (only if explicitly enabled)
+if (!process.env.VERCEL && IS_WP_SYNC_ENABLED) {
   setTimeout(() => {
     syncAllWooCommerceProducts().catch(() => {});
   }, 5000);
@@ -3407,8 +3563,18 @@ app.post('/api/webhook/woocommerce', async (req: Request, res: Response) => {
   }
 });
 
-// WordPress Health check
+// WordPress Health check (Reporta modo autónomo sin llamadas de red si está desvinculado)
 app.get('/api/health-wp', async (_req: Request, res: Response) => {
+  if (!IS_WP_SYNC_ENABLED) {
+    return res.json({
+      connected: false,
+      status: 'autonomous',
+      statusCode: 200,
+      autonomousMode: true,
+      message: 'Modo 100% Autónomo activo. Sin dependencias externas de WordPress ni WooCommerce.',
+      lastChecked: new Date().toISOString()
+    });
+  }
   try {
     const ping = await fetch('https://empresasencarmen.com/', {
       method: 'HEAD',
@@ -7250,7 +7416,7 @@ app.post('/api/businesses/approve-candidate', async (req: Request, res: Response
       payment: candidate.payment || 'Efectivo y Transferencia',
       delivery: candidate.delivery || 'Servicio a Domicilio disponible en toda la isla',
       hasDelivery: Boolean(candidate.hasDelivery || (candidate.delivery && !candidate.delivery.toLowerCase().includes('solo en sucursal'))),
-      image: candidate.image || 'https://empresasencarmen.com/icons/icon-512.svg',
+      image: candidate.image || '/icons/icon-512.svg',
       gallery: Array.isArray((candidate as any).gallery) ? (candidate as any).gallery : [],
       website: candidate.website || '',
       facebook: candidate.facebook || '',
@@ -7259,7 +7425,7 @@ app.post('/api/businesses/approve-candidate', async (req: Request, res: Response
       categorySlugs: generateCategorySlugs(cats),
       rating: 5,
       reviewCount: 1,
-      permalink: `https://empresasencarmen.com/empresa/${slug}/`,
+      permalink: `/empresa/${slug}/`,
       isTopBusiness: Boolean(candidate.isTopBusiness),
       isRecommended: Boolean(candidate.isRecommended),
       source: 'radar_auto_carmen',
@@ -7404,7 +7570,7 @@ app.post('/api/businesses/approve-multiple-candidates', async (req: Request, res
         payment: cand.payment || 'Efectivo y Transferencia',
         delivery: cand.delivery || 'Servicio a Domicilio disponible en toda la isla',
         hasDelivery: Boolean(cand.hasDelivery || (cand.delivery && !cand.delivery.toLowerCase().includes('solo en sucursal'))),
-        image: cand.image || 'https://empresasencarmen.com/icons/icon-512.svg',
+        image: cand.image || '/icons/icon-512.svg',
         gallery: Array.isArray((cand as any).gallery) ? (cand as any).gallery : [],
         website: cand.website || '',
         facebook: cand.facebook || '',
@@ -7413,7 +7579,7 @@ app.post('/api/businesses/approve-multiple-candidates', async (req: Request, res
         categorySlugs: generateCategorySlugs(cats),
         rating: 5,
         reviewCount: 1,
-        permalink: `https://empresasencarmen.com/empresa/${slug}/`,
+        permalink: `/empresa/${slug}/`,
         isTopBusiness: Boolean(cand.isTopBusiness),
         isRecommended: Boolean(cand.isRecommended),
         source: 'radar_auto_carmen',
@@ -7797,17 +7963,28 @@ const isProduction = process.env.NODE_ENV === 'production' || !!process.env.VERC
 if (!isProduction && !process.env.VERCEL) {
   // Vite Dev Server middleware for dynamic TypeScript compilation, HMR, and React SPA preview
   console.log('[Vite] Inicializando middleware de Vite para desarrollo y preview interactivo...');
-  const { createServer: createViteServer } = await import('vite');
-  const vite = await createViteServer({
-    server: {
-      middlewareMode: true,
-      allowedHosts: true,
-      hmr: false,
-      ws: false
-    },
-    appType: 'spa'
+  let viteMiddleware: any = null;
+  import('vite').then(async ({ createServer: createViteServer }) => {
+    const vite = await createViteServer({
+      server: {
+        middlewareMode: true,
+        allowedHosts: true,
+        hmr: false,
+        ws: false
+      },
+      appType: 'spa'
+    });
+    viteMiddleware = vite.middlewares;
+  }).catch((err) => {
+    console.error('[Vite] Error al inicializar middleware de Vite:', err);
   });
-  app.use(vite.middlewares);
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (viteMiddleware) {
+      return viteMiddleware(req, res, next);
+    }
+    next();
+  });
 } else {
   app.use(express.static(path.resolve(__dirname, 'dist'), {
     maxAge: oneWeekMs,
@@ -7861,22 +8038,39 @@ if (!isProduction && !process.env.VERCEL) {
           const baseUrl = getRequestBaseUrl(req);
           const ogTitle = `${biz.name} | Tarjeta Digital - Empresas en Carmen`;
           const ogDesc = `${biz.address ? `${biz.address}. ` : ''}${biz.phone ? `Tel: ${biz.phone}. ` : ''}${biz.description ? biz.description.slice(0, 140) : 'Directorio Comercial de Ciudad del Carmen'}`;
-          const ogImage = biz.image || 'https://empresasencarmen.com/icons/icon-512.svg';
+          const ogImage = biz.image?.startsWith('http') ? biz.image : `${baseUrl}${biz.image || '/icons/icon-512.svg'}`;
           const bizUrl = `${baseUrl}/empresa/${biz.slug}`;
 
           html = html.replace(/<title>.*?<\/title>/i, `<title>${ogTitle}</title>`);
           html = html.replace(/<meta property="og:title"[^>]*>/i, `<meta property="og:title" content="${ogTitle}" />`);
           html = html.replace(/<meta property="og:description"[^>]*>/i, `<meta property="og:description" content="${ogDesc}" />`);
-          html = html.replace('</head>', `  <link rel="canonical" href="${bizUrl}" />\n  <meta property="og:url" content="${bizUrl}" />\n</head>`);
+          html = html.replace(/<meta property="og:image"[^>]*>/i, `<meta property="og:image" content="${ogImage}" />`);
+          if (html.includes('<link rel="canonical"')) {
+            html = html.replace(/<link rel="canonical"[^>]*>/i, `<link rel="canonical" href="${bizUrl}" />`);
+          } else {
+            html = html.replace('</head>', `  <link rel="canonical" href="${bizUrl}" />\n</head>`);
+          }
+          if (html.includes('<meta property="og:url"')) {
+            html = html.replace(/<meta property="og:url"[^>]*>/i, `<meta property="og:url" content="${bizUrl}" />`);
+          } else {
+            html = html.replace('</head>', `  <meta property="og:url" content="${bizUrl}" />\n</head>`);
+          }
         }
       }
 
-      // Inyección garantizada de canonical y og:url para indexación de Google Search Console
+      // Inyección garantizada de canonical y og:url dinámicos para indexación en cualquier dominio
       const baseUrl = getRequestBaseUrl(req);
       const reqPath = req.path === '/' ? '' : req.path;
       const pageCanonical = `${baseUrl}${reqPath}`;
-      if (!html.includes('<link rel="canonical"')) {
-        html = html.replace('</head>', `  <link rel="canonical" href="${pageCanonical}" />\n  <meta property="og:url" content="${pageCanonical}" />\n</head>`);
+      if (html.includes('<link rel="canonical"')) {
+        html = html.replace(/<link rel="canonical"[^>]*>/i, `<link rel="canonical" href="${pageCanonical}" />`);
+      } else {
+        html = html.replace('</head>', `  <link rel="canonical" href="${pageCanonical}" />\n</head>`);
+      }
+      if (html.includes('<meta property="og:url"')) {
+        html = html.replace(/<meta property="og:url"[^>]*>/i, `<meta property="og:url" content="${pageCanonical}" />`);
+      } else {
+        html = html.replace('</head>', `  <meta property="og:url" content="${pageCanonical}" />\n</head>`);
       }
 
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, proxy-revalidate, max-age=0');

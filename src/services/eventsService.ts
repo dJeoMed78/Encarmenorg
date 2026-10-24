@@ -24,7 +24,7 @@ const STORAGE_KEY = 'carmen_events_billboard_v5';
 
 export function parseEventStartDate(dateStr?: string, timeStr?: string): number {
   if (!dateStr || typeof dateStr !== 'string') return new Date(2099, 0, 1).getTime();
-  const clean = dateStr.toLowerCase().trim();
+  const clean = dateStr.normalize('NFKD').toLowerCase().trim();
 
   const months: Record<string, number> = {
     enero: 0, feb: 1, febrero: 1, mar: 2, marzo: 2, abr: 3, abril: 3,
@@ -61,20 +61,31 @@ export function parseEventStartDate(dateStr?: string, timeStr?: string): number 
     let hour = 12;
     let min = 0;
     if (timeStr) {
-      const tm = timeStr.match(/(\d{1,2}):(\d{2})/);
-      if (tm) {
-        hour = parseInt(tm[1], 10);
-        min = parseInt(tm[2], 10);
+      const cleanTime = timeStr.normalize('NFKD').toLowerCase();
+      const showMatch = cleanTime.match(/show\s*(\d{1,2})(?::(\d{2}))?\s*(pm|am)?/i);
+      const standardMatch = cleanTime.match(/(\d{1,2})(?::(\d{2}))?\s*(pm|am|p\.?m\.?|a\.?m\.?|hrs)?/i);
+      const chosen = showMatch || standardMatch;
+      if (chosen) {
+        let h = parseInt(chosen[1], 10);
+        const m = chosen[2] ? parseInt(chosen[2], 10) : 0;
+        const period = (chosen[3] || '').replace(/\./g, '');
+        if ((period.includes('pm') || period.includes('p')) && h < 12) h += 12;
+        if ((period.includes('am') || period.includes('a')) && h === 12) h = 0;
+        hour = h;
+        min = m;
       }
     }
     return new Date(year, foundMonth, day, hour, min).getTime();
   }
 
-  // Handle recurring like "Sábado y Domingo" or "Domingos"
+  // Handle recurring like "Jueves y Domingos" or "Sábado y Domingo"
   const now = new Date();
+  if (clean.includes('jueves')) {
+    return new Date(year, now.getMonth(), now.getDate(), 18, 0).getTime();
+  }
   if (clean.includes('sabado') || clean.includes('sábado')) {
     const d = new Date(now);
-    const dayOfWeek = d.getDay(); // 0 is Sun, 6 is Sat
+    const dayOfWeek = d.getDay();
     const diff = (6 - dayOfWeek + 7) % 7;
     d.setDate(d.getDate() + diff);
     return d.getTime();
@@ -90,7 +101,35 @@ export function parseEventStartDate(dateStr?: string, timeStr?: string): number 
   return new Date(2099, 0, 1).getTime();
 }
 
-export function sortEventsChronologically(events: EventItem[]): EventItem[] {
+export function isEventExpired(dateStr?: string, timeStr?: string): boolean {
+  if (!dateStr) return false;
+  const clean = dateStr.normalize('NFKD').toLowerCase().trim();
+
+  // Eventos recurrentes permanentes nunca caducan
+  if (
+    clean.includes('todos los') ||
+    clean.includes('cada ') ||
+    clean.includes('permanente') ||
+    clean.includes('semanal')
+  ) {
+    return false;
+  }
+
+  const startTs = parseEventStartDate(dateStr, timeStr);
+  if (startTs >= new Date(2098, 0, 1).getTime()) return false;
+
+  // Un evento expira formalmente al concluir el día de su realización (23:59:59 hrs)
+  const eventDate = new Date(startTs);
+  eventDate.setHours(23, 59, 59, 999);
+
+  return eventDate.getTime() < Date.now();
+}
+
+export function filterActiveUpcomingEvents<T extends { date?: string; time?: string }>(events: T[]): T[] {
+  return events.filter(e => !isEventExpired(e.date, e.time));
+}
+
+export function sortEventsChronologically<T extends { date?: string; time?: string }>(events: T[]): T[] {
   return [...events].sort((a, b) => parseEventStartDate(a.date, a.time) - parseEventStartDate(b.date, b.time));
 }
 
@@ -108,21 +147,24 @@ export const ensureEventRepresentativeImage = (item: EventItem): EventItem => {
 
 // Helper to load cached data from localStorage or fallback to DEFAULT_EVENTS_DATA
 const loadLocalInitial = (): EventItem[] => {
+  const sanitize = (evts: EventItem[]) =>
+    sortEventsChronologically(filterActiveUpcomingEvents(evts.map(ensureEventRepresentativeImage)));
+
   if (typeof window === 'undefined') {
-    return sortEventsChronologically((DEFAULT_EVENTS_DATA as EventItem[]).map(ensureEventRepresentativeImage));
+    return sanitize(DEFAULT_EVENTS_DATA as EventItem[]);
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw !== null) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return sortEventsChronologically(parsed.map(ensureEventRepresentativeImage));
+        return sanitize(parsed);
       }
     }
   } catch (e) {
     console.error('Error reading events from localStorage:', e);
   }
-  return sortEventsChronologically((DEFAULT_EVENTS_DATA as EventItem[]).map(ensureEventRepresentativeImage));
+  return sanitize(DEFAULT_EVENTS_DATA as EventItem[]);
 };
 
 inMemoryEvents = loadLocalInitial();
@@ -130,14 +172,20 @@ inMemoryEvents = loadLocalInitial();
 // Synchronous getter for immediate render
 export const getEventsData = (): EventItem[] => {
   if (!inMemoryEvents || inMemoryEvents.length === 0) {
-    inMemoryEvents = sortEventsChronologically((DEFAULT_EVENTS_DATA as EventItem[]).map(ensureEventRepresentativeImage));
+    inMemoryEvents = filterActiveUpcomingEvents(
+      sortEventsChronologically((DEFAULT_EVENTS_DATA as EventItem[]).map(ensureEventRepresentativeImage))
+    );
   }
-  return sortEventsChronologically(inMemoryEvents.map(ensureEventRepresentativeImage));
+  return filterActiveUpcomingEvents(
+    sortEventsChronologically(inMemoryEvents.map(ensureEventRepresentativeImage))
+  );
 };
 
 // Dispatch change event and persist locally
 const notifyAndPersist = (events: EventItem[]) => {
-  const sanitized = sortEventsChronologically(events.map(ensureEventRepresentativeImage));
+  const sanitized = filterActiveUpcomingEvents(
+    sortEventsChronologically(events.map(ensureEventRepresentativeImage))
+  );
   inMemoryEvents = sanitized;
   if (typeof window !== 'undefined') {
     try {

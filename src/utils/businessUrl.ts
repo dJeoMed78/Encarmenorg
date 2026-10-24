@@ -1,19 +1,31 @@
 import { Business } from '../types';
 
 export const OFFICIAL_DOMAIN = 'https://encarmen.org';
-export const SECONDARY_DOMAIN = 'https://ai.empresasencarmen.com';
+export const SECONDARY_DOMAIN = 'https://empresasencarmen.com';
 
 /**
- * Gets the current active base domain dynamically or falls back to encarmen.org
- * Always prioritizes the official public brand domain encarmen.org for sharing, QR codes and clipboard.
+ * Gets the current active base domain dynamically based on window.location
+ * Supports seamless deployment to both empresasencarmen.com and encarmen.org
  */
 export function getActiveBaseDomain(): string {
+  if (typeof window !== 'undefined' && window.location && window.location.host) {
+    const host = window.location.host.toLowerCase();
+    if (host.includes('empresasencarmen.com')) {
+      return `${window.location.protocol}//${window.location.host}`;
+    }
+    if (host.includes('encarmen.org')) {
+      return `${window.location.protocol}//${window.location.host}`;
+    }
+    if (host.includes('localhost') || host.includes('run.app')) {
+      return `${window.location.protocol}//${window.location.host}`;
+    }
+  }
   return OFFICIAL_DOMAIN;
 }
 
 /**
- * Returns the official public URL pointing to encarmen.org (or ai.empresasencarmen.com)
- * Never uses internal dev/preview run.app URLs for sharing or QR codes.
+ * Returns the official public URL pointing to the active domain (or encarmen.org)
+ * Uses relative path routing or current active domain for sharing, QR codes and clipboard.
  */
 export function getBusinessPublicUrl(business: Partial<Business> | { slug?: string; id?: number }): string {
   const cleanSlug = business?.slug || String(business?.id || '');
@@ -22,15 +34,24 @@ export function getBusinessPublicUrl(business: Partial<Business> | { slug?: stri
 }
 
 /**
- * Returns a clean readable display format (e.g. encarmen.org/brio-cleaner or encarmen.org/clean-topal)
+ * Returns a clean readable display format (e.g. empresasencarmen.com/slug or encarmen.org/slug)
  */
 export function getBusinessDisplayUrl(business: Partial<Business> | { slug?: string; id?: number }): string {
   const cleanSlug = business?.slug || String(business?.id || '');
+  if (typeof window !== 'undefined' && window.location && window.location.host) {
+    const host = window.location.host.toLowerCase().replace(/^www\./, '');
+    if (host.includes('empresasencarmen.com')) {
+      return `empresasencarmen.com/${cleanSlug}`;
+    }
+    if (host.includes('encarmen.org')) {
+      return `encarmen.org/${cleanSlug}`;
+    }
+  }
   return `encarmen.org/${cleanSlug}`;
 }
 
 /**
- * Returns the dedicated subdomain URL (e.g. https://brio-cleaner.encarmen.org)
+ * Returns the dedicated subdomain URL (e.g. https://slug.empresasencarmen.com or https://slug.encarmen.org)
  */
 export function getBusinessSubdomainUrl(business: Partial<Business> | { slug?: string; id?: number }): string {
   const cleanSlug = (business?.slug || String(business?.id || ''))
@@ -39,6 +60,12 @@ export function getBusinessSubdomainUrl(business: Partial<Business> | { slug?: s
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+  if (typeof window !== 'undefined' && window.location && window.location.host) {
+    const host = window.location.host.toLowerCase();
+    if (host.includes('empresasencarmen.com')) {
+      return `https://${cleanSlug}.empresasencarmen.com`;
+    }
+  }
   return `https://${cleanSlug}.encarmen.org`;
 }
 
@@ -97,11 +124,16 @@ export function formatImageUrl(url?: string | null): string {
 
   // If already absolute http or https
   if (img.startsWith('http://') || img.startsWith('https://')) {
-    // If it was wrongly set to /media/ on empresasencarmen.com, fix to /wp-content/uploads/
-    if (img.includes('empresasencarmen.com/media/')) {
-      img = img.replace('/media/', '/wp-content/uploads/');
+    // If it points to empresasencarmen.com, convert directly to local relative path
+    if (img.includes('empresasencarmen.com/wp-content/')) {
+      img = img.substring(img.indexOf('/wp-content/'));
+    } else if (img.includes('empresasencarmen.com/media/')) {
+      img = '/wp-content/uploads/' + img.substring(img.indexOf('/media/') + 7);
+    } else if (img.includes('empresasencarmen.com/uploads/')) {
+      img = '/wp-content/uploads/2026/10/' + img.substring(img.indexOf('/uploads/') + 9);
+    } else {
+      return img;
     }
-    return img;
   }
 
   // If legacy /media/ was passed, convert back to /wp-content/uploads/
@@ -109,19 +141,7 @@ export function formatImageUrl(url?: string | null): string {
     img = img.replace('/media/', '/wp-content/uploads/');
   }
 
-  // If WordPress upload path (/wp-content/uploads/...)
-  if (img.startsWith('/wp-content/')) {
-    // When viewed in dev, preview, or localhost, load directly from production domain
-    if (typeof window !== 'undefined') {
-      const isProdDomain = window.location.hostname.includes('empresasencarmen.com');
-      if (!isProdDomain) {
-        return `https://empresasencarmen.com${img}`;
-      }
-    }
-    return img;
-  }
-
-  // Local uploads (/uploads/...)
+  // WordPress and local upload paths are now 100% self-hosted locally in public/
   return img;
 }
 

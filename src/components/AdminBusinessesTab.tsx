@@ -87,6 +87,7 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
   const [pinsMap, setPinsMap] = useState<Record<number, BusinessEditPinInfo>>({});
   const [generatingPinId, setGeneratingPinId] = useState<number | null>(null);
   const [copiedPinId, setCopiedPinId] = useState<number | null>(null);
+  const [businessToDelete, setBusinessToDelete] = useState<Business | null>(null);
 
   const [isSyncingWp, setIsSyncingWp] = useState(false);
   const [syncingSingleId, setSyncingSingleId] = useState<number | null>(null);
@@ -256,15 +257,14 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
   }, [filteredBusinesses, sortBy]);
 
   const handleDelete = (biz: Business) => {
-    if (
-      window.confirm(
-        `¿Estás seguro de que deseas eliminar permanentemente a "${biz.name}" del directorio?`
-      )
-    ) {
-      if (onDeleteBusiness) {
-        setDeletingId(biz.id);
-        onDeleteBusiness(biz);
-      }
+    setBusinessToDelete(biz);
+  };
+
+  const confirmDeleteBusiness = () => {
+    if (businessToDelete && onDeleteBusiness) {
+      setDeletingId(businessToDelete.id);
+      onDeleteBusiness(businessToDelete);
+      setBusinessToDelete(null);
     }
   };
 
@@ -338,12 +338,23 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
             <a
               href="/api/download-backup"
               download="codigo-fuente-empresasencarmen.zip"
-              className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-              title="Descargar código fuente completo y datos en archivo ZIP"
+              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+              title="Descargar código fuente completo y datos en archivo ZIP para Hostinger"
             >
-              <Download className="w-4 h-4 text-amber-400" />
-              <span className="hidden sm:inline">Descargar Proyecto (.ZIP)</span>
-              <span className="sm:hidden">ZIP</span>
+              <Download className="w-4 h-4 text-stone-950" />
+              <span className="hidden sm:inline">Descargar Sitio (.ZIP)</span>
+              <span className="sm:hidden">Sitio ZIP</span>
+            </a>
+
+            <a
+              href="/respaldo_imagenes_encarmen_completo.zip"
+              download="respaldo_imagenes_encarmen_completo.zip"
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+              title="Descargar respaldo completo de imágenes (.ZIP) de 253 MB para Hostinger"
+            >
+              <Download className="w-4 h-4 text-white" />
+              <span className="hidden sm:inline">Descargar Imágenes (.ZIP)</span>
+              <span className="sm:hidden">Fotos ZIP</span>
             </a>
 
             <button
@@ -754,6 +765,59 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
           }
         }}
       />
+
+      {/* Confirmation Modal for Deleting Business */}
+      {businessToDelete && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center p-4"
+          style={{
+            background: 'rgba(15, 23, 42, 0.4)',
+            backdropFilter: 'blur(25px)',
+            WebkitBackdropFilter: 'blur(25px)'
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4 animate-scaleUp"
+            style={{
+              background: 'rgba(255, 255, 255, 0.88)',
+              backdropFilter: 'blur(35px) saturate(190%)',
+              WebkitBackdropFilter: 'blur(35px) saturate(190%)',
+              border: '1.5px solid rgba(255, 255, 255, 0.95)',
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)'
+            }}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto shadow-sm">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h4 className="text-base font-extrabold text-stone-900">
+                ¿Eliminar empresa?
+              </h4>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                Estás a punto de eliminar permanentemente a <strong className="text-stone-950 font-bold">{businessToDelete.name}</strong> del directorio oficial. Esta acción no se puede deshacer.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setBusinessToDelete(null)}
+                className="py-2.5 px-3 rounded-2xl bg-stone-200/80 hover:bg-stone-300 active:scale-95 text-stone-800 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteBusiness}
+                className="py-2.5 px-3 rounded-2xl bg-[#e11d48] hover:bg-[#be123c] active:scale-95 text-white text-xs font-bold shadow-md shadow-rose-600/30 transition-all cursor-pointer"
+              >
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-10-23T16:56:10.766Z",
+  "totalAnalyzed": 992,
+  "alreadyPresent": 281,
+  "newlyDownloaded": 711,
+  "failed": 0,
+  "totalDiskBytes": 269689643,
+  "totalDiskMB": "257.20",
+  "rewrittenImages": 199,
+  "rewrittenGallery": 794,
+  "failedList": []
+}

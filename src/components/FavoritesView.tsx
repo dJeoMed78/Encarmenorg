@@ -88,11 +88,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
             <BusinessCard
               key={biz.id}
               business={biz}
-              isFavorite={true}
-              onToggleFavorite={onToggleFavorite}
-              onSelectBusiness={onSelectBusiness}
-              activePromotion={getActivePromoForBusiness ? getActivePromoForBusiness(biz.id) : undefined}
-              onOpenPromotion={onOpenPromotion}
+              onClick={() => onSelectBusiness && onSelectBusiness(biz)}
             />
           ))}
         </div>

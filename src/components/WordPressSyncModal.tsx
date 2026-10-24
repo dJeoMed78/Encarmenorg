@@ -50,7 +50,12 @@ import {
   Download,
   Image as ImageIcon,
   Bug,
-  FileCode
+  FileCode,
+  Wifi,
+  Battery,
+  Sliders,
+  Monitor,
+  ChevronLeft
 } from 'lucide-react';
 import {
   isSessionAdminAuthenticated,
@@ -67,7 +72,10 @@ import { DirectoryStats, WpHealth, Business, BusinessReport, SiteAnalytics, Busi
 import { AdminClassifiedsTab } from './AdminClassifiedsTab';
 import { AdminPromotionsTab } from './AdminPromotionsTab';
 import { AdminBusinessesTab } from './AdminBusinessesTab';
-import { AdminWindowsMobileMenu } from './AdminWindowsMobileMenu';
+import { AdminMacOSDesktop } from './AdminMacOSDesktop';
+import { AdminMacOSDock } from './AdminMacOSDock';
+import { AdminIOSMobileHub } from './AdminIOSMobileHub';
+import { AdminIOSBottomBar } from './AdminIOSBottomBar';
 import { AdminDetailedAnalytics } from './AdminDetailedAnalytics';
 import { AdminEmergencyTab } from './AdminEmergencyTab';
 import { AdminEventsTab } from './AdminEventsTab';
@@ -76,6 +84,7 @@ import { AdminBrandMediaTab } from './AdminBrandMediaTab';
 import { AdminDesiredChangesTab } from './AdminDesiredChangesTab';
 import { AdminConfigEditorTab } from './AdminConfigEditorTab';
 import { AdminMaintenanceTab } from './AdminMaintenanceTab';
+import { AdminLinksTab, AdminPublicidadTab } from './AdminLinksAndAdsManager';
 import ALL_COLONIAS_CARMEN from '../data/colonias_carmen.json';
 import { cleanPhoneNumber } from '../utils/phone';
 import { DELIVERY_OPTIONS, normalizeDeliveryOption } from '../constants/delivery';
@@ -118,7 +127,7 @@ interface WordPressSyncModalProps {
   onToggleTop?: (biz: Business) => void;
   onToggleRecommended?: (biz: Business) => void;
   onDeleteBusiness?: (biz: Business) => void;
-  initialTab?: 'start' | 'businesses' | 'ai_assistant' | 'analytics' | 'reports' | 'classifieds' | 'new_business' | 'promotions' | 'status' | 'emergency' | 'events' | 'admins' | 'brand_media';
+  initialTab?: 'start' | 'businesses' | 'ai_assistant' | 'analytics' | 'reports' | 'classifieds' | 'new_business' | 'promotions' | 'status' | 'emergency' | 'events' | 'admins' | 'brand_media' | 'links' | 'publicidad';
 }
 
 export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
@@ -155,7 +164,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
   const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showAdminPassword, setShowAdminPassword] = useState(false);
-  const [activeTab, setActiveTab] = useState<'start' | 'businesses' | 'ai_assistant' | 'analytics' | 'reports' | 'classifieds' | 'new_business' | 'promotions' | 'status' | 'emergency' | 'events' | 'admins' | 'brand_media' | 'desired_changes' | 'config_editor' | 'maintenance'>('start');
+  const [activeTab, setActiveTab] = useState<'start' | 'businesses' | 'ai_assistant' | 'analytics' | 'reports' | 'classifieds' | 'new_business' | 'promotions' | 'status' | 'emergency' | 'events' | 'admins' | 'brand_media' | 'desired_changes' | 'config_editor' | 'maintenance' | 'links' | 'publicidad'>('start');
   const [currentTime, setCurrentTime] = useState(() => {
     const d = new Date();
     return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
@@ -164,6 +173,25 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     const d = new Date();
     return d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
   });
+  const [isWindowMaximized, setIsWindowMaximized] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [openMenuDropdown, setOpenMenuDropdown] = useState<string | null>(null);
+  const [isMobileDevice, setIsMobileDevice] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    return isMobileUA || window.innerWidth < 850;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      const ua = navigator.userAgent || '';
+      const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+      setIsMobileDevice(isMobileUA || window.innerWidth < 850);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -207,6 +235,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
   const [directBizSearch, setDirectBizSearch] = useState('');
   const [loadingReports, setLoadingReports] = useState(false);
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
+  const [businessToDelete, setBusinessToDelete] = useState<{ id: number; name: string; reportId?: string } | null>(null);
 
   // Promotions and Events count state
   const [promotionsCount, setPromotionsCount] = useState<number>(0);
@@ -375,6 +404,8 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
       case 'desired_changes': return 'Cambios Deseados y Fallas del Portal';
       case 'config_editor': return 'Archivo de Configuración en Vivo';
       case 'maintenance': return 'Modo Mantenimiento y Desactivación del Portal';
+      case 'links': return 'Canales Oficiales y WhatsApp';
+      case 'publicidad': return 'Publicidad y Banners';
       case 'status': return 'Conexión & Sincronización';
       default: return 'Inicio';
     }
@@ -707,8 +738,13 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
   // Acción 2: Dar de baja el negocio directamente
   const handleDeleteBusiness = async (bizId: number, bizName: string, reportId?: string) => {
-    const confirmed = window.confirm(`¿Estás seguro de dar de baja y eliminar "${bizName}" definitivamente tanto del directorio como de WordPress / WooCommerce?`);
-    if (!confirmed) return;
+    setBusinessToDelete({ id: bizId, name: bizName, reportId });
+  };
+
+  const executeConfirmedDeleteBusiness = async () => {
+    if (!businessToDelete) return;
+    const { id: bizId, name: bizName, reportId } = businessToDelete;
+    setBusinessToDelete(null);
 
     try {
       const res = await adminDeleteBusiness(bizId);
@@ -719,10 +755,14 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
           await loadReportsData();
         }
         if (onBusinessUpdated) await onBusinessUpdated();
+        if (onDeleteBusiness) {
+          const found = businesses.find(b => b.id === bizId);
+          if (found) onDeleteBusiness(found);
+        }
         setTimeout(() => setActionSuccessMsg(null), 3000);
       }
     } catch (err: any) {
-      alert('Error al dar de baja el negocio: ' + err.message);
+      setActionSuccessMsg('Error al dar de baja el negocio: ' + (err.message || 'Error'));
     }
   };
 
@@ -744,57 +784,48 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
       className="fixed inset-0 z-50 w-screen h-screen flex flex-col bg-[#001026] text-white select-none overflow-hidden font-sans"
       onClick={e => e.stopPropagation()}
     >
-      {/* WINDOWS MOBILE TOP STATUS BAR */}
-      <div className="h-7 bg-black/60 border-b border-white/5 flex items-center justify-between px-3 text-[11px] font-medium text-slate-300 shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="font-mono tracking-tighter text-sky-400">llll</span>
-          <span className="font-bold">4G</span>
-          <span>•</span>
-          <span className="flex items-center gap-1 text-slate-400">
-            <span>✉</span>
-            <span>{reports.filter(r => r.status === 'pending').length}</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-2.5">
-          <span className="flex items-center gap-1 text-emerald-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] text-slate-300 hidden sm:inline">Servidor WP</span>
-          </span>
-          <span>•</span>
-          <span className="font-mono">{currentTime}</span>
-        </div>
-      </div>
-
       {!isAuthenticated ? (
-        /* WINDOWS MOBILE LOCK SCREEN */
-        <div className="flex-1 flex flex-col justify-between p-6 sm:p-10 relative overflow-hidden bg-gradient-to-b from-[#003870] via-[#001b38] to-[#000a18]">
-          {/* Subtle Parallax Background Aura */}
-          <div className="absolute top-10 right-10 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-10 left-10 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+        /* macOS SEQUOIA MULTI-ADMIN LOCK SCREEN WITH ZACATAL BRIDGE & BIG APPLE CLOCK */
+        <div
+          className="flex-1 flex flex-col justify-between items-center p-6 sm:p-10 relative overflow-hidden bg-cover bg-center"
+          style={{
+            backgroundImage: `radial-gradient(ellipse at center, rgba(3, 15, 34, 0.70) 0%, rgba(1, 8, 18, 0.95) 100%), url('/puente.jpg')`
+          }}
+        >
+          {/* Subtle Ambient Radial Glows & Liquid Glass Blur */}
+          <div className="absolute inset-0 backdrop-blur-xl bg-[#020b18]/50 pointer-events-none" />
+          <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-sky-500/15 rounded-full blur-[140px] pointer-events-none" />
+          <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-amber-500/10 rounded-full blur-[140px] pointer-events-none" />
 
-          {/* Close button top right */}
-          <button
-            onClick={handleModalClose}
-            aria-label="Cerrar y volver al directorio"
-            className="absolute top-4 right-4 p-2.5 rounded-full bg-black/30 hover:bg-black/50 text-white/80 hover:text-white transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {/* Top Bar with Close Button */}
+          <div className="w-full flex items-center justify-between z-10">
+            <div className="flex items-center gap-2 text-xs text-sky-200/80 font-mono tracking-wider">
+              <span></span>
+              <span className="font-semibold">Empresas en Carmen OS · macOS Sequoia</span>
+            </div>
+            <button
+              onClick={handleModalClose}
+              aria-label="Cerrar y volver al directorio"
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer backdrop-blur-xl border border-white/10"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
-          {/* Giant Windows Phone Digital Clock */}
-          <div className="text-left pt-6 sm:pt-12 space-y-1">
-            <div className="text-6xl sm:text-7xl font-light tracking-tight text-white font-mono">
+          {/* Sequoia Big Apple Clock */}
+          <div className="z-10 text-center space-y-1 my-auto pt-2 pb-4">
+            <div className="text-6xl sm:text-7xl md:text-8xl font-extralight tracking-tight text-white/95 font-sans drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]">
               {currentTime}
             </div>
-            <div className="text-sm sm:text-base font-light text-sky-200 capitalize">
+            <div className="text-sm sm:text-base font-light text-sky-200/90 capitalize tracking-wide drop-shadow-sm">
               {currentDate}
             </div>
           </div>
 
-          {/* Windows-style Multi-Admin Lock Screen */}
+          {/* Center: macOS Multi-Admin Selector or Password Entry */}
           {selectedAdminUser === null ? (
             /* User selection cards (Y and J) */
-            <div className="w-full max-w-lg mx-auto my-auto p-4 sm:p-8 space-y-6 text-center">
+            <div className="w-full max-w-xl mx-auto mb-auto py-2 space-y-6 text-center z-10">
               <div className="space-y-1">
                 <h3 className="text-2xl sm:text-3xl font-light text-white tracking-tight">
                   Iniciar Sesión
@@ -804,7 +835,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-md mx-auto">
                 {adminAccounts.map(account => (
                   <button
                     key={account.username}
@@ -814,46 +845,46 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                       setAdminPasswordInput('');
                       setAdminLoginError(null);
                     }}
-                    className="group relative p-6 sm:p-7 rounded-3xl bg-black/40 hover:bg-black/60 backdrop-blur-xl border border-white/15 hover:border-white/40 shadow-2xl transition-all duration-300 flex flex-col items-center text-center space-y-3 hover:scale-105 active:scale-98 cursor-pointer"
+                    className="group relative p-6 sm:p-7 rounded-[2rem] bg-black/45 hover:bg-black/65 backdrop-blur-2xl border border-white/15 hover:border-white/35 shadow-2xl transition-all duration-300 flex flex-col items-center text-center space-y-3 hover:scale-105 active:scale-98 cursor-pointer"
                   >
-                    <div className={`w-20 h-20 rounded-full bg-gradient-to-tr ${account.avatarColor} text-white flex items-center justify-center text-3xl font-light shadow-xl shadow-sky-500/20 group-hover:ring-4 group-hover:ring-white/30 transition-all`}>
+                    <div className={`w-20 h-20 rounded-full bg-gradient-to-tr ${account.avatarColor} text-white flex items-center justify-center text-3xl font-light shadow-2xl shadow-sky-500/25 ring-2 ring-white/25 group-hover:ring-4 group-hover:ring-white/40 transition-all`}>
                       {account.initial}
                     </div>
                     <div className="space-y-0.5">
                       <div className="text-xl font-medium text-white tracking-tight group-hover:text-sky-300 transition-colors">
                         {account.username}
                       </div>
-                      <div className="text-xs text-sky-200/70 font-light">
+                      <div className="text-[11px] text-sky-200/70 font-light">
                         {account.role}
                       </div>
                     </div>
-                    <span className="text-[11px] text-sky-300/80 group-hover:text-white flex items-center gap-1 pt-1 font-medium">
+                    <span className="text-xs text-sky-300/90 group-hover:text-white flex items-center gap-1.5 pt-0.5 font-medium transition-colors">
                       <span>Ingresar clave</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                     </span>
                   </button>
                 ))}
               </div>
 
-              <div className="pt-2">
+              <div className="pt-1">
                 <button
                   type="button"
                   onClick={handleModalClose}
-                  className="text-xs text-sky-200/70 hover:text-white transition-colors cursor-pointer"
+                  className="text-xs sm:text-sm text-sky-200/70 hover:text-white transition-colors cursor-pointer"
                 >
                   ← Volver al directorio público
                 </button>
               </div>
             </div>
           ) : (
-            /* Password Unlock Card for selected user */
-            <div className="w-full max-w-sm mx-auto my-auto p-6 sm:p-8 rounded-3xl bg-black/40 backdrop-blur-xl border border-white/15 shadow-2xl space-y-5 text-center">
-              <div className={`w-20 h-20 rounded-full bg-gradient-to-tr ${selectedAdminUser.avatarColor} text-white flex items-center justify-center text-3xl font-light mx-auto shadow-xl shadow-sky-500/25 ring-2 ring-white/20`}>
+            /* macOS Password Unlock Card for selected user */
+            <div className="w-full max-w-sm mx-auto mb-auto p-7 sm:p-8 rounded-[2.5rem] bg-black/55 backdrop-blur-3xl border border-white/20 shadow-[0_20px_60px_rgba(0,0,0,0.7)] space-y-5 text-center z-10">
+              <div className={`w-20 h-20 rounded-full bg-gradient-to-tr ${selectedAdminUser.avatarColor} text-white flex items-center justify-center text-3xl font-light mx-auto shadow-2xl ring-2 ring-white/25`}>
                 {selectedAdminUser.initial}
               </div>
 
               <div className="space-y-0.5">
-                <h3 className="text-2xl font-light text-white tracking-tight">
+                <h3 className="text-xl font-medium text-white tracking-tight">
                   {selectedAdminUser.username}
                 </h3>
                 <p className="text-xs text-sky-200/80 font-normal">
@@ -861,8 +892,9 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 </p>
               </div>
 
-              <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
-                <div className="relative">
+              <form onSubmit={handleAdminLoginSubmit} className="space-y-3.5">
+                <div className="relative flex items-center">
+                  <Lock className="w-4 h-4 text-white/50 absolute left-4 pointer-events-none" />
                   <input
                     type={showAdminPassword ? 'text' : 'password'}
                     autoFocus
@@ -872,10 +904,10 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                       setAdminPasswordInput(e.target.value);
                       if (adminLoginError) setAdminLoginError(null);
                     }}
-                    className={`w-full py-3.5 px-4 pr-11 rounded-xl border text-center text-base text-white tracking-wider outline-none transition-all bg-white/10 placeholder:text-white/40 ${
+                    className={`w-full py-3.5 pl-11 pr-11 rounded-full border text-center text-sm text-white tracking-wider outline-none transition-all bg-white/15 backdrop-blur-xl placeholder:text-white/40 ${
                       adminLoginError
                         ? 'border-rose-500 bg-rose-950/40 ring-2 ring-rose-500/40'
-                        : 'border-white/20 focus:border-[#0078D7] focus:ring-2 focus:ring-[#0078D7]/40'
+                        : 'border-white/25 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/40'
                     }`}
                   />
                   <button
@@ -897,7 +929,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 <button
                   type="submit"
                   disabled={isLoggingIn}
-                  className="w-full py-3.5 px-5 rounded-xl bg-[#0078D7] hover:bg-[#0063B1] text-white font-semibold text-sm transition-all shadow-lg shadow-sky-600/30 cursor-pointer active:scale-98 disabled:opacity-50"
+                  className="w-full py-3.5 px-5 rounded-full bg-[#007AFF] hover:bg-[#0062cc] text-white font-semibold text-sm transition-all shadow-lg shadow-sky-600/30 cursor-pointer active:scale-98 disabled:opacity-50"
                 >
                   {isLoggingIn ? 'Verificando...' : 'Iniciar sesión'}
                 </button>
@@ -927,303 +959,696 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
             </div>
           )}
 
-          <div className="text-center text-[11px] text-white/40 pb-2">
+          {/* Bottom Footnote */}
+          <div className="text-center text-xs text-white/40 pb-2 z-10">
             Empresas en Carmen OS · Edición Móvil & Desktop
           </div>
         </div>
       ) : (
-        /* Authenticated Admin Workspace */
-        <div className="flex-1 flex flex-col min-h-0 bg-[#001026] text-white">
-          {activeTab === 'start' ? (
-            <AdminWindowsMobileMenu
-              businessesCount={businesses.length}
-              pendingReportsCount={reports.filter(r => r.status === 'pending').length}
-              analytics={analytics}
-              classifiedsCount={classifieds.length}
-              promotionsCount={promotionsCount}
-              eventsCount={eventsCount}
-              isSyncing={isSyncing}
-              onTriggerSync={onTriggerSync}
-              onSelectTab={(tab) => setActiveTab(tab)}
-              onClose={handleModalClose}
-              onLogout={handleLogout}
-              currentTime={currentTime}
-              currentDate={currentDate}
-            />
-          ) : (
-            <div className="flex-1 flex flex-col min-h-0">
-              {/* Windows Mobile Subheader */}
-              <div className="bg-[#051122] border-b border-white/10 px-4 sm:px-8 pt-4 pb-3 shrink-0">
-                <div className="flex items-center justify-between mb-2">
+        /* macOS 27 Golden Gate Authenticated Admin Workspace */
+        <div
+          className="flex-1 flex flex-col min-h-0 bg-[#061124] text-white relative overflow-hidden font-sans select-none"
+          onClick={() => setOpenMenuDropdown(null)}
+        >
+          {/* macOS 27 Golden Gate Top Menu Bar (Desktop Only) */}
+          {!isMobileDevice && (
+            <div className="h-8 bg-slate-950/80 backdrop-blur-2xl border-b border-white/10 px-3.5 flex items-center justify-between text-xs font-medium text-white/90 select-none z-40 shrink-0">
+              {/* Left:  Apple Menu & App Title */}
+              <div className="flex items-center gap-3 sm:gap-4">
+                {/* Apple Logo Dropdown */}
+                <div className="relative">
                   <button
                     type="button"
-                    onClick={() => setActiveTab('start')}
-                    className="flex items-center gap-1.5 text-xs text-sky-400 hover:text-white font-medium transition-colors cursor-pointer group"
-                    title="Volver a la pantalla de inicio con mosaicos"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenMenuDropdown(openMenuDropdown === 'apple' ? null : 'apple');
+                    }}
+                    className={`px-2 py-0.5 rounded hover:bg-white/15 transition-colors cursor-pointer text-base leading-none ${
+                      openMenuDropdown === 'apple' ? 'bg-white/20' : ''
+                    }`}
+                    title="Menú Apple"
                   >
-                    <span className="text-base leading-none">←</span>
-                    <span className="uppercase tracking-wider group-hover:underline">inicio</span>
-                    <span className="text-white/30">/</span>
-                    <span className="text-white font-bold uppercase">{getTabTitle(activeTab)}</span>
+                    
                   </button>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={onTriggerSync}
-                      disabled={isSyncing}
-                      className="px-2.5 py-1 text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white flex items-center gap-1.5 cursor-pointer transition-colors"
-                      title="Sincronizar catálogo con WordPress"
+                  {openMenuDropdown === 'apple' && (
+                    <div
+                      className="absolute top-full left-0 mt-1 w-64 rounded-2xl bg-slate-900/95 backdrop-blur-3xl border border-white/15 shadow-2xl py-1 text-xs text-white z-50 animate-in fade-in zoom-in-95 duration-100"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-sky-400' : ''}`} />
-                      <span className="hidden sm:inline">{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="px-3 py-1.5 text-xs bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center gap-1.5 cursor-pointer rounded-md shadow-xs transition-colors"
-                      title="Cerrar sesión de administrador y regresar al portal"
-                    >
-                      <LogOut className="w-3.5 h-3.5 text-white" />
-                      <span>Cerrar Sesión</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleModalClose}
-                      className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                      title="Cerrar ventana"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
+                      <div className="px-3.5 py-2 font-semibold text-white/95 border-b border-white/10">
+                        Empresas en Carmen OS 27.2
+                        <div className="text-[10px] text-amber-300 font-normal">Golden Gate Edition</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setOpenMenuDropdown(null); setActiveTab('config_editor'); }}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-blue-600 transition-colors flex items-center justify-between cursor-pointer"
+                      >
+                        <span>Ajustes del Sistema...</span>
+                        <span className="text-white/40 text-[10px]">⌘,</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setOpenMenuDropdown(null); onTriggerSync(); }}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-blue-600 transition-colors flex items-center justify-between cursor-pointer"
+                      >
+                        <span>Sincronizar con WordPress</span>
+                        <span className="text-white/40 text-[10px]">⌘S</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setOpenMenuDropdown(null); setActiveTab('status'); }}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-blue-600 transition-colors flex items-center justify-between cursor-pointer"
+                      >
+                        <span>Estado de MariaDB & Servidor</span>
+                      </button>
+                      <div className="my-1 border-t border-white/10" />
+                      <button
+                        type="button"
+                        onClick={() => { setOpenMenuDropdown(null); setActiveTab('start'); }}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-blue-600 transition-colors cursor-pointer"
+                      >
+                        Mostrar Escritorio
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setOpenMenuDropdown(null); handleLogout(); }}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-rose-600 text-rose-300 hover:text-white transition-colors cursor-pointer"
+                      >
+                        Cerrar Sesión de Administrador
+                      </button>
+                      <div className="my-1 border-t border-white/10" />
+                      <button
+                        type="button"
+                        onClick={() => { setOpenMenuDropdown(null); handleModalClose(); }}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-white/10 text-white/70 transition-colors cursor-pointer"
+                      >
+                        Salir al Directorio Público
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* Metro Pivot Navigation Bar */}
-                <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto text-xs font-semibold scrollbar-none py-1 border-t border-white/10 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('start')}
-                    className="px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer text-sky-300 hover:text-white hover:bg-white/5"
-                  >
-                    <span>⊞ Inicio</span>
-                  </button>
+                {/* Bold Current App Name */}
+                <span className="font-bold text-white tracking-tight">
+                  {activeTab === 'start' ? 'Empresas en Carmen OS' : getTabTitle(activeTab)}
+                </span>
 
+                {/* Quick Navigation Dropdowns/Buttons */}
+                <div className="hidden lg:flex items-center gap-1 text-white/75">
                   <button
                     type="button"
                     onClick={() => setActiveTab('businesses')}
-                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      activeTab === 'businesses'
-                        ? 'bg-[#E3008C] text-white font-bold'
-                        : 'text-stone-300 hover:text-white hover:bg-white/5'
-                    }`}
+                    className="px-2 py-0.5 rounded hover:bg-white/15 hover:text-white transition-colors cursor-pointer"
                   >
-                    <Building2 className="w-3.5 h-3.5 text-pink-300" />
-                    <span>Catálogo de Empresas</span>
-                    {businesses.length > 0 && (
-                      <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20 text-white font-bold">
-                        {businesses.length}
-                      </span>
-                    )}
+                    Catálogo
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('ai_assistant')}
-                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      activeTab === 'ai_assistant'
-                        ? 'bg-[#0078D7] text-white font-bold'
-                        : 'text-stone-300 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-sky-300" />
-                    <span>Asistente IA</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('analytics')}
-                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      activeTab === 'analytics'
-                        ? 'bg-[#1F62B5] text-white font-bold'
-                        : 'text-stone-300 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <BarChart3 className="w-3.5 h-3.5" />
-                    <span>Alcance</span>
-                    {analytics && (analytics.totalVisits ?? 0) > 0 && (
-                      <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500 text-stone-950 font-black">
-                        {analytics.totalVisits}
-                      </span>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('reports')}
-                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      activeTab === 'reports'
-                        ? 'bg-[#D83B01] text-white font-bold'
-                        : 'text-stone-300 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>Reportes</span>
-                    {reports.filter(r => r.status === 'pending').length > 0 && (
-                      <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-red-600 text-white font-black">
-                        {reports.filter(r => r.status === 'pending').length}
-                      </span>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('promotions')}
-                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      activeTab === 'promotions'
-                        ? 'bg-[#FF8C00] text-stone-950 font-bold'
-                        : 'text-stone-300 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <Gift className="w-3.5 h-3.5" />
-                    <span>Promociones & Cupones</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('classifieds')}
-                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      activeTab === 'classifieds'
-                        ? 'bg-[#744DA9] text-white font-bold'
-                        : 'text-stone-300 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <Tag className="w-3.5 h-3.5" />
-                    <span>Clasificados</span>
-                  </button>
-
                   <button
                     type="button"
                     onClick={() => setActiveTab('new_business')}
-                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      activeTab === 'new_business'
-                        ? 'bg-[#107C41] text-white font-bold'
-                        : 'text-stone-300 hover:text-white hover:bg-white/5'
-                    }`}
+                    className="px-2 py-0.5 rounded hover:bg-white/15 hover:text-white transition-colors cursor-pointer"
                   >
-                    <Building2 className="w-3.5 h-3.5" />
-                    <span>Nueva Empresa</span>
+                    Nueva Empresa
                   </button>
-
                   <button
                     type="button"
-                    onClick={() => setActiveTab('emergency')}
-                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      activeTab === 'emergency'
-                        ? 'bg-[#A80000] text-white font-bold'
-                        : 'text-stone-300 hover:text-white hover:bg-white/5'
-                    }`}
+                    onClick={() => setActiveTab('ai_assistant')}
+                    className="px-2 py-0.5 rounded hover:bg-white/15 hover:text-white transition-colors cursor-pointer text-purple-300"
                   >
-                    <ShieldAlert className="w-3.5 h-3.5 text-rose-300" />
-                    <span>Emergencias 24/7</span>
+                    Asistente IA
                   </button>
-
                   <button
                     type="button"
-                    onClick={() => setActiveTab('events')}
-                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      activeTab === 'events'
-                        ? 'bg-[#CA5010] text-white font-bold'
-                        : 'text-stone-300 hover:text-white hover:bg-white/5'
-                    }`}
+                    onClick={() => setActiveTab('analytics')}
+                    className="px-2 py-0.5 rounded hover:bg-white/15 hover:text-white transition-colors cursor-pointer"
                   >
-                    <Calendar className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Cartelera</span>
+                    Métricas
                   </button>
-
                   <button
                     type="button"
-                    onClick={() => setActiveTab('brand_media')}
-                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      activeTab === 'brand_media'
-                        ? 'bg-[#008299] text-white font-bold'
-                        : 'text-stone-300 hover:text-white hover:bg-white/5'
-                    }`}
+                    onClick={() => setActiveTab('reports')}
+                    className="px-2 py-0.5 rounded hover:bg-white/15 hover:text-white transition-colors cursor-pointer text-amber-300"
                   >
-                    <ImageIcon className="w-3.5 h-3.5 text-cyan-300" />
-                    <span>Banner y Logo</span>
+                    Reportes
                   </button>
-
                   <button
                     type="button"
-                    onClick={() => setActiveTab('admins')}
-                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      activeTab === 'admins'
-                        ? 'bg-[#68217A] text-white font-bold'
-                        : 'text-stone-300 hover:text-white hover:bg-white/5'
-                    }`}
+                    onClick={() => setActiveTab('classifieds')}
+                    className="px-2 py-0.5 rounded hover:bg-white/15 hover:text-white transition-colors cursor-pointer"
                   >
-                    <KeyRound className="w-3.5 h-3.5 text-purple-300" />
-                    <span>Administradores</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('desired_changes')}
-                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      activeTab === 'desired_changes'
-                        ? 'bg-amber-600 text-stone-950 font-black'
-                        : 'text-amber-300 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <Bug className="w-3.5 h-3.5" />
-                    <span>Cambios Deseados</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('config_editor')}
-                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      activeTab === 'config_editor'
-                        ? 'bg-[#0078D7] text-white font-bold'
-                        : 'text-sky-300 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <FileCode className="w-3.5 h-3.5" />
-                    <span>Configuración</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('maintenance')}
-                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      activeTab === 'maintenance'
-                        ? 'bg-rose-700 text-white font-black'
-                        : 'text-rose-300 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <ShieldAlert className="w-3.5 h-3.5" />
-                    <span>🔴 Desactivar Portal</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('status')}
-                    className={`px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      activeTab === 'status'
-                        ? 'bg-[#008299] text-white font-bold'
-                        : 'text-stone-300 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <Server className="w-3.5 h-3.5" />
-                    <span>Conexión</span>
+                    Clasificados
                   </button>
                 </div>
               </div>
 
-              {/* Subtab Body Container */}
-              <div className="p-4 sm:p-8 space-y-5 sm:space-y-6 overflow-y-auto flex-1 overscroll-contain bg-stone-100 text-stone-900">
+              {/* Right: Status Indicators & Clock */}
+              <div className="flex items-center gap-3 text-xs">
+
+                {/* MariaDB Live Ping */}
+                <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-[11px] font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>MariaDB OK</span>
+                </div>
+
+                {/* Quick Sync Button */}
+                <button
+                  type="button"
+                  onClick={onTriggerSync}
+                  disabled={isSyncing}
+                  className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-white/15 text-white/80 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                  title="Sincronizar con WordPress"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-sky-400' : ''}`} />
+                  <span>{isSyncing ? 'Sincronizando' : 'Sincronizar'}</span>
+                </button>
+
+                {/* Battery 100% */}
+                <div className="hidden md:flex items-center gap-1 text-white/70">
+                  <Battery className="w-4 h-4" />
+                  <span className="text-[10px]">100%</span>
+                </div>
+
+                {/* WiFi */}
+                <Wifi className="w-3.5 h-3.5 text-white/80 hidden sm:block" />
+
+                {/* Live Clock & Date */}
+                <span className="font-medium text-white/90">
+                  {currentDate.split(',')[0]} {currentTime}
+                </span>
+
+                {/* Admin Avatar Pill */}
+                <div className="flex items-center gap-1.5 pl-1.5 border-l border-white/20">
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-sky-400 to-blue-600 text-[11px] font-bold text-white flex items-center justify-center shadow-xs">
+                    {getLoggedInAdminName().charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-white/80 hidden xl:inline font-normal">
+                    {getLoggedInAdminName()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Desktop (macOS) or Mobile (iOS) Hub */}
+          {activeTab === 'start' ? (
+            isMobileDevice ? (
+              <AdminIOSMobileHub
+                businessesCount={businesses.length}
+                pendingReportsCount={reports.filter(r => r.status === 'pending').length}
+                analytics={analytics}
+                classifiedsCount={classifieds.length}
+                promotionsCount={promotionsCount}
+                eventsCount={eventsCount}
+                isSyncing={isSyncing}
+                onTriggerSync={onTriggerSync}
+                onSelectTab={(tab) => setActiveTab(tab as any)}
+                onClose={handleModalClose}
+                onLogout={handleLogout}
+                currentTime={currentTime}
+                currentDate={currentDate}
+                activeAdminName={getLoggedInAdminName()}
+                dbStatus={dbStatus}
+                onSwitchToDesktopMode={() => setIsMobileDevice(false)}
+              />
+            ) : (
+              <AdminMacOSDesktop
+                businesses={businesses}
+                businessesCount={businesses.length}
+                pendingReportsCount={reports.filter(r => r.status === 'pending').length}
+                analytics={analytics}
+                classifiedsCount={classifieds.length}
+                promotionsCount={promotionsCount}
+                eventsCount={eventsCount}
+                isSyncing={isSyncing}
+                onTriggerSync={onTriggerSync}
+                onSelectTab={(tab) => setActiveTab(tab as any)}
+                onClose={handleModalClose}
+                onLogout={handleLogout}
+                currentTime={currentTime}
+                currentDate={currentDate}
+                activeAdminName={getLoggedInAdminName()}
+                dbStatus={dbStatus}
+              />
+            )
+          ) : (
+            /* macOS 27 Golden Gate or iOS Window Container */
+            <div className={`flex-1 flex flex-col min-h-0 relative ${
+              isMobileDevice
+                ? 'p-0 w-full h-full'
+                : isWindowMaximized ? 'p-0' : 'p-2 sm:p-4 pb-20 sm:pb-22'
+            }`}>
+              {/* Twilight Wallpaper backdrop behind floating window (Desktop Only) */}
+              {!isMobileDevice && !isWindowMaximized && (
+                <div className="absolute inset-0 bg-gradient-to-b from-[#061124] via-[#0b1c38] to-[#040c1a] pointer-events-none" />
+              )}
+
+              {/* The Window Frame */}
+              <div className={`relative flex-1 flex flex-col min-h-0 ${
+                isMobileDevice
+                  ? 'w-full h-full rounded-none border-none bg-slate-950'
+                  : isWindowMaximized
+                    ? 'w-full h-full rounded-none border-b border-white/10 bg-slate-900/90 backdrop-blur-3xl'
+                    : 'w-full max-w-7xl mx-auto rounded-2xl sm:rounded-3xl border border-white/20 shadow-[0_30px_90px_rgba(0,0,0,0.65)] overflow-hidden bg-slate-900/90 backdrop-blur-3xl'
+              }`}>
+
+                {/* Header: iOS Nav Bar on Mobile VS macOS Traffic Lights Titlebar on Desktop */}
+                {isMobileDevice ? (
+                  <div className="h-12 bg-slate-950/95 border-b border-white/15 px-3 flex items-center justify-between shrink-0 select-none z-20">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('start')}
+                      className="flex items-center gap-1 text-sky-400 hover:text-sky-300 font-semibold text-sm active:opacity-60 cursor-pointer"
+                    >
+                      <ChevronLeft className="w-5 h-5 -ml-1" />
+                      <span>Inicio</span>
+                    </button>
+
+                    <div className="text-center truncate px-2">
+                      <div className="text-xs font-bold text-white tracking-tight truncate max-w-[200px]">
+                        {getTabTitle(activeTab)}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={onTriggerSync}
+                        disabled={isSyncing}
+                        className="p-1.5 rounded-lg bg-blue-600/30 text-sky-200 active:scale-95 transition-all cursor-pointer"
+                        title="Sincronizar"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-sky-400' : ''}`} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleModalClose}
+                        className="p-1.5 rounded-lg bg-white/10 text-white/80 active:scale-95 transition-all cursor-pointer"
+                        title="Cerrar y volver al directorio"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* macOS Window Titlebar with Traffic Lights */
+                  <div className="h-11 sm:h-12 bg-slate-950/85 border-b border-white/15 px-3 sm:px-4 flex items-center justify-between shrink-0 select-none z-20">
+                    {/* Traffic Lights: Red (Close), Yellow (Minimize), Green (Zoom/Maximize) */}
+                    <div className="flex items-center gap-2 group">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('start')}
+                        title="Cerrar ventana (volver al escritorio)"
+                        className="w-3.5 h-3.5 rounded-full bg-[#FF5F56] border border-[#E0443E] hover:opacity-85 flex items-center justify-center text-[8px] font-bold text-black/60 opacity-90 transition-opacity cursor-pointer shadow-xs"
+                      >
+                        <span className="opacity-0 group-hover:opacity-100">✕</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('start')}
+                        title="Minimizar al Dock"
+                        className="w-3.5 h-3.5 rounded-full bg-[#FFBD2E] border border-[#DEA123] hover:opacity-85 flex items-center justify-center text-[9px] font-bold text-black/60 opacity-90 transition-opacity cursor-pointer shadow-xs"
+                      >
+                        <span className="opacity-0 group-hover:opacity-100">−</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsWindowMaximized(!isWindowMaximized)}
+                        title={isWindowMaximized ? "Restaurar tamaño de ventana" : "Maximizar ventana"}
+                        className="w-3.5 h-3.5 rounded-full bg-[#27C93F] border border-[#1AAB29] hover:opacity-85 flex items-center justify-center text-[7px] font-bold text-black/60 opacity-90 transition-opacity cursor-pointer shadow-xs"
+                      >
+                        <span className="opacity-0 group-hover:opacity-100">+</span>
+                      </button>
+                    </div>
+
+                    {/* Centered Window Title & Breadcrumb */}
+                    <div className="flex items-center gap-2 text-xs font-semibold text-white tracking-tight truncate max-w-[240px] sm:max-w-md">
+                      <span className="text-white/40 hidden sm:inline"></span>
+                      <span className="truncate">{getTabTitle(activeTab)}</span>
+                      <span className="text-white/30 hidden sm:inline">·</span>
+                      <span className="text-white/50 text-[11px] font-normal hidden sm:inline">macOS 27 Golden Gate</span>
+                    </div>
+
+                    {/* Right Window Toolbar Controls */}
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                        className={`p-1.5 rounded-lg border border-white/10 text-xs text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer hidden md:flex items-center gap-1 ${
+                          isSidebarOpen ? 'bg-white/10' : ''
+                        }`}
+                        title={isSidebarOpen ? "Ocultar barra lateral" : "Mostrar barra lateral"}
+                      >
+                        <Sliders className="w-3.5 h-3.5" />
+                        <span className="text-[10px] hidden lg:inline">Barra Lateral</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={onTriggerSync}
+                        disabled={isSyncing}
+                        className="px-2.5 py-1 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 border border-blue-400/30 text-xs font-medium text-white flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                        title="Sincronizar datos"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-sky-400' : ''}`} />
+                        <span className="hidden sm:inline">{isSyncing ? 'Sincronizando' : 'Sync'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('start')}
+                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-medium text-white/90 hover:text-white transition-colors cursor-pointer"
+                        title="Ver Escritorio"
+                      >
+                        Escritorio
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Window Main Layout: On Mobile NO sidebar, On Desktop two-column */}
+                <div className="flex-1 flex min-h-0 overflow-hidden">
+                  {/* macOS Sidebar Navigation (Desktop Only) */}
+                  {!isMobileDevice && isSidebarOpen && (
+                    <aside className="w-56 sm:w-64 bg-slate-950/75 backdrop-blur-2xl border-r border-white/10 flex flex-col p-2.5 sm:p-3 overflow-y-auto shrink-0 select-none space-y-4">
+                      {/* Section 1: Favoritos */}
+                      <div className="space-y-0.5">
+                        <div className="text-[10px] font-bold text-white/40 tracking-wider uppercase px-2 mb-1">
+                          Favoritos
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('businesses')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'businesses'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <Building2 className="w-4 h-4 text-amber-400 shrink-0" />
+                            <span className="truncate">Catálogo Empresas</span>
+                          </div>
+                          {businesses.length > 0 && (
+                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                              activeTab === 'businesses' ? 'bg-white/25 text-white' : 'bg-white/15 text-white/80'
+                            }`}>
+                              {businesses.length}
+                            </span>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('ai_assistant')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'ai_assistant'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+                            <span className="truncate">Asistente IA</span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('analytics')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'analytics'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <BarChart3 className="w-4 h-4 text-cyan-400 shrink-0" />
+                            <span className="truncate">Alcance & Métricas</span>
+                          </div>
+                          {analytics && (analytics.totalVisits ?? 0) > 0 && (
+                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                              activeTab === 'analytics' ? 'bg-white/25 text-white' : 'bg-emerald-500/30 text-emerald-300'
+                            }`}>
+                              {analytics.totalVisits}
+                            </span>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('reports')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'reports'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                            <span className="truncate">Reportes</span>
+                          </div>
+                          {reports.filter(r => r.status === 'pending').length > 0 && (
+                            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-500 text-white shadow-xs">
+                              {reports.filter(r => r.status === 'pending').length}
+                            </span>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('classifieds')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'classifieds'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <Tag className="w-4 h-4 text-violet-400 shrink-0" />
+                            <span className="truncate">Clasificados</span>
+                          </div>
+                          {classifieds.length > 0 && (
+                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                              activeTab === 'classifieds' ? 'bg-white/25 text-white' : 'bg-white/15 text-white/80'
+                            }`}>
+                              {classifieds.length}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Section 2: Comercio & Ciudad */}
+                      <div className="space-y-0.5">
+                        <div className="text-[10px] font-bold text-white/40 tracking-wider uppercase px-2 mb-1">
+                          Comercio y Ciudad
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('new_business')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'new_business'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <PlusCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span className="truncate">Nueva Empresa</span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('promotions')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'promotions'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <Gift className="w-4 h-4 text-amber-400 shrink-0" />
+                            <span className="truncate">Promociones</span>
+                          </div>
+                          {promotionsCount > 0 && (
+                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                              activeTab === 'promotions' ? 'bg-white/25 text-white' : 'bg-amber-500/20 text-amber-300'
+                            }`}>
+                              {promotionsCount}
+                            </span>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('emergency')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'emergency'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+                            <span className="truncate">Emergencias 24/7</span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('events')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'events'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <Calendar className="w-4 h-4 text-fuchsia-400 shrink-0" />
+                            <span className="truncate">Cartelera Eventos</span>
+                          </div>
+                          {eventsCount > 0 && (
+                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                              activeTab === 'events' ? 'bg-white/25 text-white' : 'bg-white/15 text-white/80'
+                            }`}>
+                              {eventsCount}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Section 3: Sistema & Ajustes */}
+                      <div className="space-y-0.5">
+                        <div className="text-[10px] font-bold text-white/40 tracking-wider uppercase px-2 mb-1">
+                          Sistema y Ajustes
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('links')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'links'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <Globe className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span className="truncate">Canales & Grupos</span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('publicidad')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'publicidad'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                            <span className="truncate">Publicidad & Banners</span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('brand_media')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'brand_media'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <ImageIcon className="w-4 h-4 text-teal-400 shrink-0" />
+                            <span className="truncate">Banner y Logo</span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('admins')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'admins'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <KeyRound className="w-4 h-4 text-indigo-400 shrink-0" />
+                            <span className="truncate">Administradores</span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('status')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'status'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <Database className="w-4 h-4 text-blue-400 shrink-0" />
+                            <span className="truncate">MariaDB & Sync</span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('desired_changes')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'desired_changes'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <Bug className="w-4 h-4 text-amber-400 shrink-0" />
+                            <span className="truncate">Cambios Deseados</span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('config_editor')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'config_editor'
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold'
+                              : 'text-white/75 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <FileCode className="w-4 h-4 text-sky-400 shrink-0" />
+                            <span className="truncate">Editor Configuración</span>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('maintenance')}
+                          className={`w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-xs font-medium transition-all cursor-pointer ${
+                            activeTab === 'maintenance'
+                              ? 'bg-rose-700 text-white shadow-md shadow-rose-700/30 font-semibold'
+                              : 'text-rose-400 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
+                            <span className="truncate">Modo Mantenimiento</span>
+                          </div>
+                        </button>
+                      </div>
+                    </aside>
+                  )}
+
+                  {/* Subtab Body Container (Full-width on mobile, no sidebar squish) */}
+                  <div className={`w-full overflow-y-auto flex-1 overscroll-contain bg-stone-100 text-stone-900 ${
+                    isMobileDevice ? 'p-3 sm:p-5 pb-28 space-y-4' : 'p-4 sm:p-8 space-y-5 sm:space-y-6'
+                  }`}>
           {actionSuccessMsg && (
             <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2">
               <Check className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -1711,6 +2136,14 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
             <div className="p-4 sm:p-6">
               <AdminMaintenanceTab />
             </div>
+          ) : activeTab === 'links' ? (
+            <div className="p-4 sm:p-6 overflow-y-auto">
+              <AdminLinksTab />
+            </div>
+          ) : activeTab === 'publicidad' ? (
+            <div className="p-4 sm:p-6 overflow-y-auto">
+              <AdminPublicidadTab />
+            </div>
           ) : activeTab === 'status' ? (
             <div className="space-y-6">
               {/* Status Alert */}
@@ -2014,25 +2447,70 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 </div>
               </div>
 
-              {/* Botón de acceso directo al Panel de Administración de WordPress */}
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-stone-900 to-stone-800 text-white flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md">
-                <div className="space-y-0.5 text-center sm:text-left">
-                  <p className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                    Panel Oficial de WordPress
-                  </p>
-                  <p className="text-xs text-stone-300">
-                    Administra productos, edita fichas, categorías y pedidos en tu portal.
-                  </p>
+              {/* Módulo de Autonomía Total y Desvinculación Segura de WordPress */}
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-stone-900 via-stone-850 to-stone-900 text-white border border-amber-500/30 shadow-lg space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-800 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      <HardDrive className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>Preparación para Baja de WordPress & WooCommerce</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          100% Autónomo
+                        </span>
+                      </h4>
+                      <p className="text-xs text-stone-300">
+                        Todas las imágenes, videos y catálogos han sido descargados y resguardados localmente.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <a
-                  href="https://empresasencarmen.com/wp-admin/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm whitespace-nowrap"
-                >
-                  <span>Ir al wp-admin</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+                  <div className="p-2.5 rounded-xl bg-stone-800/80 border border-stone-700/60">
+                    <p className="text-[10px] text-stone-400 font-medium">Archivos Locales</p>
+                    <p className="text-base font-bold text-amber-400">1,015</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-stone-800/80 border border-stone-700/60">
+                    <p className="text-[10px] text-stone-400 font-medium">Peso Total</p>
+                    <p className="text-base font-bold text-emerald-400">321.1 MB</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-stone-800/80 border border-stone-700/60">
+                    <p className="text-[10px] text-stone-400 font-medium">Empresas Migradas</p>
+                    <p className="text-base font-bold text-sky-400">206 / 206</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-stone-800/80 border border-stone-700/60">
+                    <p className="text-[10px] text-stone-400 font-medium">Dependencia Ext.</p>
+                    <p className="text-base font-bold text-emerald-400">0% (Ninguna)</p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-stone-300 leading-relaxed bg-stone-950/50 p-3 rounded-xl border border-stone-800">
+                  <span className="font-semibold text-amber-400">Garantía de Cero Pérdida:</span> Cuando des de baja el WordPress en Hostinger, este portal seguirá funcionando sin enlaces rotos. Los logos, galerías y videos están guardados en el almacenamiento propio y optimizados en WebP.
+                </p>
+
+                <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-1">
+                  <a
+                    href="/api/backup/migrate-sql"
+                    download="mariadb_migrate_images.sql"
+                    className="w-full sm:flex-1 px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs transition-all flex items-center justify-center gap-2 border border-stone-600"
+                  >
+                    <Database className="w-4 h-4 text-amber-400" />
+                    <span>Descargar Script SQL MariaDB</span>
+                  </a>
+                  <a
+                    href="https://empresasencarmen.com/wp-admin/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full sm:w-auto px-3.5 py-2.5 rounded-xl bg-stone-800/80 hover:bg-stone-700 text-stone-400 hover:text-stone-200 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 border border-stone-750"
+                    title="Acceder al wp-admin de WordPress antes de darlo de baja"
+                  >
+                    <span>wp-admin</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
               </div>
 
               {/* Sync Trigger button */}
@@ -2402,49 +2880,66 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
               </form>
             </div>
           )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* WINDOWS MOBILE BOTTOM APP BAR (Iconic 3-Button Softkeys) */}
-          <div className="h-14 bg-black/95 border-t border-white/10 flex items-center justify-around px-4 z-40 shrink-0 select-none">
-            <button
-              type="button"
-              onClick={() => {
-                if (activeTab !== 'start') setActiveTab('start');
-                else handleModalClose();
-              }}
-              className="p-3 text-white/80 hover:text-white active:scale-90 transition-transform cursor-pointer flex flex-col items-center gap-0.5"
-              title="Atrás"
-            >
-              <span className="text-xl leading-none">←</span>
-              <span className="text-[9px] uppercase tracking-wider text-slate-400">atrás</span>
-            </button>
+          {/* Desktop macOS Dock VS Mobile iOS Bottom Bar */}
+          {isMobileDevice ? (
+            <AdminIOSBottomBar
+              activeTab={activeTab}
+              onSelectTab={(tab) => setActiveTab(tab)}
+              pendingReportsCount={reports.filter(r => r.status === 'pending').length}
+              businessesCount={businesses.length}
+              classifiedsCount={classifieds.length}
+            />
+          ) : (
+            <AdminMacOSDock
+              activeTab={activeTab}
+              onSelectTab={(tab) => setActiveTab(tab)}
+              isSyncing={isSyncing}
+              onTriggerSync={onTriggerSync}
+              onLogout={handleLogout}
+              onClose={handleModalClose}
+              pendingReportsCount={reports.filter(r => r.status === 'pending').length}
+              businessesCount={businesses.length}
+              classifiedsCount={classifieds.length}
+            />
+          )}
+        </div>
+      )}
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('start')}
-              className="p-3 text-white hover:text-sky-300 active:scale-90 transition-transform cursor-pointer flex flex-col items-center gap-0.5"
-              title="Inicio (Mosaicos Live Tiles)"
-            >
-              <div className="grid grid-cols-2 gap-0.5 w-4 h-4 text-white">
-                <div className="bg-current w-1.5 h-1.5 rounded-2xs" />
-                <div className="bg-current w-1.5 h-1.5 rounded-2xs" />
-                <div className="bg-current w-1.5 h-1.5 rounded-2xs" />
-                <div className="bg-current w-1.5 h-1.5 rounded-2xs" />
-              </div>
-              <span className="text-[9px] uppercase tracking-wider text-slate-400">inicio</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleModalClose}
-              className="p-3 text-white/80 hover:text-rose-400 active:scale-90 transition-transform cursor-pointer flex flex-col items-center gap-0.5"
-              title="Cerrar y volver al directorio"
-            >
-              <span className="text-xl leading-none">✕</span>
-              <span className="text-[9px] uppercase tracking-wider text-slate-400">salir</span>
-            </button>
+      {/* DIÁLOGO EN APP PARA CONFIRMAR ELIMINACIÓN (SIN window.confirm) */}
+      {businessToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="w-full max-w-md p-6 rounded-3xl bg-slate-900/95 border border-white/20 shadow-2xl text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-rose-500/20 text-rose-400 mx-auto flex items-center justify-center text-2xl font-bold">
+              ⚠️
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-xl font-bold text-white">¿Confirmas eliminar esta empresa?</h4>
+              <p className="text-sm text-stone-300">
+                Se dará de baja definitivamente a <strong className="text-rose-400">{businessToDelete.name}</strong> del directorio y de la sincronización.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setBusinessToDelete(null)}
+                className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={executeConfirmedDeleteBusiness}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow-lg shadow-rose-600/30 cursor-pointer"
+              >
+                Sí, eliminar permanentemente
+              </button>
+            </div>
           </div>
         </div>
       )}

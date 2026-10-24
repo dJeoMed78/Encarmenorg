@@ -35,37 +35,50 @@ export async function initMariaDb(): Promise<boolean> {
     return false;
   }
 
-  try {
-    pool = mysql.createPool({
-      host: config.host,
-      port: config.port || 3306,
-      user: config.user,
-      password: config.password,
-      database: config.database,
-      waitForConnections: true,
-      connectionLimit: process.env.VERCEL ? 3 : 10,
-      queueLimit: 0,
-      connectTimeout: 10000,
-      idleTimeout: 15000,
-      enableKeepAlive: true,
-    });
+  // Soporta tanto conexión remota como conexión local (127.0.0.1 / localhost) en el mismo servidor de Hostinger
+  const candidateHosts = [
+    config.host,
+    '127.0.0.1',
+    'localhost'
+  ].filter((h, i, arr) => Boolean(h) && arr.indexOf(h) === i) as string[];
 
-    const [rows] = await pool.query('SELECT 1 as test');
-    isConnected = true;
-    lastConnectionError = null;
-    console.log(`[MariaDB/Hostinger] Conectado exitosamente a ${config.database} en ${config.host}`);
+  for (const candidateHost of candidateHosts) {
+    try {
+      pool = mysql.createPool({
+        host: candidateHost,
+        port: config.port || 3306,
+        user: config.user,
+        password: config.password,
+        database: config.database,
+        waitForConnections: true,
+        connectionLimit: process.env.VERCEL ? 3 : 10,
+        queueLimit: 0,
+        connectTimeout: 4000,
+        idleTimeout: 15000,
+        enableKeepAlive: true,
+      });
 
-    // Auto-create tables if they don't exist
-    await createTablesIfNotExist();
+      await pool.query('SELECT 1 as test');
+      isConnected = true;
+      lastConnectionError = null;
+      console.log(`[MariaDB/Hostinger] Conectado exitosamente a ${config.database} en ${candidateHost}`);
 
-    return true;
-  } catch (err: any) {
-    lastConnectionError = err.message || String(err);
-    console.warn(`[MariaDB/Hostinger] No se pudo conectar a la base de datos (${config.host}):`, err.message);
-    pool = null;
-    isConnected = false;
-    return false;
+      // Auto-create tables if they don't exist
+      await createTablesIfNotExist();
+
+      return true;
+    } catch (err: any) {
+      lastConnectionError = err.message || String(err);
+      console.warn(`[MariaDB/Hostinger] Intento de conexión con ${candidateHost} falló:`, err.message);
+      if (pool) {
+        try { await pool.end(); } catch (_) {}
+      }
+      pool = null;
+      isConnected = false;
+    }
   }
+
+  return false;
 }
 
 export function isMariaDbActive(): boolean {

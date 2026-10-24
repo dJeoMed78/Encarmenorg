@@ -138,15 +138,43 @@ export const ClassifiedDetailModal: React.FC<ClassifiedDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-3 sm:p-4 bg-stone-950/80 backdrop-blur-sm overflow-y-auto animate-fadeIn">
-      <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden my-auto max-h-[92vh] flex flex-col">
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[90] flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200"
+      style={{
+        background: 'rgba(15, 23, 42, 0.45)',
+        backdropFilter: 'blur(25px)',
+        WebkitBackdropFilter: 'blur(25px)',
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-4xl rounded-3xl overflow-hidden my-auto max-h-[92vh] flex flex-col"
+        style={{
+          background: 'rgba(255, 255, 255, 0.88)',
+          backdropFilter: 'blur(40px) saturate(190%)',
+          WebkitBackdropFilter: 'blur(40px) saturate(190%)',
+          border: '1.5px solid rgba(255, 255, 255, 0.95)',
+          boxShadow: '0 30px 70px -15px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header Bar */}
-        <div className="px-6 py-4 bg-stone-900 text-white flex items-center justify-between border-b border-stone-800">
+        <div
+          className="px-6 py-4 flex items-center justify-between sticky top-0 z-10"
+          style={{
+            background: 'rgba(255, 255, 255, 0.75)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderBottom: '1.5px solid rgba(255, 255, 255, 0.85)',
+          }}
+        >
           <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-stone-950 text-xs font-black uppercase tracking-wider">
+            <span className="px-3 py-1 rounded-full bg-amber-500 text-stone-950 text-xs font-black uppercase tracking-wider shadow-xs">
               {categoryDef ? categoryDef.name.replace(/^\d+\.\s*/, '') : 'Clasificado'}
             </span>
-            <span className="text-stone-400 text-xs hidden sm:inline">
+            <span className="text-stone-600 font-bold text-xs hidden sm:inline">
               › {subcategoryDef?.name || ''}
             </span>
           </div>
@@ -160,7 +188,7 @@ export const ClassifiedDetailModal: React.FC<ClassifiedDetailModalProps> = ({
                       onEdit(ad);
                       onClose();
                     }}
-                    className="p-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 hover:text-white transition-colors text-xs flex items-center gap-1.5 font-bold cursor-pointer"
+                    className="p-2 rounded-xl bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-800 transition-colors text-xs flex items-center gap-1.5 font-bold cursor-pointer"
                     title="Editar anuncio"
                   >
                     <Edit className="w-3.5 h-3.5" />
@@ -170,7 +198,7 @@ export const ClassifiedDetailModal: React.FC<ClassifiedDetailModalProps> = ({
                 {onDelete && !confirmDelete && (
                   <button
                     onClick={() => setConfirmDelete(true)}
-                    className="p-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-800/60 text-rose-300 hover:text-white transition-colors text-xs flex items-center gap-1.5 font-bold cursor-pointer"
+                    className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 transition-colors text-xs flex items-center gap-1.5 font-bold cursor-pointer"
                     title="Borrar anuncio"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -178,19 +206,19 @@ export const ClassifiedDetailModal: React.FC<ClassifiedDetailModalProps> = ({
                   </button>
                 )}
                 {confirmDelete && (
-                  <div className="flex items-center gap-1 bg-rose-900/90 p-1 rounded-xl">
+                  <div className="flex items-center gap-1 bg-rose-100 border border-rose-300 p-1 rounded-xl">
                     <button
                       onClick={() => {
                         if (onDelete) onDelete(ad.id);
                         onClose();
                       }}
-                      className="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-xs font-black hover:bg-rose-700"
+                      className="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-xs font-black hover:bg-rose-700 cursor-pointer"
                     >
                       Sí, borrar
                     </button>
                     <button
                       onClick={() => setConfirmDelete(false)}
-                      className="px-2 py-1 text-stone-300 hover:text-white text-xs"
+                      className="px-2 py-1 text-stone-700 hover:text-stone-900 text-xs font-semibold cursor-pointer"
                     >
                       Cancelar
                     </button>
@@ -201,7 +229,7 @@ export const ClassifiedDetailModal: React.FC<ClassifiedDetailModalProps> = ({
 
             <button
               onClick={handleCopyShare}
-              className="p-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white transition-colors"
+              className="p-2 rounded-xl bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 transition-colors cursor-pointer"
               title="Compartir"
             >
               <Share2 className="w-4 h-4" />
@@ -209,7 +237,7 @@ export const ClassifiedDetailModal: React.FC<ClassifiedDetailModalProps> = ({
 
             <button
               onClick={onClose}
-              className="p-2 rounded-xl bg-stone-800 hover:bg-rose-600 text-stone-400 hover:text-white transition-colors"
+              className="p-2 rounded-xl hover:bg-stone-200/60 text-stone-500 hover:text-stone-900 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>

@@ -222,7 +222,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
         );
 
         setNotice({
-          text: `¡Éxito! "${candidate.name}" ha sido autorizada y publicada tanto en encarmen.org como en empresasencarmen.com.`,
+          text: `¡Éxito! "${candidate.name}" ha sido autorizada y publicada en el directorio oficial.`,
           type: 'success'
         });
 
@@ -376,7 +376,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
 
     if (
       !window.confirm(
-        `¿Deseas autorizar y publicar ${pending.length} negocios simultáneamente en encarmen.org y empresasencarmen.com?`
+        `¿Deseas autorizar y publicar ${pending.length} negocios en el catálogo oficial de Ciudad del Carmen?`
       )
     ) {
       return;
@@ -389,7 +389,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
       if (res.success) {
         setCandidates(prev => prev.map(c => ({ ...c, status: 'accepted' })));
         setNotice({
-          text: `¡Éxito total! Se publicaron ${res.count || pending.length} empresas en encarmen.org y se sincronizaron con empresasencarmen.com.`,
+          text: `¡Éxito total! Se publicaron ${res.count || pending.length} empresas en el catálogo oficial de Carmen.`,
           type: 'success'
         });
         if (res.published && Array.isArray(res.published) && onBusinessApproved) {
@@ -488,8 +488,28 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col sm:items-center sm:justify-center p-0 sm:p-4 bg-stone-950/85 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-stone-900 border-0 sm:border sm:border-stone-800 sm:rounded-3xl w-full sm:max-w-6xl h-full sm:h-auto sm:max-h-[92vh] flex flex-col shadow-2xl overflow-hidden text-stone-100">
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex flex-col sm:items-center sm:justify-center p-0 sm:p-4 animate-in fade-in duration-200"
+      style={{
+        background: 'rgba(15, 23, 42, 0.45)',
+        backdropFilter: 'blur(25px)',
+        WebkitBackdropFilter: 'blur(25px)',
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="sm:rounded-3xl w-full sm:max-w-6xl h-full sm:h-auto sm:max-h-[92vh] flex flex-col overflow-hidden text-stone-100"
+        style={{
+          background: 'rgba(24, 24, 27, 0.90)',
+          backdropFilter: 'blur(40px) saturate(190%)',
+          WebkitBackdropFilter: 'blur(40px) saturate(190%)',
+          border: '1.5px solid rgba(255, 255, 255, 0.15)',
+          boxShadow: '0 30px 70px -15px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.15)',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
         
         {/* COMPACT STICKY HEADER */}
         <div className="p-3 sm:p-5 bg-gradient-to-r from-stone-900 via-sky-950/40 to-stone-900 border-b border-stone-800 flex items-center justify-between gap-2 shrink-0 z-10">
@@ -887,7 +907,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                             alt={candidate.name}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             onError={e => {
-                              (e.target as HTMLImageElement).src = 'https://empresasencarmen.com/icons/icon-512.svg';
+                              (e.target as HTMLImageElement).src = '/icons/icon-512.svg';
                             }}
                           />
                           {candidate.hasDelivery && (
@@ -921,7 +941,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
 
                             {isAccepted && (
                               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-black flex items-center gap-1">
-                                <Check className="w-3 h-3 text-emerald-400" /> Publicado en encarmen.org & empresasencarmen.com
+                                <Check className="w-3 h-3 text-emerald-400" /> Publicado en Directorio Oficial
                               </span>
                             )}
 
@@ -1007,7 +1027,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                               ? 'bg-emerald-900/50 text-emerald-300 border border-emerald-700/50 cursor-default'
                               : 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95'
                           }`}
-                          title="Aprobar y publicar en encarmen.org y empresasencarmen.com"
+                          title="Aprobar y publicar en el Directorio Oficial de Carmen"
                         >
                           <CheckCircle2 className="w-4 h-4" />
                           <span>
@@ -1075,9 +1095,8 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
             <span>
-              La publicación sincroniza automáticamente con{' '}
-              <strong className="text-white">encarmen.org</strong> y{' '}
-              <strong className="text-white">empresasencarmen.com</strong> (WooCommerce).
+              Catálogo 100% autónomo:{' '}
+              <strong className="text-white">Persistencia local e integración directa con MariaDB Hostinger</strong>.
             </span>
           </div>
 

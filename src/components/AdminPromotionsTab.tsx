@@ -47,6 +47,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
   const [searchTerm, setSearchTerm] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [promoToDelete, setPromoToDelete] = useState<string | null>(null);
 
   // Form state
   const [formId, setFormId] = useState<string | null>(null);
@@ -268,13 +269,20 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
     }
   };
 
-  const handleDeletePromo = async (promoId: string) => {
-    if (!window.confirm('¿Seguro que deseas eliminar esta promoción?')) return;
+  const handleDeletePromo = (promoId: string) => {
+    setPromoToDelete(promoId);
+  };
+
+  const confirmDeletePromo = async () => {
+    if (!promoToDelete) return;
     try {
-      await deleteAdminPromotion(promoId);
+      await deleteAdminPromotion(promoToDelete);
+      setPromoToDelete(null);
       loadData();
       window.dispatchEvent(new Event('promotions-updated'));
-    } catch {}
+    } catch {
+      setPromoToDelete(null);
+    }
   };
 
   const handleToggleCouponStatus = async (coupon: ClaimedCoupon) => {
@@ -933,6 +941,59 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
             </button>
           </div>
         </form>
+      )}
+
+      {/* Confirmation Modal for Deleting Promotion */}
+      {promoToDelete && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center p-4"
+          style={{
+            background: 'rgba(15, 23, 42, 0.4)',
+            backdropFilter: 'blur(25px)',
+            WebkitBackdropFilter: 'blur(25px)'
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4 animate-scaleUp"
+            style={{
+              background: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(35px) saturate(190%)',
+              WebkitBackdropFilter: 'blur(35px) saturate(190%)',
+              border: '1.5px solid rgba(255, 255, 255, 0.95)',
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)'
+            }}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto shadow-sm">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h4 className="text-base font-extrabold text-stone-900">
+                ¿Eliminar promoción?
+              </h4>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                ¿Estás seguro de que deseas eliminar esta oferta del catálogo activo? Esta acción no se puede deshacer.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setPromoToDelete(null)}
+                className="py-2.5 px-3 rounded-2xl bg-stone-200/80 hover:bg-stone-300 active:scale-95 text-stone-800 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeletePromo}
+                className="py-2.5 px-3 rounded-2xl bg-[#e11d48] hover:bg-[#be123c] active:scale-95 text-white text-xs font-bold shadow-md shadow-rose-600/30 transition-all cursor-pointer"
+              >
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

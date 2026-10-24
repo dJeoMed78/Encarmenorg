@@ -20,7 +20,9 @@ export interface Business {
   facebook?: string;
   instagram?: string;
   image: string;
+  imageUrl?: string;
   gallery?: string[];
+  subcategory?: string;
   hasDelivery?: boolean;
   deliveryOption?: string;
   delivery?: string;
@@ -36,12 +38,14 @@ export interface Business {
   mapsUrl?: string;
   featured?: boolean;
   verified?: boolean;
+  isVerified?: boolean;
   isNew?: boolean;
   isNewSubmission?: boolean;
   isTopBusiness?: boolean;
   isRecommended?: boolean;
   rating?: number;
   reviewCount?: number;
+  reviewsCount?: number;
   permalink?: string;
   createdAt?: string;
   updatedAt?: string;

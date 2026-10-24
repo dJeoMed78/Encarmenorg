@@ -146,7 +146,7 @@ export async function fetchStats(): Promise<DirectoryStats> {
       withDelivery: list.filter(b => Boolean(b.delivery && !b.delivery.toLowerCase().includes('no'))).length,
       lastSyncTimestamp: new Date().toISOString(),
       lastSyncStatus: 'success',
-      wpSiteUrl: 'https://empresasencarmen.com'
+      wpSiteUrl: typeof window !== 'undefined' ? window.location.origin : 'https://empresasencarmen.com'
     };
   }
 }
@@ -191,7 +191,7 @@ export async function checkWpHealth(): Promise<WpHealth> {
       connected: false,
       status: 'unreachable',
       error: err.message,
-      siteUrl: 'https://empresasencarmen.com'
+      siteUrl: typeof window !== 'undefined' ? window.location.origin : 'https://empresasencarmen.com'
     };
   }
 }

@@ -148,11 +148,18 @@ export const ClaimCouponModal: React.FC<ClaimCouponModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[70] overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
+      className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-4xl lg:max-w-5xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-stone-200/90 my-auto text-stone-900"
+        className="relative w-full max-w-4xl lg:max-w-5xl rounded-3xl shadow-2xl overflow-hidden my-auto text-stone-900 transition-all duration-300"
+        style={{
+          background: 'rgba(255, 255, 255, 0.84)',
+          backdropFilter: 'blur(35px) saturate(190%)',
+          WebkitBackdropFilter: 'blur(35px) saturate(190%)',
+          border: '1.5px solid rgba(255, 255, 255, 0.90)',
+          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.22), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+        }}
         onClick={e => e.stopPropagation()}
       >
         {/* Close Button Top-Right on all viewports */}
@@ -171,7 +178,7 @@ export const ClaimCouponModal: React.FC<ClaimCouponModalProps> = ({
           {/* ==================================================== */}
           {/* COLUMNA IZQUIERDA: IMAGEN PROMOCIONAL CON PANTALLA COMPLETA */}
           {/* ==================================================== */}
-          <div className="md:col-span-5 lg:col-span-5 bg-gradient-to-br from-stone-950 via-stone-900 to-amber-950 relative flex flex-col justify-between overflow-hidden group min-h-[260px] md:min-h-full">
+          <div className="md:col-span-5 lg:col-span-5 bg-gradient-to-br from-stone-950/90 via-stone-900/90 to-amber-950/90 backdrop-blur-xl relative flex flex-col justify-between overflow-hidden group min-h-[260px] md:min-h-full">
             
             {/* Background / Image Container */}
             <div
@@ -226,7 +233,7 @@ export const ClaimCouponModal: React.FC<ClaimCouponModalProps> = ({
           {/* ==================================================== */}
           {/* COLUMNA DERECHA: DATOS DEL DESCUENTO Y FORMULARIO */}
           {/* ==================================================== */}
-          <div className="md:col-span-7 lg:col-span-7 flex flex-col justify-between p-5 sm:p-7 lg:p-8 bg-white text-left">
+          <div className="md:col-span-7 lg:col-span-7 flex flex-col justify-between p-5 sm:p-7 lg:p-8 bg-transparent text-left">
             
             <div>
               {/* Badges Ribbon */}

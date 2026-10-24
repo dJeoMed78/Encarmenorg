@@ -428,10 +428,38 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
       {/* MODAL: RADAR DE ANUNCIOS CLASIFICADOS (GRUPO FB / IA)     */}
       {/* ========================================================= */}
       {isRadarOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-stone-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-4xl h-[92dvh] sm:h-auto sm:max-h-[88vh] rounded-3xl shadow-2xl border border-stone-200 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200"
+          style={{
+            background: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(25px)',
+            WebkitBackdropFilter: 'blur(25px)',
+          }}
+          onClick={() => setIsRadarOpen(false)}
+        >
+          <div
+            className="w-full max-w-4xl h-[92dvh] sm:h-auto sm:max-h-[88vh] rounded-3xl flex flex-col overflow-hidden"
+            style={{
+              background: 'rgba(255, 255, 255, 0.88)',
+              backdropFilter: 'blur(40px) saturate(190%)',
+              WebkitBackdropFilter: 'blur(40px) saturate(190%)',
+              border: '1.5px solid rgba(255, 255, 255, 0.95)',
+              boxShadow: '0 30px 70px -15px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
             {/* Modal Header */}
-            <div className="p-3 sm:p-5 border-b border-stone-200 bg-stone-50 flex items-start justify-between gap-3 sm:gap-4 shrink-0">
+            <div
+              className="p-3 sm:p-5 flex items-start justify-between gap-3 sm:gap-4 shrink-0"
+              style={{
+                background: 'rgba(255, 255, 255, 0.75)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                borderBottom: '1.5px solid rgba(255, 255, 255, 0.85)',
+              }}
+            >
               <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                 <span className="p-2 sm:p-2.5 rounded-2xl bg-indigo-600 text-white font-bold shadow-xs shrink-0">
                   <Radio className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse" />
@@ -790,8 +818,25 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                           </div>
                         </div>
 
-                        {/* Card Action Buttons */}
+                        {/* Card Action Buttons con botón obligatorio de verificación de fuente */}
                         <div className="flex items-center sm:flex-col gap-2 shrink-0 pt-2 sm:pt-0">
+                          {cand.sourceUrl ? (
+                            <a
+                              href={cand.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-black shadow-xs transition cursor-pointer"
+                              title="Abrir y verificar la fuente original directa"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span>Verificar Fuente</span>
+                            </a>
+                          ) : (
+                            <span className="px-2 py-1 rounded-lg bg-rose-100 text-rose-700 text-[10px] font-bold text-center">
+                              ⚠️ Sin liga fuente
+                            </span>
+                          )}
+
                           {!cand.alreadyPublished ? (
                             <>
                               <button
@@ -833,8 +878,16 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="p-3 sm:p-4 border-t border-stone-200 bg-stone-50 flex items-center justify-between text-xs text-stone-500 shrink-0">
-              <span className="flex items-center gap-1">
+            <div
+              className="p-3 sm:p-4 flex items-center justify-between text-xs text-stone-600 font-semibold shrink-0"
+              style={{
+                background: 'rgba(255, 255, 255, 0.75)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                borderTop: '1.5px solid rgba(255, 255, 255, 0.85)',
+              }}
+            >
+              <span className="flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
                 <span>Verificación obligatoria del administrador activa</span>
               </span>
@@ -842,7 +895,7 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
               <button
                 type="button"
                 onClick={() => setIsRadarOpen(false)}
-                className="px-4 py-2 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-xs transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-2xl border border-stone-300/80 hover:bg-stone-200/60 active:scale-95 text-stone-800 font-bold text-xs transition-all cursor-pointer"
               >
                 Cerrar
               </button>
