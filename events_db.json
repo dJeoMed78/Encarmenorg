@@ -338,25 +338,6 @@
     "status": "published"
   },
   {
-    "id": "evt-ai-1791236744581-sewt",
-    "category": "Cultura & Música",
-    "categorySlug": "cultura",
-    "title": "Tarde de Bolero y Tradición en el Kiosco",
-    "image": "/uploads/kiosco-parque-zaragoza.jpg",
-    "location": "Parque Principal Ignacio Zaragoza, Centro, Ciudad del Carmen",
-    "updatedAt": "2026-10-06T14:53:15.850Z",
-    "date": "24 de Octubre de 2026",
-    "badge": "En Vivo",
-    "sourceUrl": "https://carmen.gob.mx",
-    "organizer": "Dirección de Educación y Cultura de Carmen",
-    "time": "19:00 hrs",
-    "aiDetected": true,
-    "cost": "Entrada Libre",
-    "description": "Concierto al aire libre en el kiosco central con agrupaciones locales de trova y son campechano, promoviendo la convivencia familiar en el corazón de la isla.",
-    "icon": "Music",
-    "status": "published"
-  },
-  {
     "id": "evt-ai-1791236765960-a2sp",
     "sourceUrl": "https://proeventos.campeche.gob.mx",
     "title": "10º Festival del Camarón Perla del Golfo 2026",

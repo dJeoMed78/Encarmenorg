@@ -145,6 +145,10 @@ export const ClassifiedsView: React.FC<ClassifiedsViewProps> = ({
       if (ad.status === 'trash' || ad.status === 'sold' || ad.status === 'expired') {
         return false;
       }
+      // REGLA ESTRICTA: Solo anuncios explícitamente autorizados por administración
+      if (ad.approvedByAdmin !== true) {
+        return false;
+      }
       if (ad.createdAt) {
         const createdTs = new Date(ad.createdAt).getTime();
         // Skip older than 7 days

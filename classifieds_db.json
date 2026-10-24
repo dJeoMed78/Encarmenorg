@@ -99,10 +99,11 @@
     "sourceUrl": "https://isladelcarmen.com/",
     "source": "Isla del Carmen (IDC)",
     "isVerified": true,
-    "status": "active",
+    "status": "trash",
     "views": 53,
     "createdAt": "2026-10-17T17:00:00.000Z",
-    "userToken": ""
+    "userToken": "",
+    "trashedAt": "2026-10-24T19:30:59.411Z"
   },
   {
     "id": "ad-ind-01",
@@ -195,10 +196,11 @@
     "sourceUrl": "https://www.locanto.com.mx/ciudaddelcarmen/",
     "source": "Locanto Ciudad del Carmen",
     "isVerified": true,
-    "status": "active",
+    "status": "trash",
     "views": 145,
     "createdAt": "2026-10-17T19:00:00.000Z",
-    "userToken": ""
+    "userToken": "",
+    "trashedAt": "2026-10-24T19:30:59.411Z"
   },
   {
     "id": "ad-compu-01",

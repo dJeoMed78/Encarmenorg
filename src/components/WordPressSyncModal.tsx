@@ -1169,41 +1169,31 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
                 {/* Header: iOS Nav Bar on Mobile VS macOS Traffic Lights Titlebar on Desktop */}
                 {isMobileDevice ? (
-                  <div className="h-12 bg-white/90 border-b border-stone-200/80 px-3 flex items-center justify-between shrink-0 select-none z-20 text-stone-800">
+                  <div className="sticky top-0 h-13 bg-white/95 backdrop-blur-xl border-b border-stone-200 px-3 flex items-center justify-between shrink-0 select-none z-40 shadow-xs">
                     <button
                       type="button"
                       onClick={() => setActiveTab('start')}
-                      className="flex items-center gap-1 text-sky-600 hover:text-sky-700 font-semibold text-sm active:opacity-60 cursor-pointer"
+                      className="px-3 py-1.5 rounded-full bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold text-xs flex items-center gap-1 active:scale-95 cursor-pointer"
                     >
-                      <ChevronLeft className="w-5 h-5 -ml-1" />
-                      <span>Inicio</span>
+                      <ChevronLeft className="w-4 h-4 -ml-0.5" />
+                      <span>Menú Principal</span>
                     </button>
 
                     <div className="text-center truncate px-2">
-                      <div className="text-xs font-bold text-stone-900 tracking-tight truncate max-w-[200px]">
+                      <div className="text-xs font-extrabold text-stone-900 tracking-tight truncate max-w-[150px]">
                         {getTabTitle(activeTab)}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={onTriggerSync}
-                        disabled={isSyncing}
-                        className="p-1.5 rounded-lg bg-sky-100 text-sky-700 active:scale-95 transition-all cursor-pointer"
-                        title="Sincronizar"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-sky-600' : ''}`} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleModalClose}
-                        className="p-1.5 rounded-lg bg-stone-100 text-stone-700 hover:bg-stone-200 active:scale-95 transition-all cursor-pointer"
-                        title="Cerrar y volver al directorio"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={handleModalClose}
+                      className="px-3 py-1.5 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold text-xs flex items-center gap-1 active:scale-95 cursor-pointer"
+                      title="Cerrar panel y volver al portal"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Salir</span>
+                    </button>
                   </div>
                 ) : (
                   /* macOS Window Titlebar with Traffic Lights */

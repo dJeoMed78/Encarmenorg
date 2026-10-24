@@ -62,10 +62,12 @@ export function BusinessCard({
     (business.colonia ? `${formattedName}, ${business.colonia}, Cd. del Carmen` : 'Ciudad del Carmen, Camp.')
   );
 
-  // Calificación numérica y cálculo de estrellas
-  const ratingValue = Number(business.rating) || 5.0;
-  const ratingScore = ratingValue.toFixed(1);
-  const roundedStars = Math.round(ratingValue);
+  // Calificación numérica y cálculo de estrellas reales (sin 5.0 falso si no tiene votos)
+  const reviewCount = Number(business.reviewCount) || 0;
+  const ratingValue = reviewCount > 0 ? Number(business.rating) || 0 : 0;
+  const hasRealRating = reviewCount > 0 && ratingValue > 0;
+  const ratingScore = hasRealRating ? ratingValue.toFixed(1) : null;
+  const roundedStars = hasRealRating ? Math.round(ratingValue) : 0;
 
   return (
     <div
@@ -142,30 +144,25 @@ export function BusinessCard({
           {formattedName}
         </h3>
 
-        {/* 2. FILA DE ESTRELLAS ESTILO iOS + CALIFICACIÓN REAL O INVITACIÓN A CALIFICAR */}
-        {Number(business.reviewCount) > 0 && Number(business.rating) > 0 ? (
+        {/* 2. FILA DE ESTRELLAS ESTILO iOS (SOLO SI YA TIENE CALIFICACIONES REALES) */}
+        {hasRealRating && (
           <div className="flex items-center gap-1 mt-1">
             <div className="flex items-center text-[#F59E0B]">
               {[1, 2, 3, 4, 5].map((star) => (
                 <Star
                   key={star}
                   className={`w-3.5 h-3.5 ${
-                    star <= Math.round(Number(business.rating))
-                      ? 'fill-[#F59E0B] text-[#F59E0B]'
-                      : 'fill-stone-200 text-stone-300'
+                    star <= roundedStars ? 'fill-[#F59E0B] text-[#F59E0B]' : 'fill-stone-200 text-stone-300'
                   }`}
                 />
               ))}
             </div>
-            <span className="text-[13px] font-bold text-stone-800 ml-1">
-              {Number(business.rating).toFixed(1)}
+            <span className="text-[13px] font-bold text-[#111827] ml-1">
+              {ratingScore}
             </span>
-            <span className="text-[11px] text-stone-500">({business.reviewCount})</span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1 mt-1 text-[11px] font-semibold text-amber-700">
-            <Star className="w-3.5 h-3.5 text-amber-500" />
-            <span>Sin calificar aún · Da clic para calificar</span>
+            <span className="text-[11px] text-[#6B7280]">
+              ({reviewCount})
+            </span>
           </div>
         )}
 

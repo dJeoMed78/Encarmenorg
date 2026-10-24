@@ -23,11 +23,11 @@ import { RegisterBusinessView } from './components/RegisterBusinessView';
 import { ClassifiedCreateModal } from './components/ClassifiedCreateModal';
 import { ClassifiedDetailModal } from './components/ClassifiedDetailModal';
 import { Promotion, ClassifiedAd, Business } from './types';
-import seedClassifieds from './data/radar_classifieds_pool.json';
 import { isSessionAdminAuthenticated, hashPassword, FALLBACK_ADMIN_HASHES } from './utils/adminAuth';
 import { adminDeleteBusiness, getAdminPromotions } from './services/api';
 import { sortEventsChronologically, parseEventStartDate, isEventExpired, filterActiveUpcomingEvents } from './services/eventsService';
 import { getSavedPortalLinks } from './components/AdminLinksAndAdsManager';
+import { getRealBusinessRating } from './utils/realRatings';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('negocios');
@@ -141,17 +141,18 @@ export default function App() {
     return sortEventsChronologically(filterActiveUpcomingEvents(raw));
   }, []);
 
-  // Anuncios Clasificados y Bolsa de Trabajo (Moderación estricta: solo aprobados en portal público)
+  // Anuncios Clasificados y Bolsa de Trabajo (Moderación estricta: solo aprobados por el administrador)
   const [classifiedsList, setClassifiedsList] = useState<ClassifiedAd[]>(() => {
     try {
       const saved = localStorage.getItem('encarmen_approved_classifieds_v1');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (_) {}
-    const raw = (seedClassifieds as unknown as ClassifiedAd[]) || [];
-    return raw.filter((c: any) => c.status === 'approved' || c.status === 'active');
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed)
+        ? parsed.filter((ad: any) => ad && ad.approvedByAdmin === true)
+        : [];
+    } catch {
+      return [];
+    }
   });
   const [isCreateClassifiedOpen, setIsCreateClassifiedOpen] = useState(false);
   const [selectedClassified, setSelectedClassified] = useState<ClassifiedAd | null>(null);
@@ -199,29 +200,27 @@ export default function App() {
   const [adminError, setAdminError] = useState('');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => isSessionAdminAuthenticated());
 
+  const [ratingsTick, setRatingsTick] = useState(0);
   useEffect(() => {
-    const handleAuthChange = () => setIsAdminLoggedIn(isSessionAdminAuthenticated());
-    window.addEventListener('admin-auth-changed', handleAuthChange);
-    return () => window.removeEventListener('admin-auth-changed', handleAuthChange);
+    const onRatingUpdate = () => setRatingsTick((t) => t + 1);
+    window.addEventListener('real-ratings-updated', onRatingUpdate);
+    return () => window.removeEventListener('real-ratings-updated', onRatingUpdate);
   }, []);
 
   // Negocios con calificaciones reales integradas (si count === 0, rating es 0 y se muestra 'Sin calificar aún')
   // En pantalla principal: Empresas TOP van SIEMPRE en los primeros lugares de la lista.
   const businesses: Business[] = useMemo(() => {
     const raw = (seedBusinesses as unknown as Business[]) || [];
-    const statsMap = (seedRatings as any)?.stats || {};
 
     return [...raw]
       .filter((b) => !deletedBusinessIds.includes(Number(b.id)))
       .map((b) => {
-        const ratingData = statsMap[String(b.id)];
+        const realStat = getRealBusinessRating(b.id);
         const override = businessOverrides[String(b.id)] || {};
-        const count = ratingData?.count !== undefined ? ratingData.count : (b.reviewCount || 0);
-        const rating = count > 0 ? Number(ratingData?.average || b.rating || 0) : 0;
         return {
           ...b,
-          rating,
-          reviewCount: count,
+          rating: realStat.count > 0 ? realStat.average : 0,
+          reviewCount: realStat.count,
           ...override,
         };
       })
@@ -242,7 +241,7 @@ export default function App() {
         if (timeB !== timeA) return timeB - timeA;
         return Number(b.id) - Number(a.id);
       });
-  }, [businessOverrides, deletedBusinessIds]);
+  }, [businessOverrides, deletedBusinessIds, ratingsTick]);
 
   const categoriasList = useMemo(() => {
     const set = new Set<string>();
@@ -593,7 +592,6 @@ export default function App() {
               setActiveTab('registro');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            onAdminClick={() => setIsAdminModalOpen(true)}
             onSelectFilter={handleSelectNavbarFilter}
           />
         </div>
@@ -746,59 +744,77 @@ export default function App() {
         </div>
       ) : (
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 relative z-10">
-          {/* BARRA DE CANALES Y COMUNIDADES OFICIALES (APPLE IOS LIQUID GLASS) */}
-          <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {/* Bloque 1: Canales Oficiales */}
-            <div className="p-3.5 sm:p-4 rounded-3xl bg-white/70 backdrop-blur-2xl border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-sky-500 to-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0">
-                  📣
-                </div>
-                <div>
-                  <h3 className="text-xs font-extrabold text-stone-900 tracking-tight">Canales Oficiales</h3>
-                  <p className="text-[11px] text-stone-500">Comunidad oficial en redes sociales</p>
+          {/* BARRA SUPERIOR iOS LIQUID GLASS: CANALES OFICIALES Y COMUNIDADES WHATSAPP EN 1 SOLA LÍNEA */}
+          <div
+            className="w-full rounded-[26px] px-4 sm:px-6 py-3.5 mb-8 border border-white/90 shadow-[0_12px_32px_rgba(14,116,144,0.12)]"
+            style={{
+              background: 'linear-gradient(135deg, rgba(224, 242, 254, 0.85) 0%, rgba(240, 249, 255, 0.78) 100%)',
+              backdropFilter: 'blur(24px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+            }}
+          >
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-center">
+              {/* LADO IZQUIERDO: CANALES OFICIALES (AZUL FACEBOOK Y NEGRO TIKTOK CON LETRA BLANCA) */}
+              <div>
+                <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 tracking-tight mb-2">
+                  Canales Oficiales
+                </h3>
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
+                  {getSavedPortalLinks()
+                    .filter((l) => l.group === 'canales')
+                    .map((item) => {
+                      const isTikTok =
+                        item.id.toLowerCase().includes('tiktok') ||
+                        item.label.toLowerCase().includes('tiktok');
+                      return (
+                        <a
+                          key={item.id}
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] sm:text-xs font-bold text-white whitespace-nowrap shadow-sm transition-transform active:scale-95 shrink-0 ${
+                            isTikTok
+                              ? 'bg-black hover:bg-stone-900 border border-white/20'
+                              : 'bg-[#1877F2] hover:bg-[#166FE5] border border-white/25'
+                          }`}
+                        >
+                          {isTikTok ? (
+                            <span className="w-4 h-4 rounded-full bg-white/15 flex items-center justify-center text-[10px] font-black">
+                              ♪
+                            </span>
+                          ) : (
+                            <span className="w-4 h-4 rounded-full bg-white text-[#1877F2] flex items-center justify-center text-[11px] font-black leading-none">
+                              f
+                            </span>
+                          )}
+                          <span>{item.label}</span>
+                        </a>
+                      );
+                    })}
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {portalLinks.filter((l) => l.group === 'canales').map((link) => (
-                  <a
-                    key={link.id}
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 hover:bg-white text-stone-800 hover:text-blue-700 text-xs font-semibold border border-stone-200/80 shadow-2xs transition active:scale-95"
-                  >
-                    <span>{link.badge ? `[${link.badge}]` : '🔗'}</span>
-                    <span>{link.label}</span>
-                  </a>
-                ))}
-              </div>
-            </div>
 
-            {/* Bloque 2: Comunidades WhatsApp */}
-            <div className="p-3.5 sm:p-4 rounded-3xl bg-white/70 backdrop-blur-2xl border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-emerald-500 to-green-600 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0">
-                  💬
+              {/* LADO DERECHO: COMUNIDADES WHATSAPP (VERDE WHATSAPP CON LETRA BLANCA EN 1 SOLA LÍNEA) */}
+              <div>
+                <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 tracking-tight mb-2">
+                  Comunidades WhatsApp
+                </h3>
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
+                  {getSavedPortalLinks()
+                    .filter((l) => l.group === 'whatsapp')
+                    .map((item) => (
+                      <a
+                        key={item.id}
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] sm:text-xs font-bold text-white bg-[#075E54] hover:bg-[#128C7E] border border-emerald-400/30 whitespace-nowrap shadow-sm transition-transform active:scale-95 shrink-0"
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#25D366] shadow-[0_0_6px_#25D366] shrink-0" />
+                        <span>{item.label}</span>
+                      </a>
+                    ))}
                 </div>
-                <div>
-                  <h3 className="text-xs font-extrabold text-stone-900 tracking-tight">Comunidades WhatsApp</h3>
-                  <p className="text-[11px] text-stone-500">Únete a grupos de consumo y ventas</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {portalLinks.filter((l) => l.group === 'whatsapp').map((link) => (
-                  <a
-                    key={link.id}
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-900 text-xs font-bold border border-emerald-500/30 shadow-2xs transition active:scale-95"
-                  >
-                    <span>🟢</span>
-                    <span>{link.label}</span>
-                  </a>
-                ))}
               </div>
             </div>
           </div>

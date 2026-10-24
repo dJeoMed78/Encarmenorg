@@ -26,17 +26,7 @@ function getCarmenVersion() {
   const hour = map.hour || '12';
   const minute = map.minute || '00';
 
-  let deployCode = process.env.VERCEL_GIT_COMMIT_SHA
-    ? process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7)
-    : (process.env.DEPLOY_CODE || 'aa9ab96');
-
-  // Hosting: V (Vercel), R (Render), A (Azure)
-  let hosting = 'V';
-  if (process.env.RENDER) hosting = 'R';
-  else if (process.env.AZURE_WEBAPP_NAME || process.env.WEBSITE_SITE_NAME) hosting = 'A';
-  else if (process.env.HOSTING_ID) hosting = process.env.HOSTING_ID;
-
-  return `${day}${month}${year}:${hour}${minute}:${deployCode}:${hosting}`;
+  return `${day}${month}${year}:${hour}${minute}`;
 }
 
 const version = getCarmenVersion();

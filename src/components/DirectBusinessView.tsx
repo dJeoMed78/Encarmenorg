@@ -7,6 +7,7 @@ import {
 import { Business } from './BusinessCard';
 import { formatBusinessName, formatAddressText } from '../utils/textUtils';
 import { verifyBusinessEditPin } from '../services/api';
+import { getRealBusinessRating, submitRealBusinessRating } from '../utils/realRatings';
 
 interface DirectBusinessViewProps {
   business: Business;
@@ -63,7 +64,23 @@ export function DirectBusinessView({
   onAdminClick,
 }: DirectBusinessViewProps) {
   const [copiedLink, setCopiedLink] = useState(false);
-  const [userRating, setUserRating] = useState<number>(0);
+  const [hoverStar, setHoverStar] = useState<number>(0);
+  const [ratingSummary, setRatingSummary] = useState(() =>
+    getRealBusinessRating(business.id)
+  );
+  const [justRated, setJustRated] = useState(false);
+
+  React.useEffect(() => {
+    setRatingSummary(getRealBusinessRating(business.id));
+    setJustRated(false);
+  }, [business.id]);
+
+  const handleRateClick = (stars: number) => {
+    const updated = submitRealBusinessRating(business.id, stars);
+    setRatingSummary(updated);
+    setJustRated(true);
+  };
+
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [showOwnerSection, setShowOwnerSection] = useState(false);
   const [ownerPin, setOwnerPin] = useState('');
@@ -387,37 +404,64 @@ export function DirectBusinessView({
                 'Empresa local comprometida con ofrecer productos y servicios de alta calidad en Ciudad del Carmen.'}
             </p>
 
-            <div className="pt-4 border-t border-stone-200/70 flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <h4 className="text-xs font-black text-stone-900 uppercase tracking-wide">
-                  Calificación de la Comunidad
-                </h4>
-                <div className="flex items-center gap-1.5 mt-1">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setUserRating(star)}
-                      className="p-1 hover:scale-125 transition cursor-pointer"
-                    >
-                      <Star
-                        className={`w-5 h-5 ${
-                          (userRating || 5) >= star
-                            ? 'fill-amber-500 text-amber-500'
-                            : 'text-stone-300'
-                        }`}
-                      />
-                    </button>
-                  ))}
-                  <span className="text-sm font-black text-stone-900 ml-2">
-                    {typeof business.rating === 'number' && business.rating > 0 ? business.rating.toFixed(1) : '5.0'} / 5
-                  </span>
+            <div className="pt-4 border-t border-stone-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-700 flex items-center justify-center font-bold shrink-0">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-stone-900 uppercase tracking-wide">
+                    Calificación de la Comunidad
+                  </h4>
+                  <p className="text-[11px] text-stone-500">
+                    {justRated
+                      ? '¡Gracias! Tu calificación ya forma parte del promedio.'
+                      : ratingSummary.count > 0
+                      ? `Promedio de ${ratingSummary.count} ${ratingSummary.count === 1 ? 'opinión verificada' : 'opiniones verificadas'} · Toca para calificar`
+                      : 'Sin calificar aún · Toca una estrella para calificar'}
+                  </p>
                 </div>
               </div>
 
-              <span className="text-xs font-medium text-stone-500">
-                {business.reviewCount || (business as any).reviewsCount || 1} opinión verificada en Carmen
-              </span>
+              <div className="flex items-center gap-2 bg-white px-3.5 py-2 rounded-2xl border border-stone-200/80 shadow-2xs self-start sm:self-auto">
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => {
+                    const activeLevel = hoverStar || Math.round(ratingSummary.average);
+                    return (
+                      <button
+                        key={star}
+                        type="button"
+                        onMouseEnter={() => setHoverStar(star)}
+                        onMouseLeave={() => setHoverStar(0)}
+                        onClick={() => handleRateClick(star)}
+                        title={`Calificar con ${star} ${star === 1 ? 'estrella' : 'estrellas'}`}
+                        className="p-0.5 hover:scale-125 active:scale-95 transition-transform cursor-pointer"
+                      >
+                        <Star
+                          className={`w-4 h-4 ${
+                            star <= activeLevel
+                              ? 'fill-amber-500 text-amber-500'
+                              : 'fill-stone-100 text-stone-300'
+                          }`}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {ratingSummary.count > 0 ? (
+                  <div className="flex items-baseline gap-0.5 pl-1 border-l border-stone-200">
+                    <span className="text-base font-black text-stone-900">
+                      {ratingSummary.average.toFixed(1)}
+                    </span>
+                    <span className="text-xs text-stone-400">/ 5</span>
+                  </div>
+                ) : (
+                  <span className="text-[11px] font-bold text-amber-700 pl-1 border-l border-stone-200">
+                    Calificar
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 

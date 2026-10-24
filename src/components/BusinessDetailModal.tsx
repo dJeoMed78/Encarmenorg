@@ -8,6 +8,7 @@ import {
 import { Business } from './BusinessCard';
 import { formatBusinessName, formatAddressText } from '../utils/textUtils';
 import { verifyBusinessEditPin } from '../services/api';
+import { getRealBusinessRating, submitRealBusinessRating } from '../utils/realRatings';
 
 interface BusinessDetailModalProps {
   business: Business | null;
@@ -67,6 +68,25 @@ export function BusinessDetailModal({
   const [ownerPin, setOwnerPin] = useState('');
   const [ownerPinError, setOwnerPinError] = useState<string | null>(null);
   const [isVerifyingPin, setIsVerifyingPin] = useState(false);
+  const [hoverStar, setHoverStar] = useState<number>(0);
+  const [ratingSummary, setRatingSummary] = useState(() =>
+    business ? getRealBusinessRating(business.id) : { average: 0, count: 0, scores: [] }
+  );
+  const [justRated, setJustRated] = useState(false);
+
+  useEffect(() => {
+    if (business) {
+      setRatingSummary(getRealBusinessRating(business.id));
+      setJustRated(false);
+    }
+  }, [business?.id]);
+
+  const handleRateClick = (stars: number) => {
+    if (!business) return;
+    const updated = submitRealBusinessRating(business.id, stars);
+    setRatingSummary(updated);
+    setJustRated(true);
+  };
 
   useEffect(() => {
     setImgError(false);
@@ -346,17 +366,28 @@ export function BusinessDetailModal({
                   Anteriormente: {prevName}
                 </p>
               )}
-              <div className="flex items-center gap-1.5 mt-2">
-                <div className="flex text-amber-500">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-amber-500 text-amber-500" />
-                  ))}
+              {ratingSummary.count > 0 && (
+                <div className="flex items-center gap-1.5 mt-2">
+                  <div className="flex text-amber-500">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <Star
+                        key={i}
+                        className={`w-4 h-4 ${
+                          i <= Math.round(ratingSummary.average)
+                            ? 'fill-amber-500 text-amber-500'
+                            : 'fill-stone-200 text-stone-300'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-sm font-black text-stone-800 ml-1">
+                    {ratingSummary.average.toFixed(1)}
+                  </span>
+                  <span className="text-xs text-stone-500 font-medium">
+                    · {ratingSummary.count} {ratingSummary.count === 1 ? 'calificación recibida' : 'calificaciones recibidas'}
+                  </span>
                 </div>
-                <span className="text-sm font-black text-stone-800 ml-1">
-                  {typeof business.rating === 'number' && business.rating > 0 ? business.rating.toFixed(1) : '5.0'}
-                </span>
-                <span className="text-xs text-stone-400 font-medium">· Excelente reputación</span>
-              </div>
+              )}
             </div>
 
             <div className="rounded-3xl p-5 space-y-3" style={innerGlassCard}>
@@ -380,33 +411,64 @@ export function BusinessDetailModal({
               </div>
             </div>
 
-            <div className="rounded-3xl p-4.5 flex items-center justify-between" style={innerGlassCard}>
+            <div className="rounded-3xl p-4.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={innerGlassCard}>
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-700 flex items-center justify-center font-bold">
+                <div className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-700 flex items-center justify-center font-bold shrink-0">
                   <Award className="w-6 h-6" />
                 </div>
                 <div>
                   <h4 className="text-xs font-extrabold text-stone-900 leading-tight">
                     Calificación de la Comunidad
                   </h4>
-                  <p className="text-[11px] text-stone-500">Opiniones verificadas de clientes</p>
+                  <p className="text-[11px] text-stone-500">
+                    {justRated
+                      ? '¡Gracias! Tu calificación ya forma parte del promedio.'
+                      : ratingSummary.count > 0
+                      ? `Promedio de ${ratingSummary.count} ${ratingSummary.count === 1 ? 'opinión' : 'opiniones'} · Toca para calificar`
+                      : 'Aún sin calificar · Toca una estrella para calificar'}
+                  </p>
                 </div>
               </div>
 
-              {Number(business.reviewCount) > 0 && Number(business.rating) > 0 ? (
-                <div className="flex items-center gap-1.5 bg-white px-3.5 py-1.5 rounded-2xl border border-stone-200/60 shadow-2xs">
-                  <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
-                  <span className="text-base font-black text-stone-900">
-                    {Number(business.rating).toFixed(1)}
+              <div className="flex items-center gap-2 bg-white px-3.5 py-2 rounded-2xl border border-stone-200/80 shadow-2xs self-start sm:self-auto">
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => {
+                    const activeLevel = hoverStar || Math.round(ratingSummary.average);
+                    return (
+                      <button
+                        key={star}
+                        type="button"
+                        onMouseEnter={() => setHoverStar(star)}
+                        onMouseLeave={() => setHoverStar(0)}
+                        onClick={() => handleRateClick(star)}
+                        title={`Calificar con ${star} ${star === 1 ? 'estrella' : 'estrellas'}`}
+                        className="p-0.5 hover:scale-125 active:scale-95 transition-transform cursor-pointer"
+                      >
+                        <Star
+                          className={`w-4 h-4 ${
+                            star <= activeLevel
+                              ? 'fill-amber-500 text-amber-500'
+                              : 'fill-stone-100 text-stone-300'
+                          }`}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {ratingSummary.count > 0 ? (
+                  <div className="flex items-baseline gap-0.5 pl-1 border-l border-stone-200">
+                    <span className="text-base font-black text-stone-900">
+                      {ratingSummary.average.toFixed(1)}
+                    </span>
+                    <span className="text-xs text-stone-400">/ 5</span>
+                  </div>
+                ) : (
+                  <span className="text-[11px] font-bold text-amber-700 pl-1 border-l border-stone-200">
+                    Calificar
                   </span>
-                  <span className="text-xs text-stone-400">/ 5 ({business.reviewCount})</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-2xl border border-amber-200 text-xs font-bold text-amber-800">
-                  <Star className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Sin calificar aún</span>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* 1. GESTIÓN DEL ADMINISTRADOR (VISIBLE ÚNICAMENTE PARA ADMINISTRADOR LOGUEADO) */}

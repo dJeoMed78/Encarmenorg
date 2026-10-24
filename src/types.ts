@@ -223,6 +223,7 @@ export interface ClassifiedAd {
   aiDetected?: boolean;
   pendingApproval?: boolean;
   alreadyPublished?: boolean;
+  approvedByAdmin?: boolean;
 }
 
 export interface Promotion {

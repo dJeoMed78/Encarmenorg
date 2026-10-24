@@ -323,18 +323,20 @@ export function Navbar({
             <span>Núm. Emergencia</span>
           </button>
 
-          {/* BOTÓN PI DE ADMINISTRACIÓN */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsFilterPopoverOpen(false);
-              onAdminClick?.();
-            }}
-            className="w-9 h-9 rounded-full bg-white/70 hover:bg-amber-400 hover:text-stone-950 text-stone-800 border border-white/80 shadow-xs flex items-center justify-center font-serif text-base font-bold transition-all active:scale-95 cursor-pointer"
-            title="Panel de Administración (π)"
-          >
-            π
-          </button>
+          {/* BOTÓN PI DE ADMINISTRACIÓN (SOLO SI SE PROVEE onAdminClick) */}
+          {onAdminClick && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsFilterPopoverOpen(false);
+                onAdminClick();
+              }}
+              className="w-9 h-9 rounded-full bg-white/70 hover:bg-amber-400 hover:text-stone-950 text-stone-800 border border-white/80 shadow-xs flex items-center justify-center font-serif text-base font-bold transition-all active:scale-95 cursor-pointer"
+              title="Panel de Administración (π)"
+            >
+              π
+            </button>
+          )}
         </div>
 
         <div className="sm:hidden flex items-center gap-1.5">
@@ -347,15 +349,17 @@ export function Navbar({
             <span>Núm. Emergencia</span>
           </button>
 
-          {/* BOTÓN PI DE ADMINISTRACIÓN MÓVIL */}
-          <button
-            type="button"
-            onClick={onAdminClick}
-            className="w-7 h-7 rounded-full bg-white/70 hover:bg-amber-400 text-stone-800 font-serif text-sm font-bold flex items-center justify-center border border-white/80 cursor-pointer shadow-xs"
-            title="Panel de Administración (π)"
-          >
-            π
-          </button>
+          {/* BOTÓN PI DE ADMINISTRACIÓN MÓVIL (SOLO SI SE PROVEE onAdminClick) */}
+          {onAdminClick && (
+            <button
+              type="button"
+              onClick={onAdminClick}
+              className="w-7 h-7 rounded-full bg-white/70 hover:bg-amber-400 text-stone-800 font-serif text-sm font-bold flex items-center justify-center border border-white/80 cursor-pointer shadow-xs"
+              title="Panel de Administración (π)"
+            >
+              π
+            </button>
+          )}
 
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -397,17 +401,19 @@ export function Navbar({
             <span>Subir Mi Negocio</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setIsMobileMenuOpen(false);
-              onAdminClick?.();
-            }}
-            className="w-full py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition"
-          >
-            <span className="font-serif text-base font-bold text-amber-600">π</span>
-            <span>Panel de Administración</span>
-          </button>
+          {onAdminClick && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                onAdminClick();
+              }}
+              className="w-full py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition"
+            >
+              <span className="font-serif text-base font-bold text-amber-600">π</span>
+              <span>Panel de Administración</span>
+            </button>
+          )}
         </div>
       )}
     </div>
