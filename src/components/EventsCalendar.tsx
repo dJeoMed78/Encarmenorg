@@ -69,9 +69,7 @@ export const EventsCalendar: React.FC<EventsCalendarProps> = ({
     : null;
 
   return (
-    <div
-      className="w-full rounded-2xl p-3.5 sm:p-4 transition-all duration-300 shadow-md border border-stone-200/70 bg-white/95"
-    >
+    <div className="w-full rounded-2xl p-3.5 sm:p-4 transition-all duration-300 shadow-md border border-stone-200/70 bg-white/95">
       {/* CABECERA COMPACTA */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">

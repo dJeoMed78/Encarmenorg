@@ -141,22 +141,15 @@ export const EventsPage: React.FC<EventsPageProps> = ({
   };
 
   return (
-    <div className="min-h-screen relative font-sans text-stone-900 pb-24 text-left bg-[#f0f4f8] overflow-x-hidden">
-      {/* Luces y esferas ambientales para refracción translúcida tipo glass */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <div className="absolute top-[18%] -left-32 w-[550px] h-[550px] bg-sky-200/50 rounded-full blur-[110px]" />
-        <div className="absolute top-[48%] -right-32 w-[600px] h-[600px] bg-amber-200/45 rounded-full blur-[130px]" />
-        <div className="absolute bottom-[10%] left-[20%] w-[550px] h-[550px] bg-teal-100/50 rounded-full blur-[120px]" />
-      </div>
-
+    <div className="min-h-screen relative font-sans text-stone-900 pb-24 text-left bg-transparent">
       {/* Top Breadcrumb & Navigation Bar with Frosted Glass */}
       <div
-        className="px-4 sm:px-8 py-3 sticky top-0 z-30 transition-all duration-300"
+        className="px-4 sm:px-8 py-3 rounded-2xl mb-4 transition-all duration-300"
         style={{
-          background: 'rgba(255, 255, 255, 0.65)',
+          background: 'rgba(255, 255, 255, 0.72)',
           backdropFilter: 'blur(25px) saturate(190%)',
           WebkitBackdropFilter: 'blur(25px) saturate(190%)',
-          borderBottom: '1.5px solid rgba(255, 255, 255, 0.85)',
+          border: '1.5px solid rgba(255, 255, 255, 0.88)',
           boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
         }}
       >
@@ -164,7 +157,7 @@ export const EventsPage: React.FC<EventsPageProps> = ({
           <button
             type="button"
             onClick={onBackToDirectory}
-            className="flex items-center gap-2 text-xs sm:text-sm font-black text-stone-900 hover:text-amber-700 transition-colors cursor-pointer group px-3 py-1.5 rounded-xl bg-white/70 hover:bg-white border border-white/80 shadow-2xs"
+            className="flex items-center gap-2 text-xs sm:text-sm font-black text-stone-900 hover:text-amber-700 transition-colors cursor-pointer group px-3 py-1.5 rounded-xl bg-white/80 hover:bg-white border border-stone-200/70 shadow-2xs"
           >
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform text-amber-600" />
             <span>Volver al Directorio de Empresas</span>
@@ -180,12 +173,12 @@ export const EventsPage: React.FC<EventsPageProps> = ({
         </div>
       </div>
 
-      {/* Hero Header con Título a la Izquierda y Calendario Compacto a la Derecha dentro del mismo contenedor */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-10 pb-2">
+      {/* Hero Header con Título a la Izquierda y Calendario Compacto a la Derecha */}
+      <div className="relative z-10 max-w-7xl mx-auto pt-2 pb-2">
         <div
           className="rounded-3xl p-6 sm:p-8 lg:p-10 transition-all duration-300 relative overflow-hidden"
           style={{
-            background: 'rgba(255, 255, 255, 0.72)',
+            background: 'rgba(255, 255, 255, 0.78)',
             backdropFilter: 'blur(35px) saturate(190%)',
             WebkitBackdropFilter: 'blur(35px) saturate(190%)',
             border: '1.5px solid rgba(255, 255, 255, 0.92)',
@@ -217,7 +210,7 @@ export const EventsPage: React.FC<EventsPageProps> = ({
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Buscar por nombre, malecón, playa, feria, bazar, concierto..."
-                  className="w-full pl-12 pr-10 py-3.5 bg-white/90 border border-stone-200/80 rounded-2xl text-stone-950 font-semibold placeholder-stone-400 text-sm focus:outline-none focus:bg-white focus:border-[#007AFF] focus:ring-2 focus:ring-blue-500/20 transition-all shadow-xs"
+                  className="w-full pl-12 pr-10 py-3.5 bg-white/95 border border-stone-200/80 rounded-2xl text-stone-950 font-semibold placeholder-stone-400 text-sm focus:outline-none focus:bg-white focus:border-[#007AFF] focus:ring-2 focus:ring-blue-500/20 transition-all shadow-xs"
                 />
                 {searchQuery && (
                   <button
@@ -245,7 +238,7 @@ export const EventsPage: React.FC<EventsPageProps> = ({
       </div>
 
       {/* Main Content Area (Sin repetir el calendario abajo) */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-8 relative z-10">
+      <div className="max-w-7xl mx-auto py-4 space-y-8 relative z-10">
 
         {/* Categories Bar & Active Filters */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-stone-200/80">
