@@ -180,68 +180,72 @@ export const EventsPage: React.FC<EventsPageProps> = ({
         </div>
       </div>
 
-      {/* Hero Header with Frosted Glass Container */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-10 pb-4">
+      {/* Hero Header con Título a la Izquierda y Calendario Compacto a la Derecha dentro del mismo contenedor */}
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-10 pb-2">
         <div
-          className="rounded-3xl p-6 sm:p-10 transition-all duration-300 relative overflow-hidden"
+          className="rounded-3xl p-6 sm:p-8 lg:p-10 transition-all duration-300 relative overflow-hidden"
           style={{
-            background: 'rgba(255, 255, 255, 0.65)',
+            background: 'rgba(255, 255, 255, 0.72)',
             backdropFilter: 'blur(35px) saturate(190%)',
             WebkitBackdropFilter: 'blur(35px) saturate(190%)',
-            border: '1.5px solid rgba(255, 255, 255, 0.90)',
+            border: '1.5px solid rgba(255, 255, 255, 0.92)',
             boxShadow: '0 20px 50px -15px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
           }}
         >
-          <div className="space-y-4 max-w-3xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-900 border border-amber-400/40 text-xs font-black uppercase tracking-wider shadow-2xs">
-              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-              <span>Agenda Cultural, Deportiva y Social de Carmen</span>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
+            {/* COLUMNA IZQUIERDA (7 COLUMNAS): TÍTULO, DESCRIPCIÓN Y BUSCADOR */}
+            <div className="lg:col-span-7 space-y-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-900 border border-amber-400/40 text-xs font-black uppercase tracking-wider shadow-2xs">
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                <span>Agenda Cultural, Deportiva y Social de Carmen</span>
+              </div>
+
+              <h1 className="text-3xl sm:text-5xl font-black text-stone-950 tracking-tight leading-tight">
+                Eventos, Conciertos, Ferias y Bazares
+              </h1>
+
+              <p className="text-sm sm:text-base text-stone-800 font-medium leading-relaxed">
+                Descubre la cartelera completa de Ciudad del Carmen. Consulta las fechas en el calendario
+                interactivo, agrega los eventos a tu agenda y comparte con tu familia y amigos.
+              </p>
+
+              {/* Buscador dentro del bloque izquierdo */}
+              <div className="pt-2 max-w-xl relative">
+                <Search className="w-5 h-5 text-stone-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Buscar por nombre, malecón, playa, feria, bazar, concierto..."
+                  className="w-full pl-12 pr-10 py-3.5 bg-white/90 border border-stone-200/80 rounded-2xl text-stone-950 font-semibold placeholder-stone-400 text-sm focus:outline-none focus:bg-white focus:border-[#007AFF] focus:ring-2 focus:ring-blue-500/20 transition-all shadow-xs"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-900 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
 
-            <h1 className="text-3xl sm:text-5xl font-black text-stone-950 tracking-tight leading-tight">
-              Eventos, Conciertos, Ferias y Bazares
-            </h1>
-
-            <p className="text-sm sm:text-base text-stone-800 font-medium leading-relaxed">
-              Descubre la cartelera completa de Ciudad del Carmen. Consulta las fechas en el calendario
-              interactivo, agrega los eventos a tu agenda y comparte con tu familia y amigos.
-            </p>
-
-            {/* Search bar inside hero */}
-            <div className="pt-2 max-w-2xl relative">
-              <Search className="w-5 h-5 text-stone-500 absolute left-4 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Buscar por nombre, malecón, playa, feria, bazar, concierto..."
-                className="w-full pl-12 pr-10 py-3.5 bg-white/80 border border-white/90 rounded-2xl text-stone-950 font-semibold placeholder-stone-500 text-sm focus:outline-none focus:bg-white focus:border-[#007AFF] focus:ring-2 focus:ring-blue-500/20 transition-all shadow-xs"
+            {/* COLUMNA DERECHA (5 COLUMNAS): CALENDARIO COMPACTO INTEGRADO */}
+            <div className="lg:col-span-5 w-full">
+              <EventsCalendar
+                events={events}
+                selectedDate={selectedDate}
+                onSelectDate={d => setSelectedDate(d)}
+                onSelectEvent={evt => setSelectedEventModal(evt)}
               />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-900"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 relative z-10">
-        {/* UPPER SECTION: INTERACTIVE CALENDAR */}
-        <div>
-          <EventsCalendar
-            events={events}
-            selectedDate={selectedDate}
-            onSelectDate={d => setSelectedDate(d)}
-            onSelectEvent={evt => setSelectedEventModal(evt)}
-          />
-        </div>
+      {/* Main Content Area (Sin repetir el calendario abajo) */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-8 relative z-10">
 
         {/* Categories Bar & Active Filters */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-stone-200/80">

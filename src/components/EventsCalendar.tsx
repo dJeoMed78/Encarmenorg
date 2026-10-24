@@ -70,57 +70,51 @@ export const EventsCalendar: React.FC<EventsCalendarProps> = ({
 
   return (
     <div
-      className="max-w-xl mx-auto rounded-3xl p-4 sm:p-5 transition-all duration-300 shadow-lg"
-      style={{
-        background: 'rgba(255, 255, 255, 0.78)',
-        backdropFilter: 'blur(28px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(28px) saturate(180%)',
-        border: '1.5px solid rgba(255, 255, 255, 0.92)'
-      }}
+      className="w-full rounded-2xl p-3.5 sm:p-4 transition-all duration-300 shadow-md border border-stone-200/70 bg-white/95"
     >
-      {/* CABECERA COMPACTA CON BOTÓN COLAPSABLE */}
+      {/* CABECERA COMPACTA */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-2xl bg-amber-500 text-stone-950 flex items-center justify-center shadow-xs">
-            <CalendarIcon className="w-4 h-4" />
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-2xs shrink-0">
+            <CalendarIcon className="w-3.5 h-3.5" />
           </div>
           <div>
-            <h3 className="text-sm sm:text-base font-black text-stone-900 leading-tight">
+            <h3 className="text-xs sm:text-sm font-black text-stone-900 leading-tight">
               {MONTH_NAMES[month]} {year}
             </h3>
-            <p className="text-[11px] text-stone-500 font-medium">
+            <p className="text-[10px] text-stone-500 font-medium">
               {events.length} actividades en cartelera
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           {selectedDate && (
             <button
               type="button"
               onClick={() => onSelectDate(null)}
-              className="px-2.5 py-1 rounded-xl bg-amber-100 text-amber-900 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+              className="px-2 py-1 rounded-lg bg-amber-100 text-amber-900 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <RotateCcw className="w-2.5 h-2.5" />
               <span>Todos</span>
             </button>
           )}
 
           {!isCollapsed && (
-            <div className="flex items-center bg-white/80 rounded-xl border border-stone-200/80 p-0.5">
+            <div className="flex items-center bg-stone-100/80 rounded-lg border border-stone-200/80 p-0.5">
               <button
                 type="button"
                 onClick={() => setCurrentViewDate(new Date(year, month - 1, 1))}
-                className="p-1 rounded-lg hover:bg-stone-100 text-stone-700 cursor-pointer"
+                className="p-1 rounded-md hover:bg-white text-stone-600 cursor-pointer"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
                 onClick={() => setCurrentViewDate(new Date(year, month + 1, 1))}
-                className="p-1 rounded-lg hover:bg-stone-100 text-stone-700 cursor-pointer"
+                className="p-1 rounded-md hover:bg-white text-stone-600 cursor-pointer"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
@@ -128,20 +122,20 @@ export const EventsCalendar: React.FC<EventsCalendarProps> = ({
           <button
             type="button"
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="px-3 py-1.5 rounded-xl bg-white hover:bg-stone-100 text-stone-800 border border-stone-200/80 text-xs font-bold flex items-center gap-1 cursor-pointer shadow-2xs"
+            className="px-2.5 py-1 rounded-lg bg-stone-100/80 hover:bg-stone-200/70 text-stone-700 border border-stone-200/80 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
           >
-            <span>{isCollapsed ? 'Mostrar Calendario' : 'Ocultar'}</span>
-            {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+            <span>{isCollapsed ? 'Mostrar' : 'Ocultar'}</span>
+            {isCollapsed ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
           </button>
         </div>
       </div>
 
-      {/* CUADRÍCULA COMPACTA ESTILO iOS GLASS */}
+      {/* CUADRÍCULA COMPACTA */}
       {!isCollapsed && (
-        <div className="mt-4 pt-3 border-t border-stone-200/60">
-          <div className="grid grid-cols-7 gap-1 text-center mb-1.5">
+        <div className="mt-3 pt-2.5 border-t border-stone-100">
+          <div className="grid grid-cols-7 gap-1 text-center mb-1">
             {WEEKDAYS.map((w, i) => (
-              <div key={i} className="text-[10px] font-black text-stone-400 uppercase">
+              <div key={i} className="text-[9px] font-bold text-stone-400 uppercase">
                 {w}
               </div>
             ))}
@@ -150,7 +144,7 @@ export const EventsCalendar: React.FC<EventsCalendarProps> = ({
           <div className="grid grid-cols-7 gap-1">
             {calendarCells.map((cell) => {
               if (!cell.date || !cell.dayNumber) {
-                return <div key={cell.dateKey} className="h-9" />;
+                return <div key={cell.dateKey} className="h-7" />;
               }
               const isSelected = selectedKey === cell.dateKey;
               const hasEvt = cell.count > 0;
@@ -160,18 +154,18 @@ export const EventsCalendar: React.FC<EventsCalendarProps> = ({
                   key={cell.dateKey}
                   type="button"
                   onClick={() => onSelectDate(isSelected ? null : cell.date)}
-                  className={`h-9 sm:h-10 rounded-xl flex flex-col items-center justify-center text-xs font-bold transition-all cursor-pointer relative ${
+                  className={`h-7 sm:h-8 rounded-lg flex flex-col items-center justify-center text-[11px] font-bold transition-all cursor-pointer relative ${
                     isSelected
-                      ? 'bg-stone-900 text-white shadow-md scale-105'
+                      ? 'bg-stone-900 text-white shadow-sm scale-105'
                       : hasEvt
-                      ? 'bg-amber-500/20 hover:bg-amber-500/30 text-stone-900 border border-amber-500/40'
-                      : 'hover:bg-white/80 text-stone-700'
+                      ? 'bg-amber-100/90 hover:bg-amber-200/80 text-stone-900 border border-amber-300/60'
+                      : 'hover:bg-stone-100 text-stone-700'
                   }`}
                 >
-                  <span>{cell.dayNumber}</span>
+                  <span className="leading-none">{cell.dayNumber}</span>
                   {hasEvt && (
                     <span
-                      className={`w-1.5 h-1.5 rounded-full mt-0.5 ${
+                      className={`w-1 h-1 rounded-full mt-0.5 ${
                         isSelected ? 'bg-amber-400' : 'bg-amber-600'
                       }`}
                     />

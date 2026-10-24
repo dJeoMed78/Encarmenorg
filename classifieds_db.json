@@ -75,10 +75,11 @@
     "sourceUrl": "https://isladelcarmen.com/",
     "source": "Isla del Carmen (IDC)",
     "isVerified": true,
-    "status": "active",
+    "status": "trash",
     "views": 65,
     "createdAt": "2026-10-17T20:15:00.000Z",
-    "userToken": ""
+    "userToken": "",
+    "trashedAt": "2026-10-24T21:20:01.982Z"
   },
   {
     "id": "ad-idc-04",
@@ -103,7 +104,7 @@
     "views": 53,
     "createdAt": "2026-10-17T17:00:00.000Z",
     "userToken": "",
-    "trashedAt": "2026-10-24T19:30:59.411Z"
+    "trashedAt": "2026-10-24T21:20:01.982Z"
   },
   {
     "id": "ad-ind-01",
@@ -200,7 +201,7 @@
     "views": 145,
     "createdAt": "2026-10-17T19:00:00.000Z",
     "userToken": "",
-    "trashedAt": "2026-10-24T19:30:59.411Z"
+    "trashedAt": "2026-10-24T21:20:01.982Z"
   },
   {
     "id": "ad-compu-01",
