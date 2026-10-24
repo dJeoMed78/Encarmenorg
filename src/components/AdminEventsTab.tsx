@@ -44,6 +44,42 @@ import {
 } from '../services/eventsService';
 import { getEventRepresentativeImage, getFallbackThematicImage } from '../utils/eventImages';
 
+function resolveSourceSiteName(sourceUrl?: string, sourceField?: string): string {
+  const url = (sourceUrl || '').toLowerCase();
+  if (url.includes('facebook.com/groups/506440126097710')) return 'Grupo FB Empresas en Carmen';
+  if (url.includes('facebook.com/culturacarmenmx')) return 'FB Cultura Carmen';
+  if (url.includes('facebook.com/marketplace')) return 'FB Marketplace';
+  if (url.includes('facebook.com') || url.includes('fb.com')) {
+    if (sourceField && !sourceField.toLowerCase().includes('gemini')) return sourceField.replace(/^[✨👑📡\s]+/, '').trim();
+    return 'Facebook';
+  }
+  if (url.includes('proeventos.campeche.gob.mx')) return 'ProEventos Campeche';
+  if (url.includes('dashport.run')) return 'Dashport Run';
+  if (url.includes('computrabajo')) return 'Computrabajo';
+  if (url.includes('occ.com.mx')) return 'OCC Mundial';
+  if (url.includes('indeed.com')) return 'Indeed Empleos';
+  if (url.includes('inmuebles24')) return 'Inmuebles24';
+  if (url.includes('vivanuncios')) return 'Vivanuncios';
+  if (url.includes('segundamano')) return 'Segundamano';
+  if (url.includes('mercadolibre')) return 'MercadoLibre';
+  if (url.includes('lamudi')) return 'Lamudi';
+  if (url.includes('propiedades.com')) return 'Propiedades.com';
+  if (url.includes('eventbrite')) return 'Eventbrite';
+  if (url.includes('carmen.gob.mx')) return 'Portal Ayuntamiento Carmen';
+
+  if (sourceField && !sourceField.toLowerCase().includes('gemini') && !sourceField.toLowerCase().includes('radar local')) {
+    return sourceField.replace(/^[✨👑📡\s]+/, '').trim();
+  }
+
+  try {
+    if (sourceUrl) {
+      const host = new URL(sourceUrl).hostname.replace(/^www\./, '');
+      return host;
+    }
+  } catch {}
+  return 'Sitio Original';
+}
+
 const AVAILABLE_ICONS = [
   { name: 'Calendar', label: 'Calendario General' },
   { name: 'ShoppingBag', label: 'Bazar / Emprendedores' },
@@ -790,17 +826,21 @@ export const AdminEventsTab: React.FC = () => {
                   </div>
                   <div className="text-[11px] text-slate-500 pt-0.5 flex items-center justify-between gap-2">
                     <span>Organiza: <strong className="text-slate-300 font-medium">{evt.organizer}</strong></span>
-                    {evt.sourceUrl && (
-                      <a
-                        href={evt.sourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-indigo-400 hover:underline flex items-center gap-1"
-                      >
-                        <span>Fuente</span>
-                        <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
-                    )}
+                    {evt.sourceUrl && (() => {
+                      const siteName = resolveSourceSiteName(evt.sourceUrl, evt.organizer || evt.badge);
+                      return (
+                        <a
+                          href={evt.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-full border border-blue-200 transition-colors"
+                          title={`Abrir publicación exacta en ${siteName}: ${evt.sourceUrl}`}
+                        >
+                          <span>Ver en {siteName}</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -1465,6 +1505,28 @@ export const AdminEventsTab: React.FC = () => {
                                 {cand.description}
                               </p>
                             )}
+
+                            {cand.sourceUrl && (() => {
+                              const siteName = resolveSourceSiteName(cand.sourceUrl, cand.source || cand.badge || cand.organizer);
+                              return (
+                                <div className="pt-1.5 flex items-center justify-between gap-2 flex-wrap">
+                                  <span className="text-[10px] font-semibold text-purple-200/90 truncate">
+                                    Fuente: <strong>{siteName}</strong>
+                                  </span>
+                                  <a
+                                    href={cand.sourceUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={e => e.stopPropagation()}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-[10px] shadow-xs transition-colors"
+                                    title={`Validar evento directamente en ${siteName}: ${cand.sourceUrl}`}
+                                  >
+                                    <span>Ver en {siteName}</span>
+                                    <ExternalLink className="w-2.5 h-2.5" />
+                                  </a>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       );

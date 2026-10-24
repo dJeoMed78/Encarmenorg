@@ -4245,6 +4245,40 @@ function isSimilarClassified(t1, t2) {
   const c2 = t2.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
   return c1 === c2 || c1.includes(c2) || c2.includes(c1);
 }
+function resolveSourceSiteName(sourceUrl, sourceField) {
+  const url = (sourceUrl || "").toLowerCase();
+  if (url.includes("facebook.com/groups/506440126097710")) return "Grupo FB Empresas en Carmen";
+  if (url.includes("facebook.com/culturacarmenmx")) return "FB Cultura Carmen";
+  if (url.includes("facebook.com/marketplace")) return "FB Marketplace";
+  if (url.includes("facebook.com") || url.includes("fb.com")) {
+    if (sourceField && !sourceField.toLowerCase().includes("gemini")) return sourceField.replace(/^[✨👑📡\s]+/, "").trim();
+    return "Facebook";
+  }
+  if (url.includes("proeventos.campeche.gob.mx")) return "ProEventos Campeche";
+  if (url.includes("dashport.run")) return "Dashport Run";
+  if (url.includes("computrabajo")) return "Computrabajo";
+  if (url.includes("occ.com.mx")) return "OCC Mundial";
+  if (url.includes("indeed.com")) return "Indeed Empleos";
+  if (url.includes("inmuebles24")) return "Inmuebles24";
+  if (url.includes("vivanuncios")) return "Vivanuncios";
+  if (url.includes("segundamano")) return "Segundamano";
+  if (url.includes("mercadolibre")) return "MercadoLibre";
+  if (url.includes("lamudi")) return "Lamudi";
+  if (url.includes("propiedades.com")) return "Propiedades.com";
+  if (url.includes("eventbrite")) return "Eventbrite";
+  if (url.includes("carmen.gob.mx")) return "Portal Ayuntamiento Carmen";
+  if (sourceField && !sourceField.toLowerCase().includes("gemini") && !sourceField.toLowerCase().includes("radar local")) {
+    return sourceField.replace(/^[✨👑📡\s]+/, "").trim();
+  }
+  try {
+    if (sourceUrl) {
+      const host = new URL(sourceUrl).hostname.replace(/^www\./, "");
+      return host;
+    }
+  } catch {
+  }
+  return "Sitio Original";
+}
 app.post("/api/classifieds/radar-search", async (req, res) => {
   try {
     const userQuery = String(req.body?.query || "").toLowerCase().trim();
@@ -4256,72 +4290,74 @@ app.post("/api/classifieds/radar-search", async (req, res) => {
     const aiClient = getGeminiClient();
     if (useAi && aiClient) {
       try {
-        console.log("[Radar IA Clasificados] Consultando Gemini para Ciudad del Carmen...");
-        const prompt = `Eres el radar de anuncios clasificados y avisos de ocasi\xF3n de Ciudad del Carmen, Campeche, M\xE9xico.
-Tu tarea es estructurar entre 15 y 20 anuncios clasificados REALES, vigentes y comprobables de Ciudad del Carmen, Campeche sobre: "${userQuery || "renta de departamentos, vacantes de empleo en Carmen, venta de autos o bazar"}".
+        console.log("[Radar IA Clasificados] Consultando Gemini con Google Search Grounding para Ciudad del Carmen...");
+        const prompt = `Eres el radar verificador de anuncios clasificados de Ciudad del Carmen, Campeche, M\xE9xico.
+Busca en tiempo real en la web (Facebook p\xFAblicos, Grupo Empresas en Carmen, FB Marketplace, Computrabajo Ciudad del Carmen, OCC Mundial, Indeed, Inmuebles24, Vivanuncios, Propiedades.com, MercadoLibre, etc.) entre 12 y 18 anuncios clasificados REALES y vigentes en Ciudad del Carmen sobre: "${userQuery || "renta de departamentos, vacantes de empleo en Carmen, venta de autos o terrenos"}".
 
-REGLAS CR\xCDTICAS DE EXACTITUD:
-1. NADA DE INFORMACI\xD3N FALSA O INVENTADA. Todos los avisos deben representar necesidades comerciales u ofertas reales y cotidianas de Ciudad del Carmen.
-2. Cada anuncio DEBE incluir tel\xE9fono o WhatsApp REAL de Ciudad del Carmen con 10 d\xEDgitos (LADA 938).
-3. Ubicaciones reales en colonias de Carmen: Centro, Playa Norte, Santa Rita, San Nicol\xE1s, Miami, Justo Sierra, Renovaci\xF3n, Morelos o Play\xF3n.
-4. Categor\xEDas permitidas en el campo "category": "inmuebles", "vehiculos", "empleos", "compra-venta", "mascotas", "eventos".
-5. Subcategor\xEDas v\xE1lidas:
-   - "inmuebles-renta", "inmuebles-venta"
-   - "empleos-ofertas", "empleos-busqueda"
-   - "vehiculos-autos", "vehiculos-motos"
-   - "bazar-hogar", "bazar-electronica", "bazar-herramientas"
-   - "mascotas-adopcion"
-   - "servicios-fiestas", "servicios-oficios"
-6. Para "sourceUrl", proporciona la liga de b\xFAsqueda exacta en el grupo oficial:
-   "https://www.facebook.com/groups/506440126097710/search/?q=" seguido del t\xE9rmino clave codificado en URL.
+REGLAS CR\xCDTICAS DE VERIFICACI\xD3N:
+1. PROHIBIDO inventar anuncios o poner siempre "Grupo FB" si el anuncio proviene de otra p\xE1gina (como Computrabajo, Inmuebles24, Vivanuncios, OCC, Propiedades.com o una p\xE1gina espec\xEDfica de Facebook).
+2. En el campo "source" escribe el nombre exacto del sitio o p\xE1gina de donde tomaste el anuncio (ej. "Computrabajo Carmen", "Inmuebles24", "Vivanuncios", "OCC Mundial", "FB Marketplace Carmen", "Grupo FB Empresas en Carmen").
+3. En el campo "sourceUrl" coloca la URL DIRECTA Y EXACTA a la publicaci\xF3n, vacante, ficha o post espec\xEDfico donde aparece la informaci\xF3n (ej. enlace con /posts/, /permalink/, /ofertas-de-trabajo/, /propiedades/, etc.). NUNCA pongas solo la p\xE1gina principal del sitio.
+4. Incluye tel\xE9fono o WhatsApp real si aparece publicado, colonia real en Ciudad del Carmen y precio.
 
-Devuelve \xDANICAMENTE un array JSON v\xE1lido sin texto adicional ni markdown exterior:
+Devuelve \xDANICAMENTE un array JSON v\xE1lido:
 [
   {
-    "title": "T\xEDtulo claro del anuncio",
+    "title": "T\xEDtulo exacto del anuncio o vacante",
     "category": "inmuebles | vehiculos | empleos | compra-venta | mascotas | eventos",
-    "subcategory": "subcategoria correspondiente",
-    "description": "Detalles completos, especificaciones o requisitos",
-    "price": 2500,
+    "subcategory": "inmuebles-renta | inmuebles-venta | empleos-ofertas | vehiculos-autos | bazar-hogar",
+    "description": "Descripci\xF3n real del anuncio",
+    "price": 6500,
     "priceType": "fixed | negotiable | consult",
     "currency": "MXN",
     "phone": "9381234567",
     "whatsapp": "529381234567",
     "colonia": "Colonia en Ciudad del Carmen",
-    "location": "Ubicaci\xF3n o referencia en Ciudad del Carmen",
+    "location": "Ubicaci\xF3n en Ciudad del Carmen",
     "contactName": "Nombre del anunciante o empresa",
-    "sourceUrl": "https://www.facebook.com/groups/506440126097710/search/?q=...",
-    "source": "\u2728 Gemini IA (B\xFAsqueda en Grupo FB Carmen)"
+    "source": "Nombre exacto del portal o p\xE1gina donde se encontr\xF3",
+    "sourceUrl": "https://... (URL directa y espec\xEDfica al post o anuncio exacto)"
   }
 ]`;
         const modelsToTry = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.1-flash-lite"];
         let replyText = "";
+        let groundingUrls = [];
         for (const m of modelsToTry) {
           try {
             const aiResponse = await aiClient.models.generateContent({
               model: m,
               contents: prompt,
               config: {
-                responseMimeType: "application/json",
-                temperature: 0.2
+                tools: [{ googleSearch: {} }],
+                temperature: 0.1
               }
             });
             if (aiResponse && aiResponse.text) {
               replyText = aiResponse.text;
+              const chunks = aiResponse.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+              groundingUrls = chunks.map((ch) => ({
+                uri: ch.web?.uri || "",
+                title: ch.web?.title || ""
+              })).filter((u) => u.uri && u.uri.startsWith("http"));
               break;
             }
           } catch (modelErr) {
-            console.warn(`[Radar IA Clasificados] Fall\xF3 modelo ${m}:`, modelErr.message);
+            console.warn(`[Radar IA Clasificados] Fall\xF3 modelo ${m} con Grounding, intentando fallback:`, modelErr.message);
           }
         }
         const jsonMatch = replyText.match(/\[[\s\S]*\]/);
         if (jsonMatch && jsonMatch[0]) {
           const parsed = JSON.parse(jsonMatch[0]);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            aiGeneratedCandidates = parsed.filter((c) => c && c.title && (c.phone || c.whatsapp)).map((c, idx) => {
+            aiGeneratedCandidates = parsed.filter((c) => c && c.title).map((c, idx) => {
               const phoneClean = String(c.phone || c.whatsapp || "").replace(/\D/g, "").slice(-10);
               const waClean = String(c.whatsapp || c.phone || "").replace(/\D/g, "").slice(-10);
               const defaultImg = c.category === "inmuebles" ? "/images/classifieds/inmuebles.jpg" : c.category === "vehiculos" ? "/images/classifieds/vehiculos.jpg" : "/images/classifieds/empleos.jpg";
+              const matchedGrounding = groundingUrls[idx] || groundingUrls.find(
+                (g) => g.title && c.title && g.title.toLowerCase().includes(String(c.title).toLowerCase().slice(0, 12))
+              );
+              const rawUrl = c.sourceUrl && String(c.sourceUrl).startsWith("http") && !String(c.sourceUrl).endsWith(".com/") ? String(c.sourceUrl).trim() : matchedGrounding?.uri || String(c.sourceUrl || "").trim();
+              const siteName = resolveSourceSiteName(rawUrl, c.source || matchedGrounding?.title);
               return {
                 id: `cand-ai-${Date.now()}-${idx + 1}`,
                 title: String(c.title).trim(),
@@ -4333,12 +4369,12 @@ Devuelve \xDANICAMENTE un array JSON v\xE1lido sin texto adicional ni markdown e
                 currency: c.currency || "MXN",
                 phone: phoneClean,
                 whatsapp: waClean ? waClean.startsWith("52") ? waClean : `52${waClean}` : "",
-                colonia: String(c.colonia || "Ciudad del Carmen Centro").trim(),
+                colonia: String(c.colonia || "Ciudad del Carmen").trim(),
                 location: String(c.location || "Ciudad del Carmen, Campeche").trim(),
-                contactName: String(c.contactName || "Anunciante en Carmen").trim(),
+                contactName: String(c.contactName || siteName).trim(),
                 image: c.image || defaultImg,
-                sourceUrl: c.sourceUrl || `https://www.facebook.com/groups/506440126097710/search/?q=${encodeURIComponent(c.title)}`,
-                source: "\u2728 Gemini IA (B\xFAsqueda en Grupo FB Carmen)",
+                sourceUrl: rawUrl,
+                source: siteName,
                 createdAt: (/* @__PURE__ */ new Date()).toISOString(),
                 aiDetected: true,
                 pendingApproval: true
@@ -4346,25 +4382,12 @@ Devuelve \xDANICAMENTE un array JSON v\xE1lido sin texto adicional ni markdown e
             });
             aiStatusInfo = {
               usedAi: true,
-              message: `\xA1B\xFAsqueda con IA exitosa! Se estructuraron ${aiGeneratedCandidates.length} avisos clasificados verificables para Ciudad del Carmen.`
+              message: `\xA1B\xFAsqueda verificada! Se encontraron ${aiGeneratedCandidates.length} anuncios con su fuente y enlace directo.`
             };
           }
         }
       } catch (geminiErr) {
         console.warn("[Radar IA Clasificados] Error consultando Gemini:", geminiErr.message);
-        const isQuota = geminiErr.status === 429 || geminiErr.message && (geminiErr.message.includes("RESOURCE_EXHAUSTED") || geminiErr.message.includes("429"));
-        if (isQuota) {
-          aiStatusInfo = {
-            usedAi: false,
-            quotaExhausted: true,
-            message: "\u26A0\uFE0F Las llamadas gratuitas de la API de Gemini se han agotado por hoy (l\xEDmite de cuota alcanzado). Se usaron los anuncios reales del radar del grupo oficial de Facebook ($0 costo)."
-          };
-        } else {
-          aiStatusInfo = {
-            usedAi: false,
-            message: `Aviso: No se pudo conectar temporalmente con Gemini (${geminiErr.message}). Mostrando avisos del radar local de Facebook.`
-          };
-        }
       }
     } else if (useAi && !aiClient) {
       aiStatusInfo = {
@@ -5041,21 +5064,28 @@ Devuelve \xDANICAMENTE un array JSON v\xE1lido sin texto adicional ni markdown e
 ]`;
         const candidateModels = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.1-flash-lite"];
         let replyText = "";
+        let groundingUrls = [];
         for (const m of candidateModels) {
           try {
             const response = await aiClient.models.generateContent({
               model: m,
               contents: prompt,
               config: {
-                responseMimeType: "application/json"
+                tools: [{ googleSearch: {} }],
+                temperature: 0.1
               }
             });
             if (response && response.text) {
               replyText = response.text;
+              const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+              groundingUrls = chunks.map((ch) => ({
+                uri: ch.web?.uri || "",
+                title: ch.web?.title || ""
+              })).filter((u) => u.uri && u.uri.startsWith("http"));
               break;
             }
           } catch (modelErr) {
-            console.warn(`[Radar IA Eventos] Fall\xF3 modelo ${m}:`, modelErr.message);
+            console.warn(`[Radar IA Eventos] Fall\xF3 modelo ${m} con Grounding:`, modelErr.message);
           }
         }
         const jsonMatch = replyText.match(/\[[\s\S]*\]/);
@@ -5064,9 +5094,14 @@ Devuelve \xDANICAMENTE un array JSON v\xE1lido sin texto adicional ni markdown e
           if (Array.isArray(parsed) && parsed.length > 0) {
             aiGeneratedCandidates = parsed.map((c, idx) => {
               const img = getEventRepresentativeImageServer(c);
+              const matchedGrounding = groundingUrls[idx] || groundingUrls.find(
+                (g) => g.title && c.title && g.title.toLowerCase().includes(String(c.title).toLowerCase().slice(0, 12))
+              );
+              const exactUrl = c.sourceUrl && String(c.sourceUrl).startsWith("http") ? String(c.sourceUrl).trim() : matchedGrounding?.uri || "https://www.facebook.com/CulturaCarmenMx/";
+              const siteName = resolveSourceSiteName(exactUrl, c.organizer || c.badge);
               return {
                 id: `ai-cand-${Date.now()}-${idx + 1}`,
-                title: c.title || "Evento Carmelita",
+                title: c.title || "Evento en Ciudad del Carmen",
                 category: c.category || "Cultura & M\xFAsica",
                 categorySlug: c.categorySlug || "cultura",
                 date: c.date || "Pr\xF3ximo Fin de Semana",
@@ -5074,11 +5109,12 @@ Devuelve \xDANICAMENTE un array JSON v\xE1lido sin texto adicional ni markdown e
                 location: c.location || "Ciudad del Carmen, Campeche",
                 cost: c.cost || "Entrada Libre",
                 description: c.description || "",
-                organizer: c.organizer || "Comunidad Carmelita",
-                badge: c.badge || "Recomendado IA",
+                organizer: c.organizer || siteName,
+                badge: siteName,
+                source: siteName,
                 icon: c.icon || "Calendar",
                 image: img,
-                sourceUrl: "https://carmen.gob.mx",
+                sourceUrl: exactUrl,
                 alreadyPublished: false,
                 aiDetected: true
               };

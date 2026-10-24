@@ -31,6 +31,42 @@ import {
   batchApproveClassifiedCandidates
 } from '../services/api';
 
+function resolveSourceSiteName(sourceUrl?: string, sourceField?: string): string {
+  const url = (sourceUrl || '').toLowerCase();
+  if (url.includes('facebook.com/groups/506440126097710')) return 'Grupo FB Empresas en Carmen';
+  if (url.includes('facebook.com/culturacarmenmx')) return 'FB Cultura Carmen';
+  if (url.includes('facebook.com/marketplace')) return 'FB Marketplace';
+  if (url.includes('facebook.com') || url.includes('fb.com')) {
+    if (sourceField && !sourceField.toLowerCase().includes('gemini')) return sourceField.replace(/^[✨👑📡\s]+/, '').trim();
+    return 'Facebook';
+  }
+  if (url.includes('proeventos.campeche.gob.mx')) return 'ProEventos Campeche';
+  if (url.includes('dashport.run')) return 'Dashport Run';
+  if (url.includes('computrabajo')) return 'Computrabajo';
+  if (url.includes('occ.com.mx')) return 'OCC Mundial';
+  if (url.includes('indeed.com')) return 'Indeed Empleos';
+  if (url.includes('inmuebles24')) return 'Inmuebles24';
+  if (url.includes('vivanuncios')) return 'Vivanuncios';
+  if (url.includes('segundamano')) return 'Segundamano';
+  if (url.includes('mercadolibre')) return 'MercadoLibre';
+  if (url.includes('lamudi')) return 'Lamudi';
+  if (url.includes('propiedades.com')) return 'Propiedades.com';
+  if (url.includes('eventbrite')) return 'Eventbrite';
+  if (url.includes('carmen.gob.mx')) return 'Portal Ayuntamiento Carmen';
+
+  if (sourceField && !sourceField.toLowerCase().includes('gemini') && !sourceField.toLowerCase().includes('radar local')) {
+    return sourceField.replace(/^[✨👑📡\s]+/, '').trim();
+  }
+
+  try {
+    if (sourceUrl) {
+      const host = new URL(sourceUrl).hostname.replace(/^www\./, '');
+      return host;
+    }
+  } catch {}
+  return 'Sitio Original';
+}
+
 interface AdminClassifiedsTabProps {
   classifieds: ClassifiedAd[];
   onOpenCreate: () => void;
@@ -746,18 +782,26 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                                 </span>
                               )}
 
-                              {cand.sourceUrl && (
-                                <a
-                                  href={cand.sourceUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] transition-colors border border-blue-200"
-                                  title="Abrir publicación o búsqueda en Facebook"
-                                >
-                                  <span>Ver en Grupo FB</span>
-                                  <ExternalLink className="w-2.5 h-2.5" />
-                                </a>
-                              )}
+                              {cand.sourceUrl && (() => {
+                                const siteName = resolveSourceSiteName(cand.sourceUrl, cand.source);
+                                return (
+                                  <>
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-stone-100 text-stone-700 font-bold text-[10px] border border-stone-200">
+                                      <span>Fuente: {siteName}</span>
+                                    </span>
+                                    <a
+                                      href={cand.sourceUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] transition-colors shadow-2xs"
+                                      title={`Abrir publicación exacta en ${siteName}: ${cand.sourceUrl}`}
+                                    >
+                                      <span>Ver en {siteName}</span>
+                                      <ExternalLink className="w-2.5 h-2.5" />
+                                    </a>
+                                  </>
+                                );
+                              })()}
                             </div>
 
                             {/* Title & Price */}
