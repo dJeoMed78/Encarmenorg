@@ -4281,20 +4281,9 @@ app.delete('/api/classifieds/:id', async (req: Request, res: Response) => {
 });
 
 // ==========================================
-// RADAR DE ANUNCIOS CLASIFICADOS (GRUPO FACEBOOK EMPRESAS EN CARMEN)
-// Búsqueda autónoma (Sin IA) y Asistida con IA (Gemini Free API)
+// RADAR DE ANUNCIOS CLASIFICADOS EN VIVO
+// Rastreos web en vivo y Google Search Grounding
 // ==========================================
-let CARMEN_FACEBOOK_CLASSIFIED_POOL: any[] = [];
-try {
-  const poolPath = path.resolve(__dirname, 'src/data/radar_classifieds_pool.json');
-  if (fs.existsSync(poolPath)) {
-    CARMEN_FACEBOOK_CLASSIFIED_POOL = JSON.parse(fs.readFileSync(poolPath, 'utf8'));
-    console.log(`[Cache] ${CARMEN_FACEBOOK_CLASSIFIED_POOL.length} clasificados de radar cargados de radar_classifieds_pool.json.`);
-  }
-} catch (e) {
-  console.warn('[Cache] Error cargando radar_classifieds_pool.json:', e);
-}
-
 function isSimilarClassified(t1: string, t2: string): boolean {
   if (!t1 || !t2) return false;
   const c1 = t1.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -4306,13 +4295,9 @@ function resolveSourceSiteName(sourceUrl?: string, sourceField?: string): string
   const url = (sourceUrl || '').toLowerCase();
   if (url.includes('facebook.com/groups/506440126097710')) return 'Grupo FB Empresas en Carmen';
   if (url.includes('facebook.com/culturacarmenmx')) return 'FB Cultura Carmen';
+  if (url.includes('facebook.com/groups/')) return 'Grupo de Facebook';
   if (url.includes('facebook.com/marketplace')) return 'FB Marketplace';
-  if (url.includes('facebook.com') || url.includes('fb.com')) {
-    if (sourceField && !sourceField.toLowerCase().includes('gemini')) return sourceField.replace(/^[✨👑📡\s]+/, '').trim();
-    return 'Facebook';
-  }
-  if (url.includes('proeventos.campeche.gob.mx')) return 'ProEventos Campeche';
-  if (url.includes('dashport.run')) return 'Dashport Run';
+  if (url.includes('facebook.com') || url.includes('fb.com')) return 'Facebook';
   if (url.includes('computrabajo')) return 'Computrabajo';
   if (url.includes('occ.com.mx')) return 'OCC Mundial';
   if (url.includes('indeed.com')) return 'Indeed Empleos';
@@ -4322,209 +4307,199 @@ function resolveSourceSiteName(sourceUrl?: string, sourceField?: string): string
   if (url.includes('mercadolibre')) return 'MercadoLibre';
   if (url.includes('lamudi')) return 'Lamudi';
   if (url.includes('propiedades.com')) return 'Propiedades.com';
-  if (url.includes('eventbrite')) return 'Eventbrite';
-  if (url.includes('carmen.gob.mx')) return 'Portal Ayuntamiento Carmen';
-
-  if (sourceField && !sourceField.toLowerCase().includes('gemini') && !sourceField.toLowerCase().includes('radar local')) {
-    return sourceField.replace(/^[✨👑📡\s]+/, '').trim();
-  }
-
+  if (url.includes('trovit')) return 'Trovit';
+  if (url.includes('proeventos.campeche.gob.mx')) return 'ProEventos Campeche';
+  if (url.includes('dashport.run')) return 'Dashport Run';
   try {
-    if (sourceUrl) {
-      const host = new URL(sourceUrl).hostname.replace(/^www\./, '');
-      return host;
-    }
+    if (sourceUrl) return new URL(sourceUrl).hostname.replace(/^www\./, '');
   } catch {}
-  return 'Sitio Original';
+  return sourceField || 'Sitio Web';
 }
 
-// Radar search for classifieds: with or without AI
-app.post('/api/classifieds/radar-search', async (req: Request, res: Response) => {
+async function scrapeRealWebClassifieds(searchQuery: string, category: string): Promise<any[]> {
+  const catKeywords: Record<string, string> = {
+    inmuebles: 'renta o venta departamento casa terreno "Ciudad del Carmen" site:inmuebles24.com OR site:propiedades.com OR site:lamudi.com.mx OR site:facebook.com',
+    empleos: 'vacante empleo trabajo "Ciudad del Carmen" site:mx.computrabajo.com OR site:occ.com.mx OR site:mx.indeed.com OR site:facebook.com',
+    vehiculos: 'venta auto camioneta "Ciudad del Carmen" site:mercadolibre.com.mx OR site:seminuevos.com OR site:facebook.com',
+    all: 'renta departamento OR vacante empleo OR venta "Ciudad del Carmen" site:inmuebles24.com OR site:propiedades.com OR site:mx.computrabajo.com OR site:occ.com.mx OR site:facebook.com'
+  };
+
+  const baseQuery = searchQuery
+    ? `${searchQuery} "Ciudad del Carmen" (site:facebook.com OR site:inmuebles24.com OR site:propiedades.com OR site:mx.computrabajo.com OR site:occ.com.mx OR site:lamudi.com.mx)`
+    : (catKeywords[category] || catKeywords.all);
+
+  const results: any[] = [];
   try {
-    const userQuery = String(req.body?.query || '').toLowerCase().trim();
-    const category = String(req.body?.category || 'all').toLowerCase().trim();
-    const useAi = Boolean(req.body?.useAi);
-
-    console.log(`[Radar Clasificados] Búsqueda: "${userQuery}", categoría: "${category}", useAi: ${useAi}`);
-
-    let aiGeneratedCandidates: any[] = [];
-    let aiStatusInfo: { usedAi: boolean; quotaExhausted?: boolean; message?: string } = { usedAi: false };
-
-    const aiClient = getGeminiClient();
-    if (useAi && aiClient) {
-      try {
-        console.log('[Radar IA Clasificados] Consultando Gemini con Google Search Grounding para Ciudad del Carmen...');
-        const prompt = `Eres el radar verificador de anuncios clasificados de Ciudad del Carmen, Campeche, México.
-Busca en tiempo real en la web (Facebook públicos, Grupo Empresas en Carmen, FB Marketplace, Computrabajo Ciudad del Carmen, OCC Mundial, Indeed, Inmuebles24, Vivanuncios, Propiedades.com, MercadoLibre, etc.) entre 12 y 18 anuncios clasificados REALES y vigentes en Ciudad del Carmen sobre: "${userQuery || 'renta de departamentos, vacantes de empleo en Carmen, venta de autos o terrenos'}".
-
-REGLAS CRÍTICAS DE VERIFICACIÓN:
-1. PROHIBIDO inventar anuncios o poner siempre "Grupo FB" si el anuncio proviene de otra página (como Computrabajo, Inmuebles24, Vivanuncios, OCC, Propiedades.com o una página específica de Facebook).
-2. En el campo "source" escribe el nombre exacto del sitio o página de donde tomaste el anuncio (ej. "Computrabajo Carmen", "Inmuebles24", "Vivanuncios", "OCC Mundial", "FB Marketplace Carmen", "Grupo FB Empresas en Carmen").
-3. En el campo "sourceUrl" coloca la URL DIRECTA Y EXACTA a la publicación, vacante, ficha o post específico donde aparece la información (ej. enlace con /posts/, /permalink/, /ofertas-de-trabajo/, /propiedades/, etc.). NUNCA pongas solo la página principal del sitio.
-4. Incluye teléfono o WhatsApp real si aparece publicado, colonia real en Ciudad del Carmen y precio.
-
-Devuelve ÚNICAMENTE un array JSON válido:
-[
-  {
-    "title": "Título exacto del anuncio o vacante",
-    "category": "inmuebles | vehiculos | empleos | compra-venta | mascotas | eventos",
-    "subcategory": "inmuebles-renta | inmuebles-venta | empleos-ofertas | vehiculos-autos | bazar-hogar",
-    "description": "Descripción real del anuncio",
-    "price": 6500,
-    "priceType": "fixed | negotiable | consult",
-    "currency": "MXN",
-    "phone": "9381234567",
-    "whatsapp": "529381234567",
-    "colonia": "Colonia en Ciudad del Carmen",
-    "location": "Ubicación en Ciudad del Carmen",
-    "contactName": "Nombre del anunciante o empresa",
-    "source": "Nombre exacto del portal o página donde se encontró",
-    "sourceUrl": "https://... (URL directa y específica al post o anuncio exacto)"
-  }
-]`;
-
-        const modelsToTry = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
-        let replyText = '';
-        let groundingUrls: Array<{ uri: string; title: string }> = [];
-
-        for (const m of modelsToTry) {
-          try {
-            const aiResponse = await (aiClient as any).models.generateContent({
-              model: m,
-              contents: prompt,
-              config: {
-                tools: [{ googleSearch: {} }],
-                temperature: 0.1
-              }
-            });
-            if (aiResponse && aiResponse.text) {
-              replyText = aiResponse.text;
-              const chunks = aiResponse.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-              groundingUrls = chunks
-                .map((ch: any) => ({
-                  uri: ch.web?.uri || '',
-                  title: ch.web?.title || ''
-                }))
-                .filter((u: any) => u.uri && u.uri.startsWith('http'));
-              break;
-            }
-          } catch (modelErr: any) {
-            console.warn(`[Radar IA Clasificados] Falló modelo ${m} con Grounding, intentando fallback:`, modelErr.message);
-          }
-        }
-
-        const jsonMatch = replyText.match(/\[[\s\S]*\]/);
-        if (jsonMatch && jsonMatch[0]) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            aiGeneratedCandidates = parsed
-              .filter((c: any) => c && c.title)
-              .map((c: any, idx: number) => {
-                const phoneClean = String(c.phone || c.whatsapp || '').replace(/\D/g, '').slice(-10);
-                const waClean = String(c.whatsapp || c.phone || '').replace(/\D/g, '').slice(-10);
-                const defaultImg = c.category === 'inmuebles'
-                  ? '/images/classifieds/inmuebles.jpg'
-                  : c.category === 'vehiculos'
-                  ? '/images/classifieds/vehiculos.jpg'
-                  : '/images/classifieds/empleos.jpg';
-
-                // Si Google Search Grounding devolvió un enlace profundo real para este resultado, priorizarlo si c.sourceUrl es genérico
-                const matchedGrounding = groundingUrls[idx] || groundingUrls.find(g =>
-                  g.title && c.title && g.title.toLowerCase().includes(String(c.title).toLowerCase().slice(0, 12))
-                );
-
-                const rawUrl = (c.sourceUrl && String(c.sourceUrl).startsWith('http') && !String(c.sourceUrl).endsWith('.com/'))
-                  ? String(c.sourceUrl).trim()
-                  : (matchedGrounding?.uri || String(c.sourceUrl || '').trim());
-
-                const siteName = resolveSourceSiteName(rawUrl, c.source || matchedGrounding?.title);
-
-                return {
-                  id: `cand-ai-${Date.now()}-${idx + 1}`,
-                  title: String(c.title).trim(),
-                  category: String(c.category || 'compra-venta').trim(),
-                  subcategory: String(c.subcategory || '').trim(),
-                  description: String(c.description || '').trim(),
-                  price: c.price !== undefined && c.price !== null ? Number(c.price) : null,
-                  priceType: c.priceType || 'consult',
-                  currency: c.currency || 'MXN',
-                  phone: phoneClean,
-                  whatsapp: waClean ? (waClean.startsWith('52') ? waClean : `52${waClean}`) : '',
-                  colonia: String(c.colonia || 'Ciudad del Carmen').trim(),
-                  location: String(c.location || 'Ciudad del Carmen, Campeche').trim(),
-                  contactName: String(c.contactName || siteName).trim(),
-                  image: c.image || defaultImg,
-                  sourceUrl: rawUrl,
-                  source: siteName,
-                  createdAt: new Date().toISOString(),
-                  aiDetected: true,
-                  pendingApproval: true
-                };
-              });
-
-            aiStatusInfo = {
-              usedAi: true,
-              message: `¡Búsqueda verificada! Se encontraron ${aiGeneratedCandidates.length} anuncios con su fuente y enlace directo.`
-            };
-          }
-        }
-      } catch (geminiErr: any) {
-        console.warn('[Radar IA Clasificados] Error consultando Gemini:', geminiErr.message);
+    const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(baseQuery)}`;
+    const resp = await fetch(ddgUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept-Language': 'es-MX,es;q=0.9'
       }
-    } else if (useAi && !aiClient) {
-      aiStatusInfo = {
-        usedAi: false,
-        message: 'GEMINI_API_KEY no detectada. Se cargaron los avisos clasificados del radar del grupo oficial de Facebook ($0 costo).'
-      };
-    }
+    });
+    const html = await resp.text();
 
-    // Candidatos del banco verificado de Facebook (Sin IA o fallback)
-    let fbCandidates = CARMEN_FACEBOOK_CLASSIFIED_POOL.map(c => ({
-      ...c,
-      aiDetected: false,
-      pendingApproval: true
-    }));
+    const blockRegex = /<a class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
+    let match: RegExpExecArray | null;
+    let idx = 0;
 
-    // Filtrar por categoría si se seleccionó
-    if (category && category !== 'all') {
-      fbCandidates = fbCandidates.filter(c => c.category === category || c.subcategory.includes(category));
-    }
+    while ((match = blockRegex.exec(html)) !== null && idx < 18) {
+      let rawHref = match[1];
+      if (rawHref.includes('uddg=')) {
+        try {
+          const parsedUddg = new URL('https://duckduckgo.com' + rawHref).searchParams.get('uddg');
+          if (parsedUddg) rawHref = decodeURIComponent(parsedUddg);
+        } catch {}
+      }
 
-    // Filtrar por query si el usuario buscó algo
-    if (userQuery) {
-      const q = userQuery.toLowerCase().trim();
-      const isJob = q === 'empleo' || q === 'empleos' || q === 'trabajo' || q === 'vacante' || q === 'vacantes';
-      fbCandidates = fbCandidates.filter(c => {
-        if (isJob && (c.category === 'empleos' || (c.subcategory && c.subcategory.includes('empleo')))) return true;
-        const title = (c.title || '').toLowerCase();
-        const desc = (c.description || '').toLowerCase();
-        const col = (c.colonia || '').toLowerCase();
-        const contact = (c.contactName || '').toLowerCase();
-        const cat = (c.category || '').toLowerCase();
-        const subcat = (c.subcategory || '').toLowerCase();
-        return title.includes(q) || desc.includes(q) || col.includes(q) || contact.includes(q) || cat.includes(q) || subcat.includes(q);
+      if (!rawHref.startsWith('http') || rawHref.includes('/search/?q=') || rawHref.includes('/search?q=')) {
+        continue;
+      }
+
+      const cleanTitle = match[2].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#x27;/g, "'").replace(/&quot;/g, '"').trim();
+      const cleanSnippet = match[3].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#x27;/g, "'").replace(/&quot;/g, '"').trim();
+
+      if (!cleanTitle || cleanTitle.length < 8) continue;
+
+      const priceMatch = (cleanTitle + ' ' + cleanSnippet).match(/\$\s?([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{4,7})/);
+      const priceVal = priceMatch ? Number(priceMatch[1].replace(/,/g, '')) : null;
+
+      const phoneMatch = (cleanTitle + ' ' + cleanSnippet).replace(/\s|-/g, '').match(/(938[0-9]{7})/);
+      const phoneVal = phoneMatch ? phoneMatch[1] : '';
+
+      const siteName = resolveSourceSiteName(rawHref);
+      const inferredCat =
+        category !== 'all' ? category :
+        (rawHref.includes('computrabajo') || rawHref.includes('occ.com') || rawHref.includes('indeed') || /vacante|empleo|solicita/i.test(cleanTitle)) ? 'empleos' :
+        (rawHref.includes('inmuebles24') || rawHref.includes('propiedades') || rawHref.includes('lamudi') || /renta|departamento|casa|terreno/i.test(cleanTitle)) ? 'inmuebles' :
+        'compra-venta';
+
+      idx++;
+      results.push({
+        id: `cand-web-${Date.now()}-${idx}`,
+        title: cleanTitle,
+        category: inferredCat,
+        subcategory: '',
+        description: cleanSnippet || cleanTitle,
+        price: priceVal,
+        priceType: priceVal ? 'fixed' : 'consult',
+        currency: 'MXN',
+        phone: phoneVal,
+        whatsapp: phoneVal ? `52${phoneVal}` : '',
+        colonia: 'Ciudad del Carmen',
+        location: 'Ciudad del Carmen, Campeche',
+        contactName: siteName,
+        image: inferredCat === 'inmuebles'
+          ? '/images/classifieds/inmuebles.jpg'
+          : inferredCat === 'vehiculos'
+          ? '/images/classifieds/vehiculos.jpg'
+          : '/images/classifieds/empleos.jpg',
+        sourceUrl: rawHref,
+        source: siteName,
+        createdAt: new Date().toISOString(),
+        aiDetected: true,
+        pendingApproval: true
       });
     }
+  } catch (scrapeErr: any) {
+    console.warn('[Radar Web Scraper] Error:', scrapeErr.message);
+  }
+  return results;
+}
 
-    // Combinar con los generados por IA (priorizando los de IA si se usó)
-    const combinedCandidates = [...aiGeneratedCandidates, ...fbCandidates];
+app.post('/api/classifieds/radar-search', async (req: Request, res: Response) => {
+  try {
+    const userQuery = String(req.body?.query || '').trim();
+    const category = String(req.body?.category || 'all').toLowerCase().trim();
 
-    // Marcar los que ya están publicados en el portal
-    const annotatedCandidates = combinedCandidates.map(c => {
-      const alreadyPublished = classifiedsCache.some(existing => 
-        isSimilarClassified(existing.title, c.title) ||
-        ((existing.phone || existing.whatsapp) && (existing.phone === c.phone || existing.whatsapp === c.whatsapp))
-      );
-      return {
-        ...c,
-        alreadyPublished
-      };
-    });
+    let candidates: any[] = [];
 
-    res.json({
+    const aiClient = getGeminiClient();
+    if (aiClient) {
+      try {
+        const searchTopic = userQuery || (
+          category === 'inmuebles' ? 'renta de departamentos y casas en Ciudad del Carmen Campeche' :
+          category === 'empleos' ? 'vacantes de empleo en Ciudad del Carmen Campeche' :
+          category === 'vehiculos' ? 'venta de autos en Ciudad del Carmen Campeche' :
+          'renta de departamentos, vacantes de empleo y anuncios en Ciudad del Carmen Campeche'
+        );
+
+        const prompt = `Busca en Google anuncios clasificados reales y recientes en Ciudad del Carmen, Campeche sobre: "${searchTopic}".
+Usa exclusivamente la información real encontrada en cada página web o publicación de Facebook, Inmuebles24, Propiedades.com, Lamudi, Computrabajo u OCC.
+PROHIBIDO inventar datos que no estén en la página encontrada y PROHIBIDO generar enlaces "/search/?q=".`;
+
+        const aiResponse = await (aiClient as any).models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config: {
+            tools: [{ googleSearch: {} }],
+            temperature: 0.0
+          }
+        });
+
+        const chunks = aiResponse?.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+        const validChunks = chunks
+          .map((ch: any) => ({
+            uri: String(ch.web?.uri || '').trim(),
+            title: String(ch.web?.title || '').trim()
+          }))
+          .filter((u: any) => u.uri.startsWith('http') && !u.uri.includes('/search/?q=') && !u.uri.includes('/search?q='));
+
+        for (let i = 0; i < validChunks.length; i++) {
+          const ch = validChunks[i];
+          const siteName = resolveSourceSiteName(ch.uri, ch.title);
+          candidates.push({
+            id: `cand-grounding-${Date.now()}-${i + 1}`,
+            title: ch.title || `Publicación en ${siteName}`,
+            category: category !== 'all' ? category : 'inmuebles',
+            subcategory: '',
+            description: `Anuncio real detectado directamente en ${siteName}. Haz clic en "Ver en ${siteName}" para revisar la publicación original completa.`,
+            price: null,
+            priceType: 'consult',
+            currency: 'MXN',
+            phone: '',
+            whatsapp: '',
+            colonia: 'Ciudad del Carmen',
+            location: 'Ciudad del Carmen, Campeche',
+            contactName: siteName,
+            image: '/images/classifieds/inmuebles.jpg',
+            sourceUrl: ch.uri,
+            source: siteName,
+            createdAt: new Date().toISOString(),
+            aiDetected: true,
+            pendingApproval: true
+          });
+        }
+      } catch (aiErr: any) {
+        console.warn('[Radar Grounding] Pasando a rastreador web directo:', aiErr.message);
+      }
+    }
+
+    const scrapedCandidates = await scrapeRealWebClassifieds(userQuery, category);
+    const seenUrls = new Set(candidates.map(c => c.sourceUrl));
+    for (const sc of scrapedCandidates) {
+      if (!seenUrls.has(sc.sourceUrl)) {
+        candidates.push(sc);
+        seenUrls.add(sc.sourceUrl);
+      }
+    }
+
+    const annotatedCandidates = candidates.map(c => ({
+      ...c,
+      alreadyPublished: classifiedsCache.some(existing => existing.sourceUrl === c.sourceUrl || existing.title === c.title)
+    }));
+
+    const statusMessage = annotatedCandidates.length > 0
+      ? `¡Rastreo automático completado! Se encontraron ${annotatedCandidates.length} anuncios reales con enlace directo a su fuente original.`
+      : 'No se encontraron anuncios públicos con esos términos. Prueba con otra palabra clave (ej. "renta", "casa", "vacante", "contador").';
+
+    return res.json({
       success: true,
       candidates: annotatedCandidates,
-      aiInfo: aiStatusInfo
+      aiInfo: {
+        usedAi: true,
+        message: statusMessage
+      }
     });
   } catch (err: any) {
     res.status(500).json({ success: false, candidates: [], message: err.message });

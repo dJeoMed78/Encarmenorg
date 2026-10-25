@@ -35,13 +35,9 @@ function resolveSourceSiteName(sourceUrl?: string, sourceField?: string): string
   const url = (sourceUrl || '').toLowerCase();
   if (url.includes('facebook.com/groups/506440126097710')) return 'Grupo FB Empresas en Carmen';
   if (url.includes('facebook.com/culturacarmenmx')) return 'FB Cultura Carmen';
+  if (url.includes('facebook.com/groups/')) return 'Grupo de Facebook';
   if (url.includes('facebook.com/marketplace')) return 'FB Marketplace';
-  if (url.includes('facebook.com') || url.includes('fb.com')) {
-    if (sourceField && !sourceField.toLowerCase().includes('gemini')) return sourceField.replace(/^[✨👑📡\s]+/, '').trim();
-    return 'Facebook';
-  }
-  if (url.includes('proeventos.campeche.gob.mx')) return 'ProEventos Campeche';
-  if (url.includes('dashport.run')) return 'Dashport Run';
+  if (url.includes('facebook.com') || url.includes('fb.com')) return 'Facebook';
   if (url.includes('computrabajo')) return 'Computrabajo';
   if (url.includes('occ.com.mx')) return 'OCC Mundial';
   if (url.includes('indeed.com')) return 'Indeed Empleos';
@@ -51,20 +47,13 @@ function resolveSourceSiteName(sourceUrl?: string, sourceField?: string): string
   if (url.includes('mercadolibre')) return 'MercadoLibre';
   if (url.includes('lamudi')) return 'Lamudi';
   if (url.includes('propiedades.com')) return 'Propiedades.com';
-  if (url.includes('eventbrite')) return 'Eventbrite';
-  if (url.includes('carmen.gob.mx')) return 'Portal Ayuntamiento Carmen';
-
-  if (sourceField && !sourceField.toLowerCase().includes('gemini') && !sourceField.toLowerCase().includes('radar local')) {
-    return sourceField.replace(/^[✨👑📡\s]+/, '').trim();
-  }
-
+  if (url.includes('trovit')) return 'Trovit';
+  if (url.includes('proeventos.campeche.gob.mx')) return 'ProEventos Campeche';
+  if (url.includes('dashport.run')) return 'Dashport Run';
   try {
-    if (sourceUrl) {
-      const host = new URL(sourceUrl).hostname.replace(/^www\./, '');
-      return host;
-    }
+    if (sourceUrl) return new URL(sourceUrl).hostname.replace(/^www\./, '');
   } catch {}
-  return 'Sitio Original';
+  return sourceField || 'Sitio Web';
 }
 
 interface AdminClassifiedsTabProps {
@@ -107,7 +96,7 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
     setIsRadarOpen(true);
     setModalError(null);
     if (radarCandidates.length === 0) {
-      handleSearchRadar(false);
+      handleSearchRadar(true);
     }
   };
 

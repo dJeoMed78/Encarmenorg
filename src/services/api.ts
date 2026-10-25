@@ -1,7 +1,6 @@
 import { Business, Category, DirectoryStats, WpHealth, AutoBusinessCandidate } from '../types';
 import seedBusinesses from '../data/businesses_seed.json';
 import seedCategories from '../data/categories_seed.json';
-import radarClassifiedsSeed from '../data/radar_classifieds_pool.json';
 
 const API_BASE = '/api';
 
@@ -644,7 +643,7 @@ export async function deleteClassified(id: string): Promise<{
 export async function searchClassifiedRadarCandidates(
   query: string = '',
   category: string = 'all',
-  useAi: boolean = false
+  useAi: boolean = true
 ): Promise<{
   success: boolean;
   candidates: import('../types').ClassifiedAd[];
@@ -659,47 +658,23 @@ export async function searchClassifiedRadarCandidates(
     const res = await fetch(API_BASE + '/classifieds/radar-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, category, useAi, timestamp: Date.now() })
+      body: JSON.stringify({ query, category, useAi: true, timestamp: Date.now() })
     });
     if (res.ok) {
-      const data = await res.json();
-      if (data && data.success && Array.isArray(data.candidates) && data.candidates.length > 0) {
-        return data;
-      }
+      return await res.json();
     }
+    return {
+      success: false,
+      candidates: [],
+      message: 'Error al consultar el radar en vivo.'
+    };
   } catch (err: any) {
-    console.warn('[searchClassifiedRadarCandidates Fallback]:', err?.message || err);
+    return {
+      success: false,
+      candidates: [],
+      message: err?.message || 'Error de conexión con el radar.'
+    };
   }
-
-  // Banco de respaldo completo y verificado (36+ anuncios de Carmen de múltiples fuentes)
-  const FALLBACK_CLASSIFIED_POOL: import('../types').ClassifiedAd[] = radarClassifiedsSeed as any;
-
-  let filtered = FALLBACK_CLASSIFIED_POOL;
-  if (category && category !== 'all') {
-    filtered = filtered.filter(c => c.category === category || (c.subcategory && c.subcategory.includes(category)));
-  }
-  if (query && query.trim()) {
-    const q = query.toLowerCase().trim();
-    const isJob = q === 'empleo' || q === 'empleos' || q === 'trabajo' || q === 'vacante' || q === 'vacantes';
-    filtered = filtered.filter(c => {
-      if (isJob && (c.category === 'empleos' || (c.subcategory && c.subcategory.includes('empleo')))) return true;
-      const title = (c.title || '').toLowerCase();
-      const desc = (c.description || '').toLowerCase();
-      const col = (c.colonia || '').toLowerCase();
-      const cat = (c.category || '').toLowerCase();
-      const subcat = (c.subcategory || '').toLowerCase();
-      return title.includes(q) || desc.includes(q) || col.includes(q) || cat.includes(q) || subcat.includes(q);
-    });
-  }
-
-  return {
-    success: true,
-    candidates: filtered.length > 0 ? filtered : FALLBACK_CLASSIFIED_POOL,
-    aiInfo: {
-      usedAi: false,
-      message: 'Se cargaron avisos clasificados verificables del radar local del grupo oficial de Facebook ($0 costo).'
-    }
-  };
 }
 
 export async function approveClassifiedCandidate(candidate: Partial<import('../types').ClassifiedAd>): Promise<{
