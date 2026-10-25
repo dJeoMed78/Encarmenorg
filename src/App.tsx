@@ -12,7 +12,7 @@ import { DirectBusinessView } from './components/DirectBusinessView';
 import { DigitalCardModal } from './components/DigitalCardModal';
 import { EditBusinessModal } from './components/EditBusinessModal';
 import { WordPressSyncModal } from './components/WordPressSyncModal';
-import { MessageSquare, RefreshCw, Lock, X } from 'lucide-react';
+import { MessageSquare, RefreshCw, Lock, X, Globe, ChevronDown } from 'lucide-react';
 import seedBusinesses from './data/businesses_seed.json';
 import seedPromotions from './data/promotions_seed.json';
 import seedEvents from './data/events_carmen.json';
@@ -44,6 +44,7 @@ export default function App() {
   const [favorites, setFavorites] = useState<number[]>([]);
   const [activePromoModal, setActivePromoModal] = useState<Promotion | null>(null);
   const [isAllPromotionsModalOpen, setIsAllPromotionsModalOpen] = useState(false);
+  const [isChannelsAccordionOpen, setIsChannelsAccordionOpen] = useState(false);
   const [promotionsList, setPromotionsList] = useState<Promotion[]>(() => (seedPromotions as unknown as Promotion[]) || []);
 
   useEffect(() => {
@@ -567,31 +568,37 @@ export default function App() {
       </div>
 
       {/* 1. SECCIÓN SUPERIOR UNIFICADA CON LA FOTOGRAFÍA DEL ATARDECER Y CRISTAL TRANSLÚCIDO */}
-      <div className="relative w-full select-none z-10">
-        {/* FOTOGRAFÍA REAL DEL PUENTE ZACATAL AL ATARDECER (SIN FILTROS CAFÉS OSCUROS) */}
-        <img
-          src="/puente.jpg"
-          alt="Puente de Ciudad del Carmen al Atardecer"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = '/images/BANNER-NUEVO-EMPRESAS-EN-CARMEN.png';
-          }}
-          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
-        />
+      <div className="relative w-full select-none z-30">
+        {/* FOTOGRAFÍA REAL DEL PUENTE ZACATAL AL ATARDECER */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <img
+            src="/puente.jpg"
+            alt="Puente de Ciudad del Carmen al Atardecer"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = '/images/BANNER-NUEVO-EMPRESAS-EN-CARMEN.png';
+            }}
+            className="w-full h-full object-cover object-center"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/30" />
+        </div>
 
-        {/* SUTIL GRADIENTE TRANSLÚCIDO PARA MÁXIMA LUMINOSIDAD Y CONTRASTE */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/30 pointer-events-none" />
-
-        {/* BARRA DE NAVEGACIÓN FLOTANTE TRASLÚCIDA (EXACTA A LA IMAGEN) */}
-        <div className="relative z-20">
+        {/* BARRA DE NAVEGACIÓN FLOTANTE TRASLÚCIDA */}
+        <div className="relative z-30">
           <Navbar
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             businesses={businesses}
+            promosList={heroPromos}
+            eventsList={heroEvents}
+            onOpenPromo={handleOpenPromo}
+            onOpenEvent={handleOpenEvent}
+            onOpenAllPromos={() => setIsAllPromotionsModalOpen(true)}
             onEmergencyClick={() => setIsEmergencyModalOpen(true)}
             onRegisterClick={() => {
               setActiveTab('registro');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
+            onAdminClick={() => setIsAdminModalOpen(true)}
             onSelectFilter={handleSelectNavbarFilter}
           />
         </div>
@@ -744,79 +751,102 @@ export default function App() {
         </div>
       ) : (
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 relative z-10">
-          {/* BARRA SUPERIOR iOS LIQUID GLASS: CANALES OFICIALES Y COMUNIDADES WHATSAPP EN 1 SOLA LÍNEA */}
+          {/* BARRA SUPERIOR iOS LIQUID GLASS: CANALES OFICIALES Y COMUNIDADES WHATSAPP (COLAPSABLE) */}
           <div
-            className="w-full rounded-[26px] px-4 sm:px-6 py-3.5 mb-8 border border-white/90 shadow-[0_12px_32px_rgba(14,116,144,0.12)]"
+            className="w-full rounded-[22px] sm:rounded-[26px] px-4 sm:px-6 py-3 mb-6 sm:mb-8 border border-white/90 shadow-[0_12px_32px_rgba(14,116,144,0.12)] transition-all"
             style={{
               background: 'linear-gradient(135deg, rgba(224, 242, 254, 0.85) 0%, rgba(240, 249, 255, 0.78) 100%)',
               backdropFilter: 'blur(24px) saturate(180%)',
               WebkitBackdropFilter: 'blur(24px) saturate(180%)',
             }}
           >
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-center">
-              {/* LADO IZQUIERDO: CANALES OFICIALES (AZUL FACEBOOK Y NEGRO TIKTOK CON LETRA BLANCA) */}
-              <div>
-                <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 tracking-tight mb-2">
-                  Canales Oficiales
-                </h3>
-                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
-                  {getSavedPortalLinks()
-                    .filter((l) => l.group === 'canales')
-                    .map((item) => {
-                      const isTikTok =
-                        item.id.toLowerCase().includes('tiktok') ||
-                        item.label.toLowerCase().includes('tiktok');
-                      return (
+            <button
+              type="button"
+              onClick={() => setIsChannelsAccordionOpen(!isChannelsAccordionOpen)}
+              className="w-full flex items-center justify-between gap-2 cursor-pointer select-none text-left"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Globe className="w-4 h-4 sm:w-5 sm:h-5 text-sky-800 shrink-0" />
+                <span className="text-xs sm:text-sm font-extrabold text-stone-900 tracking-tight truncate">
+                  Canales Oficiales y Comunidades WhatsApp
+                </span>
+                <ChevronDown
+                  className={`w-4 h-4 text-stone-700 transition-transform duration-200 shrink-0 ${
+                    isChannelsAccordionOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </div>
+              <span className="text-xs font-bold text-stone-700 hover:text-stone-950 shrink-0">
+                {isChannelsAccordionOpen ? 'Ocultar' : 'Desplegar'}
+              </span>
+            </button>
+
+            {isChannelsAccordionOpen && (
+              <div className="pt-3.5 mt-3 border-t border-sky-200/60 grid grid-cols-1 xl:grid-cols-2 gap-4 items-center animate-in fade-in duration-200">
+                {/* LADO IZQUIERDO: CANALES OFICIALES */}
+                <div>
+                  <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 tracking-tight mb-2">
+                    Canales Oficiales
+                  </h3>
+                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
+                    {getSavedPortalLinks()
+                      .filter((l) => l.group === 'canales')
+                      .map((item) => {
+                        const isTikTok =
+                          item.id.toLowerCase().includes('tiktok') ||
+                          item.label.toLowerCase().includes('tiktok');
+                        return (
+                          <a
+                            key={item.id}
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] sm:text-xs font-bold text-white whitespace-nowrap shadow-sm transition-transform active:scale-95 shrink-0 ${
+                              isTikTok
+                                ? 'bg-black hover:bg-stone-900 border border-white/20'
+                                : 'bg-[#1877F2] hover:bg-[#166FE5] border border-white/25'
+                            }`}
+                          >
+                            {isTikTok ? (
+                              <span className="w-4 h-4 rounded-full bg-white/15 flex items-center justify-center text-[10px] font-black">
+                                ♪
+                              </span>
+                            ) : (
+                              <span className="w-4 h-4 rounded-full bg-white text-[#1877F2] flex items-center justify-center text-[11px] font-black leading-none">
+                                f
+                              </span>
+                            )}
+                            <span>{item.label}</span>
+                          </a>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                {/* LADO DERECHO: COMUNIDADES WHATSAPP */}
+                <div>
+                  <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 tracking-tight mb-2">
+                    Comunidades WhatsApp
+                  </h3>
+                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
+                    {getSavedPortalLinks()
+                      .filter((l) => l.group === 'whatsapp')
+                      .map((item) => (
                         <a
                           key={item.id}
                           href={item.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] sm:text-xs font-bold text-white whitespace-nowrap shadow-sm transition-transform active:scale-95 shrink-0 ${
-                            isTikTok
-                              ? 'bg-black hover:bg-stone-900 border border-white/20'
-                              : 'bg-[#1877F2] hover:bg-[#166FE5] border border-white/25'
-                          }`}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] sm:text-xs font-bold text-white bg-[#075E54] hover:bg-[#128C7E] border border-emerald-400/30 whitespace-nowrap shadow-sm transition-transform active:scale-95 shrink-0"
                         >
-                          {isTikTok ? (
-                            <span className="w-4 h-4 rounded-full bg-white/15 flex items-center justify-center text-[10px] font-black">
-                              ♪
-                            </span>
-                          ) : (
-                            <span className="w-4 h-4 rounded-full bg-white text-[#1877F2] flex items-center justify-center text-[11px] font-black leading-none">
-                              f
-                            </span>
-                          )}
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#25D366] shadow-[0_0_6px_#25D366] shrink-0" />
                           <span>{item.label}</span>
                         </a>
-                      );
-                    })}
+                      ))}
+                  </div>
                 </div>
               </div>
-
-              {/* LADO DERECHO: COMUNIDADES WHATSAPP (VERDE WHATSAPP CON LETRA BLANCA EN 1 SOLA LÍNEA) */}
-              <div>
-                <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 tracking-tight mb-2">
-                  Comunidades WhatsApp
-                </h3>
-                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
-                  {getSavedPortalLinks()
-                    .filter((l) => l.group === 'whatsapp')
-                    .map((item) => (
-                      <a
-                        key={item.id}
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] sm:text-xs font-bold text-white bg-[#075E54] hover:bg-[#128C7E] border border-emerald-400/30 whitespace-nowrap shadow-sm transition-transform active:scale-95 shrink-0"
-                      >
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#25D366] shadow-[0_0_6px_#25D366] shrink-0" />
-                        <span>{item.label}</span>
-                      </a>
-                    ))}
-                </div>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* BADGE DE FILTROS ACTIVOS CON BOTÓN PARA LIMPIAR */}
@@ -899,7 +929,7 @@ export default function App() {
 
           {displayedBusinesses.length > 0 ? (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
                 {displayedBusinesses.map((b) => (
                   <BusinessCard
                     key={b.id}
