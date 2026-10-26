@@ -55,6 +55,29 @@ export default function App() {
     }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    fetch('/api/version?t=' + Date.now(), { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && data.version) {
+          const prevVersion = localStorage.getItem('encarmen_active_version');
+          if (prevVersion && prevVersion !== data.version) {
+            localStorage.setItem('encarmen_active_version', data.version);
+            if ('caches' in window) {
+              caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).finally(() => {
+                window.location.reload();
+              });
+            } else {
+              window.location.reload();
+            }
+          } else if (!prevVersion) {
+            localStorage.setItem('encarmen_active_version', data.version);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const heroPromos: PromoItem[] = useMemo(() => {
     const active = promotionsList.filter((p) => p.isActive !== false);
     return active.map((p) => ({
@@ -603,7 +626,14 @@ export default function App() {
             }}
             onOpenPromo={handleOpenPromo}
             onOpenEvent={handleOpenEvent}
-            onOpenAllPromos={() => setIsAllPromotionsModalOpen(true)}
+            onOpenAllPromos={() => {
+              setActiveTab('promociones');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onOpenAllEvents={() => {
+              setActiveTab('eventos');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
             promosList={heroPromos}
             eventsList={heroEvents}
           />

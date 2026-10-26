@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Mic, MicOff, Flame, Calendar, Globe, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Mic, MicOff, Flame, Calendar, Globe, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
 import seedEvents from '../data/events_carmen.json';
 import { sortEventsChronologically, filterActiveUpcomingEvents } from '../services/eventsService';
 
@@ -112,6 +112,7 @@ interface HeroProps {
   onOpenPromo: (promoId?: string | number) => void;
   onOpenEvent: (eventId?: string | number) => void;
   onOpenAllPromos?: () => void;
+  onOpenAllEvents?: () => void;
   promosList?: PromoItem[];
   eventsList?: EventItem[];
 }
@@ -121,12 +122,12 @@ export function Hero({
   onOpenPromo,
   onOpenEvent,
   onOpenAllPromos,
+  onOpenAllEvents,
   promosList,
   eventsList,
 }: HeroProps) {
   const [query, setQuery] = useState('');
   const [isListening, setIsListening] = useState(false);
-  // Estados interactivos para desplegar/comprimir Promociones, Eventos y Canales en Celular e iPad
   const [activeTopTab, setActiveTopTab] = useState<'none' | 'promos' | 'eventos'>('none');
   const [isChannelsOpen, setIsChannelsOpen] = useState(false);
   const [channelLinks, setChannelLinks] = useState<HeroChannelLink[]>(() => loadHeroChannelLinks());
@@ -154,6 +155,24 @@ export function Hero({
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
+
+  const handleGoToAllPromos = () => {
+    setActiveTopTab('none');
+    if (onOpenAllPromos) {
+      onOpenAllPromos();
+    } else {
+      onOpenPromo();
+    }
+  };
+
+  const handleGoToAllEvents = () => {
+    setActiveTopTab('none');
+    if (onOpenAllEvents) {
+      onOpenAllEvents();
+    } else {
+      onOpenEvent();
+    }
+  };
 
   const handleVoiceSearch = () => {
     const SpeechRecognition =
@@ -446,29 +465,26 @@ export function Hero({
                   <h2 className="text-[18px] font-bold text-[#111827] tracking-tight">
                     Promociones del Día
                   </h2>
-                  {promoCount > 4 && (
-                    <button
-                      type="button"
-                      onClick={onOpenAllPromos}
-                      className="text-[10px] font-bold bg-white/60 hover:bg-white text-gray-800 px-2 py-0.5 rounded-full border border-white/60 transition cursor-pointer"
-                    >
-                      +{promoCount - 4} más
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleGoToAllPromos}
+                    className="text-[11px] font-extrabold bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-0.5 rounded-full shadow-2xs transition cursor-pointer flex items-center gap-0.5"
+                  >
+                    <span>Ver todas</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
                 </div>
 
                 {renderPromoItems(false)}
 
-                {promoCount > 4 && (
-                  <button
-                    type="button"
-                    onClick={onOpenAllPromos}
-                    className="w-full mt-3 py-1.5 px-3 rounded-xl bg-white/45 hover:bg-white/70 border border-white/60 text-[11px] font-bold text-[#111827] flex items-center justify-between transition active:scale-98 shadow-xs cursor-pointer"
-                  >
-                    <span>Ver todas las promociones del día</span>
-                    <span className="text-emerald-700 font-extrabold text-xs">({promoCount}) →</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleGoToAllPromos}
+                  className="w-full mt-3 py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-xs font-extrabold flex items-center justify-between transition active:scale-98 shadow-sm cursor-pointer"
+                >
+                  <span>Ver todas las promociones</span>
+                  <span className="font-black text-xs">({promoCount}) →</span>
+                </button>
               </div>
             </div>
 
@@ -533,9 +549,19 @@ export function Hero({
                   boxShadow: '0 20px 45px -10px rgba(0, 0, 0, 0.22), inset 0 1px 1px rgba(255, 255, 255, 0.9)',
                 }}
               >
-                <h2 className="text-[18px] font-bold text-[#111827] tracking-tight mb-3">
-                  Cartelera de Eventos
-                </h2>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-[18px] font-bold text-[#111827] tracking-tight">
+                    Cartelera de Eventos
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={handleGoToAllEvents}
+                    className="text-[11px] font-extrabold bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-0.5 rounded-full shadow-2xs transition cursor-pointer flex items-center gap-0.5"
+                  >
+                    <span>Ver todos</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
 
                 <div className="space-y-2.5">
                   {events.map((evt, idx) => (
@@ -568,6 +594,15 @@ export function Hero({
                     </div>
                   ))}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleGoToAllEvents}
+                  className="w-full mt-3 py-2 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white text-xs font-extrabold flex items-center justify-between transition active:scale-98 shadow-sm cursor-pointer"
+                >
+                  <span>Ver todos los eventos</span>
+                  <span className="font-black text-xs">→</span>
+                </button>
               </div>
             </div>
           </div>
@@ -638,10 +673,10 @@ export function Hero({
                 <div
                   className="mt-2 mx-1 sm:mx-4 rounded-3xl p-4 shadow-2xl animate-in fade-in duration-150"
                   style={{
-                    background: 'rgba(255, 255, 255, 0.94)',
+                    background: 'rgba(255, 255, 255, 0.95)',
                     backdropFilter: 'blur(28px) saturate(190%)',
                     WebkitBackdropFilter: 'blur(28px) saturate(190%)',
-                    border: '1.5px solid rgba(255, 255, 255, 0.96)',
+                    border: '1.5px solid rgba(255, 255, 255, 0.98)',
                   }}
                 >
                   <div className="flex items-center justify-between mb-3">
@@ -650,18 +685,14 @@ export function Hero({
                       <span>Promociones del Día</span>
                     </h3>
                     <div className="flex items-center gap-2">
-                      {onOpenAllPromos && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveTopTab('none');
-                            onOpenAllPromos();
-                          }}
-                          className="text-xs font-extrabold text-amber-800 underline cursor-pointer"
-                        >
-                          Ver todas ({promoCount})
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={handleGoToAllPromos}
+                        className="px-3 py-1 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold shadow-2xs flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>Ver todas</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => setActiveTopTab('none')}
@@ -671,7 +702,17 @@ export function Hero({
                       </button>
                     </div>
                   </div>
+
                   {renderPromoItems(true)}
+
+                  <button
+                    type="button"
+                    onClick={handleGoToAllPromos}
+                    className="w-full mt-3.5 py-2.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition active:scale-98 cursor-pointer"
+                  >
+                    <span>Ver todas las promociones disponibles</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
               )}
 
@@ -680,24 +721,34 @@ export function Hero({
                 <div
                   className="mt-2 mx-1 sm:mx-4 rounded-3xl p-4 shadow-2xl animate-in fade-in duration-150"
                   style={{
-                    background: 'rgba(255, 255, 255, 0.94)',
+                    background: 'rgba(255, 255, 255, 0.95)',
                     backdropFilter: 'blur(28px) saturate(190%)',
                     WebkitBackdropFilter: 'blur(28px) saturate(190%)',
-                    border: '1.5px solid rgba(255, 255, 255, 0.96)',
+                    border: '1.5px solid rgba(255, 255, 255, 0.98)',
                   }}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm sm:text-base font-extrabold text-stone-900 flex items-center gap-1.5">
                       <Calendar className="w-4 h-4 text-blue-600" />
-                      <span>Cartelera de Eventos</span>
+                      <span>Próximos 3 Eventos</span>
                     </h3>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTopTab('none')}
-                      className="px-2.5 py-1 rounded-full bg-stone-200 hover:bg-stone-300 text-stone-800 text-[11px] font-bold cursor-pointer"
-                    >
-                      Cerrar ▲
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleGoToAllEvents}
+                        className="px-3 py-1 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-2xs flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>Ver todos</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTopTab('none')}
+                        className="px-2.5 py-1 rounded-full bg-stone-200 hover:bg-stone-300 text-stone-800 text-[11px] font-bold cursor-pointer"
+                      >
+                        Cerrar ▲
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -729,6 +780,15 @@ export function Hero({
                       </div>
                     ))}
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={handleGoToAllEvents}
+                    className="w-full mt-3.5 py-2.5 px-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition active:scale-98 cursor-pointer"
+                  >
+                    <span>Ver todos los eventos en cartelera</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
               )}
             </div>
@@ -809,44 +869,33 @@ export function Hero({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <span className="text-[11px] font-black uppercase tracking-wider text-blue-900 px-1 block">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-blue-700 px-1 block">
                         🌐 Canales Oficiales (FB & TikTok)
                       </span>
                       <div className="grid grid-cols-1 gap-1.5">
-                        {canalesOficiales.map((item) => {
+                        {canalesOficiales.map((item, idx) => {
                           const isTikTok =
-                            item.id.toLowerCase().includes('tiktok') ||
+                            item.id.includes('tiktok') ||
                             item.label.toLowerCase().includes('tiktok');
                           return (
                             <a
-                              key={item.id}
+                              key={item.id || idx}
                               href={item.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className={`flex items-center justify-between px-3.5 py-2.5 rounded-2xl shadow-sm text-xs font-extrabold transition-all active:scale-98 ${
+                              className={`flex items-center justify-between px-3.5 py-2.5 rounded-full text-white shadow-sm text-xs font-extrabold transition active:scale-98 ${
                                 isTikTok
-                                  ? 'bg-black hover:bg-neutral-900 text-white border border-neutral-700'
-                                  : 'bg-[#1877F2] hover:bg-[#166FE5] text-white border border-blue-400/40'
+                                  ? 'bg-slate-950 hover:bg-black'
+                                  : 'bg-blue-600 hover:bg-blue-700'
                               }`}
                             >
-                              <span className="truncate flex items-center gap-2">
-                                {isTikTok ? (
-                                  <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[10px] font-black text-white shrink-0">
-                                    ♪
-                                  </span>
-                                ) : (
-                                  <span className="w-4 h-4 rounded-full bg-white text-[#1877F2] flex items-center justify-center text-[11px] font-black leading-none shrink-0">
-                                    f
-                                  </span>
-                                )}
-                                <span className="text-white font-extrabold">{item.label}</span>
-                              </span>
+                              <span className="truncate">{item.label}</span>
                               {item.badge && (
                                 <span
                                   className={`text-[9px] font-black px-2 py-0.5 rounded-full shrink-0 ${
                                     isTikTok
                                       ? 'bg-white/20 text-white'
-                                      : 'bg-white text-[#1877F2]'
+                                      : 'bg-white text-blue-700'
                                   }`}
                                 >
                                   {item.badge}
@@ -859,24 +908,21 @@ export function Hero({
                     </div>
 
                     <div className="space-y-1.5">
-                      <span className="text-[11px] font-black uppercase tracking-wider text-emerald-900 px-1 block">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800 px-1 block">
                         💬 Comunidades WhatsApp
                       </span>
                       <div className="grid grid-cols-1 gap-1.5">
-                        {comunidadesWhatsapp.map((item) => (
+                        {comunidadesWhatsapp.map((item, idx) => (
                           <a
-                            key={item.id}
+                            key={item.id || idx}
                             href={item.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-[#075E54] hover:bg-[#128C7E] text-white border border-emerald-400/30 shadow-sm text-xs font-extrabold transition-all active:scale-98"
+                            className="flex items-center justify-between px-3.5 py-2.5 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm text-xs font-extrabold transition active:scale-98"
                           >
-                            <span className="truncate flex items-center gap-2">
-                              <span className="w-2.5 h-2.5 rounded-full bg-[#25D366] shadow-[0_0_6px_#25D366] shrink-0" />
-                              <span className="text-white font-extrabold">{item.label}</span>
-                            </span>
+                            <span className="truncate">{item.label}</span>
                             {item.badge && (
-                              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-[#25D366] text-[#075E54] shrink-0">
+                              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-400/30 text-emerald-100 border border-emerald-300/40 shrink-0">
                                 {item.badge}
                               </span>
                             )}

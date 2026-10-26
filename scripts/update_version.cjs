@@ -20,13 +20,78 @@ function getCarmenVersion() {
     map[p.type] = p.value;
   }
 
-  const day = map.day || '02';
+  const day = map.day || '26';
   const month = map.month || '10';
   const year = map.year || '26';
   const hour = map.hour || '12';
   const minute = map.minute || '00';
 
-  return `${day}${month}${year}:${hour}${minute}`;
+  let deployCode = process.env.VERCEL_GIT_COMMIT_SHA
+    ? process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7)
+    : (process.env.DEPLOY_CODE || Math.random().toString(36).substring(2, 9));
+
+  let hosting = 'H';
+  if (process.env.RENDER) hosting = 'R';
+  else if (process.env.AZURE_WEBAPP_NAME || process.env.WEBSITE_SITE_NAME) hosting = 'A';
+  else if (process.env.HOSTING_ID) hosting = process.env.HOSTING_ID;
+
+  return `${day}${month}${year}:${hour}${minute}:${deployCode}:${hosting}`;
+}
+
+async function flushCloudflareAndSiteCache(version) {
+  try {
+    const cfZoneIds = (process.env.CLOUDFLARE_ZONE_ID || process.env.CF_ZONE_ID || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const cfToken = process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN || '';
+    const cfEmail = process.env.CLOUDFLARE_EMAIL || '';
+    const cfGlobalKey = process.env.CLOUDFLARE_API_KEY || '';
+
+    for (const zoneId of cfZoneIds) {
+      const headers = { 'Content-Type': 'application/json' };
+      if (cfToken) {
+        headers['Authorization'] = `Bearer ${cfToken}`;
+      } else if (cfEmail && cfGlobalKey) {
+        headers['X-Auth-Email'] = cfEmail;
+        headers['X-Auth-Key'] = cfGlobalKey;
+      } else {
+        continue;
+      }
+
+      const cfUrl = 'https://' + `api.cloudflare.com/client/v4/zones/${zoneId}/purge_cache`;
+      await fetch(cfUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ purge_everything: true })
+      }).catch(() => {});
+      console.log(`[Cloudflare Flush] Purga total enviada a Zone ID: ${zoneId}`);
+    }
+
+    const urlsToPurge = [
+      'https://' + 'encarmen.org/',
+      'https://' + 'www.encarmen.org/',
+      'https://' + 'empresasencarmen.com/',
+      'https://' + 'www.empresasencarmen.com/'
+    ];
+
+    for (const u of urlsToPurge) {
+      await fetch(u, {
+        method: 'PURGE',
+        headers: {
+          'x-litespeed-purge': '*',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      }).catch(() => {});
+      await fetch(`${u}?flush_version=${encodeURIComponent(version)}`, {
+        method: 'GET',
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+      }).catch(() => {});
+    }
+    console.log(`[Cache Flush] Señal de recarga enviada a encarmen.org y empresasencarmen.com (${version})`);
+  } catch (err) {
+    console.warn('[Cache Flush] Aviso:', err.message);
+  }
 }
 
 const version = getCarmenVersion();
@@ -39,3 +104,4 @@ export const APP_BUILD_TIMESTAMP = '${new Date().toISOString()}';
 
 fs.writeFileSync(filePath, fileContent, 'utf8');
 console.log(`[Version Stamp] APP_VERSION actualizada exitosamente a: ${version}`);
+flushCloudflareAndSiteCache(version);
