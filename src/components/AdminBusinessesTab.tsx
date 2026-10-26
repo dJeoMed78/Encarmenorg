@@ -26,8 +26,6 @@ import { Business, Category } from '../types';
 import {
   fetchBusinessEditPins,
   generateBusinessEditPin,
-  syncWordPress,
-  syncSingleBusinessToWordPress,
   BusinessEditPinInfo
 } from '../services/api';
 import { formatPhoneNumber } from '../utils/phone';
@@ -89,43 +87,7 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
   const [copiedPinId, setCopiedPinId] = useState<number | null>(null);
   const [businessToDelete, setBusinessToDelete] = useState<Business | null>(null);
 
-  const [isSyncingWp, setIsSyncingWp] = useState(false);
-  const [syncingSingleId, setSyncingSingleId] = useState<number | null>(null);
-  const [syncNotice, setSyncNotice] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  const handleSyncAllWordPress = async () => {
-    setIsSyncingWp(true);
-    setSyncNotice(null);
-    try {
-      const res = await syncWordPress();
-      if (res.success) {
-        setSyncNotice({ text: res.message || 'Sincronización con WordPress completada con éxito.', type: 'success' });
-      } else {
-        setSyncNotice({ text: res.message || 'Error en sincronización con WordPress.', type: 'error' });
-      }
-    } catch (err: any) {
-      setSyncNotice({ text: err.message || 'Error al conectar con el servidor', type: 'error' });
-    } finally {
-      setIsSyncingWp(false);
-    }
-  };
-
-  const handleSyncSingle = async (biz: Business) => {
-    setSyncingSingleId(biz.id);
-    setSyncNotice(null);
-    try {
-      const res = await syncSingleBusinessToWordPress(biz.id);
-      if (res.success) {
-        setSyncNotice({ text: res.message || `Empresa "${biz.name}" actualizada en WordPress con categorías y botones de contacto.`, type: 'success' });
-      } else {
-        setSyncNotice({ text: res.message || 'Error al sincronizar empresa con WordPress.', type: 'error' });
-      }
-    } catch (err: any) {
-      setSyncNotice({ text: err.message || 'Error de comunicación', type: 'error' });
-    } finally {
-      setSyncingSingleId(null);
-    }
-  };
 
   useEffect(() => {
     let active = true;
@@ -323,17 +285,7 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
               </button>
             </div>
 
-            <button
-              type="button"
-              onClick={handleSyncAllWordPress}
-              disabled={isSyncingWp}
-              className="px-3.5 py-2 rounded-xl bg-purple-700 hover:bg-purple-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-              title="Sincronizar catálogo con WordPress WooCommerce (empresasencarmen.com)"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-purple-200 ${isSyncingWp ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">{isSyncingWp ? 'Sincronizando WP...' : 'Sincronizar WordPress'}</span>
-              <span className="sm:hidden">WP</span>
-            </button>
+
 
             <a
               href="/api/download-backup"
@@ -615,15 +567,7 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
                           <CheckCircle className="w-3.5 h-3.5" />
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => handleSyncSingle(biz)}
-                        disabled={syncingSingleId === biz.id}
-                        className="p-1.5 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 cursor-pointer disabled:opacity-50"
-                        title="Sincronizar y actualizar con WordPress WooCommerce"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${syncingSingleId === biz.id ? 'animate-spin' : ''}`} />
-                      </button>
+
                       {onEditBusiness && (
                         <button
                           type="button"
@@ -715,15 +659,6 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
                     </td>
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleSyncSingle(biz)}
-                          disabled={syncingSingleId === biz.id}
-                          className="p-1 rounded text-purple-600 hover:text-purple-800 disabled:opacity-40"
-                          title="Sincronizar y actualizar con WordPress WooCommerce"
-                        >
-                          <RefreshCw className={`w-3.5 h-3.5 ${syncingSingleId === biz.id ? 'animate-spin' : ''}`} />
-                        </button>
                         {onEditBusiness && (
                           <button
                             onClick={() => onEditBusiness(biz)}

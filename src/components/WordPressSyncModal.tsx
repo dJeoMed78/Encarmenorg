@@ -965,8 +965,8 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         onClick={() => { setOpenMenuDropdown(null); onTriggerSync(); }}
                         className="w-full text-left px-3.5 py-1.5 hover:bg-sky-50 text-stone-700 hover:text-sky-900 transition-colors flex items-center justify-between cursor-pointer"
                       >
-                        <span>Sincronizar con WordPress</span>
-                        <span className="text-stone-400 text-[10px]">⌘S</span>
+                        <span>Actualizar Catálogo Local</span>
+                        <span className="text-stone-400 text-[10px]">⌘R</span>
                       </button>
                       <button
                         type="button"
@@ -1063,13 +1063,13 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                   <span>MariaDB OK</span>
                 </div>
 
-                {/* Quick Sync Button */}
+                {/* Quick Refresh Button */}
                 <button
                   type="button"
                   onClick={onTriggerSync}
                   disabled={isSyncing}
                   className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-stone-200/60 text-stone-700 hover:text-stone-950 transition-colors cursor-pointer disabled:opacity-50"
-                  title="Sincronizar con WordPress"
+                  title="Actualizar Catálogo"
                 >
                   <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-sky-600' : ''}`} />
                   <span>{isSyncing ? 'Sincronizando' : 'Sincronizar'}</span>

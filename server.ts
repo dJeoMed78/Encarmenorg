@@ -73,7 +73,31 @@ app.use((req: Request, res: Response, next) => {
   next();
 });
 
-// 1. Bot & Scanner Protection Middleware (Block directory traversal, .env, wp-login, etc.)
+// 1. REGLA GEOIP CLOUDFLARE: SOLO PERMITIR TRÁFICO DESDE MÉXICO (MX)
+// Si la petición proviene de cualquier otro país (US, ES, CN, etc.), desviar a https://www.google.com
+app.use((req: Request, res: Response, next) => {
+  // Excluir comprobaciones técnicas de salud y versionado interno
+  if (req.path === '/api/health' || req.path === '/api/version') {
+    return next();
+  }
+
+  const host = (req.get('host') || '').toLowerCase();
+  const isDevOrInternal = host.includes('run.app') || host.includes('localhost') || host.includes('127.0.0.1');
+  if (isDevOrInternal) {
+    return next();
+  }
+
+  // Cloudflare inyecta la cabecera 'cf-ipcountry' en todas las peticiones a través de sus servidores proxy
+  const cfCountry = (req.get('cf-ipcountry') || '').trim().toUpperCase();
+  if (cfCountry && cfCountry !== 'MX') {
+    console.log(`[GeoBlock] Acceso bloqueado desde país "${cfCountry}" (Host: ${host}, Path: ${req.path}). Desviando a https://www.google.com`);
+    return res.redirect(302, 'https://www.google.com');
+  }
+
+  next();
+});
+
+// 2. Bot & Scanner Protection Middleware (Block directory traversal, .env, wp-login, etc.)
 app.use((req: Request, res: Response, next) => {
   const pathLower = (req.path || '').toLowerCase();
   

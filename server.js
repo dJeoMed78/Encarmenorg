@@ -951,6 +951,22 @@ app.use((req, res, next) => {
   next();
 });
 app.use((req, res, next) => {
+  if (req.path === "/api/health" || req.path === "/api/version") {
+    return next();
+  }
+  const host = (req.get("host") || "").toLowerCase();
+  const isDevOrInternal = host.includes("run.app") || host.includes("localhost") || host.includes("127.0.0.1");
+  if (isDevOrInternal) {
+    return next();
+  }
+  const cfCountry = (req.get("cf-ipcountry") || "").trim().toUpperCase();
+  if (cfCountry && cfCountry !== "MX") {
+    console.log(`[GeoBlock] Acceso bloqueado desde pa\xEDs "${cfCountry}" (Host: ${host}, Path: ${req.path}). Desviando a https://www.google.com`);
+    return res.redirect(302, "https://www.google.com");
+  }
+  next();
+});
+app.use((req, res, next) => {
   const pathLower = (req.path || "").toLowerCase();
   if (pathLower.includes(".env") || pathLower.includes(".git") || pathLower.includes("..") || pathLower.includes("wp-login") || pathLower.includes("wp-admin") || pathLower.includes("xmlrpc.php") || pathLower.includes("eval-stdin") || pathLower.includes("phpinfo") || pathLower.includes("actuator") || pathLower.includes(".aws")) {
     return res.status(404).end();

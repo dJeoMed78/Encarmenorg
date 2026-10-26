@@ -213,9 +213,28 @@
           }).catch(function() {});
         }
       } catch (err) {}
+
+      // Regla de geolocalización Cloudflare: Si el acceso no proviene de México (MX), desviar a www.google.com
+      (function() {
+        try {
+          var host = window.location.hostname;
+          var isProd = host.includes('encarmen.org') || host.includes('empresasencarmen.com');
+          if (isProd) {
+            fetch('/cdn-cgi/trace')
+              .then(function(r) { return r.text(); })
+              .then(function(text) {
+                var match = text.match(/loc=([A-Z]{2})/);
+                if (match && match[1] && match[1] !== 'MX') {
+                  window.location.replace('https://www.google.com');
+                }
+              })
+              .catch(function() {});
+          }
+        } catch (e) {}
+      })();
     </script>
-    <script type="module" crossorigin src="/assets/index-Cxokhw4M.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CvYLPNJu.css">
+    <script type="module" crossorigin src="/assets/index-BppPjT_2.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-B1bGMtDv.css">
   </head>
   <body class="bg-stone-50 text-stone-900 antialiased selection:bg-amber-500 selection:text-white">
     <div id="root">

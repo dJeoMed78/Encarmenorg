@@ -30,10 +30,8 @@ function getCarmenVersion() {
     ? process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7)
     : (process.env.DEPLOY_CODE || Math.random().toString(36).substring(2, 9));
 
-  let hosting = 'H';
-  if (process.env.RENDER) hosting = 'R';
-  else if (process.env.AZURE_WEBAPP_NAME || process.env.WEBSITE_SITE_NAME) hosting = 'A';
-  else if (process.env.HOSTING_ID) hosting = process.env.HOSTING_ID;
+  // Hostinger es la plataforma de hosting oficial y exclusiva
+  const hosting = 'H';
 
   return `${day}${month}${year}:${hour}${minute}:${deployCode}:${hosting}`;
 }
