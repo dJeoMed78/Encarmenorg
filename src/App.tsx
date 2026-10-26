@@ -27,7 +27,63 @@ import { isSessionAdminAuthenticated, hashPassword, FALLBACK_ADMIN_HASHES } from
 import { adminDeleteBusiness, getAdminPromotions } from './services/api';
 import { sortEventsChronologically, parseEventStartDate, isEventExpired, filterActiveUpcomingEvents } from './services/eventsService';
 import { getSavedPortalLinks } from './components/AdminLinksAndAdsManager';
-import { getRealBusinessRating } from './utils/realRatings';
+function getBusinessSlugFromUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
+  const urlParams = new URLSearchParams(window.location.search);
+  const slugFromQuery = urlParams.get('empresa') || urlParams.get('negocio') || urlParams.get('slug');
+
+  if (slugFromQuery) {
+    return slugFromQuery.toLowerCase().trim();
+  }
+
+  // Check if window.__INITIAL_BUSINESS_SLUG__ was injected by server
+  const injectedSlug = (window as any).__INITIAL_BUSINESS_SLUG__;
+  if (injectedSlug && typeof injectedSlug === 'string' && injectedSlug.trim()) {
+    const cleanInjected = injectedSlug.toLowerCase().trim();
+    if (!['negocios', 'promociones', 'eventos', 'clasificados', 'registro', 'contacto', 'admin', 'index.html'].includes(cleanInjected)) {
+      return cleanInjected;
+    }
+  }
+
+  if (!path) return null;
+
+  // Clean prefix like empresa/ or negocio/ or producto/
+  const cleanPath = path.replace(/^(empresa|negocio|producto)\//i, '').toLowerCase().trim();
+
+  const reservedRoutes = new Set([
+    'negocios',
+    'promociones',
+    'eventos',
+    'clasificados',
+    'registro',
+    'contacto',
+    'admin',
+    'aviso-de-privacidad',
+    'terminos',
+    'api',
+    'index.html'
+  ]);
+
+  if (reservedRoutes.has(cleanPath)) {
+    return null;
+  }
+
+  return cleanPath;
+}
+
+function findBusinessInList(list: Business[], candidateSlug: string): Business | null {
+  if (!candidateSlug || !Array.isArray(list)) return null;
+  const clean = candidateSlug.toLowerCase().trim();
+  return list.find(b =>
+    (b.slug && b.slug.toLowerCase() === clean) ||
+    String(b.id) === clean ||
+    (Array.isArray((b as any).previousSlugs) && (b as any).previousSlugs.some((ps: string) => ps.toLowerCase() === clean)) ||
+    (Array.isArray((b as any).previousNames) && (b as any).previousNames.some((pn: string) => pn.toLowerCase().replace(/[^a-z0-9]+/g, '-') === clean || pn.toLowerCase().trim() === clean)) ||
+    (b.name && b.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === clean) ||
+    (b.name && b.name.toLowerCase().trim() === clean)
+  ) || null;
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('negocios');
@@ -239,10 +295,100 @@ export default function App() {
       .then((data) => {
         if (data && Array.isArray(data.businesses) && data.businesses.length > 0) {
           setBusinessesList(data.businesses);
+          const slug = getBusinessSlugFromUrl();
+          if (slug) {
+            const match = findBusinessInList(data.businesses, slug);
+            if (match) {
+              setLandingBusiness(match);
+            }
+          }
         }
       })
       .catch(() => {});
   }, []);
+
+  // Detect direct business landing page or tab on initial load
+  useEffect(() => {
+    const slug = getBusinessSlugFromUrl();
+    if (slug) {
+      const match = findBusinessInList(businessesList, slug);
+      if (match) {
+        setLandingBusiness(match);
+      } else {
+        // Query endpoint directly in case business was just registered in DB
+        fetch(`/api/businesses/${encodeURIComponent(slug)}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((resData) => {
+            if (resData && resData.business) {
+              setLandingBusiness(resData.business);
+              setBusinessesList((prev) => [
+                resData.business,
+                ...prev.filter((b) => String(b.id) !== String(resData.business.id)),
+              ]);
+            }
+          })
+          .catch(() => {});
+      }
+    } else {
+      const cleanPath = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
+      if (['promociones', 'eventos', 'clasificados', 'registro'].includes(cleanPath)) {
+        setActiveTab(cleanPath);
+      }
+    }
+  }, []);
+
+  // Listen to browser Back/Forward (popstate)
+  useEffect(() => {
+    const handlePopState = () => {
+      const slug = getBusinessSlugFromUrl();
+      if (slug) {
+        const match = findBusinessInList(businessesList, slug);
+        if (match) {
+          setLandingBusiness(match);
+        } else {
+          fetch(`/api/businesses/${encodeURIComponent(slug)}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((resData) => {
+              if (resData && resData.business) {
+                setLandingBusiness(resData.business);
+              }
+            })
+            .catch(() => {});
+        }
+      } else {
+        setLandingBusiness(null);
+        const cleanPath = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
+        if (['promociones', 'eventos', 'clasificados', 'registro', 'negocios'].includes(cleanPath)) {
+          setActiveTab(cleanPath);
+        } else {
+          setActiveTab('negocios');
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [businessesList]);
+
+  // Synchronize document title with active landing page
+  useEffect(() => {
+    if (landingBusiness) {
+      document.title = `${landingBusiness.name} | Empresas en Carmen`;
+    } else {
+      document.title = 'Directorio Empresas en Carmen | Ciudad del Carmen, Campeche';
+    }
+  }, [landingBusiness]);
+
+  const openBusinessLanding = (b: Business) => {
+    setSelectedBusiness(null);
+    setDigitalCardBusiness(null);
+    setLandingBusiness(b);
+    const targetUrl = b.slug ? `/${b.slug}` : `/empresa/${b.id}`;
+    if (window.location.pathname !== targetUrl) {
+      window.history.pushState({}, '', targetUrl);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Negocios con calificaciones reales integradas (si count === 0, rating es 0 y se muestra 'Sin calificar aún')
   // En pantalla principal: Empresas TOP van SIEMPRE en los primeros lugares de la lista.
@@ -542,11 +688,21 @@ export default function App() {
       <>
         <DirectBusinessView
           business={landingBusiness as any}
-          onBack={() => setLandingBusiness(null)}
-          onBackToDirectory={() => setLandingBusiness(null)}
+          onBack={() => {
+            setLandingBusiness(null);
+            if (window.location.pathname !== '/') window.history.pushState({}, '', '/');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          onBackToDirectory={() => {
+            setLandingBusiness(null);
+            if (window.location.pathname !== '/') window.history.pushState({}, '', '/');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
           onSearchFromPage={(query) => {
             setSearchQuery(query);
             setLandingBusiness(null);
+            if (window.location.pathname !== '/') window.history.pushState({}, '', '/');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           onOpenDigitalCard={(b) => setDigitalCardBusiness(b)}
           isAdmin={isAdminLoggedIn}
@@ -573,10 +729,7 @@ export default function App() {
           business={digitalCardBusiness as any}
           isOpen={!!digitalCardBusiness}
           onClose={() => setDigitalCardBusiness(null)}
-          onOpenClientPage={(b) => {
-            setDigitalCardBusiness(null);
-            setLandingBusiness(b);
-          }}
+          onOpenClientPage={(b) => openBusinessLanding(b)}
         />
         <EditBusinessModal
           business={editingBusiness as any}
@@ -1075,10 +1228,7 @@ export default function App() {
           setSelectedBusiness(null);
           setDigitalCardBusiness(b);
         }}
-        onOpenClientPage={(b) => {
-          setSelectedBusiness(null);
-          setLandingBusiness(b);
-        }}
+        onOpenClientPage={(b) => openBusinessLanding(b)}
         onEditBusiness={(b) => {
           setSelectedBusiness(null);
           setEditingBusiness(b);
@@ -1093,10 +1243,7 @@ export default function App() {
         business={digitalCardBusiness as any}
         isOpen={!!digitalCardBusiness}
         onClose={() => setDigitalCardBusiness(null)}
-        onOpenClientPage={(b) => {
-          setDigitalCardBusiness(null);
-          setLandingBusiness(b);
-        }}
+        onOpenClientPage={(b) => openBusinessLanding(b)}
       />
 
       {/* MODAL DE EDICIÓN DE EMPRESA */}

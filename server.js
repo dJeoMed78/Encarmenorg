@@ -7883,22 +7883,29 @@ if (!isProduction && !process.env.VERCEL) {
       }
     }
   }));
-  app.get("*", (req, res) => {
+  app.get("*", async (req, res) => {
     if (req.path.startsWith("/api/") || req.path.startsWith("/uploads/") || /\.(jpg|jpeg|png|webp|svg|gif|ico|css|js|map|json|woff2?|ttf)$/i.test(req.path)) {
       return res.status(404).setHeader("Content-Type", "text/plain").send("File not found");
+    }
+    try {
+      await refreshBusinessesFromDbIfNeeded();
+    } catch (_) {
     }
     const indexPath = path.resolve(__dirname, "dist/index.html");
     if (fs.existsSync(indexPath)) {
       let html = fs.readFileSync(indexPath, "utf8");
-      const cleanPath = req.path.replace(/^\/+|\/+$/g, "").replace(/^(empresa|producto)\//i, "");
+      const cleanPath = req.path.replace(/^\/+|\/+$/g, "").replace(/^(empresa|negocio|producto)\//i, "");
       const queryEmpresa = req.query.empresa;
       const candidateSlug = queryEmpresa || cleanPath;
-      if (candidateSlug && businessesCache && businessesCache.length > 0) {
+      if (candidateSlug && candidateSlug !== "index.html" && businessesCache && businessesCache.length > 0) {
         const cleanCandidate = candidateSlug.toLowerCase().trim();
         const biz = businessesCache.find(
-          (b) => b.slug?.toLowerCase() === cleanCandidate || String(b.id) === cleanCandidate || Array.isArray(b.previousSlugs) && b.previousSlugs.some((ps) => ps.toLowerCase() === cleanCandidate) || Array.isArray(b.previousNames) && b.previousNames.some((pn) => pn.toLowerCase().replace(/[^a-z0-9]+/g, "-") === cleanCandidate || pn.toLowerCase().trim() === cleanCandidate) || b.name && b.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") === cleanCandidate
+          (b) => b.slug?.toLowerCase() === cleanCandidate || String(b.id) === cleanCandidate || Array.isArray(b.previousSlugs) && b.previousSlugs.some((ps) => ps.toLowerCase() === cleanCandidate) || Array.isArray(b.previousNames) && b.previousNames.some((pn) => pn.toLowerCase().replace(/[^a-z0-9]+/g, "-") === cleanCandidate || pn.toLowerCase().trim() === cleanCandidate) || b.name && b.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") === cleanCandidate || b.name && b.name.toLowerCase().trim() === cleanCandidate
         );
         if (biz) {
+          const targetSlug = biz.slug || cleanCandidate;
+          html = html.replace("</head>", `  <script>window.__INITIAL_BUSINESS_SLUG__ = ${JSON.stringify(targetSlug)};</script>
+</head>`);
           if (biz.slug && biz.slug.toLowerCase() !== cleanCandidate) {
             const hasEmpresaPrefix = req.path.startsWith("/empresa/") || req.path.startsWith("/negocio/");
             const targetUrl = hasEmpresaPrefix ? `/empresa/${biz.slug}` : `/${biz.slug}`;
