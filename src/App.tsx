@@ -231,10 +231,23 @@ export default function App() {
     return () => window.removeEventListener('real-ratings-updated', onRatingUpdate);
   }, []);
 
+  const [businessesList, setBusinessesList] = useState<Business[]>(() => (seedBusinesses as unknown as Business[]) || []);
+
+  useEffect(() => {
+    fetch('/api/businesses?t=' + Date.now(), { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.businesses) && data.businesses.length > 0) {
+          setBusinessesList(data.businesses);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Negocios con calificaciones reales integradas (si count === 0, rating es 0 y se muestra 'Sin calificar aún')
   // En pantalla principal: Empresas TOP van SIEMPRE en los primeros lugares de la lista.
   const businesses: Business[] = useMemo(() => {
-    const raw = (seedBusinesses as unknown as Business[]) || [];
+    const raw = businessesList;
 
     return [...raw]
       .filter((b) => !deletedBusinessIds.includes(Number(b.id)))
@@ -265,7 +278,7 @@ export default function App() {
         if (timeB !== timeA) return timeB - timeA;
         return Number(b.id) - Number(a.id);
       });
-  }, [businessOverrides, deletedBusinessIds, ratingsTick]);
+  }, [businessesList, businessOverrides, deletedBusinessIds, ratingsTick]);
 
   const categoriasList = useMemo(() => {
     const set = new Set<string>();
@@ -461,6 +474,7 @@ export default function App() {
       await adminDeleteBusiness(Number(b.id));
     } catch (_) {}
     setDeletedBusinessIds((prev) => [...prev, Number(b.id)]);
+    setBusinessesList((prev) => prev.filter((item) => String(item.id) !== String(b.id)));
     if (selectedBusiness && String(selectedBusiness.id) === String(b.id)) {
       setSelectedBusiness(null);
     }
@@ -670,6 +684,7 @@ export default function App() {
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             onBusinessAdded={(newBiz) => {
+              setBusinessesList((prev) => [newBiz, ...prev.filter((b) => String(b.id) !== String(newBiz.id))]);
               setBusinessOverrides((prev) => ({ ...prev, [newBiz.id]: newBiz }));
               setActiveTab('negocios');
               window.scrollTo({ top: 0, behavior: 'smooth' });

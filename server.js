@@ -3172,17 +3172,17 @@ if (!process.env.VERCEL && IS_WP_SYNC_ENABLED) {
   }, 5e3);
 }
 function findDuplicateBusiness(name, phone) {
-  const cleanPhone = (phone || "").replace(/\D/g, "");
-  const cleanName = (name || "").toLowerCase().trim();
+  const normPhone = (phone || "").replace(/\D/g, "").slice(-10);
+  const cleanName = (name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
   return businessesCache.find((b) => {
-    if (cleanPhone && cleanPhone.length >= 7) {
-      const bPhone = (b.phone || "").replace(/\D/g, "");
-      const bWa = (b.whatsapp || "").replace(/\D/g, "");
-      if (bPhone && (bPhone.includes(cleanPhone) || cleanPhone.includes(bPhone))) return true;
-      if (bWa && (bWa.includes(cleanPhone) || cleanPhone.includes(bWa))) return true;
+    if (normPhone && normPhone.length >= 7) {
+      const bPhone = (b.phone || "").replace(/\D/g, "").slice(-10);
+      const bWa = (b.whatsapp || "").replace(/\D/g, "").slice(-10);
+      if (bPhone && bPhone.length >= 7 && bPhone === normPhone) return true;
+      if (bWa && bWa.length >= 7 && bWa === normPhone) return true;
     }
     if (cleanName && cleanName.length >= 4) {
-      const bName = (b.name || "").toLowerCase().trim();
+      const bName = (b.name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
       if (bName === cleanName) return true;
     }
     return false;
@@ -3207,18 +3207,25 @@ app.post("/api/submit-business", async (req, res) => {
     if (!data.name || !data.name.trim()) {
       return res.status(400).json({ success: false, message: "El nombre de la empresa es obligatorio" });
     }
-    const dup = findDuplicateBusiness(data.name, data.phone);
-    if (dup) {
-      return res.status(409).json({
-        success: false,
-        isDuplicate: true,
-        existingBusiness: dup,
-        message: `Ya existe un negocio registrado con este nombre o tel\xE9fono: "${dup.name}"`
-      });
+    const allowDuplicate = Boolean(data.allowDuplicate);
+    if (!allowDuplicate) {
+      const dup = findDuplicateBusiness(data.name, data.phone);
+      if (dup) {
+        return res.status(409).json({
+          success: false,
+          isDuplicate: true,
+          existingBusiness: dup,
+          message: `Ya existe un negocio registrado con este nombre o tel\xE9fono: "${dup.name}"`
+        });
+      }
     }
     const maxId = businessesCache.reduce((max, b) => Math.max(max, Number(b.id) || 0), 4e3);
     const newId = maxId + 1;
-    const slug = (data.name || "empresa").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || `empresa-${newId}`;
+    const baseSlug = (data.name || "empresa").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || `empresa-${newId}`;
+    let slug = baseSlug;
+    if (businessesCache.some((b) => b.slug === slug)) {
+      slug = `${baseSlug}-${newId}`;
+    }
     const newBiz = {
       id: newId,
       name: data.name.trim(),
