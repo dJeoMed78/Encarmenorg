@@ -568,31 +568,23 @@ export default function App() {
       </div>
 
       {/* 1. SECCIÓN SUPERIOR UNIFICADA CON LA FOTOGRAFÍA DEL ATARDECER Y CRISTAL TRANSLÚCIDO */}
-      <div className="relative w-full select-none z-30">
-        {/* FOTOGRAFÍA REAL DEL PUENTE ZACATAL AL ATARDECER */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <img
-            src="/puente.jpg"
-            alt="Puente de Ciudad del Carmen al Atardecer"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = '/images/BANNER-NUEVO-EMPRESAS-EN-CARMEN.png';
-            }}
-            className="w-full h-full object-cover object-center"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/30" />
-        </div>
+      <div className="relative w-full overflow-visible select-none z-20">
+        <img
+          src="/puente.jpg"
+          alt="Puente de Ciudad del Carmen al Atardecer"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = '/images/BANNER-NUEVO-EMPRESAS-EN-CARMEN.png';
+          }}
+          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+        />
 
-        {/* BARRA DE NAVEGACIÓN FLOTANTE TRASLÚCIDA */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/30 pointer-events-none" />
+
         <div className="relative z-30">
           <Navbar
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             businesses={businesses}
-            promosList={heroPromos}
-            eventsList={heroEvents}
-            onOpenPromo={handleOpenPromo}
-            onOpenEvent={handleOpenEvent}
-            onOpenAllPromos={() => setIsAllPromotionsModalOpen(true)}
             onEmergencyClick={() => setIsEmergencyModalOpen(true)}
             onRegisterClick={() => {
               setActiveTab('registro');
@@ -603,8 +595,7 @@ export default function App() {
           />
         </div>
 
-        {/* HERO: PROMOCIONES DEL DÍA, TITULAR CENTRAL Y CARTELERA DE EVENTOS */}
-        <div className="relative z-10">
+        <div className="relative z-20">
           <Hero
             onSearch={(q) => {
               setSearchQuery(q);
@@ -751,9 +742,9 @@ export default function App() {
         </div>
       ) : (
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 relative z-10">
-          {/* BARRA SUPERIOR iOS LIQUID GLASS: CANALES OFICIALES Y COMUNIDADES WHATSAPP (COLAPSABLE) */}
+          {/* BARRA SUPERIOR iOS LIQUID GLASS: CANALES OFICIALES Y COMUNIDADES WHATSAPP (SOLO ESCRITORIO XL) */}
           <div
-            className="w-full rounded-[22px] sm:rounded-[26px] px-4 sm:px-6 py-3 mb-6 sm:mb-8 border border-white/90 shadow-[0_12px_32px_rgba(14,116,144,0.12)] transition-all"
+            className="hidden xl:block w-full rounded-[22px] sm:rounded-[26px] px-4 sm:px-6 py-3 mb-6 sm:mb-8 border border-white/90 shadow-[0_12px_32px_rgba(14,116,144,0.12)] transition-all"
             style={{
               background: 'linear-gradient(135deg, rgba(224, 242, 254, 0.85) 0%, rgba(240, 249, 255, 0.78) 100%)',
               backdropFilter: 'blur(24px) saturate(180%)',
