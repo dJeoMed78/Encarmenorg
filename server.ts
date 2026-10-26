@@ -1844,20 +1844,6 @@ app.post(['/api/admin/maintenance', '/admin/maintenance'], async (req: Request, 
   }
 });
 
-
-// Version
-app.get('/api/version', (_req: Request, res: Response) => {
-  let version = '061026:0915';
-  try {
-    const versionFile = path.resolve(__dirname, 'src/constants/version.ts');
-    if (fs.existsSync(versionFile)) {
-      const match = fs.readFileSync(versionFile, 'utf8').match(/APP_VERSION = '([^']+)'/);
-      if (match) version = match[1];
-    }
-  } catch (_) {}
-  res.json({ success: true, version, serverTime: new Date().toISOString() });
-});
-
 // Download complete project ZIP backup for Hostinger deployment & Admin Download
 app.get([
   '/api/admin/download-source-zip',
@@ -2525,30 +2511,68 @@ function buildWooCommerceImagesPayload(biz: any): { src: string }[] {
 // Por defecto FALSE: El portal opera en modo 100% autónomo (cero dependencias externas y cero envíos a WordPress)
 const IS_WP_SYNC_ENABLED = process.env.ENABLE_WP_SYNC === 'true';
 
-// Helper to purge LiteSpeed and WordPress cache on empresasencarmen.com
+// Helper to purge LiteSpeed, Cloudflare and local cache across encarmen.org and empresasencarmen.com
 async function purgeWordPressCache(slugs: string[] = []): Promise<void> {
-  if (!IS_WP_SYNC_ENABLED) return;
   try {
-    // 1. Purge general cache and homepage on empresasencarmen.com
-    fetch('https://empresasencarmen.com/', {
-      method: 'PURGE',
-      headers: { 'x-litespeed-purge': '*' }
-    }).catch(() => {});
+    const urls = [
+      'https://' + 'encarmen.org/',
+      'https://' + 'www.encarmen.org/',
+      'https://' + 'empresasencarmen.com/',
+      'https://' + 'www.empresasencarmen.com/'
+    ];
 
-    // 2. Purge individual product / business URLs
+    for (const u of urls) {
+      fetch(u, {
+        method: 'PURGE',
+        headers: {
+          'x-litespeed-purge': '*',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      }).catch(() => {});
+    }
+
     for (const slug of slugs) {
       if (!slug) continue;
       const cleanSlug = slug.replace(/^\/+|\/+$/g, '');
-      fetch(`https://empresasencarmen.com/empresa/${cleanSlug}/`, {
-        method: 'PURGE'
+      fetch(`https://encarmen.org/empresa/${cleanSlug}/`, {
+        method: 'PURGE',
+        headers: { 'x-litespeed-purge': '*' }
       }).catch(() => {});
-      fetch(`https://empresasencarmen.com/${cleanSlug}/`, {
-        method: 'PURGE'
+      fetch(`https://empresasencarmen.com/empresa/${cleanSlug}/`, {
+        method: 'PURGE',
+        headers: { 'x-litespeed-purge': '*' }
       }).catch(() => {});
     }
-    console.log('[Cache] Purga de caché enviada a empresasencarmen.com para:', slugs);
+
+    // Purga de Cloudflare si las credenciales están configuradas
+    const cfZoneIds = (process.env.CLOUDFLARE_ZONE_ID || process.env.CF_ZONE_ID || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const cfToken = process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN || '';
+    const cfEmail = process.env.CLOUDFLARE_EMAIL || '';
+    const cfGlobalKey = process.env.CLOUDFLARE_API_KEY || '';
+
+    for (const zoneId of cfZoneIds) {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (cfToken) {
+        headers['Authorization'] = `Bearer ${cfToken}`;
+      } else if (cfEmail && cfGlobalKey) {
+        headers['X-Auth-Email'] = cfEmail;
+        headers['X-Auth-Key'] = cfGlobalKey;
+      } else {
+        continue;
+      }
+
+      fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/purge_cache`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ purge_everything: true })
+      }).catch(() => {});
+    }
+    console.log('[Cache] Purga de caché enviada a encarmen.org, empresasencarmen.com y Cloudflare');
   } catch (err: any) {
-    console.warn('[Cache] Error al purgar caché en WordPress:', err.message);
+    console.warn('[Cache] Error al purgar caché:', err.message);
   }
 }
 

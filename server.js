@@ -2243,18 +2243,6 @@ app.post(["/api/admin/maintenance", "/admin/maintenance"], async (req, res) => {
     return res.status(500).json({ success: false, message: "Error al cambiar modo mantenimiento: " + err.message });
   }
 });
-app.get("/api/version", (_req, res) => {
-  let version = "061026:0915";
-  try {
-    const versionFile = path.resolve(__dirname, "src/constants/version.ts");
-    if (fs.existsSync(versionFile)) {
-      const match = fs.readFileSync(versionFile, "utf8").match(/APP_VERSION = '([^']+)'/);
-      if (match) version = match[1];
-    }
-  } catch (_) {
-  }
-  res.json({ success: true, version, serverTime: (/* @__PURE__ */ new Date()).toISOString() });
-});
 app.get([
   "/api/admin/download-source-zip",
   "/api/download-backup",
@@ -2763,28 +2751,61 @@ function buildWooCommerceImagesPayload(biz) {
 }
 var IS_WP_SYNC_ENABLED = process.env.ENABLE_WP_SYNC === "true";
 async function purgeWordPressCache(slugs = []) {
-  if (!IS_WP_SYNC_ENABLED) return;
   try {
-    fetch("https://empresasencarmen.com/", {
-      method: "PURGE",
-      headers: { "x-litespeed-purge": "*" }
-    }).catch(() => {
-    });
-    for (const slug of slugs) {
-      if (!slug) continue;
-      const cleanSlug = slug.replace(/^\/+|\/+$/g, "");
-      fetch(`https://empresasencarmen.com/empresa/${cleanSlug}/`, {
-        method: "PURGE"
-      }).catch(() => {
-      });
-      fetch(`https://empresasencarmen.com/${cleanSlug}/`, {
-        method: "PURGE"
+    const urls = [
+      "https://encarmen.org/",
+      "https://www.encarmen.org/",
+      "https://empresasencarmen.com/",
+      "https://www.empresasencarmen.com/"
+    ];
+    for (const u of urls) {
+      fetch(u, {
+        method: "PURGE",
+        headers: {
+          "x-litespeed-purge": "*",
+          "Cache-Control": "no-cache, no-store, must-revalidate"
+        }
       }).catch(() => {
       });
     }
-    console.log("[Cache] Purga de cach\xE9 enviada a empresasencarmen.com para:", slugs);
+    for (const slug of slugs) {
+      if (!slug) continue;
+      const cleanSlug = slug.replace(/^\/+|\/+$/g, "");
+      fetch(`https://encarmen.org/empresa/${cleanSlug}/`, {
+        method: "PURGE",
+        headers: { "x-litespeed-purge": "*" }
+      }).catch(() => {
+      });
+      fetch(`https://empresasencarmen.com/empresa/${cleanSlug}/`, {
+        method: "PURGE",
+        headers: { "x-litespeed-purge": "*" }
+      }).catch(() => {
+      });
+    }
+    const cfZoneIds = (process.env.CLOUDFLARE_ZONE_ID || process.env.CF_ZONE_ID || "").split(",").map((s) => s.trim()).filter(Boolean);
+    const cfToken = process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN || "";
+    const cfEmail = process.env.CLOUDFLARE_EMAIL || "";
+    const cfGlobalKey = process.env.CLOUDFLARE_API_KEY || "";
+    for (const zoneId of cfZoneIds) {
+      const headers = { "Content-Type": "application/json" };
+      if (cfToken) {
+        headers["Authorization"] = `Bearer ${cfToken}`;
+      } else if (cfEmail && cfGlobalKey) {
+        headers["X-Auth-Email"] = cfEmail;
+        headers["X-Auth-Key"] = cfGlobalKey;
+      } else {
+        continue;
+      }
+      fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/purge_cache`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ purge_everything: true })
+      }).catch(() => {
+      });
+    }
+    console.log("[Cache] Purga de cach\xE9 enviada a encarmen.org, empresasencarmen.com y Cloudflare");
   } catch (err) {
-    console.warn("[Cache] Error al purgar cach\xE9 en WordPress:", err.message);
+    console.warn("[Cache] Error al purgar cach\xE9:", err.message);
   }
 }
 async function exportBusinessToWooCommerce(biz, authHeader) {
