@@ -116,19 +116,9 @@ export default function App() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data && data.version) {
-          const prevVersion = localStorage.getItem('encarmen_active_version');
-          if (prevVersion && prevVersion !== data.version) {
+          try {
             localStorage.setItem('encarmen_active_version', data.version);
-            if ('caches' in window) {
-              caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).finally(() => {
-                window.location.reload();
-              });
-            } else {
-              window.location.reload();
-            }
-          } else if (!prevVersion) {
-            localStorage.setItem('encarmen_active_version', data.version);
-          }
+          } catch (_) {}
         }
       })
       .catch(() => {});
@@ -393,36 +383,39 @@ export default function App() {
   // Negocios con calificaciones reales integradas (si count === 0, rating es 0 y se muestra 'Sin calificar aún')
   // En pantalla principal: Empresas TOP van SIEMPRE en los primeros lugares de la lista.
   const businesses: Business[] = useMemo(() => {
-    const raw = businessesList;
+    const raw = Array.isArray(businessesList) ? businessesList : [];
 
-    return [...raw]
-      .filter((b) => !deletedBusinessIds.includes(Number(b.id)))
+    return raw
+      .filter((b): b is Business => Boolean(b && typeof b === 'object' && b.id !== undefined && !deletedBusinessIds.includes(Number(b.id))))
       .map((b) => {
-        const realStat = getRealBusinessRating(b.id);
+        let realStat = { average: 0, count: 0, scores: [] as number[] };
+        try {
+          realStat = getRealBusinessRating(b.id);
+        } catch (_) {}
         const override = businessOverrides[String(b.id)] || {};
         return {
           ...b,
-          rating: realStat.count > 0 ? realStat.average : 0,
-          reviewCount: realStat.count,
+          rating: (realStat && realStat.count > 0) ? realStat.average : (b.rating || 0),
+          reviewCount: (realStat && realStat.count > 0) ? realStat.count : (b.reviewCount || 0),
           ...override,
         };
       })
       .sort((a, b) => {
         // 1. EMPRESAS TOP SIEMPRE PRIMERO EN LA PÁGINA PRINCIPAL
-        const isTopA = Boolean(a.isTopBusiness);
-        const isTopB = Boolean(b.isTopBusiness);
+        const isTopA = Boolean(a?.isTopBusiness);
+        const isTopB = Boolean(b?.isTopBusiness);
         if (isTopA !== isTopB) return isTopA ? -1 : 1;
 
         // 2. EMPRESAS RECOMENDADAS DESPUÉS DE LAS TOP
-        const isRecA = Boolean(a.isRecommended);
-        const isRecB = Boolean(b.isRecommended);
+        const isRecA = Boolean(a?.isRecommended);
+        const isRecB = Boolean(b?.isRecommended);
         if (isRecA !== isRecB) return isRecA ? -1 : 1;
 
         // 3. Orden cronológico / más recientes
-        const timeA = new Date((a as any).createdAt || 0).getTime();
-        const timeB = new Date((b as any).createdAt || 0).getTime();
+        const timeA = new Date((a as any)?.createdAt || 0).getTime() || 0;
+        const timeB = new Date((b as any)?.createdAt || 0).getTime() || 0;
         if (timeB !== timeA) return timeB - timeA;
-        return Number(b.id) - Number(a.id);
+        return (Number(b?.id) || 0) - (Number(a?.id) || 0);
       });
   }, [businessesList, businessOverrides, deletedBusinessIds, ratingsTick]);
 
