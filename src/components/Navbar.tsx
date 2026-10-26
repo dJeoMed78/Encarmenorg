@@ -229,7 +229,7 @@ export function Navbar({
           /*    RENGLÓN 2: NEGOCIOS · CLASIFICADOS · EVENTOS · PROMOS   */
           /* ========================================================== */
           <div className="flex flex-col">
-            <div className="flex items-center justify-between gap-2 pb-2 border-b border-white/60">
+            <div className="flex items-center justify-between gap-1.5 sm:gap-3 w-full pb-2 border-b border-white/60">
               <div
                 onClick={() => {
                   setActiveTab('negocios');
@@ -251,19 +251,22 @@ export function Navbar({
                 <button
                   type="button"
                   onClick={handleRegisterClick}
-                  className="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full bg-[#FFFBEB] hover:bg-[#FEF3C7] text-[#B45309] border border-[#FDE68A] font-extrabold text-[11px] sm:text-xs shadow-2xs transition-all active:scale-95 flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                  className="shrink-0 px-2.5 sm:px-4 py-1.5 rounded-full bg-[#FFFBEB] hover:bg-[#FEF3C7] text-[#B45309] border border-[#FDE68A] font-bold text-xs sm:text-sm shadow-2xs transition-all active:scale-95 flex items-center gap-1 sm:gap-1.5 cursor-pointer whitespace-nowrap"
                 >
-                  <PlusCircle className="w-3.5 h-3.5 text-[#B45309] shrink-0" />
+                  <PlusCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#B45309] shrink-0" />
                   <span>Subir Mi Negocio</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleEmergencyClick}
-                  className="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full bg-[#FF3B30] hover:bg-[#E02E24] active:scale-95 text-white font-extrabold text-[11px] sm:text-xs shadow-md shadow-red-500/30 flex items-center gap-1 cursor-pointer transition-all whitespace-nowrap"
+                  className="shrink-0 px-2.5 sm:px-4 py-1.5 rounded-full bg-[#FF3B30] hover:bg-[#E02E24] active:scale-95 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-red-500/30 flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer transition-all select-none"
+                  title="Guía de Teléfonos de Emergencia 24/7 de Ciudad del Carmen"
+                  aria-label="Números de Emergencia 911"
                 >
-                  <Phone className="w-3.5 h-3.5 text-white fill-white shrink-0" />
-                  <span>Núm. Emergencia</span>
+                  <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white fill-white shrink-0" />
+                  <span className="inline sm:hidden font-black tracking-wide">SOS</span>
+                  <span className="hidden sm:inline whitespace-nowrap">Núm. Emergencia</span>
                 </button>
               </div>
             </div>
