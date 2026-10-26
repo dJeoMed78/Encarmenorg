@@ -240,168 +240,150 @@ export const EmergencyGuideModal: React.FC<EmergencyGuideModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-slate-950/60 backdrop-blur-md overflow-y-auto animate-fadeIn">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-slate-950/60 backdrop-blur-md animate-fadeIn">
       <div
-        className="relative w-full max-w-4xl rounded-3xl overflow-hidden my-auto max-h-[92vh] flex flex-col transition-all duration-300 shadow-2xl"
+        className="relative w-full max-w-2xl max-h-[90vh] sm:max-h-[85vh] bg-white dark:bg-slate-900 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
         style={{
-          background: 'rgba(255, 255, 255, 0.76)',
-          backdropFilter: 'blur(35px) saturate(190%)',
-          WebkitBackdropFilter: 'blur(35px) saturate(190%)',
           border: '1.5px solid rgba(255, 255, 255, 0.90)',
           boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
         }}
       >
-        {/* Header */}
-        <div className="p-5 sm:p-6 bg-gradient-to-r from-rose-600 via-rose-700 to-amber-600 text-white shrink-0">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0 border border-white/30 shadow-inner">
-                <ShieldAlert className="w-7 h-7 text-white" />
+        {/* Header Superior Fijo con botón de cerrar */}
+        <div className="px-5 py-4 bg-gradient-to-r from-rose-600 via-rose-700 to-amber-600 text-white shrink-0">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0 border border-white/30 shadow-inner">
+                <ShieldAlert className="w-6 h-6 text-white" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-0.5 rounded-full bg-white text-rose-700 font-black text-[10px] uppercase tracking-wider shadow-xs">
-                    Servicio Comunitario 24/7
+                    Servicio 24/7
                   </span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                   {isAdmin && (
                     <span className="px-2 py-0.5 rounded-full bg-black/40 text-amber-300 font-mono text-[10px] border border-amber-300/40">
-                      Modo Admin Activo
+                      Modo Admin
                     </span>
                   )}
                 </div>
-                <h2 className="text-xl sm:text-2xl font-black tracking-tight mt-1 text-white">
-                  Guía de Emergencias y Servicios Públicos
+                <h2 className="text-base sm:text-xl font-black tracking-tight text-white truncate mt-0.5">
+                  Guía de Emergencias 24/7
                 </h2>
-                <p className="text-xs text-rose-100 mt-0.5 font-medium">
-                  Teléfonos directos, clínicas, farmacias de turno, auxilio vial y seguridad en Ciudad del Carmen.
-                </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               {isAdmin && (
                 <button
                   type="button"
                   onClick={handleOpenAddNew}
                   className="px-3 py-1.5 rounded-xl bg-white text-rose-700 hover:bg-rose-50 text-xs font-bold flex items-center gap-1 shadow-md transition-all active:scale-95 cursor-pointer"
-                  title="Agregar nuevo número o servicio"
+                  title="Agregar nuevo servicio"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Nuevo Servicio</span>
+                  <span className="hidden sm:inline">Nuevo</span>
                 </button>
               )}
 
               <button
+                type="button"
                 onClick={onClose}
-                className="p-2 rounded-xl bg-black/20 hover:bg-black/40 text-white transition-colors cursor-pointer"
+                className="p-2 rounded-xl bg-black/20 hover:bg-black/40 text-white transition-colors cursor-pointer select-none"
                 title="Cerrar guía"
+                aria-label="Cerrar modal"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
           </div>
+        </div>
 
+        {/* Zona deslizable única con inercia táctil nativa para iOS y Safari */}
+        <div
+          className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:p-6 space-y-4 [-webkit-overflow-scrolling:touch]"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
           {/* Quick 911 Call Banner */}
-          <div className="mt-4 p-3 rounded-2xl bg-black/30 border border-white/20 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+          <div className="p-3 sm:p-3.5 rounded-2xl bg-black/40 border border-white/20 flex flex-col sm:flex-row items-center justify-between gap-2.5 shadow-md">
             <div className="flex items-center gap-2 text-xs text-white">
               <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0" />
               <span>¿Riesgo vital o delito en curso? Llama de inmediato al <strong className="text-amber-300 font-black">911</strong></span>
             </div>
             <a
               href="tel:911"
-              className="w-full sm:w-auto px-4 py-1.5 rounded-xl bg-[#007AFF] hover:bg-[#0062cc] text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/30 transition-all active:scale-95"
+              className="w-full sm:w-auto px-4 py-1.5 rounded-xl bg-[#007AFF] hover:bg-[#0062cc] text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/30 transition-all active:scale-95 cursor-pointer select-none"
             >
               <Phone className="w-3.5 h-3.5 fill-current" />
               <span>Marcar al 911 (Gratis)</span>
             </a>
           </div>
-        </div>
 
-        {/* Search & Categories Bar with iOS Frosted Glass */}
-        <div
-          className="p-4 border-b space-y-3 shrink-0"
-          style={{
-            background: 'rgba(255, 255, 255, 0.45)',
-            borderColor: 'rgba(255, 255, 255, 0.70)',
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
+          {/* Search & Categories Bar */}
+          <div className="space-y-3">
+            <div className="relative w-full">
               <Search className="w-4 h-4 text-stone-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar hospital, farmacia de turno, bomberos, grúa, CFE..."
-                className="w-full pl-10 pr-4 py-2.5 bg-white/80 border border-white/90 rounded-2xl text-xs sm:text-sm text-stone-950 font-semibold placeholder:text-stone-500 outline-none focus:bg-white focus:border-[#007AFF] focus:ring-2 focus:ring-blue-500/20 transition-all shadow-xs"
+                className="w-full pl-10 pr-4 py-2.5 bg-stone-100 dark:bg-slate-800/80 border border-stone-200 dark:border-slate-700 rounded-2xl text-xs sm:text-sm text-stone-950 dark:text-white font-semibold placeholder:text-stone-500 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-[#007AFF] focus:ring-2 focus:ring-blue-500/20 transition-all shadow-xs"
               />
             </div>
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={handleOpenAddNew}
-                className="px-3.5 py-2.5 bg-[#007AFF] hover:bg-[#0062cc] text-white rounded-2xl text-xs font-bold flex items-center gap-1 shadow-md shadow-blue-500/20 transition-all active:scale-95 cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Agregar</span>
-              </button>
-            )}
+
+            {/* Category Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 text-xs">
+              {categories.map(cat => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap cursor-pointer transition-all select-none ${
+                    selectedCategory === cat
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-slate-700'
+                  }`}
+                >
+                  {cat === 'all' ? `Todos (${services.length})` : cat}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Category Filter Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 text-xs">
-            {categories.map(cat => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap cursor-pointer transition-all ${
-                  selectedCategory === cat
-                    ? 'bg-rose-600 text-white shadow-xs'
-                    : 'bg-white/70 hover:bg-white text-stone-800 border border-white/80'
-                }`}
-              >
-                {cat === 'all' ? `Todos (${services.length})` : cat}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Services List Grid */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-3 flex-1">
+          {/* Lista de tarjetas en flujo vertical único sin scroll anidado */}
           {filteredServices.length === 0 ? (
-            <div className="text-center py-12 text-stone-700 font-semibold text-xs">
+            <div className="text-center py-10 text-stone-500 font-semibold text-xs">
               No se encontraron servicios de emergencia con ese término de búsqueda.
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            <div className="flex flex-col gap-3.5 w-full">
               {filteredServices.map(service => (
                 <div
                   key={service.id}
-                  className={`p-4 rounded-2xl transition-all flex flex-col justify-between space-y-3 backdrop-blur-xl ${
+                  className={`p-4 rounded-2xl transition-all flex flex-col justify-between space-y-3 ${
                     service.isUrgent
-                      ? 'bg-white/85 border-2 border-rose-300 shadow-sm hover:shadow-md'
-                      : 'bg-white/75 hover:bg-white/90 border border-white/80 shadow-xs hover:shadow-sm'
+                      ? 'bg-rose-50/90 dark:bg-rose-950/20 border-2 border-rose-300 dark:border-rose-800 shadow-sm'
+                      : 'bg-stone-50 dark:bg-slate-800/80 border border-stone-200 dark:border-slate-700 shadow-xs'
                   }`}
                 >
                   <div className="space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2.5">
                         <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-xs ${
-                          service.isUrgent ? 'bg-rose-100 border border-rose-200' : 'bg-white/90 border border-white'
+                          service.isUrgent ? 'bg-rose-100 dark:bg-rose-900/40 border border-rose-200' : 'bg-white dark:bg-slate-700 border border-stone-200 dark:border-slate-600'
                         }`}>
                           {renderIcon(service.icon)}
                         </div>
                         <div>
                           <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${
                             service.isUrgent
-                              ? 'bg-rose-100 text-rose-800'
-                              : 'bg-stone-100 text-stone-800'
+                              ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200'
+                              : 'bg-stone-200/70 text-stone-800 dark:bg-slate-700 dark:text-stone-300'
                           }`}>
                             {service.badge}
                           </span>
-                          <h4 className="font-black text-sm text-stone-950 leading-tight mt-1">
+                          <h4 className="font-black text-sm text-stone-950 dark:text-white leading-tight mt-1">
                             {service.name}
                           </h4>
                         </div>
@@ -413,7 +395,7 @@ export const EmergencyGuideModal: React.FC<EmergencyGuideModalProps> = ({
                           <button
                             type="button"
                             onClick={() => handleOpenEdit(service)}
-                            className="p-1.5 rounded-lg bg-white/80 hover:bg-white text-stone-800 transition-colors shadow-xs"
+                            className="p-1.5 rounded-lg bg-white dark:bg-slate-700 hover:bg-stone-100 text-stone-800 dark:text-stone-200 transition-colors shadow-xs"
                             title="Modificar datos del servicio"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
@@ -421,7 +403,7 @@ export const EmergencyGuideModal: React.FC<EmergencyGuideModalProps> = ({
                           <button
                             type="button"
                             onClick={() => handleDeleteItem(service)}
-                            className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors shadow-xs"
+                            className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-900/40 hover:bg-rose-200 text-rose-600 dark:text-rose-300 transition-colors shadow-xs"
                             title="Eliminar de la guía"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -430,28 +412,28 @@ export const EmergencyGuideModal: React.FC<EmergencyGuideModalProps> = ({
                       )}
                     </div>
 
-                    <p className="text-xs text-stone-800 font-medium line-clamp-2">
+                    <p className="text-xs text-stone-700 dark:text-stone-300 font-medium line-clamp-2">
                       {service.description}
                     </p>
 
-                    <div className="space-y-1 text-[11px] text-stone-700 font-semibold pt-1">
+                    <div className="space-y-1 text-[11px] text-stone-600 dark:text-stone-400 font-semibold pt-1">
                       <div className="flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-stone-500 shrink-0" />
+                        <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0" />
                         <span className="truncate">{service.address}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                        <span className="font-bold text-emerald-800">{service.schedule}</span>
+                        <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span className="font-bold text-emerald-700 dark:text-emerald-400">{service.schedule}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="pt-2 border-t border-stone-200/60 flex items-center gap-2">
+                  <div className="pt-2 border-t border-stone-200 dark:border-slate-700 flex items-center gap-2">
                     {/* Botón de Llamar estilo iPhone Blue */}
                     <a
                       href={`tel:${service.phone}`}
-                      className="flex-1 py-2 px-3 rounded-xl bg-[#007AFF] hover:bg-[#0062cc] active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+                      className="flex-1 py-2 px-3 rounded-xl bg-[#007AFF] hover:bg-[#0062cc] active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/20 transition-all cursor-pointer select-none"
                     >
                       <Phone className="w-3.5 h-3.5 fill-current" />
                       <span>Llamar {service.phone}</span>
@@ -463,7 +445,7 @@ export const EmergencyGuideModal: React.FC<EmergencyGuideModalProps> = ({
                         href={`https://wa.me/52${service.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola, consulto información de emergencia de ${service.name}`)}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="py-2 px-3 rounded-xl bg-[#34C759] hover:bg-[#28a745] active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-md shadow-green-500/20"
+                        className="py-2 px-3 rounded-xl bg-[#34C759] hover:bg-[#28a745] active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-md shadow-green-500/20 select-none cursor-pointer"
                         title="Enviar WhatsApp"
                       >
                         <MessageCircle className="w-3.5 h-3.5" />
@@ -474,7 +456,7 @@ export const EmergencyGuideModal: React.FC<EmergencyGuideModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleShare(service)}
-                      className="p-2 rounded-xl bg-white/80 hover:bg-white text-stone-700 hover:text-stone-950 transition-colors shadow-xs"
+                      className="p-2 rounded-xl bg-white dark:bg-slate-700 hover:bg-stone-100 text-stone-700 dark:text-stone-300 transition-colors shadow-xs cursor-pointer select-none"
                       title="Compartir datos por WhatsApp"
                     >
                       <Share2 className="w-3.5 h-3.5" />
@@ -487,7 +469,7 @@ export const EmergencyGuideModal: React.FC<EmergencyGuideModalProps> = ({
         </div>
 
         {/* Footer info */}
-        <div className="p-3.5 bg-stone-50 border-t border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-stone-500 shrink-0">
+        <div className="p-3.5 bg-stone-50 dark:bg-slate-900 border-t border-stone-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-stone-500 shrink-0">
           <span>Directorio de auxilio permanente de Ciudad del Carmen, Campeche</span>
           {isAdmin && (
             <button
