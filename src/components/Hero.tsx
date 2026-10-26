@@ -813,22 +813,48 @@ export function Hero({
                         🌐 Canales Oficiales (FB & TikTok)
                       </span>
                       <div className="grid grid-cols-1 gap-1.5">
-                        {canalesOficiales.map((item) => (
-                          <a
-                            key={item.id}
-                            href={item.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-between px-3 py-2 rounded-2xl bg-white hover:bg-blue-600 hover:text-white border border-stone-200/80 shadow-2xs text-xs font-extrabold transition"
-                          >
-                            <span className="truncate">{item.label}</span>
-                            {item.badge && (
-                              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-900 shrink-0">
-                                {item.badge}
+                        {canalesOficiales.map((item) => {
+                          const isTikTok =
+                            item.id.toLowerCase().includes('tiktok') ||
+                            item.label.toLowerCase().includes('tiktok');
+                          return (
+                            <a
+                              key={item.id}
+                              href={item.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`flex items-center justify-between px-3.5 py-2.5 rounded-2xl shadow-sm text-xs font-extrabold transition-all active:scale-98 ${
+                                isTikTok
+                                  ? 'bg-black hover:bg-neutral-900 text-white border border-neutral-700'
+                                  : 'bg-[#1877F2] hover:bg-[#166FE5] text-white border border-blue-400/40'
+                              }`}
+                            >
+                              <span className="truncate flex items-center gap-2">
+                                {isTikTok ? (
+                                  <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[10px] font-black text-white shrink-0">
+                                    ♪
+                                  </span>
+                                ) : (
+                                  <span className="w-4 h-4 rounded-full bg-white text-[#1877F2] flex items-center justify-center text-[11px] font-black leading-none shrink-0">
+                                    f
+                                  </span>
+                                )}
+                                <span className="text-white font-extrabold">{item.label}</span>
                               </span>
-                            )}
-                          </a>
-                        ))}
+                              {item.badge && (
+                                <span
+                                  className={`text-[9px] font-black px-2 py-0.5 rounded-full shrink-0 ${
+                                    isTikTok
+                                      ? 'bg-white/20 text-white'
+                                      : 'bg-white text-[#1877F2]'
+                                  }`}
+                                >
+                                  {item.badge}
+                                </span>
+                              )}
+                            </a>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -843,11 +869,14 @@ export function Hero({
                             href={item.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center justify-between px-3 py-2 rounded-2xl bg-white hover:bg-emerald-600 hover:text-white border border-stone-200/80 shadow-2xs text-xs font-extrabold transition"
+                            className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-[#075E54] hover:bg-[#128C7E] text-white border border-emerald-400/30 shadow-sm text-xs font-extrabold transition-all active:scale-98"
                           >
-                            <span className="truncate">{item.label}</span>
+                            <span className="truncate flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-[#25D366] shadow-[0_0_6px_#25D366] shrink-0" />
+                              <span className="text-white font-extrabold">{item.label}</span>
+                            </span>
                             {item.badge && (
-                              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-900 shrink-0">
+                              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-[#25D366] text-[#075E54] shrink-0">
                                 {item.badge}
                               </span>
                             )}
