@@ -258,3 +258,9 @@ Advertencia de implementación:
 - **Autorización de publicación en staging:** concedida explícitamente por el propietario el 2026-10-27.
 - La generación de una imagen nueva **no** equivale a modificar el repositorio ni a publicar en Hostinger.
 - Antes de dar por completada la ficha nueva y las opiniones, verificar implementación, compilación, seguridad y despliegue efectivo. Producción `main` sigue fuera de alcance.
+
+## Registro de implementación incremental — 2026-10-27
+
+- `src/components/BusinessCard.tsx`: se eliminan teléfonos de respaldo ajenos al negocio, se normalizan números mexicanos de WhatsApp, se deshabilitan botones cuando falta un contacto y se presenta dirección formateada.
+- Esta corrección funcional **no** equivale al rediseño de la ficha Glass ni a opiniones persistentes; ambos siguen pendientes.
+- Pruebas: revisión estática. No se ejecutaron compilación TypeScript ni validación de despliegue Hostinger desde esta conexión.
