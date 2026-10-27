@@ -22,6 +22,7 @@ import {
   Instagram,
   Check,
   Upload,
+  Save,
   AlertCircle
 } from 'lucide-react';
 import { Business, Category } from '../types';
@@ -471,7 +472,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           .encarmen-glass-editor .encarmen-glass-card .rounded-2xl.bg-stone-50 {background:transparent;border:0;padding:0}
           .encarmen-glass-editor .encarmen-glass-card button[type="button"] {padding:5px 7px;font-size:10px;border-radius:8px}
           .encarmen-glass-editor .encarmen-glass-card input:not([type="checkbox"]):not([type="file"]),.encarmen-glass-editor .encarmen-glass-card select {padding-top:5px;padding-bottom:5px}
-          .encarmen-glass-editor .encarmen-glass-footer {position:sticky;bottom:0;z-index:15;padding:9px 12px;background:rgba(235,245,255,.65);backdrop-filter:blur(24px);border-top:1px solid rgba(255,255,255,.85)}
+          .encarmen-glass-editor .encarmen-glass-footer {position:relative;z-index:15;padding:8px 12px;background:rgba(235,245,255,.48);backdrop-filter:blur(28px) saturate(150%);border-top:1px solid rgba(255,255,255,.85)}
           @media(max-height:900px) {.encarmen-glass-editor .encarmen-glass-card {padding:8px 12px}.encarmen-glass-editor .encarmen-section-heading{margin-bottom:5px}}
           @media(max-width:640px) {.encarmen-glass-editor .encarmen-glass-card {padding:14px 13px;border-radius:22px}.encarmen-glass-editor .encarmen-section-heading strong{font-size:14px}.encarmen-glass-editor .encarmen-section-icon{width:38px;height:38px}}
         `}</style>
@@ -508,7 +509,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="encarmen-glass-form px-2 py-1 overflow-y-auto min-h-0 flex-1 space-y-[6px]">
+        <form onSubmit={handleSubmit} className="encarmen-glass-form flex flex-col min-h-0 flex-1">
           {errorMsg && (
             <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -524,6 +525,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           )}
 
           {/* Approved glass basic-information card */}
+          <div className="encarmen-glass-scroll px-2 py-1 min-h-0 flex-1 overflow-y-auto space-y-[6px]">
           <section className="encarmen-glass-card">
           <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-amber"><Building2 size={19}/></span><span><strong>Información Básica</strong><small>Datos principales de tu negocio</small></span></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -846,10 +848,10 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
 
           </section>
           <details className="encarmen-advanced-details"><summary className="cursor-pointer text-[11px] font-semibold text-blue-700 px-3 py-2 rounded-xl bg-white/40 border border-white/70">Opciones adicionales, redes sociales y fotografías</summary>
-          {isAdmin && <section className="encarmen-glass-card encarmen-extra-card">
+          {isAdmin && <section className="encarmen-glass-card encarmen-extra-card encarmen-privileged-glass">
             <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-blue"><Globe size={19}/></span><span><strong>Enlaces y opciones adicionales</strong><small>Dirección web personalizada y distintivos del negocio</small></span></div>
           {/* Enlace Personalizado (Slug URL) */}
-          <div className="space-y-1.5 p-3 rounded-2xl bg-amber-50/60 border border-amber-200/80">
+          <div className="encarmen-privileged-panel space-y-1.5 p-3 rounded-2xl border border-white/75 bg-white/30 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,.8),0_4px_18px_rgba(70,110,165,.09)]">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
                 <Globe className="w-3.5 h-3.5 text-amber-600" />
@@ -859,7 +861,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 Ej: hairpalace, unitamp, lavanderia
               </span>
             </div>
-            <div className="flex items-center gap-1 bg-white rounded-xl border border-amber-300 px-3 py-1.5 focus-within:border-amber-500 shadow-xs">
+            <div className="flex items-center gap-1 bg-white/75 rounded-xl border border-white/90 px-3 py-1.5 focus-within:border-blue-400 shadow-[inset_0_1px_0_rgba(255,255,255,.9)]">
               <span className="text-xs text-stone-400 font-mono select-none">
                 encarmen.org/
               </span>
@@ -889,7 +891,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           </div>
 
           {/* Badges Toggles */}
-          <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 flex flex-wrap items-center gap-4">
+          <div className="encarmen-privileged-panel p-3 rounded-2xl bg-white/30 backdrop-blur-xl border border-white/75 flex flex-wrap items-center gap-4 shadow-[inset_0_1px_0_rgba(255,255,255,.75)]">
             <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-stone-800 select-none">
               <input
                 type="checkbox"
@@ -958,6 +960,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           </div>
 
           {/* Image Upload / URL */}
+          <section className="encarmen-photo-glass rounded-[18px] border border-white/75 bg-white/25 backdrop-blur-xl p-3 shadow-[inset_0_1px_0_rgba(255,255,255,.85),0_8px_22px_rgba(80,112,155,.10)]">
           <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-blue"><Upload size={19}/></span><span><strong>Fotografías de tu Negocio</strong><small>Personaliza tu imagen y galería</small></span></div>
           <div className="space-y-1 pt-1">
             <label className="text-xs font-bold text-stone-700 flex items-center justify-between">
@@ -965,7 +968,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
               {isUploadingPhoto && <span className="text-[10px] text-amber-600 animate-pulse">Subiendo...</span>}
             </label>
             <div className="flex items-center gap-3">
-              <div className="w-16 h-14 rounded-xl bg-stone-100 border border-stone-200 overflow-hidden shrink-0 flex items-center justify-center">
+              <div className="w-16 h-14 rounded-xl bg-white/45 border border-white/80 overflow-hidden shrink-0 flex items-center justify-center shadow-[0_4px_12px_rgba(35,85,145,.14)]">
                 {formData.image ? (
                   <img src={formData.image} alt="Preview" className="w-full h-full object-cover" />
                 ) : (
@@ -973,7 +976,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 )}
               </div>
               <div className="grow space-y-1.5">
-                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold cursor-pointer transition-colors">
+                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/45 border border-white/80 hover:bg-white/75 text-slate-800 text-xs font-bold cursor-pointer backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,.8)] transition-colors">
                   <Upload className="w-3.5 h-3.5 text-stone-600" />
                   <span>{formData.image ? 'Cambiar foto desde tu dispositivo' : 'Subir foto desde tu dispositivo'}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
@@ -997,7 +1000,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
               <label className="text-xs font-bold text-stone-700">
                 Fotos de Trabajos o Servicios (Hasta 10 fotos)
               </label>
-              <span className="text-[10px] font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] font-bold text-blue-700 bg-white/55 border border-white/75 px-2 py-0.5 rounded-full backdrop-blur-lg">
                 {(Array.isArray(formData.gallery) ? formData.gallery : []).length} de 10
               </span>
             </div>
@@ -1005,8 +1008,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             {/* Upload button */}
             {((Array.isArray(formData.gallery) ? formData.gallery : []).length < 10) && (
               <div>
-                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100/80 text-amber-950 text-xs font-bold cursor-pointer transition-colors">
-                  <Upload className="w-3.5 h-3.5 text-amber-600" />
+                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/85 bg-white/40 hover:bg-white/70 text-blue-700 text-xs font-bold cursor-pointer backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,.8)] transition-colors">
+                  <Upload className="w-3.5 h-3.5 text-blue-600" />
                   <span>{isUploadingGallery ? 'Subiendo fotos...' : '+ Agregar fotos de trabajos (múltiples)'}</span>
                   <input type="file" multiple accept="image/*" className="hidden" onChange={handleGalleryUpload} disabled={isUploadingGallery} />
                 </label>
@@ -1017,7 +1020,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             {Array.isArray(formData.gallery) && formData.gallery.length > 0 && (
               <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 pt-1">
                 {formData.gallery.map((photo, idx) => (
-                  <div key={idx} className="group relative aspect-square rounded-xl overflow-hidden bg-stone-100 border border-stone-200 shadow-xs">
+                  <div key={idx} className="group relative aspect-square rounded-xl overflow-hidden bg-white/35 border border-white/80 shadow-[0_5px_15px_rgba(35,75,130,.15)]">
                     <img src={photo} alt={`Trabajo ${idx + 1}`} className="w-full h-full object-cover" />
                     <button
                       type="button"
@@ -1035,8 +1038,10 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
               </div>
             )}
           </div>
+          </section>
 
           </details>
+          </div>
           {/* Submit Toolbar */}
           {errorMsg && (
             <div className="mb-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2">
@@ -1044,20 +1049,20 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
               <span>{errorMsg}</span>
             </div>
           )}
-          <div className="encarmen-glass-footer flex items-center justify-end gap-2.5">
+          <div className="encarmen-glass-footer shrink-0 flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-2xl border border-stone-300/80 hover:bg-stone-200/60 active:scale-95 text-stone-700 text-xs font-bold transition-all cursor-pointer"
+              className="px-4 py-2 rounded-xl border border-white/65 bg-white/35 hover:bg-white/60 active:scale-95 text-slate-800 text-[11px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,.65)] backdrop-blur-xl transition-all cursor-pointer"
             >
-              Cancelar
+              <X size={13} className="inline-block mr-1.5 align-[-2px]" />Cancelar
             </button>
             <button
               type="submit"
               disabled={isSaving}
-              className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black text-sm shadow-lg transition-all cursor-pointer disabled:opacity-50"
+              className="px-5 py-2 rounded-xl border border-blue-400/60 bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-500 hover:to-blue-700 active:scale-95 text-white font-bold text-[11px] shadow-[0_5px_15px_rgba(27,106,234,.28),inset_0_1px_0_rgba(255,255,255,.3)] transition-all cursor-pointer disabled:opacity-50"
             >
-              {isSaving ? 'Guardando...' : 'Guardar Cambios'}
+              <span className="inline-flex items-center gap-1.5"><Save size={14} />{isSaving ? 'Guardando...' : 'Guardar Cambios'}</span>
             </button>
           </div>
         </form>
