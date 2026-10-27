@@ -355,8 +355,16 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       const cleanDelivery = selectedDeliveryOptions.length > 0
         ? selectedDeliveryOptions.join(', ')
         : (normalizeDeliveryOption(formData.delivery) || 'Atención en el Local de la empresa');
+      const cleanSlug = (formData.slug || '')
+        .toLowerCase()
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9-_]/g, '');
+
       const res = await onSave(business.id, {
         ...formData,
+        slug: cleanSlug || undefined,
         name: cleanName,
         address: cleanAddress,
         phone: cleanPhone,

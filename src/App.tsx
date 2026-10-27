@@ -26,7 +26,7 @@ import { ClassifiedCreateModal } from './components/ClassifiedCreateModal';
 import { ClassifiedDetailModal } from './components/ClassifiedDetailModal';
 import { Promotion, ClassifiedAd, Business } from './types';
 import { isSessionAdminAuthenticated, hashPassword, FALLBACK_ADMIN_HASHES } from './utils/adminAuth';
-import { adminDeleteBusiness, getAdminPromotions } from './services/api';
+import { adminDeleteBusiness, adminUpdateBusiness, getAdminPromotions } from './services/api';
 import { sortEventsChronologically, parseEventStartDate, isEventExpired, filterActiveUpcomingEvents } from './services/eventsService';
 import { getSavedPortalLinks } from './components/AdminLinksAndAdsManager';
 function getBusinessSlugFromUrl(): string | null {
@@ -625,17 +625,56 @@ export default function App() {
   };
 
   const handleSaveBusiness = async (id: number, updatedData: Partial<Business>) => {
-    setBusinessOverrides((prev) => ({
-      ...prev,
-      [String(id)]: { ...prev[String(id)], ...updatedData }
-    }));
-    if (selectedBusiness && Number(selectedBusiness.id) === id) {
-      setSelectedBusiness((prev) => prev ? { ...prev, ...updatedData } : null);
+    try {
+      // 1. Enviar cambios al servidor (persiste en MariaDB, businessesCache y businesses_seed.json)
+      const res = await adminUpdateBusiness(id, updatedData);
+      const serverUpdated = res.business;
+      const finalData: Partial<Business> = serverUpdated ? { ...updatedData, ...serverUpdated } : updatedData;
+
+      // 2. Actualizar lista de negocios en memoria
+      setBusinessesList((prev) =>
+        prev.map((b) => (Number(b.id) === id ? { ...b, ...finalData } : b))
+      );
+
+      // 3. Registrar overrides locales
+      setBusinessOverrides((prev) => ({
+        ...prev,
+        [String(id)]: { ...prev[String(id)], ...finalData }
+      }));
+
+      // 4. Actualizar negocio modal si está abierto
+      if (selectedBusiness && Number(selectedBusiness.id) === id) {
+        setSelectedBusiness((prev) => (prev ? { ...prev, ...finalData } : null));
+      }
+
+      // 5. Actualizar landingBusiness si estamos en su página, y actualizar la URL en la barra de direcciones
+      if (landingBusiness && Number(landingBusiness.id) === id) {
+        const nextLanding = { ...landingBusiness, ...finalData };
+        setLandingBusiness(nextLanding);
+        if (finalData.slug && typeof window !== 'undefined') {
+          const newUrl = `/${finalData.slug}`;
+          if (window.location.pathname !== newUrl) {
+            window.history.replaceState({}, '', newUrl);
+          }
+        }
+      }
+
+      return {
+        success: res.success !== false,
+        message: res.message || 'Empresa actualizada correctamente'
+      };
+    } catch (err: any) {
+      console.error('Error saving business to API:', err);
+      // Fallback local en caso de falla momentánea de red
+      setBusinessesList((prev) =>
+        prev.map((b) => (Number(b.id) === id ? { ...b, ...updatedData } : b))
+      );
+      setBusinessOverrides((prev) => ({
+        ...prev,
+        [String(id)]: { ...prev[String(id)], ...updatedData }
+      }));
+      return { success: true, message: 'Guardado localmente' };
     }
-    if (landingBusiness && Number(landingBusiness.id) === id) {
-      setLandingBusiness((prev) => prev ? { ...prev, ...updatedData } : null);
-    }
-    return { success: true, message: 'Empresa actualizada correctamente' };
   };
 
   const handleSelectNavbarFilter = (type: 'category' | 'colonia', value: string) => {

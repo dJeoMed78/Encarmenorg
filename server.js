@@ -3319,15 +3319,20 @@ app.post("/api/submit-business", async (req, res) => {
 });
 app.patch(["/api/businesses/:id", "/businesses/:id"], async (req, res) => {
   try {
+    await refreshBusinessesFromDbIfNeeded();
     const id = req.params.id;
-    const idx = businessesCache.findIndex((b) => String(b.id) === String(id) || Number(b.id) === Number(id));
+    const idParam = String(id).toLowerCase().trim();
+    const idx = businessesCache.findIndex(
+      (b) => String(b.id) === idParam || Number(b.id) === Number(idParam) || b.slug && b.slug.toLowerCase() === idParam || Array.isArray(b.previousSlugs) && b.previousSlugs.some((s) => s.toLowerCase() === idParam)
+    );
     if (idx === -1) {
       return res.status(404).json({ success: false, message: "Empresa no encontrada" });
     }
     const oldBiz = businessesCache[idx];
     const prevSlugs = new Set(Array.isArray(oldBiz.previousSlugs) ? oldBiz.previousSlugs : []);
     const prevNames = new Set(Array.isArray(oldBiz.previousNames) ? oldBiz.previousNames : []);
-    if (oldBiz.slug && req.body.slug && oldBiz.slug.toLowerCase() !== req.body.slug.toLowerCase()) {
+    const newSlug = req.body.slug ? String(req.body.slug).toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9-_]/g, "") : oldBiz.slug;
+    if (oldBiz.slug && newSlug && oldBiz.slug.toLowerCase() !== newSlug.toLowerCase()) {
       prevSlugs.add(oldBiz.slug);
     }
     if (oldBiz.name && req.body.name && oldBiz.name.trim() !== req.body.name.trim()) {
@@ -3343,6 +3348,7 @@ app.patch(["/api/businesses/:id", "/businesses/:id"], async (req, res) => {
     const updated = {
       ...oldBiz,
       ...req.body,
+      slug: newSlug,
       categories: finalCategories,
       categorySlugs: req.body.category || req.body.categories ? generateCategorySlugs(finalCategories) : oldBiz.categorySlugs && oldBiz.categorySlugs.length > 0 ? oldBiz.categorySlugs : generateCategorySlugs(finalCategories),
       id: oldBiz.id,
