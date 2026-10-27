@@ -73,6 +73,21 @@ app.use((req: Request, res: Response, next) => {
   next();
 });
 
+// Staging safety: do not allow requests that can modify shared production data.
+// This is a defense-in-depth measure; MariaDB must ALSO use a SELECT-only account.
+if (process.env.STAGING_READ_ONLY === 'true') {
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
+      return res.status(403).json({
+        success: false,
+        error: 'STAGING_READ_ONLY',
+        message: 'Entorno de pruebas en modo solo lectura. No se guardaron cambios.'
+      });
+    }
+    next();
+  });
+}
+
 // 1. REGLA GEOIP CLOUDFLARE: SOLO PERMITIR TRÁFICO DESDE MÉXICO (MX)
 // Si la petición proviene de cualquier otro país (US, ES, CN, etc.), desviar a https://www.google.com
 app.use((req: Request, res: Response, next) => {
