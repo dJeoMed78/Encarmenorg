@@ -398,20 +398,60 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       // Backdrop clicks must not dismiss the editor during text selection.
     >
       <div
-        className="relative w-full max-w-2xl rounded-3xl overflow-hidden flex flex-col my-auto max-h-[92vh]"
+        className="encarmen-glass-editor relative w-full max-w-4xl rounded-[32px] overflow-hidden flex flex-col my-auto max-h-[94vh]"
         style={{
-          background: 'rgba(255, 255, 255, 0.88)',
+          background: 'linear-gradient(135deg, rgba(239, 247, 255, 0.84), rgba(255, 255, 255, 0.76) 45%, rgba(224, 239, 255, 0.84))',
           backdropFilter: 'blur(40px) saturate(190%)',
           WebkitBackdropFilter: 'blur(40px) saturate(190%)',
           border: '1.5px solid rgba(255, 255, 255, 0.95)',
-          boxShadow: '0 30px 70px -15px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+          boxShadow: '0 32px 85px -18px rgba(20, 48, 86, 0.40), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
         }}
         onClick={e => e.stopPropagation()}
       >
+
+        <style>{`
+          .encarmen-glass-editor .encarmen-glass-form > div:not(.grid) {
+            border-radius: 22px;
+          }
+          .encarmen-glass-editor .encarmen-glass-form > .grid,
+          .encarmen-glass-editor .encarmen-glass-form > .space-y-1,
+          .encarmen-glass-editor .encarmen-glass-form > .space-y-2,
+          .encarmen-glass-editor .encarmen-glass-form > .space-y-1\\.5 {
+            background: rgba(255,255,255,.45);
+            border: 1px solid rgba(255,255,255,.87);
+            box-shadow: 0 5px 18px rgba(38,71,115,.055), inset 0 1px 0 rgba(255,255,255,.8);
+            border-radius: 22px;
+            padding: 16px;
+          }
+          .encarmen-glass-editor input:not([type="checkbox"]):not([type="file"]),
+          .encarmen-glass-editor textarea,
+          .encarmen-glass-editor select {
+            background: #fff !important;
+            color: #17253b;
+            border: 1px solid #dce4ef;
+            border-radius: 13px;
+            min-height: 40px;
+            transition: border-color .18s, box-shadow .18s;
+          }
+          .encarmen-glass-editor textarea { min-height: 105px; }
+          .encarmen-glass-editor input:focus,
+          .encarmen-glass-editor textarea:focus,
+          .encarmen-glass-editor select:focus {
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 3px rgba(59,130,246,.16);
+          }
+          .encarmen-glass-editor label { color: #25344b; }
+          .encarmen-glass-editor .encarmen-glass-form { scrollbar-color: #b5cbe5 transparent; }
+          @media (max-width: 640px) {
+            .encarmen-glass-editor .encarmen-glass-form > .grid,
+            .encarmen-glass-editor .encarmen-glass-form > .space-y-1,
+            .encarmen-glass-editor .encarmen-glass-form > .space-y-2 { padding: 12px; }
+          }
+        `}</style>
         <ModalErrorBoundary onClose={onClose}>
         {/* Header */}
         <div
-          className="flex items-center justify-between px-6 py-4 sticky top-0 z-10"
+          className="flex items-center justify-between px-5 sm:px-7 py-5 sticky top-0 z-10"
           style={{
             background: 'rgba(255, 255, 255, 0.75)',
             backdropFilter: 'blur(20px)',
@@ -420,12 +460,12 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           }}
         >
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-amber-500 text-stone-950 flex items-center justify-center font-bold shadow-xs">
+            <div className="w-12 h-12 rounded-2xl bg-blue-100/80 border border-white text-blue-600 flex items-center justify-center font-bold shadow-sm">
               <Building2 className="w-5 h-5" />
             </div>
             <div>
               <h3 className="font-black text-base text-stone-900 leading-tight">
-                Editar Datos de la Empresa
+                Editar Negocio
               </h3>
               <p className="text-xs text-stone-600 font-semibold">
                 ID: {business.id} • {business.name}
@@ -441,7 +481,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
+        <form onSubmit={handleSubmit} className="encarmen-glass-form px-4 sm:px-6 py-5 overflow-y-auto space-y-4">
           {errorMsg && (
             <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -965,7 +1005,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             <button
               type="submit"
               disabled={isSaving}
-              className="px-6 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-stone-950 font-black text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
+              className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black text-sm shadow-lg transition-all cursor-pointer disabled:opacity-50"
             >
               {isSaving ? 'Guardando...' : 'Guardar Cambios'}
             </button>
