@@ -3258,6 +3258,10 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
       ? req.body.categories
       : (req.body.category ? [req.body.category] : oldBiz.categories);
 
+    if (newSlug && businessesCache.some((b, i) => i !== idx && (String(b.slug || '').toLowerCase() === newSlug || (Array.isArray(b.previousSlugs) && b.previousSlugs.some((previous: string) => previous.toLowerCase() === newSlug)))) {
+      return res.status(409).json({ success: false, message: 'El enlace personalizado ya pertenece a otra empresa o es una dirección histórica reservada.' });
+    }
+
     const updated = {
       ...oldBiz,
       ...req.body,
@@ -3272,23 +3276,22 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
       isLocallyEdited: true,
       updatedAt: new Date().toISOString()
     };
-    businessesCache[idx] = updated;
 
+    if (!isMariaDbActive()) {
+      return res.status(503).json({ success: false, message: 'MariaDB no está disponible. Los cambios no se guardaron.' });
+    }
+    const persisted = await dbSaveBusiness(updated);
+    if (!persisted) {
+      return res.status(503).json({ success: false, message: 'No fue posible guardar los cambios en MariaDB.' });
+    }
+    businessesCache[idx] = updated;
+    cachedDbSignature = null;
     try {
       const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
       fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
     } catch (_) {}
 
     
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveBusiness(updated);
-        cachedDbSignature = null;
-      } catch (_) {}
-    } else {
-      cachedDbSignature = null;
-    }
 
     // Sync update with WordPress WooCommerce if credentials exist
     const authHeader = getWpAuthHeader();
