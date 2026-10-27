@@ -391,98 +391,80 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       aria-modal="true"
       className="fixed inset-0 z-[100] overflow-y-auto flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
       style={{
-        background: 'rgba(15, 23, 42, 0.45)',
+        background: 'rgba(22, 36, 56, 0.28)',
         backdropFilter: 'blur(25px)',
         WebkitBackdropFilter: 'blur(25px)',
       }}
       // Backdrop clicks must not dismiss the editor during text selection.
     >
       <div
-        className="encarmen-glass-editor relative w-full max-w-5xl rounded-[32px] overflow-hidden flex flex-col my-auto max-h-[94vh]"
+        className="encarmen-glass-editor relative w-full max-w-4xl rounded-[34px] overflow-hidden flex flex-col my-auto max-h-[94vh]"
         style={{
-          background: 'linear-gradient(155deg, rgba(235, 244, 255, 0.92), rgba(244, 248, 255, 0.86) 44%, rgba(210, 228, 246, 0.91))',
-          backdropFilter: 'blur(40px) saturate(190%)',
-          WebkitBackdropFilter: 'blur(40px) saturate(190%)',
+          background: 'linear-gradient(125deg, rgba(166, 201, 233, 0.47) 0%, rgba(245, 245, 246, 0.30) 43%, rgba(179, 210, 241, 0.43) 100%)',
+          backdropFilter: 'blur(38px) saturate(160%)',
+          WebkitBackdropFilter: 'blur(38px) saturate(160%)',
           border: '1.5px solid rgba(255, 255, 255, 0.95)',
-          boxShadow: '0 32px 85px -18px rgba(20, 48, 86, 0.40), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+          boxShadow: '0 30px 90px rgba(19, 37, 60, 0.24), inset 0 1px 1px rgba(255, 255, 255, 0.90)',
         }}
         onClick={e => e.stopPropagation()}
       >
 
         <style>{`
-          .encarmen-glass-editor .encarmen-section-heading { display:flex;align-items:center;gap:12px;padding:5px 4px 0!important;margin-top:22px!important;background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important; }
-          .encarmen-glass-editor .encarmen-section-heading strong {display:block;color:#1e293b;font-size:15px;font-weight:850;line-height:1.3}
-          .encarmen-glass-editor .encarmen-section-heading small {display:block;color:#64748b;font-size:11px;margin-top:2px}
-          .encarmen-glass-editor .encarmen-section-icon {display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:12px;flex-shrink:0;color:#fff;box-shadow:0 5px 12px rgba(30,41,59,.15)}
+          .encarmen-glass-editor { isolation:isolate; }
+          .encarmen-glass-form { scrollbar-color:rgba(255,255,255,.4) transparent; }
+          .encarmen-glass-editor .encarmen-glass-card {
+            padding:18px 20px 20px; margin:0 0 12px;
+            border-radius:27px; border:1.5px solid rgba(255,255,255,.77);
+            background:linear-gradient(122deg,rgba(240,248,255,.25),rgba(255,255,255,.38) 55%,rgba(246,248,253,.24));
+            backdrop-filter:blur(28px) saturate(150%); -webkit-backdrop-filter:blur(28px) saturate(150%);
+            box-shadow:inset 0 1px 1px rgba(255,255,255,.68),0 8px 26px rgba(30,60,98,.045);
+          }
+          .encarmen-glass-editor .encarmen-section-heading {display:flex;align-items:center;gap:13px;margin:0 0 16px;padding:0;background:none;border:0;box-shadow:none}
+          .encarmen-glass-editor .encarmen-section-heading strong {display:block;color:#101c2b;font-size:16px;font-weight:800;line-height:1.35}
+          .encarmen-glass-editor .encarmen-section-heading small {display:block;color:#475569;font-size:12px;margin-top:2px}
+          .encarmen-glass-editor .encarmen-section-icon {display:flex;align-items:center;justify-content:center;width:43px;height:43px;border-radius:15px;flex-shrink:0;color:#fff;box-shadow:0 6px 13px rgba(31,51,85,.14)}
+          .encarmen-glass-editor .encarmen-amber {background:linear-gradient(145deg,#ffcf57,#ffad19)}
           .encarmen-glass-editor .encarmen-blue {background:linear-gradient(145deg,#4e99ff,#1d5fe6)}
           .encarmen-glass-editor .encarmen-green {background:linear-gradient(145deg,#4cb4ff,#1464c8)}
           .encarmen-glass-editor .encarmen-red {background:linear-gradient(145deg,#ff6d7e,#dc254c)}
           .encarmen-glass-editor .encarmen-purple {background:linear-gradient(145deg,#ad7afa,#7c36ce)}
           .encarmen-glass-editor .encarmen-emerald {background:linear-gradient(145deg,#36c89b,#079b70)}
           .encarmen-glass-editor .encarmen-violet {background:linear-gradient(145deg,#b46cf1,#783bc3)}
-          .encarmen-glass-editor .encarmen-glass-form > div:not(.encarmen-section-heading) {background:rgba(255,255,255,.38);border:1px solid rgba(255,255,255,.83);box-shadow:0 6px 22px rgba(40,65,110,.055),inset 0 1px 0 rgba(255,255,255,.75);border-radius:20px;padding:16px}
-          .encarmen-glass-editor .encarmen-glass-form > div.encarmen-section-heading {background:transparent!important;border:0!important;box-shadow:none!important;padding:5px 4px 0!important}
-          .encarmen-glass-editor .encarmen-glass-form button[type="button"] {transition:transform .16s,box-shadow .16s,background .16s}
-          .encarmen-glass-editor .encarmen-glass-form button[type="button"]:active {transform:scale(.985)}
-          .encarmen-glass-editor .encarmen-glass-form > div:not(.grid) {
-            border-radius: 22px;
+          .encarmen-glass-editor .encarmen-glass-card > div:not(.encarmen-section-heading) {margin-top:10px}
+          .encarmen-glass-editor input:not([type="checkbox"]):not([type="file"]),.encarmen-glass-editor textarea,.encarmen-glass-editor select {
+            background:rgba(255,255,255,.93)!important;color:#1a2b43;border:1px solid rgba(210,221,237,.85);
+            border-radius:14px;min-height:45px;font-size:13px;transition:border-color .18s,box-shadow .18s;
           }
-          .encarmen-glass-editor .encarmen-glass-form > .grid,
-          .encarmen-glass-editor .encarmen-glass-form > .space-y-1,
-          .encarmen-glass-editor .encarmen-glass-form > .space-y-2,
-          .encarmen-glass-editor .encarmen-glass-form > .space-y-1\\.5 {
-            background: rgba(255,255,255,.45);
-            border: 1px solid rgba(255,255,255,.87);
-            box-shadow: 0 5px 18px rgba(38,71,115,.055), inset 0 1px 0 rgba(255,255,255,.8);
-            border-radius: 22px;
-            padding: 16px;
-          }
-          .encarmen-glass-editor input:not([type="checkbox"]):not([type="file"]),
-          .encarmen-glass-editor textarea,
-          .encarmen-glass-editor select {
-            background: #fff !important;
-            color: #17253b;
-            border: 1px solid #dce4ef;
-            border-radius: 13px;
-            min-height: 40px;
-            transition: border-color .18s, box-shadow .18s;
-          }
-          .encarmen-glass-editor textarea { min-height: 105px; }
-          .encarmen-glass-editor input:focus,
-          .encarmen-glass-editor textarea:focus,
-          .encarmen-glass-editor select:focus {
-            border-color: #3b82f6 !important;
-            box-shadow: 0 0 0 3px rgba(59,130,246,.16);
-          }
-          .encarmen-glass-editor label { color: #25344b; }
-          .encarmen-glass-editor .encarmen-glass-form { scrollbar-color: #b5cbe5 transparent; }
-          @media (max-width: 640px) {
-            .encarmen-glass-editor .encarmen-glass-form > .grid,
-            .encarmen-glass-editor .encarmen-glass-form > .space-y-1,
-            .encarmen-glass-editor .encarmen-glass-form > .space-y-2 { padding: 12px; }
-          }
+          .encarmen-glass-editor textarea {min-height:95px}
+          .encarmen-glass-editor input:focus,.encarmen-glass-editor textarea:focus,.encarmen-glass-editor select:focus {border-color:#3485ff!important;box-shadow:0 0 0 2px rgba(59,130,246,.23);outline:none}
+          .encarmen-glass-editor label {color:#1c293c}
+          .encarmen-glass-editor .encarmen-glass-card button[type="button"] {border-color:rgba(210,220,236,.8);transition:background .18s,border-color .18s,transform .18s}
+          .encarmen-glass-editor .encarmen-glass-card button[type="button"]:has(.text-stone-950),.encarmen-glass-editor .encarmen-glass-card button[type="button"]:has(.text-white) {border-color:#448eff;background:rgba(228,239,255,.64);color:#0754c8}
+          .encarmen-glass-editor .encarmen-glass-card button[type="button"]:active {transform:scale(.99)}
+          .encarmen-glass-editor .encarmen-extra-card {margin-top:16px}
+          @media(max-width:640px) {.encarmen-glass-editor .encarmen-glass-card {padding:14px 13px;border-radius:22px}.encarmen-glass-editor .encarmen-section-heading strong{font-size:14px}.encarmen-glass-editor .encarmen-section-icon{width:38px;height:38px}}
         `}</style>
         <ModalErrorBoundary onClose={onClose}>
         {/* Header */}
         <div
           className="flex items-center justify-between px-5 sm:px-7 py-5 sticky top-0 z-10"
           style={{
-            background: 'rgba(255, 255, 255, 0.75)',
+            background: 'rgba(233, 241, 250, 0.25)',
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
             borderBottom: '1.5px solid rgba(255, 255, 255, 0.85)',
           }}
         >
           <div className="flex items-center gap-2.5">
-            <div className="w-12 h-12 rounded-2xl bg-blue-100/80 border border-white text-blue-600 flex items-center justify-center font-bold shadow-sm">
+            <div className="w-14 h-14 rounded-[22px] bg-white/35 border-2 border-white/80 text-blue-600 flex items-center justify-center font-bold shadow-lg">
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-black text-base text-stone-900 leading-tight">
+              <h3 className="font-black text-xl text-slate-950 leading-tight">
                 Editar Negocio
               </h3>
-              <p className="text-xs text-stone-600 font-semibold">
-                ID: {business.id} • {business.name}
+              <p className="text-sm text-slate-700 font-normal">
+                Actualiza la información de tu negocio en el directorio
               </p>
             </div>
           </div>
@@ -495,7 +477,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="encarmen-glass-form px-4 sm:px-6 py-5 overflow-y-auto space-y-4">
+        <form onSubmit={handleSubmit} className="encarmen-glass-form px-4 sm:px-5 py-4 overflow-y-auto space-y-3">
           {errorMsg && (
             <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -510,31 +492,9 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             </div>
           )}
 
-          {/* Badges Toggles */}
-          <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-stone-800 select-none">
-              <input
-                type="checkbox"
-                checked={Boolean(formData.isTopBusiness)}
-                onChange={e => setFormData(prev => ({ ...prev, isTopBusiness: e.target.checked }))}
-                className="w-4 h-4 text-amber-500 rounded focus:ring-amber-400"
-              />
-              <span>★ Empresa TOP (Primeros lugares en búsquedas relacionadas)</span>
-            </label>
-
-            <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-stone-800 select-none">
-              <input
-                type="checkbox"
-                checked={Boolean(formData.isRecommended)}
-                onChange={e => setFormData(prev => ({ ...prev, isRecommended: e.target.checked }))}
-                className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-              />
-              <span>✓ Empresa Recomendada (Distintivo verde)</span>
-            </label>
-          </div>
-
-          {/* Name & Category */}
-          <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-blue"><Building2 size={19}/></span><span><strong>Información Básica</strong><small>Datos principales de tu negocio</small></span></div>
+          {/* Approved glass basic-information card */}
+          <section className="encarmen-glass-card">
+          <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-amber"><Building2 size={19}/></span><span><strong>Información Básica</strong><small>Datos principales de tu negocio</small></span></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-bold text-stone-700">Nombre de la Empresa *</label>
@@ -601,47 +561,6 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             </div>
           </div>
 
-          {/* Enlace Personalizado (Slug URL) */}
-          <div className="space-y-1.5 p-3 rounded-2xl bg-amber-50/60 border border-amber-200/80">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
-                <Globe className="w-3.5 h-3.5 text-amber-600" />
-                <span>Enlace Web Personalizado (Slug URL)</span>
-              </label>
-              <span className="text-[10px] text-amber-700 font-semibold">
-                Ej: hairpalace, unitamp, lavanderia
-              </span>
-            </div>
-            <div className="flex items-center gap-1 bg-white rounded-xl border border-amber-300 px-3 py-1.5 focus-within:border-amber-500 shadow-xs">
-              <span className="text-xs text-stone-400 font-mono select-none">
-                encarmen.org/
-              </span>
-              <input
-                type="text"
-                value={formData.slug || ''}
-                onChange={e => {
-                  const clean = e.target.value
-                    .toLowerCase()
-                    .normalize('NFD')
-                    .replace(/[\u0300-\u036f]/g, '')
-                    .replace(/[^a-z0-9-_]/g, '');
-                  setFormData(prev => ({ ...prev, slug: clean }));
-                }}
-                placeholder="slug-personalizado"
-                className="w-full text-xs sm:text-sm font-bold text-amber-950 outline-none font-mono bg-white"
-              />
-            </div>
-            <p className="text-[11px] text-stone-600">
-              Liga final de acceso: <span className="font-mono font-bold text-amber-900">https://encarmen.org/{formData.slug || 'enlace'}</span>
-            </p>
-            {safePreviousSlugs.length > 0 && (
-              <p className="text-[10px] text-amber-700/80">
-                Enlaces anteriores activos: {safePreviousSlugs.map(s => `encarmen.org/${s}`).join(', ')} (redirigen automáticamente a este perfil)
-              </p>
-            )}
-          </div>
-
-          {/* Description */}
           <div className="space-y-1">
             <label className="text-xs font-bold text-stone-700">Descripción Comercial</label>
             <textarea
@@ -652,6 +571,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             />
           </div>
 
+          </section>
+          <section className="encarmen-glass-card">
           {/* Phone & WhatsApp */}
           <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-green"><Phone size={19}/></span><span><strong>Contacto</strong><small>Al menos un medio de contacto es obligatorio</small></span></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -702,6 +623,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             </div>
           </div>
 
+          </section>
+          <section className="encarmen-glass-card">
           {/* Address, Postal Code & Colonia */}
           <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-red"><MapPin size={19}/></span><span><strong>Ubicación</strong><small>Indica la dirección de tu negocio</small></span></div>
           <div className="space-y-1">
@@ -773,6 +696,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             </div>
           </div>
 
+          </section>
+          <section className="encarmen-glass-card">
           {/* Modalidad de Atención y Entrega (Multiselección) */}
           <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-purple"><Truck size={19}/></span><span><strong>Modalidad de Atención y Entrega</strong><small>Selecciona una o más opciones</small></span></div>
           <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 border border-stone-200">
@@ -821,6 +746,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             </div>
           </div>
 
+          </section>
+          <section className="encarmen-glass-card">
           {/* Métodos de Pago Aceptados (Multiselección) */}
           <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-emerald"><CreditCard size={19}/></span><span><strong>Métodos de Pago</strong><small>Selecciona las formas de pago que aceptas</small></span></div>
           <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 border border-stone-200">
@@ -868,6 +795,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             </div>
           </div>
 
+          </section>
+          <section className="encarmen-glass-card">
           {/* Horario Comercial */}
           <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-violet"><Clock size={19}/></span><span><strong>Horarios de Atención</strong><small>Indica los días y horarios de tu negocio</small></span></div>
           <div className="space-y-1">
@@ -884,6 +813,73 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             />
           </div>
 
+          </section>
+          <section className="encarmen-glass-card encarmen-extra-card">
+            <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-blue"><Globe size={19}/></span><span><strong>Enlaces y opciones adicionales</strong><small>Dirección web personalizada y distintivos del negocio</small></span></div>
+          {/* Enlace Personalizado (Slug URL) */}
+          <div className="space-y-1.5 p-3 rounded-2xl bg-amber-50/60 border border-amber-200/80">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-amber-600" />
+                <span>Enlace Web Personalizado (Slug URL)</span>
+              </label>
+              <span className="text-[10px] text-amber-700 font-semibold">
+                Ej: hairpalace, unitamp, lavanderia
+              </span>
+            </div>
+            <div className="flex items-center gap-1 bg-white rounded-xl border border-amber-300 px-3 py-1.5 focus-within:border-amber-500 shadow-xs">
+              <span className="text-xs text-stone-400 font-mono select-none">
+                encarmen.org/
+              </span>
+              <input
+                type="text"
+                value={formData.slug || ''}
+                onChange={e => {
+                  const clean = e.target.value
+                    .toLowerCase()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/[^a-z0-9-_]/g, '');
+                  setFormData(prev => ({ ...prev, slug: clean }));
+                }}
+                placeholder="slug-personalizado"
+                className="w-full text-xs sm:text-sm font-bold text-amber-950 outline-none font-mono bg-white"
+              />
+            </div>
+            <p className="text-[11px] text-stone-600">
+              Liga final de acceso: <span className="font-mono font-bold text-amber-900">https://encarmen.org/{formData.slug || 'enlace'}</span>
+            </p>
+            {safePreviousSlugs.length > 0 && (
+              <p className="text-[10px] text-amber-700/80">
+                Enlaces anteriores activos: {safePreviousSlugs.map(s => `encarmen.org/${s}`).join(', ')} (redirigen automáticamente a este perfil)
+              </p>
+            )}
+          </div>
+
+          {/* Badges Toggles */}
+          <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 flex flex-wrap items-center gap-4">
+            <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-stone-800 select-none">
+              <input
+                type="checkbox"
+                checked={Boolean(formData.isTopBusiness)}
+                onChange={e => setFormData(prev => ({ ...prev, isTopBusiness: e.target.checked }))}
+                className="w-4 h-4 text-amber-500 rounded focus:ring-amber-400"
+              />
+              <span>★ Empresa TOP (Primeros lugares en búsquedas relacionadas)</span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-stone-800 select-none">
+              <input
+                type="checkbox"
+                checked={Boolean(formData.isRecommended)}
+                onChange={e => setFormData(prev => ({ ...prev, isRecommended: e.target.checked }))}
+                className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+              />
+              <span>✓ Empresa Recomendada (Distintivo verde)</span>
+            </label>
+          </div>
+
+          </section>
           {/* Redes Sociales y Sitio Web */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
