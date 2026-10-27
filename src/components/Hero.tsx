@@ -128,7 +128,15 @@ export function Hero({
 }: HeroProps) {
   const [query, setQuery] = useState('');
   const [isListening, setIsListening] = useState(false);
-  const [activeTopTab, setActiveTopTab] = useState<'none' | 'promos' | 'eventos'>('none');
+  const [activeTopTab, setActiveTopTab] = useState<'none' | 'promos' | 'eventos'>(() => {
+    try {
+      const saved = localStorage.getItem('encarmen_hero_mobile_active_panel');
+      return saved === 'promos' || saved === 'eventos' ? saved : 'none';
+    } catch { return 'none'; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('encarmen_hero_mobile_active_panel', activeTopTab); } catch {}
+  }, [activeTopTab]);
   const [isChannelsOpen, setIsChannelsOpen] = useState(false);
   // The two desktop panels are independent; each visitor's preference is retained.
   const [promosCollapsed, setPromosCollapsed] = useState<boolean>(() => {
@@ -637,69 +645,43 @@ export function Hero({
           /*    - PESTAÑA DE CANALES Y WHATSAPP EN LA BASE DE LA FOTO     */
           /* ============================================================ */
           <div className="flex flex-col justify-between min-h-[260px] sm:min-h-[310px]">
-            {/* A. DOS PESTAÑAS TIPO CARPETA COLGANDO DEL BORDE INFERIOR DEL MENÚ */}
+            {/* A. Compact iOS glass tabs, designed for narrow phones and tablets. */}
             <div className="w-full relative z-30">
-              <div className="flex items-start justify-between gap-2 px-2 sm:px-6 -mt-[1px]">
-                {/* Pestaña Izquierda: Promociones */}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setActiveTopTab((prev) => (prev === 'promos' ? 'none' : 'promos'))
-                  }
-                  className="px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-t-none rounded-b-2xl text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg border-x border-b border-white/60 transition-all active:scale-95 cursor-pointer"
-                  style={{
-                    background:
-                      activeTopTab === 'promos'
-                        ? 'linear-gradient(135deg, #EA580C 0%, #C2410C 100%)'
-                        : 'linear-gradient(135deg, rgba(245, 158, 11, 0.95) 0%, rgba(234, 88, 12, 0.95) 100%)',
-                    backdropFilter: 'blur(16px)',
-                    WebkitBackdropFilter: 'blur(16px)',
-                  }}
-                >
-                  <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-amber-200 text-amber-100 shrink-0" />
-                  <span>Promociones ({promoCount})</span>
-                  {activeTopTab === 'promos' ? (
-                    <ChevronUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-0.5" />
-                  ) : (
-                    <ChevronDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-0.5" />
-                  )}
+              <div className="grid grid-cols-2 items-start gap-2 px-2 sm:px-6 -mt-[1px]">
+                <button type="button" aria-expanded={activeTopTab === 'promos'} aria-controls="encarmen-mobile-promos"
+                  onClick={() => setActiveTopTab(prev => prev === 'promos' ? 'none' : 'promos')}
+                  className={`min-w-0 flex items-center justify-between gap-1.5 px-2.5 sm:px-4 py-2.5 sm:py-3 rounded-t-none rounded-b-[18px] border border-white/75 shadow-[0_8px_24px_rgba(32,56,92,.15),inset_0_1px_0_rgba(255,255,255,.8)] backdrop-blur-[24px] saturate-150 transition-all duration-200 active:scale-[.98] ${activeTopTab === 'promos' ? 'bg-amber-100/85' : 'bg-white/60'}`}>
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <Flame size={16} className="text-orange-600 shrink-0"/>
+                    <span className="text-[11px] sm:text-[13px] font-bold text-slate-900 truncate">Promociones <span className="hidden sm:inline">del Día </span>({promoCount})</span>
+                  </span>
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/80 bg-white/70 text-orange-700 shadow-sm">
+                    {activeTopTab === 'promos' ? <ChevronUp size={17}/> : <ChevronDown size={17}/>}
+                  </span>
                 </button>
-
-                {/* Pestaña Derecha: Eventos */}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setActiveTopTab((prev) => (prev === 'eventos' ? 'none' : 'eventos'))
-                  }
-                  className="px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-t-none rounded-b-2xl text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg border-x border-b border-white/60 transition-all active:scale-95 cursor-pointer"
-                  style={{
-                    background:
-                      activeTopTab === 'eventos'
-                        ? 'linear-gradient(135deg, #1D4ED8 0%, #1E3A8A 100%)'
-                        : 'linear-gradient(135deg, rgba(37, 99, 235, 0.95) 0%, rgba(29, 78, 216, 0.95) 100%)',
-                    backdropFilter: 'blur(16px)',
-                    WebkitBackdropFilter: 'blur(16px)',
-                  }}
-                >
-                  <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-100 shrink-0" />
-                  <span>Eventos ({events.length})</span>
-                  {activeTopTab === 'eventos' ? (
-                    <ChevronUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-0.5" />
-                  ) : (
-                    <ChevronDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-0.5" />
-                  )}
+                <button type="button" aria-expanded={activeTopTab === 'eventos'} aria-controls="encarmen-mobile-eventos"
+                  onClick={() => setActiveTopTab(prev => prev === 'eventos' ? 'none' : 'eventos')}
+                  className={`min-w-0 flex items-center justify-between gap-1.5 px-2.5 sm:px-4 py-2.5 sm:py-3 rounded-t-none rounded-b-[18px] border border-white/75 shadow-[0_8px_24px_rgba(32,56,92,.15),inset_0_1px_0_rgba(255,255,255,.8)] backdrop-blur-[24px] saturate-150 transition-all duration-200 active:scale-[.98] ${activeTopTab === 'eventos' ? 'bg-blue-100/85' : 'bg-white/60'}`}>
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <Calendar size={16} className="text-blue-600 shrink-0"/>
+                    <span className="text-[11px] sm:text-[13px] font-bold text-slate-900 truncate"><span className="sm:hidden">Eventos</span><span className="hidden sm:inline">Cartelera de Eventos</span> ({events.length})</span>
+                  </span>
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/80 bg-white/70 text-blue-700 shadow-sm">
+                    {activeTopTab === 'eventos' ? <ChevronUp size={17}/> : <ChevronDown size={17}/>}
+                  </span>
                 </button>
               </div>
 
               {/* Panel Desplegable de Promociones */}
               {activeTopTab === 'promos' && (
                 <div
-                  className="mt-2 mx-1 sm:mx-4 rounded-3xl p-4 shadow-2xl animate-in fade-in duration-150"
+                  id="encarmen-mobile-promos"
+                  className="mt-2 mx-2 sm:mx-6 rounded-[22px] p-3 sm:p-4 shadow-[0_14px_38px_rgba(30,55,90,.18)] animate-in fade-in duration-200"
                   style={{
-                    background: 'rgba(255, 255, 255, 0.95)',
+                    background: 'rgba(244, 249, 255, 0.66)',
                     backdropFilter: 'blur(28px) saturate(190%)',
                     WebkitBackdropFilter: 'blur(28px) saturate(190%)',
-                    border: '1.5px solid rgba(255, 255, 255, 0.98)',
+                    border: '1px solid rgba(255, 255, 255, 0.88)',
                   }}
                 >
                   <div className="flex items-center justify-between mb-3">
@@ -719,9 +701,10 @@ export function Hero({
                       <button
                         type="button"
                         onClick={() => setActiveTopTab('none')}
-                        className="px-2.5 py-1 rounded-full bg-stone-200 hover:bg-stone-300 text-stone-800 text-[11px] font-bold cursor-pointer"
+                        aria-label="Contraer promociones"
+                        className="h-8 w-8 flex items-center justify-center rounded-full border border-white/80 bg-white/65 hover:bg-white/90 text-slate-800 shadow-sm backdrop-blur-xl cursor-pointer"
                       >
-                        Cerrar ▲
+                        <ChevronUp size={17}/>
                       </button>
                     </div>
                   </div>
@@ -742,12 +725,13 @@ export function Hero({
               {/* Panel Desplegable de Eventos */}
               {activeTopTab === 'eventos' && (
                 <div
-                  className="mt-2 mx-1 sm:mx-4 rounded-3xl p-4 shadow-2xl animate-in fade-in duration-150"
+                  id="encarmen-mobile-eventos"
+                  className="mt-2 mx-2 sm:mx-6 rounded-[22px] p-3 sm:p-4 shadow-[0_14px_38px_rgba(30,55,90,.18)] animate-in fade-in duration-200"
                   style={{
-                    background: 'rgba(255, 255, 255, 0.95)',
+                    background: 'rgba(244, 249, 255, 0.66)',
                     backdropFilter: 'blur(28px) saturate(190%)',
                     WebkitBackdropFilter: 'blur(28px) saturate(190%)',
-                    border: '1.5px solid rgba(255, 255, 255, 0.98)',
+                    border: '1px solid rgba(255, 255, 255, 0.88)',
                   }}
                 >
                   <div className="flex items-center justify-between mb-3">
@@ -767,9 +751,10 @@ export function Hero({
                       <button
                         type="button"
                         onClick={() => setActiveTopTab('none')}
-                        className="px-2.5 py-1 rounded-full bg-stone-200 hover:bg-stone-300 text-stone-800 text-[11px] font-bold cursor-pointer"
+                        aria-label="Contraer eventos"
+                        className="h-8 w-8 flex items-center justify-center rounded-full border border-white/80 bg-white/65 hover:bg-white/90 text-slate-800 shadow-sm backdrop-blur-xl cursor-pointer"
                       >
-                        Cerrar ▲
+                        <ChevronUp size={17}/>
                       </button>
                     </div>
                   </div>
