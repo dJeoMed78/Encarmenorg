@@ -107,3 +107,117 @@
 - Documentación basada en antecedentes de trabajo y una lectura actual de `package.json` y del SHA de `EditBusinessModal.tsx`.
 - **No se ha realizado aquí prueba de compilación ni validación visual del editor.**
 - Próxima tarea: confirmar acceso a Hostinger de forma segura y continuar corrección del editor en staging.
+
+
+---
+
+# Anexo A — Historial técnico ampliado y decisiones que deben preservarse
+
+Este anexo conserva información adicional recuperada del historial del proyecto. Cuando una afirmación procede de una conversación o un resultado previo, se indica como **reportada** y debe verificarse contra el repositorio o servidor actual antes de actuar.
+
+## A.1 Evolución arquitectónica: WordPress y WooCommerce
+
+- Se acordó migrar hacia una arquitectura **autónoma** basada en Hostinger, Node/Express y MariaDB, sin dependencia operativa de WordPress/WooCommerce.
+- Según un registro técnico anterior, `server.ts` eliminó la sincronización con WooCommerce/WordPress; `/api/sync`, el webhook y la sincronización por negocio se configuraron para responder **HTTP 410 Gone**, mientras `/api/health-wp` indicó `decommissioned`. **Verificar el estado actual antes de confiar en estos endpoints.**
+- Se reportaron cambios asociados en `src/services/api.ts`, `WordPressSyncModal.tsx`, `RegisterBusinessView.tsx`, `render.yaml`, `.env.example`, `README.md` y bundles.
+- Se informó que se conservaron **1,824 archivos multimedia**, con una prueba de imagen HTTP 200, TypeScript y compilación correctos en aquella intervención. Esto **no equivale a una auditoría actual** de integridad de medios.
+- La decisión de retirar WordPress es relevante: no reintroducir sincronización ni dependencia WordPress/WooCommerce sin nueva autorización.
+- En aquel registro se aclaró que no se había desplegado a producción. Los despliegues posteriores deben reconstruirse desde GitHub y Hostinger.
+
+## A.2 Bases de datos y aislamiento
+
+- Nombre de BD de producción **reportado** en una conversación previa: `u293982346_encarmenapp`.
+- Nombre de BD de staging **reportado**: `u293982346_encarmentest`.
+- Se reportó una importación de respaldo de staging con **76 consultas, 13 tablas y 206 empresas**. Son cifras históricas, **no recuentos actuales**.
+- La base staging se describió como una copia independiente y con escritura habilitada para pruebas.
+- **No registrar ni repetir nombres de usuario de BD, contraseñas, tokens, claves ni valores de conexión.** Tampoco pegar contenidos de archivos `.env`.
+- Nunca asumir que una operación en staging es inocua sin comprobar a qué BD apunta el proceso activo.
+- Antes de cualquier operación de datos: comprobar variables de entorno sin revelar secretos, confirmar conexión al esquema correcto, planificar reversión y evitar alteraciones masivas.
+
+## A.3 Historia de compilación y despliegue
+
+- Se reportó un fallo en el que la compilación de Hostinger no actualizaba el frontend React/Vite como se esperaba; se investigaron diferencias entre `npm run build` y `npm run build:server`.
+- Commits históricos mencionados en conversaciones: `615b770`, `8ec8b85`, `a6dcff7`, `8d274f61`, `ab07d2fd`, `e884c...` (último identificador incompleto). **No atribuirles cambios específicos sin inspeccionar sus diffs.**
+- En una intervención posterior se reportó que `1e8fff4` dejó `build:server` incluyendo Vite, esbuild y copia del bundle. La lectura directa de `package.json` el 2026-10-27 confirmó esa composición del script, aunque no certifica qué commit la introdujo.
+- En Hostinger Business, el disparador automático puede ejecutar compilaciones por commits documentales. Evitar cambios pequeños innecesarios en `ia-desarrollo`.
+- Para validar un despliegue comprobar: SHA de origen, resultado de build, artefactos actualizados, respuesta HTTP, versión visible, consola de navegador, rutas API, persistencia en BD y regresiones.
+- La herramienta GitHub conectada permite leer/escribir archivos y commits; **no proporciona por sí sola acceso SSH ni consola hPanel**.
+
+## A.4 Editor Glass: diferencias detectadas en capturas
+
+Comparación del 2026-10-27: primera imagen = diseño aprobado; imágenes restantes = implementación real de staging.
+
+Problemas observados/reclamados:
+- Panel demasiado gris y opaco, sin transparencia ni color ambiental visibles.
+- Tarjetas excesivamente separadas en vez de seis grupos compactos.
+- Demasiado desplazamiento vertical debido a campos administrativos y multimedia mezclados con el formulario principal.
+- Chips seleccionados en naranja para entrega y violeta para pagos, cuando la referencia aprobada los muestra azules.
+- Horarios como texto libre en lugar de siete toggles de días y dos controles de apertura/cierre.
+- Pie de acciones no fijo.
+- Encabezado con icono de edificio en lugar del lápiz de la referencia.
+- La referencia tenía borde luminoso blanco, desenfoque intenso, tarjetas translúcidas y fondo difuso azul/rosa visible detrás.
+- Un simple `backdrop-filter` no garantiza el efecto de la imagen si detrás hay una capa plana u opaca: revisar conjuntamente el **fondo detrás del modal**, la opacidad de overlay y panel, blur, saturación, bordes y sombras.
+- La superposición verde tipo Matrix que apareció en otras capturas **debe ignorarse**.
+
+Advertencia de implementación:
+- La reorganización del JSX de `EditBusinessModal.tsx` alrededor del commit `940fded` se hizo sin prueba de compilación confirmada en esa intervención.
+- El campo `formData.schedule` se había descrito como texto libre. Si se agregan controles semanales, preservar horarios históricos; escribir al campo persistente únicamente después de una edición explícita o una conversión validada.
+- Preservar selección múltiple, datos existentes, imágenes, categorías, direcciones, enlaces y administración.
+- Los cambios visuales deben verificarse con capturas reales a tamaño comparable; no prometer identidad sin comparación.
+
+## A.5 Reglas de trabajo y preferencias del propietario
+
+- El propietario exige **fidelidad exacta** a diseños aprobados; una interpretación parecida no basta.
+- Solicita pruebas reales y comunicación transparente, sin afirmar “terminado” o “publicado correctamente” solo por haber creado un commit.
+- Prefiere trabajar extensamente en el mismo chat y reducir cambios de herramienta; considera Work/Codex solo cuando aporten pruebas, navegador o ejecución que aquí no esté disponible.
+- Quiere que el proyecto pueda retomarse **sin repetir todo el historial**. Este archivo debe ser el punto de entrada obligatorio y actualizarse al concluir cada trabajo.
+- Prioriza **staging** para toda modificación y no tocar producción sin autorización explícita.
+- Busca integrar Hostinger con el flujo actual, idealmente con privilegios limitados a staging.
+- Evitar cambios de diseño, reestructuración o eliminación de funciones no solicitados.
+
+## A.6 Hostinger Business: SSH y captura de estado
+
+- El propietario confirmó **Web Hosting Business**.
+- En captura de hPanel del 2026-10-27, sección “Detalles de SSH”, el panel mostraba:
+  - Estado: **INACTIVE**.
+  - Puerto SSH: **65002**.
+  - Existían una IP del servidor, usuario SSH y huellas de host ED25519/ECDSA/RSA visibles. **No hace falta reproducirlos aquí**; consultarlos en hPanel antes de conectarse.
+  - Botón **Activar** disponible.
+- No se ha confirmado en esta documentación que SSH haya sido activado.
+- Activar SSH no otorga automáticamente permisos a esta conversación. Requiere un cliente/integración con autenticación.
+- Hostinger Business es alojamiento compartido: el usuario SSH puede abarcar más que staging. **No asumir confinamiento por subdominio**.
+- Nunca subir claves privadas al repositorio ni pedir que se peguen en el chat. Para una integración futura, usar credenciales administradas por el servicio correspondiente y comprobar el alcance antes de habilitar escritura.
+- No cambiar contraseña, firewall, permisos, archivos o procesos de producción como parte de la puesta en marcha de staging.
+
+## A.7 Registro de decisiones abiertas
+
+| Tema | Decisión vigente | Pendiente |
+| --- | --- | --- |
+| Producción | No tocar `main` sin permiso | Ninguno |
+| Staging | `ia-desarrollo` como rama de trabajo | Confirmar despliegue y versión |
+| Diseño editor | Referencia Glass aprobada | Implementación y validación pixel/funcional |
+| Horarios | Preservar datos históricos | Diseñar serialización de controles semanales |
+| Funciones extra | No perder datos ni funciones | Ordenarlas en interfaz avanzada |
+| Hostinger | Plan Business confirmado | Activar SSH si procede y definir integración segura |
+| Documentación | Mantener contexto exhaustivo en GitHub | Actualizar al cierre de cada intervención |
+| WordPress | Arquitectura autónoma sin sincronización | Verificar que no haya dependencias residuales |
+
+## A.8 Lista de comprobación de cierre de cada intervención
+
+- [ ] Revisé el estado actual del repositorio y los archivos relevantes.
+- [ ] Trabajé solo en `ia-desarrollo`, salvo autorización expresa.
+- [ ] Respeté el diseño aprobado y no eliminé funciones existentes.
+- [ ] Ejecuté `npm run lint` y `npm run build:server`, o indiqué que no fue posible.
+- [ ] Verifiqué el despliegue en Hostinger, o indiqué que no tengo acceso a comprobarlo.
+- [ ] Probé guardado, recarga, multimedia y comportamiento responsive cuando correspondía.
+- [ ] Informé SHA de commit, archivos modificados, pruebas, riesgos y pendientes.
+- [ ] Actualicé este documento con los cambios importantes y el estado real.
+- [ ] No incorporé secretos, contraseñas, claves privadas ni datos sensibles.
+
+## A.9 Límites de esta memoria técnica
+
+- Este archivo **no es una transcripción íntegra** de todas las conversaciones. Conserva los hechos y decisiones técnicas recuperables y útiles.
+- No se garantiza que todas las conversaciones o capturas históricas estén disponibles desde una sesión futura. Por eso es recomendable conservar las referencias visuales aprobadas también como archivos de proyecto, sin secretos.
+- Cuando un dato histórico contradiga código, registros o configuración actual, **investigar y registrar la discrepancia** en vez de asumir que uno de los dos es correcto.
+- Los identificadores de commits incompletos, estados de hosting y cifras históricas se mantienen como pistas de auditoría, no como verificaciones actuales.
+
