@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Mic, MicOff, Flame, Calendar, Globe, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
+import { Search, Mic, MicOff, Flame, Calendar, Globe, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowRight, Tag } from 'lucide-react';
 import seedEvents from '../data/events_carmen.json';
 import { sortEventsChronologically, filterActiveUpcomingEvents } from '../services/eventsService';
 
@@ -130,6 +130,23 @@ export function Hero({
   const [isListening, setIsListening] = useState(false);
   const [activeTopTab, setActiveTopTab] = useState<'none' | 'promos' | 'eventos'>('none');
   const [isChannelsOpen, setIsChannelsOpen] = useState(false);
+  // The two desktop panels are independent; each visitor's preference is retained.
+  const [promosCollapsed, setPromosCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem('encarmen_hero_promos_collapsed') === 'true'; } catch { return false; }
+  });
+  const [eventsCollapsed, setEventsCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem('encarmen_hero_events_collapsed') === 'true'; } catch { return false; }
+  });
+  const togglePromosCollapsed = () => setPromosCollapsed(prev => {
+    const next = !prev;
+    try { localStorage.setItem('encarmen_hero_promos_collapsed', String(next)); } catch {}
+    return next;
+  });
+  const toggleEventsCollapsed = () => setEventsCollapsed(prev => {
+    const next = !prev;
+    try { localStorage.setItem('encarmen_hero_events_collapsed', String(next)); } catch {}
+    return next;
+  });
   const [channelLinks, setChannelLinks] = useState<HeroChannelLink[]>(() => loadHeroChannelLinks());
 
   const [isMobileOrTablet, setIsMobileOrTablet] = useState<boolean>(() => {
@@ -448,11 +465,18 @@ export function Hero({
           /* ============================================================ */
           /* 1. VISTA ESCRITORIO (COMPUTADORA): 3 COLUMNAS ABIERTAS       */
           /* ============================================================ */
-          <div className="flex items-center justify-between gap-8">
+          <div className="flex items-center justify-between gap-4 min-h-[360px]">
             {/* COLUMNA IZQUIERDA: "Promociones del Día" */}
-            <div className="w-[300px] shrink-0">
-              <div
-                className="rounded-3xl p-4 transition-all duration-300"
+            <div className={`shrink-0 self-stretch flex items-center justify-start transition-[width] duration-300 ease-out ${promosCollapsed ? 'w-[54px]' : 'w-[300px]'}`}>
+              {promosCollapsed ? (
+                <button type="button" onClick={togglePromosCollapsed} aria-label="Mostrar Promociones del Día" aria-expanded={false}
+                  className="group flex h-[310px] w-[54px] flex-col items-center justify-between rounded-r-[22px] rounded-l-[14px] border border-white/75 bg-white/45 py-3 text-slate-900 shadow-[0_12px_32px_rgba(20,40,75,.22),inset_0_1px_0_rgba(255,255,255,.85)] backdrop-blur-[28px] transition hover:bg-white/60">
+                  <Tag size={18} className="text-amber-600" />
+                  <span className="text-[12px] font-bold tracking-wide" style={{writingMode:'vertical-rl'}}>Promociones del Día</span>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/75 text-amber-600 shadow-sm"><ChevronRight size={20}/></span>
+                </button>
+              ) : <div
+                className="rounded-3xl p-4 transition-all duration-300 w-full"
                 style={{
                   background: 'rgba(255, 255, 255, 0.42)',
                   backdropFilter: 'blur(25px)',
@@ -465,13 +489,9 @@ export function Hero({
                   <h2 className="text-[18px] font-bold text-[#111827] tracking-tight">
                     Promociones del Día
                   </h2>
-                  <button
-                    type="button"
-                    onClick={handleGoToAllPromos}
-                    className="text-[11px] font-extrabold bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-0.5 rounded-full shadow-2xs transition cursor-pointer flex items-center gap-0.5"
-                  >
-                    <span>Ver todas</span>
-                    <ArrowRight className="w-3 h-3" />
+                  <button type="button" onClick={togglePromosCollapsed} aria-label="Ocultar Promociones del Día" aria-expanded={true}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/80 bg-white/75 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] backdrop-blur-xl transition hover:bg-white active:scale-95">
+                    <ChevronLeft size={21}/>
                   </button>
                 </div>
 
@@ -485,7 +505,7 @@ export function Hero({
                   <span>Ver todas las promociones</span>
                   <span className="font-black text-xs">({promoCount}) →</span>
                 </button>
-              </div>
+              </div>}
             </div>
 
             {/* COLUMNA CENTRAL: TITULAR + BARRA DE BÚSQUEDA CON MICRÓFONO */}
@@ -538,9 +558,16 @@ export function Hero({
             </div>
 
             {/* COLUMNA DERECHA: "Cartelera de Eventos" */}
-            <div className="w-[300px] shrink-0">
-              <div
-                className="rounded-3xl p-4 transition-all duration-300"
+            <div className={`shrink-0 self-stretch flex items-center justify-end transition-[width] duration-300 ease-out ${eventsCollapsed ? 'w-[54px]' : 'w-[300px]'}`}>
+              {eventsCollapsed ? (
+                <button type="button" onClick={toggleEventsCollapsed} aria-label="Mostrar Cartelera de Eventos" aria-expanded={false}
+                  className="group flex h-[310px] w-[54px] flex-col items-center justify-between rounded-l-[22px] rounded-r-[14px] border border-white/75 bg-white/45 py-3 text-slate-900 shadow-[0_12px_32px_rgba(20,40,75,.22),inset_0_1px_0_rgba(255,255,255,.85)] backdrop-blur-[28px] transition hover:bg-white/60">
+                  <Calendar size={18} className="text-blue-600" />
+                  <span className="text-[12px] font-bold tracking-wide" style={{writingMode:'vertical-rl'}}>Cartelera de Eventos</span>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/75 text-blue-600 shadow-sm"><ChevronLeft size={20}/></span>
+                </button>
+              ) : <div
+                className="rounded-3xl p-4 transition-all duration-300 w-full"
                 style={{
                   background: 'rgba(255, 255, 255, 0.42)',
                   backdropFilter: 'blur(25px)',
@@ -553,13 +580,9 @@ export function Hero({
                   <h2 className="text-[18px] font-bold text-[#111827] tracking-tight">
                     Cartelera de Eventos
                   </h2>
-                  <button
-                    type="button"
-                    onClick={handleGoToAllEvents}
-                    className="text-[11px] font-extrabold bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-0.5 rounded-full shadow-2xs transition cursor-pointer flex items-center gap-0.5"
-                  >
-                    <span>Ver todos</span>
-                    <ArrowRight className="w-3 h-3" />
+                  <button type="button" onClick={toggleEventsCollapsed} aria-label="Ocultar Cartelera de Eventos" aria-expanded={true}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/80 bg-white/75 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] backdrop-blur-xl transition hover:bg-white active:scale-95">
+                    <ChevronRight size={21}/>
                   </button>
                 </div>
 
@@ -603,7 +626,7 @@ export function Hero({
                   <span>Ver todos los eventos</span>
                   <span className="font-black text-xs">→</span>
                 </button>
-              </div>
+              </div>}
             </div>
           </div>
         ) : (
