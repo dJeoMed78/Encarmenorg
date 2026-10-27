@@ -221,3 +221,40 @@ Advertencia de implementación:
 - Cuando un dato histórico contradiga código, registros o configuración actual, **investigar y registrar la discrepancia** en vez de asumir que uno de los dos es correcto.
 - Los identificadores de commits incompletos, estados de hosting y cifras históricas se mantienen como pistas de auditoría, no como verificaciones actuales.
 
+
+
+## 15. REGLA OBLIGATORIA: documentación sincronizada con cada push (2026-10-27)
+
+**Instrucción expresa del propietario, sin excepciones:** cada push o commit de cambios funcionales a `ia-desarrollo` debe incluir la actualización correspondiente de este documento, idealmente en el mismo commit. Antes de declarar un despliegue terminado, comprobar que este archivo refleja código implementado, decisiones aprobadas, pendientes, riesgos y pruebas efectuadas. No afirmar que una maqueta es código desplegado. No modificar `main` sin autorización específica.
+
+### Ficha pública de negocios — diseño visual aprobado, AÚN PENDIENTE DE IMPLEMENTACIÓN
+
+- Diseño iOS/macOS Glass aprobado en conversación: **no crear una barra superior de navegación adicional** dentro de la ficha. Respetar la navegación existente del portal.
+- Fotografía y galería a la izquierda, logo a la derecha del encabezado, tipografía consistente con el nombre en `BusinessCard.tsx`: **Roboto**, actualmente definido allí con `font-bold`, 18 px y `letter-spacing: -0.015em`. Homologar la familia en todo el portal, con escalas y pesos distintos según jerarquía y pantalla; evitar imponer un mismo tamaño a todos.
+- El botón azul para llamar ya contiene el teléfono: no duplicar tarjeta de teléfono.
+- El botón de Landing Page debe mostrar la URL real generada a partir del slug, por ejemplo `https://encarmen.org/bendita_carmelita`; no inventar slugs ni URLs.
+- Eliminar «Nuestros servicios» porque el formulario de alta no captura un catálogo de servicios.
+- Distribución solicitada: descripción amplia; opiniones de la comunidad; formas de pago; modalidades de atención/entrega; ubicación en mapa con dirección agrupada debajo; horarios y acciones actuales. Los datos mostrados deben provenir de campos existentes, no inventarse.
+- Los controles, enlaces, WhatsApp, llamadas, favoritos, galería, QR, edición y gestión deben continuar funcionando. Adaptar a móvil y tableta.
+- Símbolo **π**: carácter pequeño y discreto junto al borde de la ventana de negocio, no gran botón flotante ni bloque en esquina. Al pulsarlo, mostrar autenticación administrativa centrada si no hay sesión válida; con sesión válida mostrar menú de gestión Glass centrado. La autorización de editar, marcar TOP/recomendada y eliminar **debe comprobarse en backend**, nunca depender solo del ocultamiento de controles.
+- El menú de administración debe conservar editar datos del negocio, marcar recomendada, TOP y eliminar con confirmación.
+
+### Opiniones — funcionalidad requerida, AÚN NO IMPLEMENTADA
+
+- Se solicita sistema real de opiniones con texto, calificación, consulta y agregados persistidos en MariaDB; no presentar datos ficticios como opiniones reales.
+- Se constató el 2026-10-27 que `src/utils/realRatings.ts` utiliza `localStorage` para calificaciones y efectúa una solicitud secundaria a `/api/ratings`; eso **no es** una solución de opiniones comunitarias segura ni multiusuario.
+- Diseñar primero modelo SQL y API de consulta/publicación con validación de longitud y contenido, consultas parametrizadas, límites por IP/cuenta/negocio, protección de bots (p. ej. desafío validado en servidor), control de duplicados, moderación y estados pendiente/aprobada/rechazada, y auditoría sin exponer datos sensibles.
+- No desplegar una caja de publicación de opiniones abierta sin estas defensas. No usar calificaciones o nombres inventados en staging como si fueran opiniones reales.
+
+### Ajustes visuales anteriores pendientes de cierre
+
+- En editor de negocios, dar al botón «Quitar foto» estilo de botón Glass acorde con «Cambiar foto», sin perder funcionalidad.
+- Barra «Canales Oficiales y Comunidades WhatsApp» inmediatamente debajo de la foto, sin superposición: borde superior recto y esquinas inferiores redondeadas; flecha circular, sin texto «Desplegar».
+- Promociones y eventos: pestañas retráctiles Glass en escritorio y controles compactos responsivos en móvil/tableta. Revisar visualmente su implementación en `Hero.tsx`.
+- Todos los cambios de diseño deben respetar el arte aprobado y los campos realmente disponibles.
+
+### Estado de ejecución
+
+- **Autorización de publicación en staging:** concedida explícitamente por el propietario el 2026-10-27.
+- La generación de una imagen nueva **no** equivale a modificar el repositorio ni a publicar en Hostinger.
+- Antes de dar por completada la ficha nueva y las opiniones, verificar implementación, compilación, seguridad y despliegue efectivo. Producción `main` sigue fuera de alcance.
