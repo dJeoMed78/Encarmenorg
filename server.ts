@@ -441,12 +441,20 @@ app.get('/api/version', (_req: Request, res: Response) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
   res.setHeader('CDN-Cache-Control', 'no-store');
   res.setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
-  let ver = 'latest';
+  // Derive version from the actual compiled frontend, not a tracked source stamp.
+  // A source version.ts can remain stale on Hostinger even after a successful build.
+  let ver = 'unavailable';
   try {
-    const vFile = fs.readFileSync(path.resolve(__dirname, 'src/constants/version.ts'), 'utf8');
-    const m = vFile.match(/APP_VERSION\s*=\s*'([^']+)'/);
-    if (m) ver = m[1];
-  } catch {}
+    const indexFile = path.resolve(__dirname, 'dist/index.html');
+    const html = fs.readFileSync(indexFile, 'utf8');
+    const assets = [...html.matchAll(/(?:src|href)="([^"]*\/assets\/[^"]+\.(?:js|css))"/g)]
+      .map(match => match[1]).sort();
+    const stat = fs.statSync(indexFile);
+    ver = crypto.createHash('sha256').update(html).update(assets.join('|'))
+      .digest('hex').slice(0, 16) + '-' + Math.round(stat.mtimeMs);
+  } catch (error) {
+    console.warn('[Version] No se pudo identificar el frontend compilado:', error);
+  }
   res.json({ success: true, version: ver, timestamp: Date.now() });
 });
 
