@@ -42,6 +42,10 @@ class RootErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState
     }
   };
 
+  handleDismiss = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
   render() {
     if (this.state.hasError) {
       return (
@@ -52,14 +56,29 @@ class RootErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState
             </div>
             <h2 className="text-xl font-bold text-stone-900">Actualización en curso</h2>
             <p className="text-sm text-stone-600">
-              Hemos detectado una actualización en la plataforma. Por favor, pulsa el botón a continuación para cargar la última versión.
+              Hemos detectado una actualización o recarga en la plataforma. Por favor, pulsa el botón a continuación para continuar o recargar el directorio.
             </p>
-            <button
-              onClick={this.handleReload}
-              className="w-full py-3 px-6 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-2xl shadow-md transition-colors cursor-pointer"
-            >
-              ↻ Recargar Directorio
-            </button>
+            {this.state.error && (
+              <details className="text-left text-[11px] text-stone-500 bg-stone-100 p-2.5 rounded-xl max-h-36 overflow-y-auto cursor-pointer">
+                <summary className="font-semibold text-stone-700 select-none">Detalles del reporte</summary>
+                <pre className="mt-1.5 whitespace-pre-wrap font-mono text-[10px] text-rose-700">{this.state.error.message || String(this.state.error)}</pre>
+              </details>
+            )}
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={this.handleReload}
+                className="w-full py-3 px-6 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-2xl shadow-md transition-colors cursor-pointer"
+              >
+                ↻ Recargar Directorio
+              </button>
+              <button
+                type="button"
+                onClick={this.handleDismiss}
+                className="w-full py-2.5 px-6 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold rounded-2xl transition-colors cursor-pointer text-xs"
+              >
+                Continuar en el Directorio
+              </button>
+            </div>
           </div>
         </div>
       );

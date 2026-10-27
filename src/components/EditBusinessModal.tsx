@@ -123,6 +123,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isUploadingGallery, setIsUploadingGallery] = useState(false);
 
   // Lista plana y exhaustiva de todas las categorías y subcategorías disponibles en el sistema (Falla 13)
   const allAvailableCategories = useMemo(() => {
@@ -256,8 +257,6 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   }, [business, isOpen]);
 
   if (!isOpen || !business) return null;
-
-  const [isUploadingGallery, setIsUploadingGallery] = useState(false);
 
   const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);

@@ -726,14 +726,16 @@ export default function App() {
           onClose={() => setDigitalCardBusiness(null)}
           onOpenClientPage={(b) => openBusinessLanding(b)}
         />
-        <EditBusinessModal
-          business={editingBusiness as any}
-          isOpen={!!editingBusiness}
-          onClose={() => setEditingBusiness(null)}
-          categories={categoriasList.map((c) => ({ id: c, name: c })) as any}
-          coloniasList={ALL_COLONIAS_CARMEN.map((name) => ({ name, count: 0 }))}
-          onSave={handleSaveBusiness}
-        />
+        {editingBusiness && (
+          <EditBusinessModal
+            business={editingBusiness as any}
+            isOpen={!!editingBusiness}
+            onClose={() => setEditingBusiness(null)}
+            categories={categoriasList.map((c) => ({ id: c, name: c })) as any}
+            coloniasList={ALL_COLONIAS_CARMEN.map((name) => ({ name, count: 0 }))}
+            onSave={handleSaveBusiness}
+          />
+        )}
         <ClaimCouponModal
           promotion={activePromoModal}
           isOpen={!!activePromoModal}
@@ -1242,14 +1244,16 @@ export default function App() {
       />
 
       {/* MODAL DE EDICIÓN DE EMPRESA */}
-      <EditBusinessModal
-        business={editingBusiness as any}
-        isOpen={!!editingBusiness}
-        onClose={() => setEditingBusiness(null)}
-        categories={categoriasList.map((c) => ({ id: c, name: c })) as any}
-        coloniasList={ALL_COLONIAS_CARMEN.map((name) => ({ name, count: 0 }))}
-        onSave={handleSaveBusiness}
-      />
+      {editingBusiness && (
+        <EditBusinessModal
+          business={editingBusiness as any}
+          isOpen={!!editingBusiness}
+          onClose={() => setEditingBusiness(null)}
+          categories={categoriasList.map((c) => ({ id: c, name: c })) as any}
+          coloniasList={ALL_COLONIAS_CARMEN.map((name) => ({ name, count: 0 }))}
+          onSave={handleSaveBusiness}
+        />
+      )}
 
       {/* MODAL DE CUPONES Y PROMOCIONES */}
       <ClaimCouponModal
