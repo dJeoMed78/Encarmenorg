@@ -766,7 +766,6 @@ export default function App() {
             categories={categoriasList.map((c) => ({ id: c, name: c })) as any}
             coloniasList={ALL_COLONIAS_CARMEN.map((name) => ({ name, count: 0 }))}
             onSave={handleSaveBusiness}
-          isAdmin={isAdminLoggedIn}
             isAdmin={isAdminLoggedIn}
           />
         )}
