@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
   Building2,
+  PencilLine,
   Phone,
   MessageSquare,
   MapPin,
@@ -120,6 +121,10 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   const [selectedDeliveryOptions, setSelectedDeliveryOptions] = useState<string[]>([]);
   const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [weeklyDays,setWeeklyDays]=useState([true,true,true,true,true,true,false]);
+  const [openingTime,setOpeningTime]=useState('08:00');
+  const [closingTime,setClosingTime]=useState('18:00');
+  const [weeklyEdited,setWeeklyEdited]=useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -248,6 +253,14 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           isRecommended: Boolean(business.isRecommended),
           isTopBusiness: Boolean(business.isTopBusiness)
         });
+        const schedule = ensureString(business.schedule,'Lunes a Sábado');
+        const normalized = schedule.toLowerCase();
+        const days=['lun','mar','mié','jue','vie','sáb','dom'];
+        const times=schedule.match(/\\d{1,2}:\\d{2}/g);
+        setWeeklyDays(/lunes a s[aá]bado/i.test(schedule)?[true,true,true,true,true,true,false]:/lunes a viernes/i.test(schedule)?[true,true,true,true,true,false,false]:days.some(d=>normalized.includes(d))?days.map(d=>normalized.includes(d)):[true,true,true,true,true,true,false]);
+        setOpeningTime(times?.[0] || '08:00');
+        setClosingTime(times?.[1] || '18:00');
+        setWeeklyEdited(false);
         setErrorMsg(null);
         setSuccessMsg(null);
       } catch (err: any) {
@@ -364,6 +377,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
 
       const res = await onSave(business.id, {
         ...formData,
+        schedule: weeklyEdited ? ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].filter((_,i)=>weeklyDays[i]).join(', ') + ' ' + openingTime + ' - ' + closingTime : formData.schedule,
         slug: cleanSlug || undefined,
         name: cleanName,
         address: cleanAddress,
@@ -389,18 +403,18 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[100] overflow-y-auto flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-3 animate-in fade-in duration-200"
       style={{
-        background: 'rgba(22, 36, 56, 0.28)',
+        background: 'radial-gradient(at 12% 20%,rgba(65,150,235,.34),transparent 55%),radial-gradient(at 85% 80%,rgba(240,160,190,.33),transparent 55%),rgba(30,60,90,.24)',
         backdropFilter: 'blur(25px)',
         WebkitBackdropFilter: 'blur(25px)',
       }}
       // Backdrop clicks must not dismiss the editor during text selection.
     >
       <div
-        className="encarmen-glass-editor relative w-full max-w-4xl rounded-[34px] overflow-hidden flex flex-col my-auto max-h-[94vh]"
+        className="encarmen-glass-editor relative w-full max-w-[568px] rounded-[22px] overflow-hidden flex flex-col my-auto max-h-[98dvh]"
         style={{
-          background: 'linear-gradient(125deg, rgba(166, 201, 233, 0.47) 0%, rgba(245, 245, 246, 0.30) 43%, rgba(179, 210, 241, 0.43) 100%)',
+          background: 'radial-gradient(at 5% 10%,rgba(100,173,238,.3),transparent 55%),radial-gradient(at 90% 75%,rgba(255,185,193,.28),transparent 55%),linear-gradient(125deg,rgba(229,242,255,.68),rgba(255,255,255,.50),rgba(221,239,254,.65))',
           backdropFilter: 'blur(38px) saturate(160%)',
           WebkitBackdropFilter: 'blur(38px) saturate(160%)',
           border: '1.5px solid rgba(255, 255, 255, 0.95)',
@@ -413,16 +427,16 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           .encarmen-glass-editor { isolation:isolate; }
           .encarmen-glass-form { scrollbar-color:rgba(255,255,255,.4) transparent; }
           .encarmen-glass-editor .encarmen-glass-card {
-            padding:18px 20px 20px; margin:0 0 12px;
-            border-radius:27px; border:1.5px solid rgba(255,255,255,.77);
+            padding:10px 14px 11px; margin:0 0 6px;
+            border-radius:18px; border:1.5px solid rgba(255,255,255,.77);
             background:linear-gradient(122deg,rgba(240,248,255,.25),rgba(255,255,255,.38) 55%,rgba(246,248,253,.24));
             backdrop-filter:blur(28px) saturate(150%); -webkit-backdrop-filter:blur(28px) saturate(150%);
             box-shadow:inset 0 1px 1px rgba(255,255,255,.68),0 8px 26px rgba(30,60,98,.045);
           }
-          .encarmen-glass-editor .encarmen-section-heading {display:flex;align-items:center;gap:13px;margin:0 0 16px;padding:0;background:none;border:0;box-shadow:none}
-          .encarmen-glass-editor .encarmen-section-heading strong {display:block;color:#101c2b;font-size:16px;font-weight:800;line-height:1.35}
-          .encarmen-glass-editor .encarmen-section-heading small {display:block;color:#475569;font-size:12px;margin-top:2px}
-          .encarmen-glass-editor .encarmen-section-icon {display:flex;align-items:center;justify-content:center;width:43px;height:43px;border-radius:15px;flex-shrink:0;color:#fff;box-shadow:0 6px 13px rgba(31,51,85,.14)}
+          .encarmen-glass-editor .encarmen-section-heading {display:flex;align-items:center;gap:9px;margin:0 0 7px;padding:0;background:none;border:0;box-shadow:none}
+          .encarmen-glass-editor .encarmen-section-heading strong {display:block;color:#101c2b;font-size:12px;font-weight:800;line-height:1.35}
+          .encarmen-glass-editor .encarmen-section-heading small {display:block;color:#475569;font-size:9px;margin-top:1px}
+          .encarmen-glass-editor .encarmen-section-icon {display:flex;align-items:center;justify-content:center;width:29px;height:29px;border-radius:9px;flex-shrink:0;color:#fff;box-shadow:0 6px 13px rgba(31,51,85,.14)}
           .encarmen-glass-editor .encarmen-amber {background:linear-gradient(145deg,#ffcf57,#ffad19)}
           .encarmen-glass-editor .encarmen-blue {background:linear-gradient(145deg,#4e99ff,#1d5fe6)}
           .encarmen-glass-editor .encarmen-green {background:linear-gradient(145deg,#4cb4ff,#1464c8)}
@@ -430,24 +444,31 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           .encarmen-glass-editor .encarmen-purple {background:linear-gradient(145deg,#ad7afa,#7c36ce)}
           .encarmen-glass-editor .encarmen-emerald {background:linear-gradient(145deg,#36c89b,#079b70)}
           .encarmen-glass-editor .encarmen-violet {background:linear-gradient(145deg,#b46cf1,#783bc3)}
-          .encarmen-glass-editor .encarmen-glass-card > div:not(.encarmen-section-heading) {margin-top:10px}
+          .encarmen-glass-editor .encarmen-glass-card > div:not(.encarmen-section-heading) {margin-top:5px}
           .encarmen-glass-editor input:not([type="checkbox"]):not([type="file"]),.encarmen-glass-editor textarea,.encarmen-glass-editor select {
             background:rgba(255,255,255,.93)!important;color:#1a2b43;border:1px solid rgba(210,221,237,.85);
-            border-radius:14px;min-height:45px;font-size:13px;transition:border-color .18s,box-shadow .18s;
+            border-radius:14px;min-height:32px;font-size:11px;transition:border-color .18s,box-shadow .18s;
           }
-          .encarmen-glass-editor textarea {min-height:95px}
+          .encarmen-glass-editor textarea {min-height:65px}
           .encarmen-glass-editor input:focus,.encarmen-glass-editor textarea:focus,.encarmen-glass-editor select:focus {border-color:#3485ff!important;box-shadow:0 0 0 2px rgba(59,130,246,.23);outline:none}
           .encarmen-glass-editor label {color:#1c293c}
           .encarmen-glass-editor .encarmen-glass-card button[type="button"] {border-color:rgba(210,220,236,.8);transition:background .18s,border-color .18s,transform .18s}
           .encarmen-glass-editor .encarmen-glass-card button[type="button"]:has(.text-stone-950),.encarmen-glass-editor .encarmen-glass-card button[type="button"]:has(.text-white) {border-color:#448eff;background:rgba(228,239,255,.64);color:#0754c8}
           .encarmen-glass-editor .encarmen-glass-card button[type="button"]:active {transform:scale(.99)}
-          .encarmen-glass-editor .encarmen-extra-card {margin-top:16px}
+          .encarmen-glass-editor .encarmen-extra-card {margin-top:8px}
+          .encarmen-glass-editor .encarmen-glass-card .grid {gap:7px}
+          .encarmen-glass-editor .encarmen-glass-card label {font-size:10px}
+          .encarmen-glass-editor .encarmen-glass-card .rounded-2xl.bg-stone-50 {background:transparent;border:0;padding:0}
+          .encarmen-glass-editor .encarmen-glass-card button[type="button"] {padding:5px 7px;font-size:10px;border-radius:8px}
+          .encarmen-glass-editor .encarmen-glass-card input:not([type="checkbox"]):not([type="file"]),.encarmen-glass-editor .encarmen-glass-card select {padding-top:5px;padding-bottom:5px}
+          .encarmen-glass-editor .encarmen-glass-footer {position:sticky;bottom:0;z-index:15;padding:9px 12px;background:rgba(235,245,255,.65);backdrop-filter:blur(24px);border-top:1px solid rgba(255,255,255,.85)}
+          @media(max-height:900px) {.encarmen-glass-editor .encarmen-glass-card {padding:8px 12px}.encarmen-glass-editor .encarmen-section-heading{margin-bottom:5px}}
           @media(max-width:640px) {.encarmen-glass-editor .encarmen-glass-card {padding:14px 13px;border-radius:22px}.encarmen-glass-editor .encarmen-section-heading strong{font-size:14px}.encarmen-glass-editor .encarmen-section-icon{width:38px;height:38px}}
         `}</style>
         <ModalErrorBoundary onClose={onClose}>
         {/* Header */}
         <div
-          className="flex items-center justify-between px-5 sm:px-7 py-5 sticky top-0 z-10"
+          className="flex items-center justify-between px-3 py-3 shrink-0 z-10"
           style={{
             background: 'rgba(233, 241, 250, 0.25)',
             backdropFilter: 'blur(20px)',
@@ -456,14 +477,14 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           }}
         >
           <div className="flex items-center gap-2.5">
-            <div className="w-14 h-14 rounded-[22px] bg-white/35 border-2 border-white/80 text-blue-600 flex items-center justify-center font-bold shadow-lg">
-              <Building2 className="w-5 h-5" />
+            <div className="w-11 h-11 rounded-[15px] bg-white/35 border-2 border-white/80 text-blue-600 flex items-center justify-center font-bold shadow-lg">
+              <PencilLine className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-black text-xl text-slate-950 leading-tight">
+              <h3 className="font-black text-[16px] text-slate-950 leading-tight">
                 Editar Negocio
               </h3>
-              <p className="text-sm text-slate-700 font-normal">
+              <p className="text-[10px] text-slate-700 font-normal">
                 Actualiza la información de tu negocio en el directorio
               </p>
             </div>
@@ -477,7 +498,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="encarmen-glass-form px-4 sm:px-5 py-4 overflow-y-auto space-y-3">
+        <form onSubmit={handleSubmit} className="encarmen-glass-form px-2 py-1 overflow-y-auto min-h-0 flex-1 space-y-[6px]">
           {errorMsg && (
             <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -710,7 +731,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 {selectedDeliveryOptions.length} seleccionada(s)
               </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {STANDARDIZED_DELIVERY_OPTIONS.map(opt => {
                 const isChecked = selectedDeliveryOptions.includes(opt);
                 return (
@@ -730,14 +751,14 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                     }}
                     className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all text-left cursor-pointer ${
                       isChecked
-                        ? 'bg-amber-500/15 border-amber-500 text-stone-900 shadow-xs'
+                        ? 'bg-blue-100/80 border-blue-400 text-blue-700 shadow-xs'
                         : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
                     }`}
                   >
                     <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
-                      isChecked ? 'bg-amber-500 border-amber-600 text-stone-950 font-bold' : 'border-stone-300 bg-white'
+                      isChecked ? 'bg-blue-600 border-blue-600 text-white font-bold' : 'border-stone-300 bg-white'
                     }`}>
-                      {isChecked && <Check className="w-3 h-3 text-stone-950" />}
+                      {isChecked && <Check className="w-3 h-3 text-white" />}
                     </div>
                     <span className="leading-tight">{opt}</span>
                   </button>
@@ -760,7 +781,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 {selectedPaymentOptions.length} seleccionado(s)
               </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {STANDARDIZED_PAYMENT_OPTIONS.map(opt => {
                 const isChecked = selectedPaymentOptions.includes(opt);
                 return (
@@ -779,12 +800,12 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                     }}
                     className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all text-left cursor-pointer ${
                       isChecked
-                        ? 'bg-purple-500/15 border-purple-500 text-stone-900 shadow-xs'
+                        ? 'bg-blue-100/80 border-blue-400 text-blue-700 shadow-xs'
                         : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
                     }`}
                   >
                     <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
-                      isChecked ? 'bg-purple-600 border-purple-700 text-white font-bold' : 'border-stone-300 bg-white'
+                      isChecked ? 'bg-blue-600 border-blue-600 text-white font-bold' : 'border-stone-300 bg-white'
                     }`}>
                       {isChecked && <Check className="w-3 h-3 text-white" />}
                     </div>
@@ -799,21 +820,17 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           <section className="encarmen-glass-card">
           {/* Horario Comercial */}
           <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-violet"><Clock size={19}/></span><span><strong>Horarios de Atención</strong><small>Indica los días y horarios de tu negocio</small></span></div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-sky-600" />
-              <span>Horario de Atención</span>
-            </label>
-            <input
-              type="text"
-              value={formData.schedule || ''}
-              onChange={e => setFormData(prev => ({ ...prev, schedule: e.target.value }))}
-              placeholder="Ej. Lunes a Sábado 8:00 AM - 8:00 PM, Domingos 9:00 AM - 3:00 PM"
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none bg-white"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px_100px] gap-2 items-end">
+            <div className="grid grid-cols-7 gap-1">
+              {['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map((day,i)=><button key={day} type="button" aria-pressed={weeklyDays[i]} onClick={()=>{setWeeklyDays(prev=>prev.map((v,j)=>j===i?!v:v));setWeeklyEdited(true);}} className={`flex flex-col items-center gap-1 rounded-lg border px-1 py-1 text-[9px] ${weeklyDays[i]?'bg-blue-100 border-blue-400 text-blue-700':'bg-white/80 border-white text-slate-600'}`}><span className={`w-4 h-4 rounded border flex items-center justify-center ${weeklyDays[i]?'bg-blue-600 border-blue-600 text-white':'bg-white border-slate-300'}`}>{weeklyDays[i]&&<Check size={11}/>}</span>{day}</button>)}
+            </div>
+            <label className="text-[9px] font-bold">Hora de Apertura<input type="time" value={openingTime} onChange={e=>{setOpeningTime(e.target.value);setWeeklyEdited(true);}} className="w-full px-1 py-1"/></label>
+            <label className="text-[9px] font-bold">Hora de Cierre<input type="time" value={closingTime} onChange={e=>{setClosingTime(e.target.value);setWeeklyEdited(true);}} className="w-full px-1 py-1"/></label>
           </div>
+          {!weeklyEdited&&formData.schedule&&!/lunes a (viernes|s[aá]bado)/i.test(formData.schedule)&&<p className="text-[9px] text-slate-600">Horario guardado: {formData.schedule}. Se conservará hasta editarlo.</p>}
 
           </section>
+          <details className="encarmen-advanced-details"><summary className="cursor-pointer text-[11px] font-semibold text-blue-700 px-3 py-2 rounded-xl bg-white/40 border border-white/70">Opciones adicionales, redes sociales y fotografías</summary>
           <section className="encarmen-glass-card encarmen-extra-card">
             <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-blue"><Globe size={19}/></span><span><strong>Enlaces y opciones adicionales</strong><small>Dirección web personalizada y distintivos del negocio</small></span></div>
           {/* Enlace Personalizado (Slug URL) */}
@@ -1004,6 +1021,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             )}
           </div>
 
+          </details>
           {/* Submit Toolbar */}
           {errorMsg && (
             <div className="mb-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2">
@@ -1011,7 +1029,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
               <span>{errorMsg}</span>
             </div>
           )}
-          <div className="pt-4 border-t border-stone-200/70 flex items-center justify-end gap-2.5">
+          <div className="encarmen-glass-footer flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
