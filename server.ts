@@ -3258,7 +3258,12 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
       ? req.body.categories
       : (req.body.category ? [req.body.category] : oldBiz.categories);
 
-    if (newSlug && businessesCache.some((b, i) => i !== idx && (String(b.slug || '').toLowerCase() === newSlug || (Array.isArray(b.previousSlugs) && b.previousSlugs.some((previous: string) => previous.toLowerCase() === newSlug)))) {
+    if (newSlug && businessesCache.some((b, i) =>
+      i !== idx && (
+        String(b.slug || '').toLowerCase() === newSlug ||
+        (Array.isArray(b.previousSlugs) && b.previousSlugs.some((previous: string) => previous.toLowerCase() === newSlug))
+      )
+    )) {
       return res.status(409).json({ success: false, message: 'El enlace personalizado ya pertenece a otra empresa o es una dirección histórica reservada.' });
     }
 
