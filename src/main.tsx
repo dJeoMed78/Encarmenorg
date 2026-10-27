@@ -87,6 +87,50 @@ class RootErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState
   }
 }
 
+// Detect deployments without interrupting users who are editing a form.
+function startVersionWatcher() {
+  let currentVersion: string | null = null;
+  let updatePending = false;
+  let checking = false;
+  const notice = document.createElement('div');
+  notice.id = 'encarmen-update-notice';
+  notice.setAttribute('role', 'status');
+  notice.style.cssText = 'position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:2147483647;background:rgba(245,250,255,.97);backdrop-filter:blur(18px);color:#183153;padding:12px 16px;border:1px solid #bdd4f6;border-radius:16px;box-shadow:0 12px 35px #102a4a33;font:600 14px system-ui;display:none;max-width:calc(100vw - 28px);';
+  notice.textContent = 'Hay una nueva versión de Encarmen disponible. Guarda tus cambios antes de actualizar. ';
+  const reloadButton = document.createElement('button');
+  reloadButton.textContent = 'Actualizar ahora';
+  reloadButton.style.cssText = 'margin-left:10px;padding:8px 12px;border:0;border-radius:10px;background:#2563eb;color:white;font-weight:700;cursor:pointer;';
+  reloadButton.addEventListener('click', () => window.location.reload());
+  notice.appendChild(reloadButton);
+  document.body.appendChild(notice);
+
+  const hasActiveEditor = () => Boolean(document.querySelector('[role="dialog"], input:focus, textarea:focus, select:focus, [contenteditable="true"]:focus'));
+  async function check() {
+    if (checking || document.hidden) return;
+    checking = true;
+    try {
+      const response = await fetch('/api/version?t=' + Date.now(), { cache: 'no-store' });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!data?.version || data.version === 'latest') return;
+      if (currentVersion === null) currentVersion = data.version;
+      else if (data.version !== currentVersion) updatePending = true;
+      if (updatePending) {
+        if (!hasActiveEditor()) window.location.reload();
+        else notice.style.display = 'block';
+      }
+    } catch (_) {
+      // A temporary network error must never interrupt editing.
+    } finally {
+      checking = false;
+    }
+  }
+  void check();
+  window.setInterval(() => void check(), 60000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) void check(); });
+}
+startVersionWatcher();
+
 const rootElement = document.getElementById('root');
 if (rootElement) {
   ReactDOM.createRoot(rootElement).render(
