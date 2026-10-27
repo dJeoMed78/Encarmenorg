@@ -63,8 +63,12 @@ export async function initMariaDb(): Promise<boolean> {
       lastConnectionError = null;
       console.log(`[MariaDB/Hostinger] Conectado exitosamente a ${config.database} en ${candidateHost}`);
 
-      // Auto-create tables if they don't exist
-      await createTablesIfNotExist();
+      // Staging shares production data in read-only mode: never run schema initialization.
+      if (process.env.STAGING_READ_ONLY !== 'true') {
+        await createTablesIfNotExist();
+      } else {
+        console.log('[Staging] MariaDB schema initialization disabled (read-only).');
+      }
 
       return true;
     } catch (err: any) {
