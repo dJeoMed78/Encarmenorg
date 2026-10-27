@@ -3232,6 +3232,15 @@ app.post('/api/submit-business', async (req: Request, res: Response) => {
   }
 });
 
+// Server-side admin sessions for privileged business fields (not client-controlled flags).
+const privilegedAdminSessions = new Map<string, number>();
+const isVerifiedAdminSession = (req: Request): boolean => {
+  const token = req.get('X-Encarmen-Admin-Token') || '';
+  const expires = privilegedAdminSessions.get(token);
+  if (!token || !expires) return false;
+  if (expires <= Date.now()) { privilegedAdminSessions.delete(token); return false; }
+  return true;
+};
 // Admin update business
 app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: Response) => {
   try {
@@ -3249,6 +3258,10 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
     }
 
     const oldBiz = businessesCache[idx];
+    const privilegedFields = ['slug','isTopBusiness','isRecommended','previousSlugs','previousNames'];
+    if (!isVerifiedAdminSession(req) && privilegedFields.some(key => Object.prototype.hasOwnProperty.call(req.body || {}, key) && JSON.stringify(req.body[key]) !== JSON.stringify((oldBiz as any)[key]))) {
+      return res.status(403).json({success:false,message:'Solo un administrador autenticado puede modificar enlaces y distintivos.'});
+    }
     const prevSlugs = new Set<string>(Array.isArray(oldBiz.previousSlugs) ? oldBiz.previousSlugs : []);
     const prevNames = new Set<string>(Array.isArray(oldBiz.previousNames) ? oldBiz.previousNames : []);
 
@@ -8199,7 +8212,9 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
 
   const hash = hashPassword(password.trim());
   if (hash === user.passwordHash) {
-    res.json({ success: true, message: 'Autenticación exitosa', username: user.username });
+    const token = crypto.randomBytes(32).toString('hex');
+    privilegedAdminSessions.set(token, Date.now() + 6 * 60 * 60 * 1000);
+    res.json({ success: true, message: 'Autenticación exitosa', username: user.username, token });
   } else {
     res.status(401).json({ success: false, error: 'Contraseña incorrecta' });
   }
