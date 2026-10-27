@@ -5,6 +5,14 @@ import {
   PencilLine,
   Phone,
   MessageSquare,
+  Store,
+  Utensils,
+  Bike,
+  Users,
+  Package,
+  Banknote,
+  Landmark,
+  MoreHorizontal,
   MapPin,
   Clock,
   Truck,
@@ -103,6 +111,7 @@ interface EditBusinessModalProps {
   business: Business | null;
   isOpen: boolean;
   onClose: () => void;
+  isAdmin?: boolean;
   categories?: Category[];
   coloniasList?: { name: string; count: number }[];
   onSave: (id: number, updatedData: Partial<Business>) => Promise<{ success: boolean; message: string }>;
@@ -112,6 +121,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   business,
   isOpen,
   onClose,
+  isAdmin = false,
   categories,
   coloniasList,
   onSave
@@ -378,7 +388,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       const res = await onSave(business.id, {
         ...formData,
         schedule: weeklyEdited ? ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].filter((_,i)=>weeklyDays[i]).join(', ') + ' ' + openingTime + ' - ' + closingTime : formData.schedule,
-        slug: cleanSlug || undefined,
+        ...(isAdmin ? { slug: cleanSlug || undefined, isTopBusiness: formData.isTopBusiness, isRecommended: formData.isRecommended } : { slug: business.slug, isTopBusiness: business.isTopBusiness, isRecommended: business.isRecommended }),
         name: cleanName,
         address: cleanAddress,
         phone: cleanPhone,
@@ -534,6 +544,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 <label className="text-xs font-bold text-stone-700">Giro / Categoría *</label>
                 <span className="text-[10px] text-stone-400">Ver todas las categorías</span>
               </div>
+              <div className="relative"><Utensils size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-500 pointer-events-none z-10" />
               <select
                 value={
                   allAvailableCategories.some(c => c.name.toLowerCase() === (formData.category || '').toLowerCase())
@@ -552,7 +563,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                     }));
                   }
                 }}
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm font-semibold text-stone-800 bg-white focus:border-amber-500 outline-none cursor-pointer"
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm font-semibold text-stone-800 bg-white focus:border-amber-500 outline-none cursor-pointer"
               >
                 <option value="" disabled>-- Selecciona del listado completo de categorías ({allAvailableCategories.length}) --</option>
                 {allAvailableCategories.map(c => (
@@ -561,7 +572,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                   </option>
                 ))}
                 <option value="__custom__">➕ Escribir otra categoría personalizada...</option>
-              </select>
+              </select></div>
 
               {(!allAvailableCategories.some(c => c.name.toLowerCase() === (formData.category || '').toLowerCase()) || formData.category === '') && (
                 <div className="mt-1.5">
@@ -599,6 +610,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-bold text-stone-700">Teléfono (10 dígitos)</label>
+              <div className="relative"><Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none" />
               <input
                 type="text"
                 value={formData.phone || ''}
@@ -616,12 +628,13 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                   }
                 }}
                 placeholder="Ej. 9381458462"
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none font-mono bg-white"
-              />
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none font-mono bg-white pl-9"
+              /></div>
             </div>
 
             <div className="space-y-1">
               <label className="text-xs font-bold text-stone-700">WhatsApp (Solo 10 dígitos)</label>
+              <div className="relative"><MessageSquare size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-green-500 pointer-events-none" />
               <input
                 type="text"
                 value={formData.whatsapp || ''}
@@ -639,8 +652,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                   }
                 }}
                 placeholder="Ej. 9381458462"
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none font-mono font-bold bg-white"
-              />
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none font-mono font-bold bg-white pl-9"
+              /></div>
             </div>
           </div>
 
@@ -760,6 +773,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                     }`}>
                       {isChecked && <Check className="w-3 h-3 text-white" />}
                     </div>
+                    {(() => {const Icon = opt.includes('Local') ? Store : opt.includes('domicilio') ? Bike : opt.includes('cliente') ? Users : Package; return <Icon size={13} className="shrink-0" />;})()}
+                    {(() => {const Icon = opt.includes('Efectivo') ? Banknote : opt.includes('Tarjeta') ? CreditCard : opt.includes('Transferencia') ? Landmark : MoreHorizontal; return <Icon size={13} className="shrink-0" />;})()}
                     <span className="leading-tight">{opt}</span>
                   </button>
                 );
@@ -831,7 +846,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
 
           </section>
           <details className="encarmen-advanced-details"><summary className="cursor-pointer text-[11px] font-semibold text-blue-700 px-3 py-2 rounded-xl bg-white/40 border border-white/70">Opciones adicionales, redes sociales y fotografías</summary>
-          <section className="encarmen-glass-card encarmen-extra-card">
+          {isAdmin && <section className="encarmen-glass-card encarmen-extra-card">
             <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-blue"><Globe size={19}/></span><span><strong>Enlaces y opciones adicionales</strong><small>Dirección web personalizada y distintivos del negocio</small></span></div>
           {/* Enlace Personalizado (Slug URL) */}
           <div className="space-y-1.5 p-3 rounded-2xl bg-amber-50/60 border border-amber-200/80">
@@ -896,7 +911,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             </label>
           </div>
 
-          </section>
+          </section>}
           {/* Redes Sociales y Sitio Web */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
