@@ -628,6 +628,7 @@ export default function App() {
     try {
       // 1. Enviar cambios al servidor (persiste en MariaDB, businessesCache y businesses_seed.json)
       const res = await adminUpdateBusiness(id, updatedData);
+      if (!res.success) return { success: false, message: res.message || 'No se pudieron guardar los cambios en el servidor.' };
       const serverUpdated = res.business;
       const finalData: Partial<Business> = serverUpdated ? { ...updatedData, ...serverUpdated } : updatedData;
 
@@ -660,20 +661,12 @@ export default function App() {
       }
 
       return {
-        success: res.success !== false,
+        success: true,
         message: res.message || 'Empresa actualizada correctamente'
       };
     } catch (err: any) {
       console.error('Error saving business to API:', err);
-      // Fallback local en caso de falla momentánea de red
-      setBusinessesList((prev) =>
-        prev.map((b) => (Number(b.id) === id ? { ...b, ...updatedData } : b))
-      );
-      setBusinessOverrides((prev) => ({
-        ...prev,
-        [String(id)]: { ...prev[String(id)], ...updatedData }
-      }));
-      return { success: true, message: 'Guardado localmente' };
+      return { success: false, message: err instanceof Error ? err.message : 'Error de conexión. Los cambios no se guardaron.' };
     }
   };
 
