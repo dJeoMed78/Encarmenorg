@@ -3133,26 +3133,23 @@ app.post('/api/submit-business', async (req: Request, res: Response) => {
       createdAt: new Date().toISOString()
     };
 
+    // Persist first: never acknowledge a registration that MariaDB did not save.
+    if (!isMariaDbActive()) {
+      return res.status(503).json({ success: false, message: 'MariaDB no está disponible. No se registró la empresa.' });
+    }
+    const saved = await dbSaveBusiness(newBiz);
+    if (!saved) {
+      return res.status(503).json({ success: false, message: 'No fue posible guardar la empresa en MariaDB.' });
+    }
     businessesCache.unshift(newBiz);
+    cachedDbSignature = null;
 
-    // Save to disk seed
+    // Best-effort local seed cache; MariaDB remains authoritative.
     try {
       const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
       fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
     } catch (e) {
       console.warn('[Storage] Error actualizando businesses_seed.json:', e);
-    }
-
-
-
-    // Save to Hostinger MariaDB if connected
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveBusiness(newBiz);
-        console.log(`[MariaDB] Empresa "${newBiz.name}" guardada en Hostinger MariaDB.`);
-      } catch (mErr: any) {
-        console.warn('[MariaDB] Error guardando empresa:', mErr.message);
-      }
     }
 
     // Attempt WordPress WooCommerce REST API integration if credentials are configured
