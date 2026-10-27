@@ -488,7 +488,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 value={formData.name || ''}
                 onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 onBlur={() => setFormData(prev => ({ ...prev, name: formatBusinessName(prev.name || '') }))}
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm font-bold text-stone-900 focus:border-amber-500 outline-none"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm font-bold text-stone-900 focus:border-amber-500 outline-none bg-white"
                 required
               />
             </div>
@@ -538,7 +538,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                       categories: [e.target.value]
                     }))}
                     placeholder="Escribe el nombre de la categoría personalizada..."
-                    className="w-full px-3 py-2 rounded-xl border border-amber-300 text-xs sm:text-sm font-semibold text-stone-800 focus:border-amber-500 outline-none"
+                    className="w-full px-3 py-2 rounded-xl border border-amber-300 text-xs sm:text-sm font-semibold text-stone-800 focus:border-amber-500 outline-none bg-white"
                     autoFocus
                   />
                 </div>
@@ -573,7 +573,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                   setFormData(prev => ({ ...prev, slug: clean }));
                 }}
                 placeholder="slug-personalizado"
-                className="w-full text-xs sm:text-sm font-bold text-amber-950 outline-none font-mono"
+                className="w-full text-xs sm:text-sm font-bold text-amber-950 outline-none font-mono bg-white"
               />
             </div>
             <p className="text-[11px] text-stone-600">
@@ -593,7 +593,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
               rows={3}
               value={formData.description || ''}
               onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none leading-relaxed"
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none leading-relaxed bg-white"
             />
           </div>
 
@@ -618,7 +618,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                   }
                 }}
                 placeholder="Ej. 9381458462"
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none font-mono"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none font-mono bg-white"
               />
             </div>
 
@@ -641,7 +641,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                   }
                 }}
                 placeholder="Ej. 9381458462"
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none font-mono font-bold"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none font-mono font-bold bg-white"
               />
             </div>
           </div>
@@ -654,7 +654,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
               value={formData.address || ''}
               onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))}
               placeholder="Calle, número, cruzamientos..."
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none"
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none bg-white"
             />
           </div>
 
@@ -836,7 +836,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 value={formData.facebook || ''}
                 onChange={e => setFormData(prev => ({ ...prev, facebook: e.target.value }))}
                 placeholder="https://facebook.com/tunegocio"
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none bg-white"
               />
             </div>
 
@@ -850,7 +850,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 value={formData.instagram || ''}
                 onChange={e => setFormData(prev => ({ ...prev, instagram: e.target.value }))}
                 placeholder="https://instagram.com/tunegocio o @usuario"
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none bg-white"
               />
             </div>
 
@@ -864,7 +864,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 value={formData.website || ''}
                 onChange={e => setFormData(prev => ({ ...prev, website: e.target.value }))}
                 placeholder="https://minegocio.com"
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none bg-white"
               />
             </div>
           </div>
