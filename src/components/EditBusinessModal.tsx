@@ -395,7 +395,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         backdropFilter: 'blur(25px)',
         WebkitBackdropFilter: 'blur(25px)',
       }}
-      onClick={onClose}
+      // Backdrop clicks must not dismiss the editor during text selection.
     >
       <div
         className="relative w-full max-w-2xl rounded-3xl overflow-hidden flex flex-col my-auto max-h-[92vh]"
