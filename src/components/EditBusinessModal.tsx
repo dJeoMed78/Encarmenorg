@@ -22,6 +22,7 @@ import {
   Instagram,
   Check,
   Upload,
+  Trash2,
   Save,
   AlertCircle
 } from 'lucide-react';
@@ -985,8 +986,11 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setFormData(prev => ({ ...prev, image: '' }))}
-                    className="ml-2 text-[11px] text-rose-600 hover:underline font-bold cursor-pointer"
+                    disabled={isUploadingPhoto}
+                    aria-label="Quitar fotografía o logotipo"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/45 border border-rose-200/80 hover:bg-rose-50/80 text-rose-700 text-xs font-bold cursor-pointer backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,.8)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
+                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                     Quitar foto
                   </button>
                 )}
