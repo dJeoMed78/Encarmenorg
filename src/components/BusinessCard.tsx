@@ -23,17 +23,19 @@ export function BusinessCard({
 }: BusinessCardProps) {
   const phoneClean = business.phone ? business.phone.replace(/\D/g, '') : '';
   const waClean = business.whatsapp ? business.whatsapp.replace(/\D/g, '') : '';
-  const targetCall = phoneClean || waClean || '9381522623';
-  const targetWa = waClean || phoneClean || '529381522623';
+  const targetCall = phoneClean || waClean;
+  const rawWhatsApp = waClean || phoneClean;
+  const targetWa = /^521\d{10}$/.test(rawWhatsApp) ? `52${rawWhatsApp.slice(3)}` : /^52\d{10}$/.test(rawWhatsApp) ? rawWhatsApp : /^\d{10}$/.test(rawWhatsApp) ? `52${rawWhatsApp}` : '';
 
   const handleWhatsApp = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const phoneWithCountry = targetWa.startsWith('52') ? targetWa : `52${targetWa}`;
-    window.open(`https://wa.me/${phoneWithCountry}?text=Hola,%20vi%20su%20negocio%20en%20encarmen.org`, '_blank');
+    if (!targetWa) return;
+    window.open(`https://wa.me/${targetWa}?text=Hola,%20vi%20su%20negocio%20en%20encarmen.org`, '_blank', 'noopener,noreferrer');
   };
 
   const handleCall = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!targetCall) return;
     window.open(`tel:${targetCall}`, '_self');
   };
 
@@ -172,9 +174,9 @@ export function BusinessCard({
           <span 
             className="text-[13px] font-normal text-[#1F2937] truncate"
             style={{ fontFamily: "'Roboto', sans-serif" }}
-            title={business.address || business.colonia || 'Ciudad del Carmen, Camp.'}
+            title={displayAddress}
           >
-            {business.address || business.colonia || 'Ciudad del Carmen, Camp.'}
+            {displayAddress}
           </span>
         </div>
       </div>
@@ -184,7 +186,8 @@ export function BusinessCard({
         <button
           type="button"
           onClick={handleWhatsApp}
-          className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-full font-semibold text-xs sm:text-[13px] text-white bg-[#25D366] hover:bg-[#20ba59] active:scale-95 transition-all shadow-md cursor-pointer"
+          disabled={!targetWa}
+          className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-full font-semibold text-xs sm:text-[13px] text-white bg-[#25D366] hover:bg-[#20ba59] active:scale-95 transition-all shadow-md cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
             <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm.01 18.06c-1.49 0-2.94-.4-4.22-1.16l-.3-.18-3.13.82.83-3.05-.2-.31a8.13 8.13 0 0 1-1.25-4.27c0-4.52 3.68-8.2 8.2-8.2 2.19 0 4.25.85 5.8 2.4 1.55 1.55 2.4 3.61 2.4 5.8 0 4.52-3.68 8.2-8.13 8.2zm4.49-6.14c-.25-.12-1.47-.72-1.7-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.39-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.43h-.47c-.17 0-.43.06-.66.31-.23.25-.87.85-.87 2.08 0 1.23.89 2.42 1.02 2.59.12.17 1.76 2.69 4.27 3.77.6.26 1.07.41 1.43.53.6.19 1.15.16 1.58.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.15-1.18-.06-.12-.22-.19-.47-.31z" />
@@ -195,7 +198,8 @@ export function BusinessCard({
         <button
           type="button"
           onClick={handleCall}
-          className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-full font-semibold text-xs sm:text-[13px] text-white bg-[#1E88E5] hover:bg-[#1976D2] active:scale-95 transition-all shadow-md cursor-pointer"
+          disabled={!targetCall}
+          className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-full font-semibold text-xs sm:text-[13px] text-white bg-[#1E88E5] hover:bg-[#1976D2] active:scale-95 transition-all shadow-md cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Phone className="w-3.5 h-3.5 shrink-0" />
           <span>Llamar</span>
