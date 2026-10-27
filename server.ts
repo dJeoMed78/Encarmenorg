@@ -3080,6 +3080,16 @@ app.post('/api/submit-business', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'El nombre de la empresa es obligatorio' });
     }
 
+    // Every business must provide at least one contact method.
+    const phone = typeof data.phone === 'string' ? data.phone.trim() : '';
+    const whatsapp = typeof data.whatsapp === 'string' ? data.whatsapp.trim() : '';
+    if (!phone && !whatsapp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Debes proporcionar al menos un medio de contacto: teléfono o WhatsApp.'
+      });
+    }
+
     const allowDuplicate = Boolean(data.allowDuplicate);
     if (!allowDuplicate) {
       const dup = findDuplicateBusiness(data.name, data.phone);
