@@ -264,3 +264,8 @@ Advertencia de implementación:
 - `src/components/BusinessCard.tsx`: se eliminan teléfonos de respaldo ajenos al negocio, se normalizan números mexicanos de WhatsApp, se deshabilitan botones cuando falta un contacto y se presenta dirección formateada.
 - Esta corrección funcional **no** equivale al rediseño de la ficha Glass ni a opiniones persistentes; ambos siguen pendientes.
 - Pruebas: revisión estática. No se ejecutaron compilación TypeScript ni validación de despliegue Hostinger desde esta conexión.
+
+### Avance de implementación — 2026-10-27 (ficha empresarial)
+
+- Commit `ce1dbf0782e0071fb347431593f419f08450d55c`: `BusinessDetailModal.tsx` ahora muestra bajo «Landing Page» la ruta pública `https://encarmen.org/negocio/{slug o id}` según la ruta que abre el botón, y cambia el encabezado «Descripción y Servicios» a «Descripción del negocio» sin alterar el contenido.
+- Verificación pendiente: compilación y prueba de navegación en Staging; el rediseño integral, reseñas escritas persistentes y protecciones anti-spam siguen pendientes. No desplegado a producción.
