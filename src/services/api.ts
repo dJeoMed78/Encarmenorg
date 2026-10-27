@@ -144,8 +144,8 @@ export async function fetchStats(): Promise<DirectoryStats> {
       withAddress: list.filter(b => Boolean(b.address && b.address.length > 5)).length,
       withDelivery: list.filter(b => Boolean(b.delivery && !b.delivery.toLowerCase().includes('no'))).length,
       lastSyncTimestamp: new Date().toISOString(),
-      lastSyncStatus: 'success',
-      wpSiteUrl: typeof window !== 'undefined' ? window.location.origin : 'https://empresasencarmen.com'
+      lastSyncStatus: 'autonomous',
+      wpSiteUrl: typeof window !== 'undefined' ? window.location.origin : 'https://encarmen.org'
     };
   }
 }
@@ -158,11 +158,18 @@ export async function syncWordPress(): Promise<{
   pushedToWpCount?: number;
   categoriesCount?: number;
   timestamp?: string;
+  disabled?: boolean;
 }> {
-  const res = await fetch(`${API_BASE}/sync`, {
-    method: 'POST'
-  });
-  return await res.json();
+  try {
+    const res = await fetch(`${API_BASE}/sync`, { method: 'POST' });
+    return await res.json();
+  } catch {
+    return {
+      success: false,
+      disabled: true,
+      message: 'La sincronización con WordPress/WooCommerce ha sido desactivada definitivamente. La plataforma opera de forma 100% autónoma en Hostinger MariaDB.'
+    };
+  }
 }
 
 export async function syncSingleBusinessToWordPress(id: number): Promise<{
@@ -170,14 +177,17 @@ export async function syncSingleBusinessToWordPress(id: number): Promise<{
   message: string;
   permalink?: string;
   wpId?: number;
+  disabled?: boolean;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/businesses/${id}/sync-wp`, {
-      method: 'POST'
-    });
+    const res = await fetch(`${API_BASE}/businesses/${id}/sync-wp`, { method: 'POST' });
     return await res.json();
-  } catch (err: any) {
-    return { success: false, message: err.message };
+  } catch {
+    return {
+      success: false,
+      disabled: true,
+      message: 'La sincronización con WordPress/WooCommerce ha sido desactivada. Las modificaciones se guardan directamente en Hostinger MariaDB.'
+    };
   }
 }
 
@@ -188,9 +198,9 @@ export async function checkWpHealth(): Promise<WpHealth> {
   } catch (err: any) {
     return {
       connected: false,
-      status: 'unreachable',
+      status: 'decommissioned',
       error: err.message,
-      siteUrl: typeof window !== 'undefined' ? window.location.origin : 'https://empresasencarmen.com'
+      siteUrl: typeof window !== 'undefined' ? window.location.origin : 'https://encarmen.org'
     };
   }
 }
@@ -643,7 +653,7 @@ export async function deleteClassified(id: string): Promise<{
 export async function searchClassifiedRadarCandidates(
   query: string = '',
   category: string = 'all',
-  useAi: boolean = true
+  useAi: boolean = false
 ): Promise<{
   success: boolean;
   candidates: import('../types').ClassifiedAd[];
@@ -658,21 +668,27 @@ export async function searchClassifiedRadarCandidates(
     const res = await fetch(API_BASE + '/classifieds/radar-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, category, useAi: true, timestamp: Date.now() })
+      body: JSON.stringify({ query, category, useAi, timestamp: Date.now() })
     });
     if (res.ok) {
-      return await res.json();
+      const data = await res.json();
+      return {
+        success: Boolean(data?.success),
+        candidates: Array.isArray(data?.candidates) ? data.candidates : [],
+        aiInfo: data?.aiInfo,
+        message: data?.message || data?.aiInfo?.message
+      };
     }
     return {
       success: false,
       candidates: [],
-      message: 'Error al consultar el radar en vivo.'
+      message: 'El servidor respondió con código ' + res.status + ' al buscar en el radar.'
     };
   } catch (err: any) {
     return {
       success: false,
       candidates: [],
-      message: err?.message || 'Error de conexión con el radar.'
+      message: err?.message || 'Error de conexión con el radar en vivo.'
     };
   }
 }

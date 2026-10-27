@@ -2444,43 +2444,22 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                     className="w-full sm:flex-1 px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs transition-all flex items-center justify-center gap-2 border border-stone-600"
                   >
                     <Database className="w-4 h-4 text-amber-400" />
-                    <span>Descargar Script SQL MariaDB</span>
-                  </a>
-                  <a
-                    href="https://empresasencarmen.com/wp-admin/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full sm:w-auto px-3.5 py-2.5 rounded-xl bg-stone-800/80 hover:bg-stone-700 text-stone-400 hover:text-stone-200 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 border border-stone-750"
-                    title="Acceder al wp-admin de WordPress antes de darlo de baja"
-                  >
-                    <span>wp-admin</span>
-                    <ExternalLink className="w-3 h-3" />
+                    <span>Descargar Respaldo SQL MariaDB</span>
                   </a>
                 </div>
               </div>
 
-              {/* Sync Trigger button */}
+              {/* Estado Autónomo MariaDB */}
               <div className="pt-1">
-                <button
-                  onClick={onTriggerSync}
-                  disabled={isSyncing}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:bg-stone-200 text-white font-bold text-sm shadow-md transition-all cursor-pointer"
-                >
-                  <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>
-                    {isSyncing
-                      ? 'Sincronizando bidireccionalmente...'
-                      : 'Sincronizar catálogo bidireccional (WordPress ⇄ Directorio)'}
-                  </span>
-                </button>
-                <p className="text-[11px] text-center text-stone-500 mt-1.5">
-                  Sincronización en tiempo real: trae negocios nuevos de WordPress y publica automáticamente en empresasencarmen.com los registrados aquí.
-                </p>
-                {syncResultMsg && (
-                  <div className="mt-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-center text-emerald-800 font-medium">
-                    {syncResultMsg}
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs">
+                    <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+                    <span>Plataforma 100% Autónoma Activa</span>
                   </div>
-                )}
+                  <p className="text-[11px] text-emerald-800 leading-relaxed">
+                    Las integraciones funcionales con WordPress y WooCommerce han sido desactivadas. Toda la gestión de empresas, clasificados, eventos y promociones opera directamente sobre Hostinger MariaDB con 1,824 archivos multimedia preservados localmente.
+                  </p>
+                </div>
               </div>
             </div>
           ) : (

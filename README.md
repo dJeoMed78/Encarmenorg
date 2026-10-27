@@ -3,8 +3,8 @@
 Aplicación web progresiva (PWA) y plataforma completa de directorio comercial, eventos, clasificados y emergencias para Ciudad del Carmen, Campeche.
 
 Totalmente conectada con:
-- **Base de Datos MariaDB / MySQL en Hostinger**: Lectura y escritura en tiempo real de comercios, reportes, eventos y reseñas.
-- **Sincronización WooCommerce / WordPress**: Sincronización bidireccional y webhooks con `empresasencarmen.com`.
+- **Base de Datos MariaDB / MySQL en Hostinger**: Lectura y escritura en tiempo real de comercios, reportes, eventos y reseñas (fuente principal de datos).
+- **Almacenamiento Local de Medios Autónomo**: Más de 1,800 archivos multimedia históricos servidos directamente desde el servidor.
 - **Servidor Express + Vite + React + Tailwind CSS**.
 
 ---
@@ -31,10 +31,6 @@ DB_PORT=3306
 DB_USER=u293982346_appuser
 DB_PASSWORD="TU_PASSWORD_AQUI"
 DB_NAME=u293982346_encarmenapp
-
-# Credenciales de WordPress / WooCommerce (Opcional)
-WC_CONSUMER_KEY=tu_consumer_key
-WC_CONSUMER_SECRET=tu_consumer_secret
 ```
 
 ---
@@ -58,5 +54,6 @@ WC_CONSUMER_SECRET=tu_consumer_secret
 - **Directorio de más de 200 empresas y negocios locales.**
 - **Búsqueda instantánea, categorías y filtros por colonia.**
 - **Integración con Google Maps / Waze / WhatsApp directo.**
-- **Sincronización automática periódica y webhook de WooCommerce.**
+- **Arquitectura 100% autónoma:** Sin dependencias externas de CMS ni llamadas a APIs de WordPress/WooCommerce.
 - **SEO optimizado:** OpenGraph dinámico para compartir en WhatsApp y Facebook con vista previa de cada negocio.
+

@@ -2235,290 +2235,12 @@ app.post('/api/admin/purge-cache', async (req: Request, res: Response) => {
   }
 });
 
-// Helper to parse a WooCommerce REST API product into our Business schema
-function parseWooCommerceProduct(p: any): any {
-  const getMeta = (key: string) => {
-    if (!Array.isArray(p.meta_data)) return '';
-    const item = p.meta_data.find((m: any) => m.key === key || m.key === `_${key}`);
-    return item ? String(item.value || '').trim() : '';
-  };
-
-  const cleanDescription = (html: string) => {
-    if (!html) return '';
-    let text = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ');
-    text = text.replace(/<div[^>]*class=["'][^"']*fe-wrapper[^"']*["'][\s\S]*?<\/div>\s*<\/div>/gi, ' ');
-    text = text.replace(/\.fe-wrapper[\s\S]*?\.fe-content[^}]*\}/gi, ' ');
-    text = text.replace(/📞\s*Marcar a la empresa[\s\S]*?(?=(?:<p|$))/i, ' ');
-    return text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-  };
-
-  const name = p.name ? p.name.trim() : 'Empresa';
-  let phone = getMeta('telefono') || getMeta('phone') || '';
-  if (!phone && p.description) {
-    const mPhone = p.description.match(/(?:Teléfono|Telefono|📞)\s*[:]?\s*([0-9\s\/\-]{7,25})/i);
-    if (mPhone) phone = mPhone[1].replace(/[^\d\s\/-]/g, '').trim();
-  }
-  let whatsapp = getMeta('whatsapp') || phone;
-  if ((!whatsapp || whatsapp === phone) && p.description) {
-    const mWa = p.description.match(/wa\.me\/52(\d{10})/i) || p.description.match(/(?:WhatsApp|whatsapp)\s*[:]?\s*([0-9]{10})/i);
-    if (mWa) whatsapp = mWa[1];
-  }
-  let address = getMeta('direccion') || getMeta('address') || '';
-  if (!address && p.description) {
-    const mAddr = p.description.match(/(?:Dirección|Direccion|📍)\s*[:]?\s*([^💳⏰🚚\.\<\n]{5,100})/i);
-    if (mAddr) address = mAddr[1].trim();
-  }
-  const colonia = getMeta('colonia') || 'Ciudad del Carmen Centro';
-  let schedule = getMeta('horario') || '';
-  if (!schedule && p.description) {
-    const mSched = p.description.match(/(?:Horario|⏰)\s*[:]?\s*([^💳🚚\.\<\n]{5,80})/i);
-    if (mSched) schedule = mSched[1].trim();
-  }
-  if (!schedule) schedule = 'Lunes a Sábado';
-
-  let payment = getMeta('pagos') || '';
-  if (!payment && p.description) {
-    const mPay = p.description.match(/(?:Métodos de pago|Metodos de pago|💳)\s*[:]?\s*([^🚚\.\<\n]{5,80})/i);
-    if (mPay) payment = mPay[1].trim();
-  }
-  if (!payment) payment = 'Efectivo y Transferencia';
-
-  let delivery = getMeta('envio') || '';
-  if (!delivery && p.description) {
-    const mDel = p.description.match(/(?:Envío a domicilio|Envio a domicilio|🚚)\s*[:]?\s*([^<\n]{5,80})/i);
-    if (mDel) delivery = mDel[1].trim();
-  }
-  if (!delivery) delivery = 'Atención en el Local de la empresa';
-  const isRecommended = getMeta('is_recommended') === '1' || getMeta('is_recommended') === 'true';
-
-  let facebook = getMeta('facebook') || '';
-  let instagram = getMeta('instagram') || '';
-  let website = getMeta('website') || getMeta('web') || '';
-
-  // Extract from short_description [ficha_empresa ...] or description if meta was empty
-  const shortDesc = p.short_description || '';
-  if (shortDesc.includes('ficha_empresa')) {
-    const mFb = shortDesc.match(/facebook=["']([^"']*)["']/i);
-    if (mFb && !facebook) facebook = mFb[1];
-    const mIg = shortDesc.match(/instagram=["']([^"']*)["']/i);
-    if (mIg && !instagram) instagram = mIg[1];
-    const mWeb = shortDesc.match(/web=["']([^"']*)["']/i);
-    if (mWeb && !website) website = mWeb[1];
-    const mTel = shortDesc.match(/telefono=["']([^"']*)["']/i);
-    if (mTel && !phone) phone = mTel[1];
-    const mWa = shortDesc.match(/whatsapp=["']([^"']*)["']/i);
-    if (mWa && !whatsapp) whatsapp = mWa[1];
-    const mDir = shortDesc.match(/direccion=["']([^"']*)["']/i);
-    if (mDir && !address) address = mDir[1];
-    const mHor = shortDesc.match(/horario=["']([^"']*)["']/i);
-    if (mHor && !schedule) schedule = mHor[1];
-    const mPag = shortDesc.match(/pagos=["']([^"']*)["']/i);
-    if (mPag && !payment) payment = mPag[1];
-    const mEnv = shortDesc.match(/envio=["']([^"']*)["']/i);
-    if (mEnv && !delivery) delivery = mEnv[1];
-  }
-
-  const image = (Array.isArray(p.images) && p.images[0]?.src) ? p.images[0].src : '';
-  const gallery = (Array.isArray(p.images) && p.images.length > 1) ? p.images.slice(1).map((i: any) => i.src) : [];
-  const categories = (Array.isArray(p.categories) && p.categories.length > 0) ? p.categories.map((c: any) => c.name) : ['Comercios y Servicios'];
-  const categorySlugs = (Array.isArray(p.categories) && p.categories.length > 0) ? p.categories.map((c: any) => c.slug) : ['comercios-y-servicios'];
-
-  return {
-    id: p.id,
-    name,
-    slug: p.slug || `empresa-${p.id}`,
-    description: cleanDescription(p.description) || cleanDescription(p.short_description) || '',
-    phone,
-    whatsapp,
-    facebook,
-    instagram,
-    website,
-    address,
-    colonia,
-    mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + ', Ciudad del Carmen, Campeche')}`,
-    schedule,
-    payment,
-    delivery,
-    image,
-    gallery,
-    categories,
-    categorySlugs,
-    rating: 5,
-    reviewCount: 1,
-    permalink: p.permalink || `https://empresasencarmen.com/empresa/${p.slug}/`,
-    isTopBusiness: false,
-    isRecommended,
-    createdAt: p.date_created || new Date().toISOString()
-  };
-}
-
-// Helper to normalize business name for duplicate and cross-platform matching
-function normalizeBusinessName(name: string): string {
-  return (name || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]/g, '')
-    .trim();
-}
-
-// Helper to resolve numerical WooCommerce category IDs from local categories or auto-detection
-function resolveWooCommerceCategoryIds(biz: any): { id: number }[] {
-  const result: { id: number }[] = [];
-  const assignedIds = new Set<number>();
-
-  const addId = (id: number) => {
-    if (id && !assignedIds.has(id)) {
-      assignedIds.add(id);
-      result.push({ id });
-    }
-  };
-
-  const findCatInCache = (term: string) => {
-    if (!term || !Array.isArray(categoriesCache)) return null;
-    const clean = term.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-    return categoriesCache.find(c => {
-      const cName = (c.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-      const cSlug = (c.slug || '').toLowerCase().trim();
-      return cName === clean || cSlug === clean || cName.includes(clean) || clean.includes(cName);
-    });
-  };
-
-  // 1. Match from existing categories
-  const existingCats: string[] = [];
-  if (Array.isArray(biz.categories)) existingCats.push(...biz.categories);
-  if (biz.category) existingCats.push(biz.category);
-  if (biz.subcategory) existingCats.push(biz.subcategory);
-  if (Array.isArray(biz.categorySlugs)) existingCats.push(...biz.categorySlugs);
-
-  for (const c of existingCats) {
-    const found = findCatInCache(c);
-    if (found && found.id && found.id !== 15) {
-      addId(Number(found.id));
-      if (found.parent && found.parent !== 0) {
-        addId(Number(found.parent));
-      }
-    }
-  }
-
-  // 2. Intelligent Auto-Categorization based on keywords in name, description only if no category matched
-  if (result.length === 0) {
-    const textCorpus = `${biz.name || ''} ${biz.description || ''} ${biz.tags ? (Array.isArray(biz.tags) ? biz.tags.join(' ') : biz.tags) : ''}`
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
-
-    if (/churro|postre|panaderia|cafeteria|dulce|crepa|helado|frappe|reposteria|pastel/i.test(textCorpus)) {
-      addId(62);  // Alimentos y Bebidas
-      addId(372); // Cafeterías, Jugos y Postres
-      if (!biz.category) biz.category = 'Alimentos y Bebidas';
-      if (!biz.subcategory) biz.subcategory = 'Cafeterías, Jugos y Postres';
-      if (!biz.categories || biz.categories.length === 0) biz.categories = ['Alimentos y Bebidas', 'Cafeterías, Jugos y Postres'];
-      if (!biz.categorySlugs || biz.categorySlugs.length === 0) biz.categorySlugs = ['alimentos-y-bebidas', 'cafeterias-jugos-y-postres'];
-    } else if (/taco|pizza|hamburguesa|comida|cocina|restaurante|antojito|marisco|sushi|torta|asador|parrilla/i.test(textCorpus)) {
-      addId(62);  // Alimentos y Bebidas
-      addId(371); // Restaurantes y Cocinas Económicas
-      addId(370); // Antojitos y Comida Rápida
-    } else if (/mecanic|taller|auto|moto|refaccion|freno|suspension|llanta/i.test(textCorpus)) {
-      addId(401); // Automotriz y Motocicletas
-      addId(402); // Talleres Mecánicos y Eléctricos (Autos y Motos)
-    } else if (/una|pestana|belleza|barber|peluquer|estetic|spa|facial|cabello/i.test(textCorpus)) {
-      addId(374); // Cuidado y Belleza Personal
-      addId(377); // Aplicación de Uñas y Pestañas
-    } else if (/mandadito|reparto|entrega|flete|transporte/i.test(textCorpus)) {
-      addId(380); // Servicios Logísticos y Transporte
-    } else if (/medico|clinica|doctor|farmacia|dental|dentista/i.test(textCorpus)) {
-      addId(384); // Salud y Medicina
-    } else {
-      addId(62); // Alimentos y Bebidas
-    }
-  }
-
-  return result;
-}
-
-// Helper to clean raw business description for WordPress (no CSS, no buttons, no junk)
-function cleanWooCommerceDescription(desc: string): string {
-  if (!desc) return '';
-  return desc
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<div[^>]*class=["'][^"']*fe-wrapper[^"']*["'][\s\S]*?<\/div>\s*<\/div>/gi, '')
-    .replace(/<div[^>]*class=["'][^"']*fe-[^"']*["'][\s\S]*?<\/div>/gi, '')
-    .replace(/\.fe-wrapper[\s\S]*?\.fe-content[^}]*\}/gi, '')
-    .replace(/<p>\.fe-wrapper[\s\S]*?<\/p>/gi, '')
-    .replace(/📞\s*Marcar a la empresa[\s\S]*$/i, '')
-    .replace(/\[ficha_empresa[^\]]*\]/gi, '')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-// Helper to construct the exact [ficha_empresa] shortcode for WooCommerce short_description
-function buildFichaEmpresaShortcode(biz: any): string {
-  const phone = String(biz.phone || '').trim().replace(/"/g, '');
-  let rawWa = String(biz.whatsapp || biz.phone || '').trim().replace(/\D/g, '');
-  if (rawWa && !rawWa.startsWith('52') && rawWa.length === 10) {
-    rawWa = `52${rawWa}`;
-  }
-  const wa = rawWa.replace(/"/g, '');
-  const fb = String(biz.facebook || '').trim().replace(/"/g, '');
-  const ig = String(biz.instagram || '').trim().replace(/"/g, '');
-  const web = String(biz.website || '').trim().replace(/"/g, '');
-
-  let direccion = String(biz.address || '').trim();
-  const col = String(biz.colonia || '').trim();
-  if (col && direccion && !direccion.toLowerCase().includes(col.toLowerCase())) {
-    direccion = `${direccion}, Col. ${col}`;
-  }
-  direccion = direccion.replace(/"/g, '');
-
-  const horario = String(biz.schedule || '').trim().replace(/"/g, '');
-  const pagos = String(biz.payment || '').trim().replace(/"/g, '');
-  const envio = String(biz.delivery || '').trim().replace(/"/g, '');
-
-  return `[ficha_empresa telefono="${phone}" whatsapp="${wa}" facebook="${fb}" instagram="${ig}" web="${web}" direccion="${direccion}" horario="${horario}" pagos="${pagos}" envio="${envio}"]`;
-}
-
-// Helper to format images properly for WooCommerce
-function buildWooCommerceImagesPayload(biz: any): { src: string }[] {
-  const images: { src: string }[] = [];
-  const makeFull = (src: string) => {
-    if (!src || typeof src !== 'string') return '';
-    const trimmed = src.trim();
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
-    if (trimmed.startsWith('/')) return `https://encarmen.org${trimmed}`;
-    return `https://encarmen.org/uploads/${trimmed}`;
-  };
-
-  if (biz.image) {
-    const full = makeFull(biz.image);
-    if (full) images.push({ src: full });
-  }
-
-  if (Array.isArray(biz.gallery)) {
-    for (const g of biz.gallery) {
-      const full = makeFull(g);
-      if (full && !images.some(img => img.src === full)) {
-        images.push({ src: full });
-      }
-    }
-  }
-
-  return images;
-}
-
-// Flag de sincronización externa con WordPress/WooCommerce
-// Por defecto FALSE: El portal opera en modo 100% autónomo (cero dependencias externas y cero envíos a WordPress)
-const IS_WP_SYNC_ENABLED = process.env.ENABLE_WP_SYNC === 'true';
-
-// Helper to purge LiteSpeed, Cloudflare and local cache across encarmen.org and empresasencarmen.com
-async function purgeWordPressCache(slugs: string[] = []): Promise<void> {
+// Helper autónomo para purgar caché de Cloudflare y LiteSpeed (encarmen.org)
+async function purgePortalCache(slugs: string[] = []): Promise<void> {
   try {
     const urls = [
-      'https://' + 'encarmen.org/',
-      'https://' + 'www.encarmen.org/',
-      'https://' + 'empresasencarmen.com/',
-      'https://' + 'www.empresasencarmen.com/'
+      'https://encarmen.org/',
+      'https://www.encarmen.org/'
     ];
 
     for (const u of urls) {
@@ -2538,13 +2260,8 @@ async function purgeWordPressCache(slugs: string[] = []): Promise<void> {
         method: 'PURGE',
         headers: { 'x-litespeed-purge': '*' }
       }).catch(() => {});
-      fetch(`https://empresasencarmen.com/empresa/${cleanSlug}/`, {
-        method: 'PURGE',
-        headers: { 'x-litespeed-purge': '*' }
-      }).catch(() => {});
     }
 
-    // Purga de Cloudflare si las credenciales están configuradas
     const cfZoneIds = (process.env.CLOUDFLARE_ZONE_ID || process.env.CF_ZONE_ID || '')
       .split(',')
       .map((s) => s.trim())
@@ -2570,443 +2287,12 @@ async function purgeWordPressCache(slugs: string[] = []): Promise<void> {
         body: JSON.stringify({ purge_everything: true })
       }).catch(() => {});
     }
-    console.log('[Cache] Purga de caché enviada a encarmen.org, empresasencarmen.com y Cloudflare');
+    console.log('[Cache] Purga de caché enviada a encarmen.org y Cloudflare');
   } catch (err: any) {
-    console.warn('[Cache] Error al purgar caché:', err.message);
+    console.warn('[Cache] Error al purgar caché:', err?.message);
   }
 }
-
-// Helper to push a business to WordPress WooCommerce via REST API
-async function exportBusinessToWooCommerce(biz: any, authHeader: string): Promise<{ success: boolean; wpId?: number; permalink?: string; slug?: string; error?: string }> {
-  if (!IS_WP_SYNC_ENABLED) {
-    return { success: true, slug: biz.slug };
-  }
-  try {
-    const meta_data = [
-      { key: 'telefono', value: String(biz.phone || '') },
-      { key: 'phone', value: String(biz.phone || '') },
-      { key: 'whatsapp', value: String(biz.whatsapp || biz.phone || '') },
-      { key: 'direccion', value: String(biz.address || '') },
-      { key: 'address', value: String(biz.address || '') },
-      { key: 'colonia', value: String(biz.colonia || '') },
-      { key: '_colonia', value: String(biz.colonia || '') },
-      { key: 'horario', value: String(biz.schedule || '') },
-      { key: 'pagos', value: String(biz.payment || '') },
-      { key: 'envio', value: String(biz.delivery || '') },
-      { key: 'facebook', value: String(biz.facebook || '') },
-      { key: 'website', value: String(biz.website || '') },
-      { key: 'mapsUrl', value: String(biz.mapsUrl || '') },
-      { key: 'is_recommended', value: biz.isRecommended ? '1' : '0' }
-    ];
-
-    const categories = resolveWooCommerceCategoryIds(biz);
-    const cleanDesc = cleanWooCommerceDescription(biz.description || biz.name);
-    const fichaShortcode = buildFichaEmpresaShortcode(biz);
-
-    const payload: any = {
-      name: biz.name.trim(),
-      type: 'simple',
-      status: 'publish',
-      regular_price: '0',
-      description: `<p>${cleanDesc}</p>`,
-      short_description: fichaShortcode,
-      categories,
-      meta_data
-    };
-
-    if (biz.slug) {
-      payload.slug = biz.slug;
-    }
-
-    const images = buildWooCommerceImagesPayload(biz);
-    if (images.length > 0) {
-      payload.images = images;
-    }
-
-    let wpRes = await fetch('https://empresasencarmen.com/wp-json/wc/v3/products', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader
-      },
-      body: JSON.stringify(payload)
-    });
-
-    // If WooCommerce errors with image fetch failure (HTTP 400), retry without images
-    if (!wpRes.ok && payload.images) {
-      delete payload.images;
-      wpRes = await fetch('https://empresasencarmen.com/wp-json/wc/v3/products', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': authHeader
-        },
-        body: JSON.stringify(payload)
-      });
-    }
-
-    if (!wpRes.ok) {
-      const errText = await wpRes.text();
-      return { success: false, error: `HTTP ${wpRes.status}: ${errText}` };
-    }
-
-    const data: any = await wpRes.json();
-    return {
-      success: true,
-      wpId: data.id,
-      permalink: data.permalink,
-      slug: data.slug
-    };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
-// Helper to get WordPress / WooCommerce auth headers from Secrets
-function getWpAuthHeader(): string | null {
-  if (!IS_WP_SYNC_ENABLED) {
-    return null;
-  }
-  const wcKey = process.env.WC_CONSUMER_KEY;
-  const wcSecret = process.env.WC_CONSUMER_SECRET;
-  if (wcKey && wcSecret) {
-    return 'Basic ' + Buffer.from(`${wcKey}:${wcSecret}`).toString('base64');
-  }
-  const coPubWp = process.env.CO_PUB_WP;
-  if (coPubWp && !coPubWp.trim().startsWith('[')) {
-    if (coPubWp.includes(':')) {
-      return 'Basic ' + Buffer.from(coPubWp).toString('base64');
-    }
-    return `Bearer ${coPubWp}`;
-  }
-  return null;
-}
-
-// Full bidirectional sync helper:
-// 1. Pulls all products from WordPress WooCommerce into MariaDB / cache
-// 2. Finds businesses in local DB that do not exist in WooCommerce and pushes them to WordPress (Disabled in autonomous mode)
-async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: number; pushedToWpCount: number }> {
-  if (!IS_WP_SYNC_ENABLED) {
-    console.info('[WooCommerce Sync] Modo autónomo activo: Sincronización cruzada con WordPress desactivada.');
-    return { count: businessesCache.length, newCount: 0, pushedToWpCount: 0 };
-  }
-  const authHeader = getWpAuthHeader();
-  if (!authHeader) {
-    return { count: businessesCache.length, newCount: 0, pushedToWpCount: 0 };
-  }
-
-  try {
-    let page = 1;
-    const allProducts: any[] = [];
-
-    while (true) {
-      const wpRes = await fetch(`https://empresasencarmen.com/wp-json/wc/v3/products?per_page=100&page=${page}`, {
-        headers: { 'Authorization': authHeader }
-      });
-      if (!wpRes.ok) break;
-      const batch: any = await wpRes.json();
-      if (!Array.isArray(batch) || batch.length === 0) break;
-      allProducts.push(...batch);
-      if (batch.length < 100) break;
-      page++;
-    }
-
-    const existingMap = new Map<number, any>();
-    for (const b of businessesCache) {
-      existingMap.set(Number(b.id), b);
-    }
-
-    // 1. Build lookup maps of WooCommerce products
-    const wpProductIds = new Set<number>();
-    const wpProductByName = new Map<string, any>();
-    const wpProductByPhone = new Map<string, any>();
-    const wpProductBySlug = new Map<string, any>();
-
-    for (const p of allProducts) {
-      const pId = Number(p.id);
-      wpProductIds.add(pId);
-      if (p.name) wpProductByName.set(normalizeBusinessName(p.name), p);
-      if (p.slug) wpProductBySlug.set(p.slug.toLowerCase().trim(), p);
-      if (Array.isArray(p.meta_data)) {
-        const ph = p.meta_data.find((m: any) => m.key === 'telefono' || m.key === 'phone' || m.key === 'whatsapp')?.value;
-        if (ph) {
-          const clean = String(ph).replace(/\D/g, '').slice(-10);
-          if (clean.length >= 7) wpProductByPhone.set(clean, p);
-        }
-      }
-    }
-
-    // 2. Import / Update products from WooCommerce (Pull Phase)
-    let newCount = 0;
-    for (const p of allProducts) {
-      const parsed = parseWooCommerceProduct(p);
-      if (!existingMap.has(p.id)) {
-        newCount++;
-        existingMap.set(p.id, parsed);
-      } else {
-        const old = existingMap.get(p.id) || {};
-        const isPendingLocalEdit = Boolean(
-          old.isLocallyEdited &&
-          old.updatedAt &&
-          p.date_modified &&
-          new Date(old.updatedAt) > new Date(p.date_modified)
-        );
-        const hasLocalCustomizations = Boolean(
-          isPendingLocalEdit ||
-          (old.image && old.image.startsWith('/uploads/')) ||
-          (old.gallery && old.gallery.some((img: string) => img.startsWith('/uploads/'))) ||
-          (Array.isArray(old.previousSlugs) && old.previousSlugs.length > 0) ||
-          (Array.isArray(old.previousNames) && old.previousNames.length > 0)
-        );
-
-        if (hasLocalCustomizations) {
-          // Local changes TAKE PRECEDENCE over stale WooCommerce data
-          const mergedCategories = (old.categories && old.categories.length > 0) ? old.categories : parsed.categories;
-          const mergedCategorySlugs = (old.categorySlugs && old.categorySlugs.length > 0) ? old.categorySlugs : parsed.categorySlugs;
-          const mergedCategory = old.category || (mergedCategories[0] || 'Comercios y Servicios');
-
-          existingMap.set(p.id, {
-            ...parsed,
-            ...old,
-            name: old.name || parsed.name,
-            slug: old.slug || parsed.slug,
-            description: old.description || parsed.description,
-            image: old.image || parsed.image,
-            gallery: (old.gallery && old.gallery.length > 0) ? old.gallery : parsed.gallery,
-            categories: mergedCategories,
-            categorySlugs: mergedCategorySlugs,
-            category: mergedCategory,
-            colonia: old.colonia || parsed.colonia,
-            phone: old.phone || parsed.phone,
-            whatsapp: old.whatsapp || parsed.whatsapp,
-            address: old.address || parsed.address,
-            schedule: old.schedule || parsed.schedule,
-            payment: old.payment || parsed.payment,
-            delivery: old.delivery || parsed.delivery,
-            facebook: old.facebook || parsed.facebook,
-            instagram: old.instagram || parsed.instagram,
-            website: old.website || parsed.website,
-            previousSlugs: old.previousSlugs || [],
-            previousNames: old.previousNames || [],
-            isLocallyEdited: isPendingLocalEdit,
-            updatedAt: old.updatedAt || new Date().toISOString()
-          });
-        } else {
-          existingMap.set(p.id, {
-            ...old,
-            ...parsed,
-            isLocallyEdited: false,
-            previousSlugs: old.previousSlugs || [],
-            previousNames: old.previousNames || []
-          });
-        }
-      }
-    }
-
-    // 3. Export businesses missing in WooCommerce (Push Phase - Two-Way Sync)
-    let pushedToWpCount = 0;
-    for (const b of businessesCache) {
-      const bId = Number(b.id);
-      const bNameNorm = normalizeBusinessName(b.name || '');
-      const bSlug = (b.slug || '').toLowerCase().trim();
-      const bPhoneClean = (b.phone || b.whatsapp || '').replace(/\D/g, '').slice(-10);
-
-      // Check if this business already exists in WooCommerce by ID, slug, name, or phone
-      let matchingWp: any = wpProductIds.has(bId) ? allProducts.find(p => Number(p.id) === bId) : null;
-      if (!matchingWp && bSlug && wpProductBySlug.has(bSlug)) {
-        matchingWp = wpProductBySlug.get(bSlug);
-      }
-      if (!matchingWp && bNameNorm && wpProductByName.has(bNameNorm)) {
-        matchingWp = wpProductByName.get(bNameNorm);
-      }
-      if (!matchingWp && bPhoneClean && bPhoneClean.length >= 7 && wpProductByPhone.has(bPhoneClean)) {
-        matchingWp = wpProductByPhone.get(bPhoneClean);
-      }
-
-      if (matchingWp) {
-        const targetWpId = Number(matchingWp.id);
-        if (targetWpId !== bId) {
-          // Business exists in WooCommerce with a different ID (e.g. temporary local ID)
-          const oldId = b.id;
-          b.oldId = oldId;
-          b.id = targetWpId;
-          if (matchingWp.permalink) b.permalink = matchingWp.permalink;
-          if (matchingWp.slug) b.slug = matchingWp.slug;
-          b.source = 'synced';
-          b.isNewSubmission = false;
-
-          existingMap.delete(Number(oldId));
-          existingMap.set(targetWpId, b);
-
-          if (isMariaDbActive()) {
-            try {
-              await dbDeleteBusiness(oldId);
-              await dbSaveBusiness(b);
-            } catch (_) {}
-          }
-          console.log(`[WooCommerce Match] Empresa "${b.name}" vinculada con producto en WordPress ID #${targetWpId}.`);
-        }
-
-        // Check if matching product in WooCommerce needs sync (local edits, missing categories, shortcode, slug, or images)
-        const fullWpProduct = allProducts.find(p => Number(p.id) === targetWpId) || matchingWp;
-        const wpCatList = Array.isArray(fullWpProduct.categories) ? fullWpProduct.categories : [];
-        const wpValidCats = wpCatList.filter((c: any) => c.id !== 15 && (c.name || '').toLowerCase() !== 'sin categorizar');
-        const wpShortDesc = typeof fullWpProduct.short_description === 'string' ? fullWpProduct.short_description : '';
-        const wpHasShortcode = wpShortDesc.includes('ficha_empresa') || wpShortDesc.includes('fe-wrapper');
-        const wpSlugMismatch = Boolean(b.slug && fullWpProduct.slug && b.slug.toLowerCase().trim() !== fullWpProduct.slug.toLowerCase().trim());
-        
-        const decodeHtml = (str: string) => (str || '').replace(/&amp;/g, '&').replace(/&#8211;/g, '-').replace(/&#8217;/g, "'").replace(/&quot;/g, '"').trim();
-        const wpNameMismatch = Boolean(b.name && fullWpProduct.name && decodeHtml(b.name).toLowerCase() !== decodeHtml(fullWpProduct.name).toLowerCase());
-
-        const hasRealDifferences = wpValidCats.length === 0 || !wpHasShortcode || wpSlugMismatch || wpNameMismatch;
-        const hasNewerLocalEdits = Boolean(
-          b.isLocallyEdited &&
-          b.updatedAt &&
-          fullWpProduct.date_modified &&
-          new Date(b.updatedAt) > new Date(fullWpProduct.date_modified)
-        );
-
-        if (!hasRealDifferences && !hasNewerLocalEdits && b.isLocallyEdited) {
-          b.isLocallyEdited = false;
-          if (existingMap.has(targetWpId)) {
-            const it = existingMap.get(targetWpId);
-            if (it) it.isLocallyEdited = false;
-          }
-        }
-
-        if (hasRealDifferences || hasNewerLocalEdits) {
-          try {
-            const catPayload = resolveWooCommerceCategoryIds(b);
-            const cleanDesc = cleanWooCommerceDescription(b.description || b.name);
-            const fichaShortcode = buildFichaEmpresaShortcode(b);
-            const wpImages = buildWooCommerceImagesPayload(b);
-
-            const putPayload: any = {
-              name: b.name,
-              slug: b.slug,
-              categories: catPayload,
-              description: `<p>${cleanDesc}</p>`,
-              short_description: fichaShortcode,
-              meta_data: [
-                { key: 'telefono', value: String(b.phone || '') },
-                { key: 'phone', value: String(b.phone || '') },
-                { key: 'whatsapp', value: String(b.whatsapp || b.phone || '') },
-                { key: 'direccion', value: String(b.address || '') },
-                { key: 'address', value: String(b.address || '') },
-                { key: 'colonia', value: String(b.colonia || '') },
-                { key: 'horario', value: String(b.schedule || '') },
-                { key: 'pagos', value: String(b.payment || '') },
-                { key: 'envio', value: String(b.delivery || '') },
-                { key: 'facebook', value: String(b.facebook || '') },
-                { key: 'website', value: String(b.website || '') },
-                { key: 'mapsUrl', value: String(b.mapsUrl || '') }
-              ]
-            };
-
-            // CRITICAL: NEVER re-upload images to WooCommerce if product already has images!
-            // Passing images: [{ src: '...' }] causes WordPress to re-download the image and regenerate 10+ thumbnails each time, exhausting Hostinger inodes!
-            const existingWpImages = Array.isArray(fullWpProduct.images) ? fullWpProduct.images : [];
-            if (existingWpImages.length === 0 && wpImages.length > 0) {
-              putPayload.images = wpImages;
-            }
-
-            try {
-              const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 15000);
-              const wpPutRes = await fetch(`https://empresasencarmen.com/wp-json/wc/v3/products/${targetWpId}`, {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': authHeader
-                },
-                body: JSON.stringify(putPayload),
-                signal: controller.signal
-              });
-              clearTimeout(timeout);
-
-              if (wpPutRes.ok) {
-                b.isLocallyEdited = false;
-                if (existingMap.has(targetWpId)) {
-                  const it = existingMap.get(targetWpId);
-                  if (it) it.isLocallyEdited = false;
-                }
-                purgeWordPressCache([b.slug, ...(b.previousSlugs || [])]);
-                console.log(`[WooCommerce Sync] Actualizadas categorías, imágenes y estructura para "${b.name}" en WordPress ID #${targetWpId}.`);
-              } else {
-                console.info(`[WooCommerce Sync] Aviso al actualizar "${b.name}" en WordPress: HTTP ${wpPutRes.status}`);
-              }
-            } catch (err: any) {
-              console.info(`[WooCommerce Sync] Servidor WordPress empresasencarmen.com en espera temporal para "${b.name}":`, err.message);
-            }
-
-            // Gentle delay to respect LiteSpeed connection rate limits
-            await new Promise(resolve => setTimeout(resolve, 300));
-          } catch (syncErr: any) {
-            console.info(`[WooCommerce Sync] Aviso procesando "${b.name}":`, syncErr.message);
-          }
-        }
-      } else if (!matchingWp) {
-        // Business does NOT exist in WooCommerce at all! Push it!
-        console.log(`[WooCommerce Sync] Exportando empresa local "${b.name}" a empresasencarmen.com...`);
-        const exportRes = await exportBusinessToWooCommerce(b, authHeader);
-        if (exportRes.success && exportRes.wpId) {
-          pushedToWpCount++;
-          const oldId = b.id;
-          b.oldId = oldId;
-          b.id = exportRes.wpId;
-          if (exportRes.permalink) b.permalink = exportRes.permalink;
-          if (exportRes.slug) b.slug = exportRes.slug;
-          b.source = 'synced';
-          b.isNewSubmission = false;
-
-          existingMap.delete(Number(oldId));
-          existingMap.set(exportRes.wpId, b);
-
-          if (isMariaDbActive()) {
-            try {
-              if (oldId !== b.id) await dbDeleteBusiness(oldId);
-              await dbSaveBusiness(b);
-            } catch (_) {}
-          }
-          
-          console.log(`[WooCommerce Sync] ¡Empresa "${b.name}" exportada y creada exitosamente en WordPress WooCommerce ID #${exportRes.wpId}!`);
-        } else {
-          console.warn(`[WooCommerce Sync] No se pudo exportar "${b.name}" a WooCommerce:`, exportRes.error);
-        }
-      }
-    }
-
-    businessesCache = Array.from(existingMap.values());
-    console.log(`[WooCommerce Sync] Sincronización bidireccional exitosa: ${businessesCache.length} comercios totales (${newCount} importados, ${pushedToWpCount} exportados a WordPress).`);
-
-    // Save updated catalog to disk
-    try {
-      const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
-      fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
-    } catch (_) {}
-
-
-
-    // Save to Hostinger MariaDB
-    if (isMariaDbActive()) {
-      for (const b of businessesCache) {
-        dbSaveBusiness(b).catch(() => {});
-      }
-    }
-
-    return { count: businessesCache.length, newCount, pushedToWpCount };
-  } catch (err: any) {
-    console.info('[WooCommerce Sync] Aviso:', err.message);
-    return { count: businessesCache.length, newCount: 0, pushedToWpCount: 0 };
-  }
-}
-
-// Initial background sync from WooCommerce on startup (only if explicitly enabled)
-if (!process.env.VERCEL && IS_WP_SYNC_ENABLED) {
-  setTimeout(() => {
-    syncAllWooCommerceProducts().catch(() => {});
-  }, 5000);
-}
+const purgeWordPressCache = purgePortalCache;
 
 // Helper to check duplicates by phone or normalized name
 function findDuplicateBusiness(name?: string, phone?: string) {
@@ -3140,61 +2426,13 @@ app.post('/api/submit-business', async (req: Request, res: Response) => {
       }
     }
 
-    // Attempt WordPress WooCommerce REST API integration if credentials are configured
-    let publishedToWordPress = false;
-    let wpPermalink: string | null = null;
-    let wpProductId: number | null = null;
-
-    const authHeader = getWpAuthHeader();
-
-    if (authHeader) {
-      try {
-        const exportRes = await exportBusinessToWooCommerce(newBiz, authHeader);
-
-        if (exportRes.success && exportRes.wpId) {
-          publishedToWordPress = true;
-          wpProductId = exportRes.wpId;
-          wpPermalink = exportRes.permalink || null;
-          newBiz.oldId = newId;
-          newBiz.id = exportRes.wpId;
-          if (exportRes.permalink) newBiz.permalink = exportRes.permalink;
-          if (exportRes.slug) newBiz.slug = exportRes.slug;
-          newBiz.source = 'synced';
-          newBiz.isNewSubmission = false;
-
-          // Re-sync with MariaDB and Firestore with the official WordPress product ID
-          if (isMariaDbActive()) {
-            try {
-              await dbDeleteBusiness(newId);
-              await dbSaveBusiness(newBiz);
-            } catch (_) {}
-          }
-
-          
-
-          try {
-            const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
-            fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
-          } catch (_) {}
-
-          console.log(`[WordPress] Empresa "${newBiz.name}" publicada automáticamente en WordPress WooCommerce ID #${wpProductId}.`);
-        } else {
-          console.warn('[WordPress] Error al sincronizar con WordPress:', exportRes.error);
-        }
-      } catch (wpErr: any) {
-        console.warn('[WordPress] Error al sincronizar con WordPress:', wpErr.message);
-      }
-    }
-
     return res.status(201).json({
       success: true,
-      message: publishedToWordPress
-        ? '¡Empresa registrada y publicada con éxito en el directorio y en WordPress!'
-        : '¡Empresa registrada con éxito en el directorio!',
+      message: '¡Empresa registrada con éxito en el directorio!',
       business: newBiz,
-      publishedToWordPress,
-      wpPermalink,
-      wpProductId
+      publishedToWordPress: false,
+      wpPermalink: null,
+      wpProductId: null
     });
   } catch (err: any) {
     console.error('Error en submit-business:', err);
@@ -3275,59 +2513,7 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
       cachedDbSignature = null;
     }
 
-    // Sync update with WordPress WooCommerce if credentials exist
-    const authHeader = getWpAuthHeader();
-    if (authHeader) {
-      try {
-        const cleanDesc = cleanWooCommerceDescription(updated.description || updated.name);
-        const fichaShortcode = buildFichaEmpresaShortcode(updated);
-        const catPayload = resolveWooCommerceCategoryIds(updated);
-        const wpImages = buildWooCommerceImagesPayload(updated);
-
-        const putBody: any = {
-          name: updated.name,
-          slug: updated.slug,
-          categories: catPayload,
-          description: `<p>${cleanDesc}</p>`,
-          short_description: fichaShortcode,
-          meta_data: [
-            { key: 'telefono', value: updated.phone || '' },
-            { key: 'phone', value: updated.phone || '' },
-            { key: 'whatsapp', value: updated.whatsapp || updated.phone || '' },
-            { key: 'direccion', value: updated.address || '' },
-            { key: 'address', value: updated.address || '' },
-            { key: 'colonia', value: updated.colonia || '' },
-            { key: 'horario', value: updated.schedule || '' },
-            { key: 'pagos', value: updated.payment || '' },
-            { key: 'envio', value: updated.delivery || '' },
-            { key: 'facebook', value: updated.facebook || '' },
-            { key: 'website', value: updated.website || '' }
-          ]
-        };
-
-        // Only re-upload images to WooCommerce if the user explicitly provided a new image or gallery
-        if (wpImages.length > 0 && (req.body.image || req.body.gallery)) {
-          putBody.images = wpImages;
-        }
-
-        fetch(`https://empresasencarmen.com/wp-json/wc/v3/products/${id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': authHeader
-          },
-          body: JSON.stringify(putBody)
-        }).then(async (wpRes) => {
-          if (wpRes.status === 404) {
-            // Product does not exist on WordPress yet, export it as a new product!
-            await exportBusinessToWooCommerce(updated, authHeader);
-          } else if (wpRes.ok) {
-            purgeWordPressCache([updated.slug, ...(updated.previousSlugs || [])]);
-          }
-        }).catch(err => console.warn('[WooCommerce Update] Error:', err.message));
-        purgeWordPressCache([updated.slug, ...(updated.previousSlugs || [])]);
-      } catch (_) {}
-    }
+    purgePortalCache([updated.slug, ...(updated.previousSlugs || [])]);
 
     return res.json({ success: true, message: 'Empresa actualizada con éxito', business: updated });
   } catch (err: any) {
@@ -3337,80 +2523,11 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
 
 // Force sync a single business to WordPress WooCommerce with full category & interactive contact buttons
 app.post('/api/businesses/:id/sync-wp', async (req: Request, res: Response) => {
-  try {
-    const id = req.params.id;
-    const biz = businessesCache.find(b => String(b.id) === id || String(b.oldId) === id);
-    if (!biz) {
-      return res.status(404).json({ success: false, message: 'Empresa no encontrada' });
-    }
-
-    const authHeader = getWpAuthHeader();
-    if (!authHeader) {
-      return res.status(400).json({ success: false, message: 'Credenciales de WordPress/WooCommerce no configuradas en el servidor.' });
-    }
-
-    const catPayload = resolveWooCommerceCategoryIds(biz);
-    const cleanDesc = cleanWooCommerceDescription(biz.description || biz.name);
-    const fichaShortcode = buildFichaEmpresaShortcode(biz);
-    const wpImages = buildWooCommerceImagesPayload(biz);
-
-    const checkRes = await fetch(`https://empresasencarmen.com/wp-json/wc/v3/products/${biz.id}`, {
-      headers: { 'Authorization': authHeader }
-    });
-
-    if (checkRes.ok) {
-      const syncBody: any = {
-        name: biz.name,
-        slug: biz.slug,
-        categories: catPayload,
-        description: `<p>${cleanDesc}</p>`,
-        short_description: fichaShortcode,
-        meta_data: [
-          { key: 'telefono', value: String(biz.phone || '') },
-          { key: 'phone', value: String(biz.phone || '') },
-          { key: 'whatsapp', value: String(biz.whatsapp || biz.phone || '') },
-          { key: 'direccion', value: String(biz.address || '') },
-          { key: 'address', value: String(biz.address || '') },
-          { key: 'colonia', value: String(biz.colonia || '') },
-          { key: 'horario', value: String(biz.schedule || '') },
-          { key: 'pagos', value: String(biz.payment || '') },
-          { key: 'envio', value: String(biz.delivery || '') },
-          { key: 'facebook', value: String(biz.facebook || '') },
-          { key: 'website', value: String(biz.website || '') }
-        ]
-      };
-
-      if (wpImages.length > 0) {
-        syncBody.images = wpImages;
-      }
-
-      const updateRes = await fetch(`https://empresasencarmen.com/wp-json/wc/v3/products/${biz.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': authHeader
-        },
-        body: JSON.stringify(syncBody)
-      });
-
-      if (updateRes.ok) {
-        const data: any = await updateRes.json();
-        purgeWordPressCache([biz.slug, ...(biz.previousSlugs || [])]);
-        return res.json({
-          success: true,
-          message: `¡Empresa "${biz.name}" actualizada con éxito en WordPress con categorías y botones de contacto!`,
-          permalink: data.permalink,
-          wpId: data.id
-        });
-      }
-    }
-
-    // If not found by ID or check failed, try exporting as new product
-    const expRes = await exportBusinessToWooCommerce(biz, authHeader);
-    return res.json(expRes);
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
+  return res.status(410).json({
+    success: false,
+    disabled: true,
+    message: 'La sincronización con WordPress/WooCommerce ha sido desactivada definitivamente. La empresa opera de forma 100% autónoma en MariaDB Hostinger.'
+  });
 });
 
 // Helper to save active pins to disk
@@ -3568,128 +2685,38 @@ app.delete(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res:
       cachedDbSignature = null;
     }
 
-    // Sync deletion with WordPress WooCommerce if credentials exist
-    const authHeader = getWpAuthHeader();
-    if (authHeader) {
-      try {
-        fetch(`https://empresasencarmen.com/wp-json/wc/v3/products/${id}?force=true`, {
-          method: 'DELETE',
-          headers: { 'Authorization': authHeader }
-        }).catch(err => console.warn('[WooCommerce Delete] Error:', err.message));
-      } catch (_) {}
-    }
-
-    return res.json({ success: true, message: `Negocio "${deleted.name}" dado de baja y eliminado con éxito tanto del directorio como de WordPress.` });
+    return res.json({ success: true, message: `Negocio "${deleted.name}" dado de baja y eliminado con éxito del directorio y de MariaDB.` });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// Sync WordPress
+// Endpoints autónomos de compatibilidad para WordPress / WooCommerce (Desactivados definitivamente)
 app.post('/api/sync', async (_req: Request, res: Response) => {
-  try {
-    const result = await syncAllWooCommerceProducts();
-    const parts: string[] = [];
-    if (result.newCount > 0) {
-      parts.push(`${result.newCount} nuevos comercios importados de WordPress`);
-    }
-    if (result.pushedToWpCount > 0) {
-      parts.push(`${result.pushedToWpCount} comercios locales publicados en WordPress`);
-    }
-    const detailMsg = parts.length > 0 ? parts.join(' y ') : 'ambas plataformas ya estaban perfectamente sincronizadas';
-    return res.json({
-      success: true,
-      message: `Sincronización bidireccional exitosa: ${result.count} comercios totales activos (${detailMsg}).`,
-      count: result.count,
-      newCount: result.newCount,
-      pushedToWpCount: result.pushedToWpCount,
-      categoriesCount: categoriesCache.length,
-      timestamp: new Date().toISOString()
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: 'Error durante la sincronización: ' + err.message });
-  }
+  return res.status(410).json({
+    success: false,
+    disabled: true,
+    message: 'La sincronización con WordPress/WooCommerce ha sido desactivada definitivamente. El directorio opera en modo 100% autónomo sobre MariaDB Hostinger.'
+  });
 });
 
-// WooCommerce Webhook for real-time synchronization from WordPress
-app.post('/api/webhook/woocommerce', async (req: Request, res: Response) => {
-  try {
-    const topic = (req.headers['x-wc-webhook-topic'] as string) || '';
-    const body = req.body;
-
-    console.log(`[WooCommerce Webhook] Evento recibido: ${topic}`, body?.id, body?.name);
-
-    if (!body || !body.id) {
-      return res.status(200).json({ success: true, message: 'Webhook ignorado (sin datos de producto)' });
-    }
-
-    if (topic === 'product.deleted') {
-      const id = body.id;
-      businessesCache = businessesCache.filter(b => String(b.id) !== String(id));
-      if (isMariaDbActive()) {
-        await dbDeleteBusiness(id);
-      }
-      return res.json({ success: true, message: `Producto ${id} eliminado en Hostinger MariaDB` });
-    }
-
-    // Product created or updated
-    const norm = parseWooCommerceProduct(body);
-    const existingIdx = businessesCache.findIndex(b => String(b.id) === String(norm.id));
-    if (existingIdx !== -1) {
-      businessesCache[existingIdx] = norm;
-    } else {
-      businessesCache.unshift(norm);
-    }
-
-    // Persist to Hostinger MariaDB
-    if (isMariaDbActive()) {
-      await dbSaveBusiness(norm);
-    }
-
-    return res.json({
-      success: true,
-      message: `Producto "${norm.name}" sincronizado en tiempo real a Hostinger MariaDB`,
-      businessId: norm.id
-    });
-  } catch (err: any) {
-    console.warn('[WooCommerce Webhook] Error:', err.message);
-    return res.status(500).json({ success: false, error: err.message });
-  }
+app.post('/api/webhook/woocommerce', async (_req: Request, res: Response) => {
+  return res.status(410).json({
+    success: false,
+    disabled: true,
+    message: 'El webhook de WooCommerce ha sido desactivado permanentemente en favor de MariaDB Hostinger.'
+  });
 });
 
-// WordPress Health check (Reporta modo autónomo sin llamadas de red si está desvinculado)
 app.get('/api/health-wp', async (_req: Request, res: Response) => {
-  if (!IS_WP_SYNC_ENABLED) {
-    return res.json({
-      connected: false,
-      status: 'autonomous',
-      statusCode: 200,
-      autonomousMode: true,
-      message: 'Modo 100% Autónomo activo. Sin dependencias externas de WordPress ni WooCommerce.',
-      lastChecked: new Date().toISOString()
-    });
-  }
-  try {
-    const ping = await fetch('https://empresasencarmen.com/', {
-      method: 'HEAD',
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
-    return res.json({
-      connected: ping.ok,
-      status: ping.ok ? 'online' : 'error',
-      statusCode: ping.status,
-      siteUrl: 'https://empresasencarmen.com',
-      lastChecked: new Date().toISOString()
-    });
-  } catch (err: any) {
-    return res.json({
-      connected: false,
-      status: 'unreachable',
-      error: err.message,
-      siteUrl: 'https://empresasencarmen.com',
-      lastChecked: new Date().toISOString()
-    });
-  }
+  return res.json({
+    connected: false,
+    status: 'decommissioned',
+    statusCode: 410,
+    autonomousMode: true,
+    message: 'WordPress y WooCommerce han sido dados de baja definitivamente. La plataforma opera de forma 100% autónoma sobre MariaDB Hostinger.',
+    lastChecked: new Date().toISOString()
+  });
 });
 
 // Reports endpoints
@@ -7954,51 +6981,13 @@ app.post('/api/businesses/approve-candidate', async (req: Request, res: Response
     let wpPermalink: string | null = null;
     let wpProductId: number | null = null;
 
-    const authHeader = getWpAuthHeader();
-    if (authHeader) {
-      try {
-        console.log(`[WooCommerce REST] Exportando "${newBiz.name}" a empresasencarmen.com...`);
-        const exportRes = await exportBusinessToWooCommerce(newBiz, authHeader);
-        if (exportRes.success && exportRes.wpId) {
-          publishedToWordPress = true;
-          wpProductId = exportRes.wpId;
-          wpPermalink = exportRes.permalink || null;
-          newBiz.oldId = newId;
-          newBiz.id = exportRes.wpId;
-          if (exportRes.permalink) newBiz.permalink = exportRes.permalink;
-          if (exportRes.slug) newBiz.slug = exportRes.slug;
-          newBiz.source = 'synced';
-
-          // Actualizar registros con el ID oficial de WordPress
-          if (isMariaDbActive()) {
-            try {
-              await dbDeleteBusiness(newId);
-              await dbSaveBusiness(newBiz);
-            } catch (_) {}
-          }
-          
-          try {
-            const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
-            fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
-          } catch (_) {}
-          console.log(`[WooCommerce REST] ¡Empresa "${newBiz.name}" publicada con éxito en empresasencarmen.com (ID #${wpProductId})!`);
-        } else {
-          console.warn('[WooCommerce REST] Advertencia al exportar:', exportRes.error);
-        }
-      } catch (wpErr: any) {
-        console.warn('[WooCommerce REST] Error en exportación a empresasencarmen.com:', wpErr.message);
-      }
-    }
+    // Integración WooCommerce desactivada
 
     res.json({
       success: true,
       business: newBiz,
-      wpSynced: publishedToWordPress,
-      wpPermalink,
-      wpProductId,
-      message: publishedToWordPress
-        ? `¡Éxito! "${newBiz.name}" se publicó tanto en encarmen.org como en empresasencarmen.com (ID #${wpProductId}).`
-        : `¡Éxito! "${newBiz.name}" se publicó en el directorio de encarmen.org.`
+      wpSynced: false,
+      message: `¡Éxito! "${newBiz.name}" se publicó en el directorio de encarmen.org.`
     });
   } catch (err: any) {
     console.error('[Approve Candidate Error]:', err);
@@ -8018,8 +7007,6 @@ app.post('/api/businesses/approve-multiple-candidates', async (req: Request, res
     }
 
     const publishedList: any[] = [];
-    const authHeader = getWpAuthHeader();
-
     for (const cand of candidates) {
       if (!cand.name || !cand.phone) continue;
       const cleanPhone = cand.phone.replace(/\D/g, '');
@@ -8083,18 +7070,7 @@ app.post('/api/businesses/approve-multiple-candidates', async (req: Request, res
 
       businessesCache.unshift(newBiz);
 
-      if (authHeader) {
-        try {
-          const exportRes = await exportBusinessToWooCommerce(newBiz, authHeader);
-          if (exportRes.success && exportRes.wpId) {
-            newBiz.oldId = newId;
-            newBiz.id = exportRes.wpId;
-            if (exportRes.permalink) newBiz.permalink = exportRes.permalink;
-            if (exportRes.slug) newBiz.slug = exportRes.slug;
-            newBiz.source = 'synced';
-          }
-        } catch (_) {}
-      }
+      // WooCommerce export removido
 
       if (isMariaDbActive()) {
         try {

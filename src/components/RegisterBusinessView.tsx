@@ -271,6 +271,9 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
+    } else {
+      setDuplicateWarning(null);
+      setErrorMessage(null);
     }
 
     setIsSubmitting(true);
@@ -288,6 +291,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
       const formattedBizName = formatBusinessName(formData.name.trim());
       const res = await submitBusinessRegistration({
         ...formData,
+        allowDuplicate: Boolean(allowDuplicate),
         name: formattedBizName,
         address: formatAddressText(formData.address),
         delivery: deliveryStr,
@@ -303,11 +307,8 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
 
       if (res.success) {
         setDuplicateWarning(null);
+        setErrorMessage(null);
         setIsSuccess(true);
-        if (res.publishedToWordPress) {
-          setIsWpPublished(true);
-          setWpPermalink(res.wpPermalink || null);
-        }
         if (res.business) {
           setRegisteredBusiness(res.business);
           if (onBusinessAdded) onBusinessAdded(res.business);
@@ -505,7 +506,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
         </div>
       )}
 
-      {errorMessage && (
+      {errorMessage && !duplicateWarning && (
         <div
           className="p-4 rounded-2xl text-rose-900 text-xs font-bold flex items-center gap-2 shadow-sm"
           style={{
