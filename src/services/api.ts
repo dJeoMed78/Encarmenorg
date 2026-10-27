@@ -451,7 +451,7 @@ export async function adminUpdateBusiness(id: number, data: Partial<import('../t
   try {
     const res = await fetch(`${API_BASE}/businesses/${id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(sessionStorage.getItem('encarmen_admin_session_token') ? { 'X-Encarmen-Admin-Token': sessionStorage.getItem('encarmen_admin_session_token')! } : {}) },
       body: JSON.stringify(data)
     });
     return await parseJsonResponse(res, 'Error al actualizar negocio');
