@@ -321,6 +321,9 @@ export function BusinessDetailModal({
                 <ExternalLink className="w-4 h-4 text-sky-600" />
                 <span>Landing Page</span>
               </button>
+              <p className="col-span-full text-center text-[11px] text-slate-600 break-all" aria-label="Dirección pública de la página del negocio">
+                https://encarmen.org/negocio/{business.slug || business.id}
+              </p>
             </div>
           </div>
 
@@ -392,7 +395,7 @@ export function BusinessDetailModal({
 
             <div className="rounded-3xl p-5 space-y-3" style={innerGlassCard}>
               <h3 className="text-xs font-black uppercase text-stone-500 tracking-wider">
-                Descripción y Servicios
+                Descripción del negocio
               </h3>
               <p className="text-sm text-stone-700 leading-relaxed font-normal whitespace-pre-line">
                 {cleanDescription(business.description)}
