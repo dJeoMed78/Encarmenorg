@@ -6,6 +6,7 @@ export interface AdminAccountInfo {
 }
 
 export const ADMIN_AUTH_STORAGE_KEY = 'admin_authenticated';
+export const ADMIN_TOKEN_STORAGE_KEY = 'encarmen_admin_session_token';
 export const ADMIN_USER_STORAGE_KEY = 'admin_authenticated_user';
 export const ADMIN_EXPIRES_STORAGE_KEY = 'admin_auth_expires_at';
 export const SESSION_DURATION_MS = 6 * 60 * 60 * 1000; // 6 hours
@@ -108,6 +109,8 @@ export function clearAdminAuth(): void {
     localStorage.removeItem(ADMIN_EXPIRES_STORAGE_KEY);
 
     sessionStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+    sessionStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
     sessionStorage.removeItem(ADMIN_USER_STORAGE_KEY);
 
     window.dispatchEvent(new Event('admin-auth-changed'));
@@ -155,6 +158,7 @@ export async function loginAdminUser(
     if (res.ok) {
       const data = await res.json();
       if (data.success) {
+        if (data.token) sessionStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, data.token);
         saveAdminAuth(data.user?.username || username);
         return { success: true, user: data.user };
       }
