@@ -398,9 +398,9 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       // Backdrop clicks must not dismiss the editor during text selection.
     >
       <div
-        className="encarmen-glass-editor relative w-full max-w-4xl rounded-[32px] overflow-hidden flex flex-col my-auto max-h-[94vh]"
+        className="encarmen-glass-editor relative w-full max-w-5xl rounded-[32px] overflow-hidden flex flex-col my-auto max-h-[94vh]"
         style={{
-          background: 'linear-gradient(135deg, rgba(239, 247, 255, 0.84), rgba(255, 255, 255, 0.76) 45%, rgba(224, 239, 255, 0.84))',
+          background: 'linear-gradient(155deg, rgba(235, 244, 255, 0.92), rgba(244, 248, 255, 0.86) 44%, rgba(210, 228, 246, 0.91))',
           backdropFilter: 'blur(40px) saturate(190%)',
           WebkitBackdropFilter: 'blur(40px) saturate(190%)',
           border: '1.5px solid rgba(255, 255, 255, 0.95)',
@@ -410,6 +410,20 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       >
 
         <style>{`
+          .encarmen-glass-editor .encarmen-section-heading { display:flex;align-items:center;gap:12px;padding:5px 4px 0!important;margin-top:22px!important;background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important; }
+          .encarmen-glass-editor .encarmen-section-heading strong {display:block;color:#1e293b;font-size:15px;font-weight:850;line-height:1.3}
+          .encarmen-glass-editor .encarmen-section-heading small {display:block;color:#64748b;font-size:11px;margin-top:2px}
+          .encarmen-glass-editor .encarmen-section-icon {display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:12px;flex-shrink:0;color:#fff;box-shadow:0 5px 12px rgba(30,41,59,.15)}
+          .encarmen-glass-editor .encarmen-blue {background:linear-gradient(145deg,#4e99ff,#1d5fe6)}
+          .encarmen-glass-editor .encarmen-green {background:linear-gradient(145deg,#4cb4ff,#1464c8)}
+          .encarmen-glass-editor .encarmen-red {background:linear-gradient(145deg,#ff6d7e,#dc254c)}
+          .encarmen-glass-editor .encarmen-purple {background:linear-gradient(145deg,#ad7afa,#7c36ce)}
+          .encarmen-glass-editor .encarmen-emerald {background:linear-gradient(145deg,#36c89b,#079b70)}
+          .encarmen-glass-editor .encarmen-violet {background:linear-gradient(145deg,#b46cf1,#783bc3)}
+          .encarmen-glass-editor .encarmen-glass-form > div:not(.encarmen-section-heading) {background:rgba(255,255,255,.38);border:1px solid rgba(255,255,255,.83);box-shadow:0 6px 22px rgba(40,65,110,.055),inset 0 1px 0 rgba(255,255,255,.75);border-radius:20px;padding:16px}
+          .encarmen-glass-editor .encarmen-glass-form > div.encarmen-section-heading {background:transparent!important;border:0!important;box-shadow:none!important;padding:5px 4px 0!important}
+          .encarmen-glass-editor .encarmen-glass-form button[type="button"] {transition:transform .16s,box-shadow .16s,background .16s}
+          .encarmen-glass-editor .encarmen-glass-form button[type="button"]:active {transform:scale(.985)}
           .encarmen-glass-editor .encarmen-glass-form > div:not(.grid) {
             border-radius: 22px;
           }
@@ -520,6 +534,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           </div>
 
           {/* Name & Category */}
+          <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-blue"><Building2 size={19}/></span><span><strong>Información Básica</strong><small>Datos principales de tu negocio</small></span></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-bold text-stone-700">Nombre de la Empresa *</label>
@@ -638,6 +653,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           </div>
 
           {/* Phone & WhatsApp */}
+          <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-green"><Phone size={19}/></span><span><strong>Contacto</strong><small>Al menos un medio de contacto es obligatorio</small></span></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-bold text-stone-700">Teléfono (10 dígitos)</label>
@@ -687,6 +703,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           </div>
 
           {/* Address, Postal Code & Colonia */}
+          <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-red"><MapPin size={19}/></span><span><strong>Ubicación</strong><small>Indica la dirección de tu negocio</small></span></div>
           <div className="space-y-1">
             <label className="text-xs font-bold text-stone-700">Dirección Física Exacta</label>
             <input
@@ -757,6 +774,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           </div>
 
           {/* Modalidad de Atención y Entrega (Multiselección) */}
+          <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-purple"><Truck size={19}/></span><span><strong>Modalidad de Atención y Entrega</strong><small>Selecciona una o más opciones</small></span></div>
           <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 border border-stone-200">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
@@ -804,6 +822,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           </div>
 
           {/* Métodos de Pago Aceptados (Multiselección) */}
+          <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-emerald"><CreditCard size={19}/></span><span><strong>Métodos de Pago</strong><small>Selecciona las formas de pago que aceptas</small></span></div>
           <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 border border-stone-200">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
@@ -850,6 +869,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           </div>
 
           {/* Horario Comercial */}
+          <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-violet"><Clock size={19}/></span><span><strong>Horarios de Atención</strong><small>Indica los días y horarios de tu negocio</small></span></div>
           <div className="space-y-1">
             <label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-sky-600" />
@@ -910,6 +930,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           </div>
 
           {/* Image Upload / URL */}
+          <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-blue"><Upload size={19}/></span><span><strong>Fotografías de tu Negocio</strong><small>Personaliza tu imagen y galería</small></span></div>
           <div className="space-y-1 pt-1">
             <label className="text-xs font-bold text-stone-700 flex items-center justify-between">
               <span>Fotografía / Logotipo</span>
