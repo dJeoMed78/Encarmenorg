@@ -86,6 +86,7 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
   const [generatingPinId, setGeneratingPinId] = useState<number | null>(null);
   const [copiedPinId, setCopiedPinId] = useState<number | null>(null);
   const [businessToDelete, setBusinessToDelete] = useState<Business | null>(null);
+  const [syncNotice, setSyncNotice] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
 
 

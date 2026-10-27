@@ -17,6 +17,8 @@ import seedBusinesses from './data/businesses_seed.json';
 import seedPromotions from './data/promotions_seed.json';
 import seedEvents from './data/events_carmen.json';
 import seedRatings from '../ratings_db.json';
+import ALL_COLONIAS_CARMEN from './data/colonias_carmen.json';
+import { getRealBusinessRating } from './utils/realRatings';
 import { EventsPage } from './components/EventsPage';
 import { ClassifiedsView } from './components/ClassifiedsView';
 import { RegisterBusinessView } from './components/RegisterBusinessView';
@@ -729,7 +731,7 @@ export default function App() {
           isOpen={!!editingBusiness}
           onClose={() => setEditingBusiness(null)}
           categories={categoriasList.map((c) => ({ id: c, name: c })) as any}
-          coloniasList={[]}
+          coloniasList={ALL_COLONIAS_CARMEN.map((name) => ({ name, count: 0 }))}
           onSave={handleSaveBusiness}
         />
         <ClaimCouponModal
@@ -1245,7 +1247,7 @@ export default function App() {
         isOpen={!!editingBusiness}
         onClose={() => setEditingBusiness(null)}
         categories={categoriasList.map((c) => ({ id: c, name: c })) as any}
-        coloniasList={[]}
+        coloniasList={ALL_COLONIAS_CARMEN.map((name) => ({ name, count: 0 }))}
         onSave={handleSaveBusiness}
       />
 

@@ -26,6 +26,7 @@ import {
   getColoniasForPostalCode,
   CARMEN_POSTAL_CODES_MAP
 } from '../data/carmen_postal_codes';
+import ALL_COLONIAS_CARMEN from '../data/colonias_carmen.json';
 
 import {
   STANDARDIZED_DELIVERY_OPTIONS,
@@ -34,12 +35,75 @@ import {
 
 export { STANDARDIZED_DELIVERY_OPTIONS, STANDARDIZED_PAYMENT_OPTIONS };
 
+function ensureArray(val: any): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map(v => (typeof v === 'string' ? v : String(v || ''))).filter(Boolean);
+  if (typeof val === 'string' && val.trim()) {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed.map(v => (typeof v === 'string' ? v : String(v || ''))).filter(Boolean);
+    } catch {}
+    return [val.trim()];
+  }
+  return [];
+}
+
+function ensureString(val: any, fallback = ''): string {
+  if (typeof val === 'string') return val;
+  if (val === null || val === undefined) return fallback;
+  return String(val);
+}
+
+class ModalErrorBoundary extends React.Component<
+  { children: React.ReactNode; onClose: () => void },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('ModalErrorBoundary caught error in EditBusinessModal:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 text-center space-y-4">
+          <div className="w-12 h-12 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto text-xl font-black">
+            !
+          </div>
+          <h4 className="text-base font-bold text-stone-900">
+            No se pudo cargar la edición de este registro
+          </h4>
+          <p className="text-xs text-stone-600 max-w-sm mx-auto">
+            Los datos de esta empresa tienen un formato que no pudo procesarse correctamente.
+          </p>
+          <button
+            type="button"
+            onClick={this.props.onClose}
+            className="px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-black shadow-md cursor-pointer"
+          >
+            Cerrar Ventana
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 interface EditBusinessModalProps {
   business: Business | null;
   isOpen: boolean;
   onClose: () => void;
-  categories: Category[];
-  coloniasList: { name: string; count: number }[];
+  categories?: Category[];
+  coloniasList?: { name: string; count: number }[];
   onSave: (id: number, updatedData: Partial<Business>) => Promise<{ success: boolean; message: string }>;
 }
 
@@ -65,14 +129,15 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
     const list: { name: string; id?: number | string }[] = [];
     const seen = new Set<string>();
 
-    categories.forEach(c => {
-      if (c && c.name && !seen.has(c.name.toLowerCase().trim())) {
+    const safeCats = Array.isArray(categories) ? categories : [];
+    safeCats.forEach(c => {
+      if (c && typeof c.name === 'string' && !seen.has(c.name.toLowerCase().trim())) {
         seen.add(c.name.toLowerCase().trim());
         list.push({ name: c.name.trim(), id: c.id || c.slug });
       }
-      if ((c as any).subcategories && Array.isArray((c as any).subcategories)) {
+      if (c && (c as any).subcategories && Array.isArray((c as any).subcategories)) {
         (c as any).subcategories.forEach((sub: any) => {
-          if (sub && sub.name && !seen.has(sub.name.toLowerCase().trim())) {
+          if (sub && typeof sub.name === 'string' && !seen.has(sub.name.toLowerCase().trim())) {
             seen.add(sub.name.toLowerCase().trim());
             list.push({ name: sub.name.trim(), id: sub.id || sub.slug });
           }
@@ -84,82 +149,109 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
     return list;
   }, [categories]);
 
+  const availableColonias = useMemo(() => {
+    if (postalCode) {
+      const byCp = getColoniasForPostalCode(postalCode);
+      if (Array.isArray(byCp) && byCp.length > 0) return byCp;
+    }
+    if (Array.isArray(coloniasList) && coloniasList.length > 0) {
+      const mapped = coloniasList
+        .map(c => (typeof c === 'string' ? c : c?.name || ''))
+        .filter(Boolean);
+      if (mapped.length > 0) return mapped;
+    }
+    return ALL_COLONIAS_CARMEN;
+  }, [postalCode, coloniasList]);
+
+  const safePreviousSlugs = useMemo(() => {
+    return ensureArray(business?.previousSlugs);
+  }, [business?.previousSlugs]);
+
   useEffect(() => {
     if (business) {
-      const initialCol = business.colonia || 'Ciudad del Carmen Centro';
-      const initialCp = business.postalCode || getPostalCodeForColonia(initialCol);
-      setPostalCode(initialCp);
+      try {
+        const initialCol = (typeof business.colonia === 'string' && business.colonia) || 'Ciudad del Carmen Centro';
+        const initialCp = (typeof business.postalCode === 'string' && business.postalCode) || getPostalCodeForColonia(initialCol);
+        setPostalCode(initialCp);
 
-      // Parse existing delivery into multi-select
-      const rawDel = (business.delivery || '').trim();
-      const rawDelLow = rawDel.toLowerCase();
-      const existingParts = rawDel.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-      const initialDel = STANDARDIZED_DELIVERY_OPTIONS.filter(opt => {
-        const oLow = opt.toLowerCase();
-        // Exact match with whole string or part
-        if (existingParts.some(p => p === oLow || p.includes(oLow)) || rawDelLow.includes(oLow)) return true;
-        // Specific semantic match per option
-        if (opt === 'Atención en el Local de la empresa') {
-          return existingParts.some(p => (p.includes('local') && !p.includes('paqueter')) || p.includes('mostrador') || p.includes('sucursal') || p.includes('tienda'));
-        }
-        if (opt === 'Servicio a domicilio gratis') {
-          return existingParts.some(p => p.includes('gratis') || p.includes('sin costo'));
-        }
-        if (opt === 'Servicio a domicilio con costo') {
-          return existingParts.some(p => p.includes('con costo') || p.includes('costo') || p.includes('mandadito') || (p.includes('domicilio') && !p.includes('gratis') && !p.includes('cliente')));
-        }
-        if (opt === 'Servicio a domicilio en el lugar del cliente') {
-          return existingParts.some(p => p.includes('lugar del cliente') || p.includes('en sitio') || p.includes('a domicilio en el lugar'));
-        }
-        if (opt === 'Envíos por paquetería local y foránea') {
-          return existingParts.some(p => p.includes('paqueter') || p.includes('foráneo') || p.includes('foranea') || (p.includes('envío') && !p.includes('domicilio')));
-        }
-        return false;
-      });
-      const parsedDel = initialDel.length > 0 ? initialDel : ['Atención en el Local de la empresa'];
-      setSelectedDeliveryOptions(parsedDel);
+        // Parse existing delivery into multi-select
+        const rawDel = ensureString(business.delivery).trim();
+        const rawDelLow = rawDel.toLowerCase();
+        const existingParts = rawDel ? rawDel.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+        const initialDel = STANDARDIZED_DELIVERY_OPTIONS.filter(opt => {
+          const oLow = opt.toLowerCase();
+          // Exact match with whole string or part
+          if (existingParts.some(p => p === oLow || p.includes(oLow)) || rawDelLow.includes(oLow)) return true;
+          // Specific semantic match per option
+          if (opt === 'Atención en el Local de la empresa') {
+            return existingParts.some(p => (p.includes('local') && !p.includes('paqueter')) || p.includes('mostrador') || p.includes('sucursal') || p.includes('tienda'));
+          }
+          if (opt === 'Servicio a domicilio gratis') {
+            return existingParts.some(p => p.includes('gratis') || p.includes('sin costo'));
+          }
+          if (opt === 'Servicio a domicilio con costo') {
+            return existingParts.some(p => p.includes('con costo') || p.includes('costo') || p.includes('mandadito') || (p.includes('domicilio') && !p.includes('gratis') && !p.includes('cliente')));
+          }
+          if (opt === 'Servicio a domicilio en el lugar del cliente') {
+            return existingParts.some(p => p.includes('lugar del cliente') || p.includes('en sitio') || p.includes('a domicilio en el lugar'));
+          }
+          if (opt === 'Envíos por paquetería local y foránea') {
+            return existingParts.some(p => p.includes('paqueter') || p.includes('foráneo') || p.includes('foranea') || (p.includes('envío') && !p.includes('domicilio')));
+          }
+          return false;
+        });
+        const parsedDel = initialDel.length > 0 ? initialDel : ['Atención en el Local de la empresa'];
+        setSelectedDeliveryOptions(parsedDel);
 
-      // Parse existing payments into multi-select
-      const rawPay = (business.payment || '').toLowerCase();
-      const initialPay = STANDARDIZED_PAYMENT_OPTIONS.filter(opt => {
-        const oLow = opt.toLowerCase();
-        if (oLow.includes('efectivo') && rawPay.includes('efectivo')) return true;
-        if (oLow.includes('tarjeta') && rawPay.includes('tarjeta')) return true;
-        if (oLow.includes('transferencia') && (rawPay.includes('transferencia') || rawPay.includes('spei'))) return true;
-        if (oLow.includes('codi') && rawPay.includes('codi')) return true;
-        if (oLow.includes('contra entrega') && rawPay.includes('contra entrega')) return true;
-        return false;
-      });
-      const parsedPay = initialPay.length > 0 ? initialPay : ['Efectivo', 'Transferencia Bancaria (SPEI)'];
-      setSelectedPaymentOptions(parsedPay);
+        // Parse existing payments into multi-select
+        const rawPay = ensureString(business.payment).toLowerCase();
+        const initialPay = STANDARDIZED_PAYMENT_OPTIONS.filter(opt => {
+          const oLow = opt.toLowerCase();
+          if (oLow.includes('efectivo') && rawPay.includes('efectivo')) return true;
+          if (oLow.includes('tarjeta') && rawPay.includes('tarjeta')) return true;
+          if (oLow.includes('transferencia') && (rawPay.includes('transferencia') || rawPay.includes('spei'))) return true;
+          if (oLow.includes('codi') && rawPay.includes('codi')) return true;
+          if (oLow.includes('contra entrega') && rawPay.includes('contra entrega')) return true;
+          return false;
+        });
+        const parsedPay = initialPay.length > 0 ? initialPay : ['Efectivo', 'Transferencia Bancaria (SPEI)'];
+        setSelectedPaymentOptions(parsedPay);
 
-      setFormData({
-        name: business.name || '',
-        category: business.categories?.[0] || 'Servicios',
-        categories: business.categories || [],
-        description: business.description || '',
-        phone: cleanPhoneNumber(business.phone) || '',
-        whatsapp: cleanPhoneNumber(business.whatsapp) || cleanPhoneNumber(business.phone) || '',
-        address: business.address || '',
-        colonia: initialCol,
-        postalCode: initialCp,
-        schedule: business.schedule || 'Lunes a Sábado',
-        payment: parsedPay.join(', '),
-        delivery: parsedDel.join(', '),
-        hasDelivery: parsedDel.some(d => d.toLowerCase().includes('domicilio') || d.toLowerCase().includes('envío')),
-        facebook: business.facebook || '',
-        instagram: business.instagram || '',
-        website: business.website || '',
-        image: business.image || '',
-        gallery: business.gallery || [],
-        slug: business.slug || '',
-        previousSlugs: business.previousSlugs || [],
-        previousNames: business.previousNames || [],
-        isRecommended: Boolean(business.isRecommended),
-        isTopBusiness: Boolean(business.isTopBusiness)
-      });
-      setErrorMsg(null);
-      setSuccessMsg(null);
+        const safeCats = ensureArray(business.categories);
+        const safePrevSlugs = ensureArray(business.previousSlugs);
+        const safePrevNames = ensureArray(business.previousNames);
+        const safeGallery = ensureArray(business.gallery);
+
+        setFormData({
+          name: ensureString(business.name),
+          category: safeCats[0] || ensureString(business.category, 'Servicios'),
+          categories: safeCats.length > 0 ? safeCats : [ensureString(business.category, 'Servicios')],
+          description: ensureString(business.description),
+          phone: cleanPhoneNumber(ensureString(business.phone)) || '',
+          whatsapp: cleanPhoneNumber(ensureString(business.whatsapp)) || cleanPhoneNumber(ensureString(business.phone)) || '',
+          address: ensureString(business.address),
+          colonia: initialCol,
+          postalCode: initialCp,
+          schedule: ensureString(business.schedule, 'Lunes a Sábado'),
+          payment: parsedPay.join(', '),
+          delivery: parsedDel.join(', '),
+          hasDelivery: parsedDel.some(d => d.toLowerCase().includes('domicilio') || d.toLowerCase().includes('envío')),
+          facebook: ensureString(business.facebook),
+          instagram: ensureString(business.instagram),
+          website: ensureString(business.website),
+          image: ensureString(business.image),
+          gallery: safeGallery,
+          slug: ensureString(business.slug),
+          previousSlugs: safePrevSlugs,
+          previousNames: safePrevNames,
+          isRecommended: Boolean(business.isRecommended),
+          isTopBusiness: Boolean(business.isTopBusiness)
+        });
+        setErrorMsg(null);
+        setSuccessMsg(null);
+      } catch (err: any) {
+        console.error('Error initializing EditBusinessModal:', err);
+      }
     }
   }, [business, isOpen]);
 
@@ -309,6 +401,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         }}
         onClick={e => e.stopPropagation()}
       >
+        <ModalErrorBoundary onClose={onClose}>
         {/* Header */}
         <div
           className="flex items-center justify-between px-6 py-4 sticky top-0 z-10"
@@ -479,9 +572,9 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             <p className="text-[11px] text-stone-600">
               Liga final de acceso: <span className="font-mono font-bold text-amber-900">https://encarmen.org/{formData.slug || 'enlace'}</span>
             </p>
-            {business.previousSlugs && business.previousSlugs.length > 0 && (
+            {safePreviousSlugs.length > 0 && (
               <p className="text-[10px] text-amber-700/80">
-                Enlaces anteriores activos: {business.previousSlugs.map(s => `encarmen.org/${s}`).join(', ')} (redirigen automáticamente a este perfil)
+                Enlaces anteriores activos: {safePreviousSlugs.map(s => `encarmen.org/${s}`).join(', ')} (redirigen automáticamente a este perfil)
               </p>
             )}
           </div>
@@ -607,10 +700,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none bg-white font-medium"
               >
                 <option value="">Selecciona Colonia...</option>
-                {(postalCode && getColoniasForPostalCode(postalCode).length > 0
-                  ? getColoniasForPostalCode(postalCode)
-                  : (coloniasList.map(c => c.name))
-                ).map((cName, i) => (
+                {availableColonias.map((cName, i) => (
                   <option key={i} value={cName}>
                     {cName}
                   </option>
@@ -812,12 +902,12 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 Fotos de Trabajos o Servicios (Hasta 10 fotos)
               </label>
               <span className="text-[10px] font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded-full">
-                {(formData.gallery || []).length} de 10
+                {(Array.isArray(formData.gallery) ? formData.gallery : []).length} de 10
               </span>
             </div>
 
             {/* Upload button */}
-            {((formData.gallery || []).length < 10) && (
+            {((Array.isArray(formData.gallery) ? formData.gallery : []).length < 10) && (
               <div>
                 <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100/80 text-amber-950 text-xs font-bold cursor-pointer transition-colors">
                   <Upload className="w-3.5 h-3.5 text-amber-600" />
@@ -828,7 +918,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             )}
 
             {/* Gallery Thumbnails: Renders ONLY existing photos, NO empty placeholders */}
-            {(formData.gallery && formData.gallery.length > 0) && (
+            {Array.isArray(formData.gallery) && formData.gallery.length > 0 && (
               <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 pt-1">
                 {formData.gallery.map((photo, idx) => (
                   <div key={idx} className="group relative aspect-square rounded-xl overflow-hidden bg-stone-100 border border-stone-200 shadow-xs">
@@ -874,6 +964,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             </button>
           </div>
         </form>
+        </ModalErrorBoundary>
       </div>
     </div>
   );
