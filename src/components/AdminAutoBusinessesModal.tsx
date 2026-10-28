@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Search,
   Filter,
@@ -24,50 +24,130 @@ import {
   Layers,
   Sparkles,
   UploadCloud,
-  FileText
-} from 'lucide-react';
-import { AutoBusinessCandidate, Business } from '../types';
-import {
-  fetchAutoBusinessCandidates,
-  autoSearchBusinessesWithAi,
-  approveAutoBusinessCandidate,
-  approveMultipleAutoBusinessCandidates,
-  parseWhatsAppGroupBusinesses
-} from '../services/api';
-import { formatPhoneNumber } from '../utils/phone';
-import { EditBusinessModal } from './EditBusinessModal';
-import CATEGORIES_SEED from '../data/categories_seed.json';
-import { CARMEN_POSTAL_CODES_MAP } from '../data/carmen_postal_codes';
+  FileText,
+} from "lucide-react";
+import { AutoBusinessCandidate, Business } from "../types";
+import { formatPhoneNumber } from "../utils/phone";
+import { EditBusinessModal } from "./EditBusinessModal";
+import CATEGORIES_SEED from "../data/categories_seed.json";
+import { CARMEN_POSTAL_CODES_MAP } from "../data/carmen_postal_codes";
+
+// These endpoints do not currently guarantee authorization + durable DB commit.
+const RADAR_WRITE_BLOCKED = true;
+const RADAR_BLOCK_REASON =
+  "Publicación bloqueada: el backend no garantiza autorización y persistencia. Los candidatos se conservan para revisión.";
+async function readRadarResponse(
+  url: string,
+  body: object,
+  controller: AbortController,
+) {
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!response.ok)
+      throw new Error(
+        `Radar HTTP ${response.status}. No se confirmaron resultados.`,
+      );
+    const data = await response.json();
+    if (
+      !data ||
+      data.success !== true ||
+      !Array.isArray(data.candidates) ||
+      data.candidates.length > 1000
+    )
+      throw new Error(
+        "Respuesta de candidatos inválida. Se conserva la lista anterior.",
+      );
+    if (
+      data.candidates.some(
+        (c: any) =>
+          !c ||
+          typeof c.id !== "string" ||
+          !c.id ||
+          typeof (c.title ?? c.name) !== "string" ||
+          !(c.title ?? c.name).trim() ||
+          (c.sourceUrl &&
+            (typeof c.sourceUrl !== "string" ||
+              !/^https?:\/\//i.test(c.sourceUrl))),
+      )
+    )
+      throw new Error(
+        "Respuesta parcial o con fuentes inválidas. Se conserva la lista anterior.",
+      );
+    if (
+      new Set(data.candidates.map((c: any) => c.id)).size !==
+      data.candidates.length
+    )
+      throw new Error("La respuesta contiene candidatos duplicados.");
+    return data;
+  } catch (error) {
+    if (controller.signal.aborted)
+      throw new Error(
+        "La consulta se canceló o tardó demasiado. No se confirmó su resultado. Puedes reintentar.",
+      );
+    if (error instanceof SyntaxError)
+      throw new Error(
+        "Respuesta JSON inválida. Se conserva la lista anterior.",
+      );
+    if (error instanceof TypeError)
+      throw new Error(
+        "Error de conexión. No se confirmó el resultado; puedes reintentar.",
+      );
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 interface AdminAutoBusinessesModalProps {
   isOpen: boolean;
   onClose: () => void;
   onBusinessApproved?: (newBiz: Business) => void;
-  initialSource?: 'all' | 'official_group' | 'official_page' | 'whatsapp' | 'community' | 'ai';
+  initialSource?:
+    | "all"
+    | "official_group"
+    | "official_page"
+    | "whatsapp"
+    | "community"
+    | "ai";
   autoTriggerAiScan?: boolean;
 }
 
-export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> = ({
+export const AdminAutoBusinessesModal: React.FC<
+  AdminAutoBusinessesModalProps
+> = ({
   isOpen,
   onClose,
   onBusinessApproved,
-  initialSource = 'all',
-  autoTriggerAiScan = false
+  initialSource = "all",
+  autoTriggerAiScan = false,
 }) => {
   const [candidates, setCandidates] = useState<AutoBusinessCandidate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isAiScanning, setIsAiScanning] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedSource, setSelectedSource] = useState<'all' | 'official_group' | 'official_page' | 'whatsapp' | 'community' | 'ai'>(initialSource);
-  const [notice, setNotice] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedSource, setSelectedSource] = useState<
+    "all" | "official_group" | "official_page" | "whatsapp" | "community" | "ai"
+  >(initialSource);
+  const [notice, setNotice] = useState<{
+    text: string;
+    type: "success" | "error" | "info";
+  } | null>(null);
 
   // Candidate being edited in "Modificar" sub-modal
-  const [editingCandidate, setEditingCandidate] = useState<AutoBusinessCandidate | null>(null);
+  const [editingCandidate, setEditingCandidate] =
+    useState<AutoBusinessCandidate | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Source viewing modal for "Consultar Fuente"
-  const [viewingSourceCandidate, setViewingSourceCandidate] = useState<AutoBusinessCandidate | null>(null);
+  const [viewingSourceCandidate, setViewingSourceCandidate] =
+    useState<AutoBusinessCandidate | null>(null);
 
   // Approving state trackers
   const [approvingId, setApprovingId] = useState<string | null>(null);
@@ -75,217 +155,189 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
 
   // WhatsApp Group Chat Parser state
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
-  const [whatsAppRawText, setWhatsAppRawText] = useState('');
-  const [whatsAppGroupName, setWhatsAppGroupName] = useState('Empresas en Carmen - WhatsApp Oficial');
+  const [whatsAppRawText, setWhatsAppRawText] = useState("");
+  const [whatsAppGroupName, setWhatsAppGroupName] = useState(
+    "Empresas en Carmen - WhatsApp Oficial",
+  );
   const [isParsingWhatsApp, setIsParsingWhatsApp] = useState(false);
 
-  // Load candidates on modal open
+  const radarGeneration = useRef(0),
+    radarBusy = useRef(false),
+    radarController = useRef<AbortController | null>(null),
+    hiddenCandidates = useRef(new Set<string>());
+  useEffect(
+    () => () => {
+      radarGeneration.current++;
+      radarController.current?.abort();
+    },
+    [],
+  );
+  const cancelRadar = () => {
+    radarGeneration.current++;
+    radarController.current?.abort();
+    radarBusy.current = false;
+    setIsLoading(false);
+    setIsAiScanning(false);
+    setIsParsingWhatsApp(false);
+  };
+  const closeBusinessRadar = () => {
+    cancelRadar();
+    onClose();
+  };
+  // Closing/reopening invalidates old requests; hidden candidates live only in this mounted session.
   useEffect(() => {
     if (isOpen) {
-      if (initialSource) {
-        setSelectedSource(initialSource);
-      }
-      loadCandidates();
-      if (autoTriggerAiScan) {
-        setSelectedSource('ai');
-        handleScanWithAi();
-      }
-    }
+      setSelectedSource(initialSource);
+      if (autoTriggerAiScan) handleScanWithAi();
+      else loadCandidates();
+    } else cancelRadar();
   }, [isOpen, autoTriggerAiScan, initialSource]);
 
-  const loadCandidates = async () => {
-    setIsLoading(true);
+  const queryCandidates = async (ai: boolean) => {
+    if (radarBusy.current) return;
+    radarBusy.current = true;
+    const version = ++radarGeneration.current;
+    const controller = new AbortController();
+    radarController.current = controller;
+    if (ai) setIsAiScanning(true);
+    else setIsLoading(true);
     setNotice(null);
     try {
-      const res = await fetchAutoBusinessCandidates('', 'all', 'all');
-      if (res.success && Array.isArray(res.candidates)) {
-        let dismissed: string[] = [];
-        try {
-          dismissed = JSON.parse(localStorage.getItem('carmen_dismissed_candidates') || '[]');
-        } catch {}
-        const filtered = res.candidates.filter(c => {
-          const idMatch = c.id && dismissed.includes(c.id);
-          const nameMatch = c.name && dismissed.includes(c.name.toLowerCase().trim());
-          const phoneMatch = c.phone && dismissed.includes(c.phone.replace(/\D/g, ''));
-          return !idMatch && !nameMatch && !phoneMatch;
-        });
-        setCandidates(filtered);
-        if (filtered.length > 0) {
-          setNotice({
-            text: `Se detectaron ${filtered.length} negocios locales verificados en Ciudad del Carmen listos para revisión y autorización.`,
-            type: 'info'
-          });
-        }
-      } else {
-        setNotice({
-          text: res.message || 'No se pudieron recuperar empresas candidatas.',
-          type: 'error'
-        });
-      }
-    } catch (err: any) {
+      const res = await readRadarResponse(
+        ai ? "/api/businesses/auto-search-ai" : "/api/businesses/auto-search",
+        {
+          query: searchQuery,
+          category: selectedCategory,
+          source: selectedSource,
+        },
+        controller,
+      );
+      if (version !== radarGeneration.current) return;
+      const next = res.candidates.filter(
+        (c: AutoBusinessCandidate) => !hiddenCandidates.current.has(c.id),
+      );
+      setCandidates(next);
       setNotice({
-        text: err.message || 'Error al conectar con el radar de empresas.',
-        type: 'error'
+        text: `${next.length} candidatos recibidos para revisión, sin publicación. Fuente, teléfono, dirección y fecha no verificados.`,
+        type: "info",
       });
+    } catch (error: any) {
+      if (version === radarGeneration.current)
+        setNotice({
+          text:
+            error?.message ||
+            "Consulta fallida; candidatos anteriores conservados.",
+          type: "error",
+        });
     } finally {
-      setIsLoading(false);
+      if (version === radarGeneration.current) {
+        radarBusy.current = false;
+        setIsLoading(false);
+        setIsAiScanning(false);
+      }
     }
   };
-
-  // Detección con IA (30 Negocios Reales por pulsación)
-  const handleScanWithAi = async () => {
-    setIsAiScanning(true);
-    setSelectedSource('ai');
-    setNotice(null);
-    try {
-      const res = await autoSearchBusinessesWithAi(searchQuery, selectedCategory);
-      if (res.success && Array.isArray(res.candidates) && res.candidates.length > 0) {
-        setCandidates(prev => {
-          // Unir y poner al frente los candidatos detectados por IA sin duplicar teléfonos
-          const seen = new Set<string>();
-          const combined = [...res.candidates, ...prev];
-          return combined.filter(c => {
-            const key = (c.phone || c.name).toLowerCase();
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          });
-        });
-        setNotice({
-          text: `¡Detección con IA exitosa! Se localizaron ${res.candidates.length} negocios reales de Ciudad del Carmen con teléfono verificado.`,
-          type: 'success'
-        });
-      } else {
-        setNotice({
-          text: res.message || 'No se pudieron recuperar negocios con IA en este momento.',
-          type: 'error'
-        });
-      }
-    } catch (err: any) {
-      setNotice({
-        text: err.message || 'Error al conectar con el radar de IA.',
-        type: 'error'
-      });
-    } finally {
-      setIsAiScanning(false);
-    }
-  };
+  const loadCandidates = () => queryCandidates(false);
+  const handleScanWithAi = () => queryCandidates(true);
 
   // Procesar e importar texto exportado de grupos de WhatsApp
   const handleParseWhatsApp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!whatsAppRawText.trim()) {
-      alert('Por favor pega el texto exportado del chat de WhatsApp.');
-      return;
-    }
-
+    if (!whatsAppRawText.trim() || radarBusy.current) return;
+    radarBusy.current = true;
+    const version = ++radarGeneration.current;
+    const controller = new AbortController();
+    radarController.current = controller;
     setIsParsingWhatsApp(true);
-    try {
-      const res = await parseWhatsAppGroupBusinesses(whatsAppRawText, whatsAppGroupName);
-      if (res.success && Array.isArray(res.candidates) && res.candidates.length > 0) {
-        setCandidates(prev => {
-          const combined = [...res.candidates, ...prev];
-          // Eliminar duplicados por id o teléfono
-          const seen = new Set<string>();
-          return combined.filter(c => {
-            if (seen.has(c.phone)) return false;
-            seen.add(c.phone);
-            return true;
-          });
-        });
-        setNotice({
-          text: `¡Éxito! Se extrajeron y agregaron ${res.count} prospectos desde "${whatsAppGroupName}".`,
-          type: 'success'
-        });
-        setIsWhatsAppModalOpen(false);
-        setWhatsAppRawText('');
-      } else {
-        alert(res.message || 'No se detectaron negocios con teléfono de 10 dígitos.');
-      }
-    } catch (err: any) {
-      alert(err.message || 'Error al procesar el texto de WhatsApp.');
-    } finally {
-      setIsParsingWhatsApp(false);
-    }
-  };
-
-  // 1. ACEPTAR (Aprobar y publicar en encarmen.org y empresasencarmen.com)
-  const handleAccept = async (candidate: AutoBusinessCandidate) => {
-    setApprovingId(candidate.id);
     setNotice(null);
     try {
-      const res = await approveAutoBusinessCandidate(candidate);
-      if (res.success && res.business) {
-        // Mark candidate as accepted
-        setCandidates(prev =>
-          prev.map(c => (c.id === candidate.id ? { ...c, status: 'accepted' } : c))
-        );
-
-        setNotice({
-          text: `¡Éxito! "${candidate.name}" ha sido autorizada y publicada en el directorio oficial.`,
-          type: 'success'
-        });
-
-        if (onBusinessApproved) {
-          onBusinessApproved(res.business);
-        }
-      } else {
-        setNotice({
-          text: res.message || 'Error al autorizar la empresa.',
-          type: 'error'
-        });
-      }
-    } catch (err: any) {
-      setNotice({
-        text: err.message || 'Error durante la publicación de la empresa.',
-        type: 'error'
+      const res = await readRadarResponse(
+        "/api/businesses/parse-whatsapp-group",
+        { rawText: whatsAppRawText, groupName: whatsAppGroupName },
+        controller,
+      );
+      if (version !== radarGeneration.current) return;
+      setCandidates((prev) => {
+        const seen = new Set(prev.map((c) => c.id));
+        return [
+          ...res.candidates.filter(
+            (c: AutoBusinessCandidate) =>
+              !seen.has(c.id) && !hiddenCandidates.current.has(c.id),
+          ),
+          ...prev,
+        ];
       });
+      setNotice({
+        text: `${res.candidates.length} prospectos extraídos para revisión local; no publicados ni verificados.`,
+        type: "info",
+      });
+      setIsWhatsAppModalOpen(false);
+      setWhatsAppRawText("");
+    } catch (error: any) {
+      if (version === radarGeneration.current)
+        setNotice({
+          text: error?.message || "No se confirmó la extracción.",
+          type: "error",
+        });
     } finally {
-      setApprovingId(null);
+      if (version === radarGeneration.current) {
+        radarBusy.current = false;
+        setIsParsingWhatsApp(false);
+      }
     }
   };
+
+  // Approvals deliberately fail closed; no write endpoint is invoked.
+  const handleAccept = (_candidate: AutoBusinessCandidate) =>
+    setNotice({ text: RADAR_BLOCK_REASON, type: "error" });
 
   const allColoniasList = useMemo(() => {
     const allNames = Object.values(CARMEN_POSTAL_CODES_MAP).flat();
-    return Array.from(new Set(allNames)).map(name => ({ name, count: 0 }));
+    return Array.from(new Set(allNames)).map((name) => ({ name, count: 0 }));
   }, []);
 
   const allCategoriesList = useMemo(() => {
-    return (CATEGORIES_SEED as any[]).map(c => ({ id: c.id, name: c.name, slug: c.slug, count: c.count }));
+    return (CATEGORIES_SEED as any[]).map((c) => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      count: c.count,
+    }));
   }, []);
 
   const candidateToBusiness = (c: AutoBusinessCandidate): Business => {
-    const cats = Array.isArray(c.categories) && c.categories.length > 0
-      ? c.categories
-      : [c.category || 'Comercios y Servicios'];
+    const cats =
+      Array.isArray(c.categories) && c.categories.length > 0
+        ? c.categories
+        : [c.category || "Comercios y Servicios"];
     return {
-      id: typeof c.id === 'number' ? c.id : 999999,
-      name: c.name || '',
+      id: Number.isSafeInteger(Number(c.id)) ? Number(c.id) : 0,
+      name: c.name || "",
       category: c.category || cats[0],
       categories: cats,
       categorySlugs: Array.isArray(c.categorySlugs) ? c.categorySlugs : [],
-      description: c.description || '',
-      phone: c.phone || '',
-      whatsapp: c.whatsapp || c.phone || '',
-      address: c.address || 'Ciudad del Carmen, Campeche',
-      colonia: c.colonia || 'Ciudad del Carmen Centro',
-      postalCode: c.postalCode || '24100',
-      schedule: c.schedule || 'Lunes a Sábado',
-      payment: c.payment || 'Efectivo y Transferencia',
-      delivery: c.delivery || 'Atención en el Local de la empresa',
+      description: c.description || "",
+      phone: c.phone || "",
+      whatsapp: c.whatsapp || "",
+      address: c.address || "",
+      colonia: c.colonia || "",
+      postalCode: c.postalCode || "",
+      schedule: c.schedule || "",
+      payment: c.payment || "",
+      delivery: c.delivery || "",
       hasDelivery: Boolean(c.hasDelivery),
-      facebook: c.facebook || '',
-      instagram: c.instagram || '',
-      website: c.website || '',
-      image: c.image || '',
+      facebook: c.facebook || "",
+      instagram: c.instagram || "",
+      website: c.website || "",
+      image: c.image || "",
       gallery: (c as any).gallery || [],
-      slug: c.slug || '',
+      slug: c.slug || "",
       isRecommended: false,
       isTopBusiness: false,
       rating: 0,
       reviewCount: 0,
-      verified: true,
-      featured: false
+      verified: false,
+      featured: false,
     };
   };
 
@@ -294,8 +346,12 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
     setEditingCandidate({ ...candidate });
   };
 
-  const handleSaveStandardCandidateEdit = async (_id: number, updatedData: Partial<Business>) => {
-    if (!editingCandidate) return { success: false, message: 'No hay candidato seleccionado' };
+  const handleSaveStandardCandidateEdit = async (
+    _id: number,
+    updatedData: Partial<Business>,
+  ) => {
+    if (!editingCandidate)
+      return { success: false, message: "No hay candidato seleccionado" };
 
     const merged: AutoBusinessCandidate = {
       ...editingCandidate,
@@ -318,46 +374,40 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
       image: updatedData.image || editingCandidate.image,
       gallery: updatedData.gallery || (editingCandidate as any).gallery,
       slug: updatedData.slug || editingCandidate.slug,
-      status: 'modified'
+      status: "modified",
     };
 
-    setCandidates(prev => prev.map(c => (c.id === editingCandidate.id ? merged : c)));
+    setCandidates((prev) =>
+      prev.map((c) => (c.id === editingCandidate.id ? merged : c)),
+    );
     setEditingCandidate(null);
     setNotice({
-      text: `Datos de "${merged.name}" actualizados con el formulario homologado.`,
-      type: 'info'
+      text: `Borrador de "${merged.name}" actualizado solo en esta sesión; no guardado en el servidor.`,
+      type: "info",
     });
-    return { success: true, message: 'Candidato actualizado con éxito' };
+    return {
+      success: true,
+      message: "Borrador actualizado solo en esta sesión",
+    };
   };
 
-  // 3. ELIMINAR (Descartar y depurar de forma permanente de la lista de prospectos)
-  const handleDeleteCandidate = async (candidateId: string, name: string, phone?: string) => {
-    if (!window.confirm(`¿Deseas descartar y eliminar a "${name}" de la lista de prospectos? No volverá a aparecer al buscar.`)) return;
-
-    setCandidates(prev => prev.filter(c => c.id !== candidateId));
-
-    try {
-      const stored = JSON.parse(localStorage.getItem('carmen_dismissed_candidates') || '[]');
-      if (!stored.includes(candidateId)) stored.push(candidateId);
-      if (!stored.includes(name.toLowerCase().trim())) stored.push(name.toLowerCase().trim());
-      if (phone) {
-        const cleanPhone = phone.replace(/\D/g, '');
-        if (cleanPhone && !stored.includes(cleanPhone)) stored.push(cleanPhone);
-      }
-      localStorage.setItem('carmen_dismissed_candidates', JSON.stringify(stored));
-    } catch {}
-
-    try {
-      await fetch('/api/admin/auto-candidates/dismiss', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: candidateId, name, phone })
-      });
-    } catch (_) {}
-
+  // Session-only concealment: no storage or destructive endpoint.
+  const handleDeleteCandidate = (
+    candidateId: string,
+    name: string,
+    _phone?: string,
+  ) => {
+    if (
+      !window.confirm(
+        `¿Ocultar a "${name}" solo en esta sesión? No se guardará un rechazo permanente.`,
+      )
+    )
+      return;
+    hiddenCandidates.current.add(candidateId);
+    setCandidates((prev) => prev.filter((c) => c.id !== candidateId));
     setNotice({
-      text: `Empresa "${name}" descartada y depurada permanentemente.`,
-      type: 'info'
+      text: "Ocultado en esta sesión. No se guardó un rechazo en el servidor.",
+      type: "info",
     });
   };
 
@@ -366,55 +416,13 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
     setViewingSourceCandidate(candidate);
   };
 
-  // Aceptar todos los candidatos pendientes
-  const handleAcceptAllPending = async () => {
-    const pending = candidates.filter(c => c.status !== 'accepted');
-    if (pending.length === 0) {
-      alert('No hay negocios pendientes por autorizar.');
-      return;
-    }
-
-    if (
-      !window.confirm(
-        `¿Deseas autorizar y publicar ${pending.length} negocios en el catálogo oficial de Ciudad del Carmen?`
-      )
-    ) {
-      return;
-    }
-
-    setIsApprovingAll(true);
-    setNotice(null);
-    try {
-      const res = await approveMultipleAutoBusinessCandidates(pending);
-      if (res.success) {
-        setCandidates(prev => prev.map(c => ({ ...c, status: 'accepted' })));
-        setNotice({
-          text: `¡Éxito total! Se publicaron ${res.count || pending.length} empresas en el catálogo oficial de Carmen.`,
-          type: 'success'
-        });
-        if (res.published && Array.isArray(res.published) && onBusinessApproved) {
-          res.published.forEach(b => onBusinessApproved(b));
-        }
-      } else {
-        setNotice({
-          text: res.message || 'Error en publicación por lote.',
-          type: 'error'
-        });
-      }
-    } catch (err: any) {
-      setNotice({
-        text: err.message || 'Error de conexión durante la aprobación.',
-        type: 'error'
-      });
-    } finally {
-      setIsApprovingAll(false);
-    }
-  };
+  const handleAcceptAllPending = () =>
+    setNotice({ text: RADAR_BLOCK_REASON, type: "error" });
 
   // Categories list extracted from candidates
   const categoriesList = useMemo(() => {
     const set = new Set<string>();
-    candidates.forEach(c => {
+    candidates.forEach((c) => {
       if (c.category) set.add(c.category);
     });
     return Array.from(set).sort();
@@ -422,43 +430,80 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
 
   // Source counts
   const officialGroupCount = useMemo(
-    () => candidates.filter(c => c.sourceUrl?.includes('18WwRY3pKB') || c.source?.toLowerCase().includes('grupo oficial')).length,
-    [candidates]
+    () =>
+      candidates.filter(
+        (c) =>
+          c.sourceUrl?.includes("18WwRY3pKB") ||
+          c.source?.toLowerCase().includes("grupo oficial"),
+      ).length,
+    [candidates],
   );
   const officialPageCount = useMemo(
-    () => candidates.filter(c => c.sourceUrl?.includes('facebook.com/empresasencarmen') || c.source?.toLowerCase().includes('fanpage')).length,
-    [candidates]
+    () =>
+      candidates.filter(
+        (c) =>
+          c.sourceUrl?.includes("facebook.com/empresasencarmen") ||
+          c.source?.toLowerCase().includes("fanpage"),
+      ).length,
+    [candidates],
   );
   const whatsAppCount = useMemo(
-    () => candidates.filter(c => c.source?.toLowerCase().includes('whatsapp')).length,
-    [candidates]
+    () =>
+      candidates.filter((c) => c.source?.toLowerCase().includes("whatsapp"))
+        .length,
+    [candidates],
   );
   const communityCount = useMemo(
-    () => candidates.filter(c => !c.isOfficialSource && !c.source?.toLowerCase().includes('whatsapp') && !c.source?.includes('IA') && !c.source?.includes('Inteligente')).length,
-    [candidates]
+    () =>
+      candidates.filter(
+        (c) =>
+          !c.isOfficialSource &&
+          !c.source?.toLowerCase().includes("whatsapp") &&
+          !c.source?.includes("IA") &&
+          !c.source?.includes("Inteligente"),
+      ).length,
+    [candidates],
   );
   const aiCount = useMemo(
-    () => candidates.filter(c => c.source?.includes('IA') || c.source?.includes('Inteligente')).length,
-    [candidates]
+    () =>
+      candidates.filter(
+        (c) => c.source?.includes("IA") || c.source?.includes("Inteligente"),
+      ).length,
+    [candidates],
   );
 
   // Filtered candidate list with source filtering and official priority
   const filteredCandidates = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    let list = candidates.filter(c => {
-      if (selectedCategory !== 'all' && c.category !== selectedCategory) {
+    let list = candidates.filter((c) => {
+      if (selectedCategory !== "all" && c.category !== selectedCategory) {
         return false;
       }
-      if (selectedSource === 'official_group') {
-        if (!c.sourceUrl?.includes('18WwRY3pKB') && !c.source?.toLowerCase().includes('grupo oficial')) return false;
-      } else if (selectedSource === 'official_page') {
-        if (!c.sourceUrl?.includes('facebook.com/empresasencarmen') && !c.source?.toLowerCase().includes('fanpage')) return false;
-      } else if (selectedSource === 'whatsapp') {
-        if (!c.source?.toLowerCase().includes('whatsapp')) return false;
-      } else if (selectedSource === 'community') {
-        if (c.isOfficialSource || c.source?.toLowerCase().includes('whatsapp') || c.source?.includes('IA') || c.source?.includes('Inteligente')) return false;
-      } else if (selectedSource === 'ai') {
-        if (!c.source?.includes('IA') && !c.source?.includes('Inteligente')) return false;
+      if (selectedSource === "official_group") {
+        if (
+          !c.sourceUrl?.includes("18WwRY3pKB") &&
+          !c.source?.toLowerCase().includes("grupo oficial")
+        )
+          return false;
+      } else if (selectedSource === "official_page") {
+        if (
+          !c.sourceUrl?.includes("facebook.com/empresasencarmen") &&
+          !c.source?.toLowerCase().includes("fanpage")
+        )
+          return false;
+      } else if (selectedSource === "whatsapp") {
+        if (!c.source?.toLowerCase().includes("whatsapp")) return false;
+      } else if (selectedSource === "community") {
+        if (
+          c.isOfficialSource ||
+          c.source?.toLowerCase().includes("whatsapp") ||
+          c.source?.includes("IA") ||
+          c.source?.includes("Inteligente")
+        )
+          return false;
+      } else if (selectedSource === "ai") {
+        if (!c.source?.includes("IA") && !c.source?.includes("Inteligente"))
+          return false;
       }
 
       if (!q) return true;
@@ -482,7 +527,9 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
     return list;
   }, [candidates, searchQuery, selectedCategory, selectedSource]);
 
-  const acceptedCount = candidates.filter(c => c.status === 'accepted').length;
+  const acceptedCount = candidates.filter(
+    (c) => c.status === "accepted",
+  ).length;
   const pendingCount = candidates.length - acceptedCount;
 
   if (!isOpen) return null;
@@ -493,24 +540,24 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
       aria-modal="true"
       className="fixed inset-0 z-50 flex flex-col sm:items-center sm:justify-center p-0 sm:p-4 animate-in fade-in duration-200"
       style={{
-        background: 'rgba(15, 23, 42, 0.45)',
-        backdropFilter: 'blur(25px)',
-        WebkitBackdropFilter: 'blur(25px)',
+        background: "rgba(15, 23, 42, 0.45)",
+        backdropFilter: "blur(25px)",
+        WebkitBackdropFilter: "blur(25px)",
       }}
-      onClick={onClose}
+      onClick={closeBusinessRadar}
     >
       <div
         className="sm:rounded-3xl w-full sm:max-w-6xl h-full sm:h-auto sm:max-h-[92vh] flex flex-col overflow-hidden text-stone-100"
         style={{
-          background: 'rgba(24, 24, 27, 0.90)',
-          backdropFilter: 'blur(40px) saturate(190%)',
-          WebkitBackdropFilter: 'blur(40px) saturate(190%)',
-          border: '1.5px solid rgba(255, 255, 255, 0.15)',
-          boxShadow: '0 30px 70px -15px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.15)',
+          background: "rgba(24, 24, 27, 0.90)",
+          backdropFilter: "blur(40px) saturate(190%)",
+          WebkitBackdropFilter: "blur(40px) saturate(190%)",
+          border: "1.5px solid rgba(255, 255, 255, 0.15)",
+          boxShadow:
+            "0 30px 70px -15px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.15)",
         }}
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
-        
         {/* COMPACT STICKY HEADER */}
         <div className="p-3 sm:p-5 bg-gradient-to-r from-stone-900 via-sky-950/40 to-stone-900 border-b border-stone-800 flex items-center justify-between gap-2 shrink-0 z-10">
           <div className="flex items-center gap-2 min-w-0">
@@ -527,7 +574,8 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                 </span>
               </div>
               <p className="text-[11px] text-stone-400 hidden sm:block truncate">
-                Rastreo autónomo y con IA en fuentes oficiales de Empresas en Carmen, Google y WhatsApp.
+                Rastreo autónomo y con IA en fuentes oficiales de Empresas en
+                Carmen, Google y WhatsApp.
               </p>
             </div>
           </div>
@@ -541,28 +589,36 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
               className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-black text-[11px] sm:text-xs flex items-center gap-1 sm:gap-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50 active:scale-95"
               title="Detección con IA: localiza 30 negocios reales de Ciudad del Carmen con teléfono por pulsación"
             >
-              <Sparkles className={`w-3.5 h-3.5 text-stone-950 ${isAiScanning ? 'animate-spin' : ''}`} />
-              <span className="hidden xs:inline">{isAiScanning ? 'Buscando...' : '30 con IA'}</span>
-              <span className="xs:hidden">{isAiScanning ? '...' : 'IA'}</span>
+              <Sparkles
+                className={`w-3.5 h-3.5 text-stone-950 ${isAiScanning ? "animate-spin" : ""}`}
+              />
+              <span className="hidden xs:inline">
+                {isAiScanning ? "Buscando..." : "30 con IA"}
+              </span>
+              <span className="xs:hidden">{isAiScanning ? "..." : "IA"}</span>
             </button>
 
             {pendingCount > 0 && (
               <button
                 type="button"
                 onClick={handleAcceptAllPending}
-                disabled={isApprovingAll || isLoading}
+                disabled={RADAR_WRITE_BLOCKED || isApprovingAll || isLoading}
                 className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] sm:text-xs flex items-center gap-1 sm:gap-1.5 shadow-md transition-colors cursor-pointer disabled:opacity-50 active:scale-95"
                 title="Aprobar y publicar todos los candidatos pendientes"
               >
                 <Check className="w-3.5 h-3.5 text-emerald-200" />
-                <span className="hidden sm:inline">{isApprovingAll ? 'Publicando...' : `Aceptar Todos (${pendingCount})`}</span>
+                <span className="hidden sm:inline">
+                  {isApprovingAll
+                    ? "Publicando..."
+                    : `Aceptar Todos (${pendingCount})`}
+                </span>
                 <span className="sm:hidden">({pendingCount})</span>
               </button>
             )}
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={closeBusinessRadar}
               className="p-1.5 sm:p-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-400 hover:text-white transition-colors cursor-pointer border border-stone-700"
               aria-label="Cerrar modal"
             >
@@ -573,7 +629,6 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
 
         {/* CONTENEDOR DESPLAZABLE PRINCIPAL (OPTIMIZADO PARA TOUCH EN MÓVIL) */}
         <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y min-h-0 bg-stone-900 divide-y divide-stone-800/80">
-          
           {/* ACCIONES SECUNDARIAS Y FUENTES EN MÓVIL/DESKTOP */}
           <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-stone-950/70 flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
@@ -590,11 +645,13 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
               <button
                 type="button"
                 onClick={loadCandidates}
-                disabled={isLoading}
+                disabled={isLoading || isAiScanning || isParsingWhatsApp}
                 className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-[11px] sm:text-xs flex items-center gap-1 border border-stone-700 cursor-pointer disabled:opacity-50"
                 title="Refrescar búsqueda y volver a escanear"
               >
-                <RefreshCw className={`w-3 h-3 text-sky-400 ${isLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw
+                  className={`w-3 h-3 text-sky-400 ${isLoading ? "animate-spin" : ""}`}
+                />
                 <span>Refrescar</span>
               </button>
 
@@ -622,25 +679,35 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
             </div>
 
             <div className="text-[11px] text-stone-400 ml-auto font-mono">
-              <span>Total: <strong className="text-white">{candidates.length}</strong></span>
+              <span>
+                Total:{" "}
+                <strong className="text-white">{candidates.length}</strong>
+              </span>
             </div>
           </div>
 
           {/* NOTIFICATION BANNER */}
+          <p
+            role="status"
+            className="p-3 text-xs text-amber-900 bg-amber-50 rounded-xl"
+          >
+            {RADAR_BLOCK_REASON} Ocultar solo afecta esta sesión.
+          </p>
           {notice && (
             <div
+              role="status"
               className={`px-3 sm:px-4 py-2 sm:py-2.5 text-xs font-medium flex items-center justify-between gap-2 ${
-                notice.type === 'success'
-                  ? 'bg-emerald-950/70 text-emerald-200'
-                  : notice.type === 'error'
-                  ? 'bg-rose-950/70 text-rose-200'
-                  : 'bg-sky-950/70 text-sky-200'
+                notice.type === "success"
+                  ? "bg-emerald-950/70 text-emerald-200"
+                  : notice.type === "error"
+                    ? "bg-rose-950/70 text-rose-200"
+                    : "bg-sky-950/70 text-sky-200"
               }`}
             >
               <div className="flex items-center gap-2 text-[11px] sm:text-xs">
-                {notice.type === 'success' ? (
+                {notice.type === "success" ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                ) : notice.type === 'error' ? (
+                ) : notice.type === "error" ? (
                   <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
                 ) : (
                   <Sparkles className="w-4 h-4 text-sky-400 shrink-0" />
@@ -661,66 +728,66 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
           <div className="px-3 sm:px-4 py-2 bg-stone-900/90 overflow-x-auto whitespace-nowrap scrollbar-none flex items-center gap-1.5 text-xs">
             <button
               type="button"
-              onClick={() => setSelectedSource('all')}
+              onClick={() => setSelectedSource("all")}
               className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs shrink-0 ${
-                selectedSource === 'all'
-                  ? 'bg-sky-600 text-white shadow-xs'
-                  : 'bg-stone-800/80 hover:bg-stone-800 text-stone-300'
+                selectedSource === "all"
+                  ? "bg-sky-600 text-white shadow-xs"
+                  : "bg-stone-800/80 hover:bg-stone-800 text-stone-300"
               }`}
             >
               Todas ({candidates.length})
             </button>
             <button
               type="button"
-              onClick={() => setSelectedSource('official_group')}
+              onClick={() => setSelectedSource("official_group")}
               className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs shrink-0 ${
-                selectedSource === 'official_group'
-                  ? 'bg-sky-600 text-white shadow-xs'
-                  : 'bg-stone-800/80 hover:bg-stone-800 text-sky-300'
+                selectedSource === "official_group"
+                  ? "bg-sky-600 text-white shadow-xs"
+                  : "bg-stone-800/80 hover:bg-stone-800 text-sky-300"
               }`}
             >
               👑 Grupo FB ({officialGroupCount})
             </button>
             <button
               type="button"
-              onClick={() => setSelectedSource('official_page')}
+              onClick={() => setSelectedSource("official_page")}
               className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs shrink-0 ${
-                selectedSource === 'official_page'
-                  ? 'bg-sky-600 text-white shadow-xs'
-                  : 'bg-stone-800/80 hover:bg-stone-800 text-amber-300'
+                selectedSource === "official_page"
+                  ? "bg-sky-600 text-white shadow-xs"
+                  : "bg-stone-800/80 hover:bg-stone-800 text-amber-300"
               }`}
             >
               👑 FanPage ({officialPageCount})
             </button>
             <button
               type="button"
-              onClick={() => setSelectedSource('whatsapp')}
+              onClick={() => setSelectedSource("whatsapp")}
               className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs shrink-0 ${
-                selectedSource === 'whatsapp'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-stone-800/80 hover:bg-stone-800 text-emerald-300'
+                selectedSource === "whatsapp"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "bg-stone-800/80 hover:bg-stone-800 text-emerald-300"
               }`}
             >
               📲 WhatsApp ({whatsAppCount})
             </button>
             <button
               type="button"
-              onClick={() => setSelectedSource('community')}
+              onClick={() => setSelectedSource("community")}
               className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs shrink-0 ${
-                selectedSource === 'community'
-                  ? 'bg-stone-700 text-white shadow-xs'
-                  : 'bg-stone-800/80 hover:bg-stone-800 text-stone-400'
+                selectedSource === "community"
+                  ? "bg-stone-700 text-white shadow-xs"
+                  : "bg-stone-800/80 hover:bg-stone-800 text-stone-400"
               }`}
             >
               📍 Maps & Local ({communityCount})
             </button>
             <button
               type="button"
-              onClick={() => setSelectedSource('ai')}
+              onClick={() => setSelectedSource("ai")}
               className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs shrink-0 ${
-                selectedSource === 'ai'
-                  ? 'bg-amber-500 text-stone-950 shadow-xs'
-                  : 'bg-stone-800/80 hover:bg-stone-800 text-amber-300'
+                selectedSource === "ai"
+                  ? "bg-amber-500 text-stone-950 shadow-xs"
+                  : "bg-stone-800/80 hover:bg-stone-800 text-amber-300"
               }`}
             >
               ✨ IA ({aiCount})
@@ -734,14 +801,14 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
               <input
                 type="text"
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar por nombre, giro, teléfono, colonia..."
                 className="w-full pl-8 sm:pl-9 pr-7 py-2 rounded-xl bg-stone-950 border border-stone-800 text-xs sm:text-sm text-stone-200 placeholder:text-stone-500 focus:border-sky-500 outline-none"
               />
               {searchQuery && (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => setSearchQuery("")}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-500 hover:text-stone-300"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -753,11 +820,13 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
               <div className="relative flex-1 sm:flex-initial">
                 <select
                   value={selectedCategory}
-                  onChange={e => setSelectedCategory(e.target.value)}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
                   className="w-full pl-2.5 pr-7 py-2 rounded-xl bg-stone-950 border border-stone-800 text-xs text-stone-300 font-medium focus:border-sky-500 outline-none cursor-pointer appearance-none"
                 >
-                  <option value="all">Todas las categorías ({candidates.length})</option>
-                  {categoriesList.map(cat => (
+                  <option value="all">
+                    Todas las categorías ({candidates.length})
+                  </option>
+                  {categoriesList.map((cat) => (
                     <option key={cat} value={cat}>
                       {cat}
                     </option>
@@ -767,348 +836,390 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
               </div>
 
               <div className="px-2.5 py-1.5 rounded-xl bg-stone-800 border border-stone-700 text-[11px] sm:text-xs font-mono text-stone-300 shrink-0">
-                <span className="text-emerald-400 font-bold">{acceptedCount}</span> ok /{' '}
-                <span className="text-amber-400 font-bold">{pendingCount}</span> pend
+                <span className="text-emerald-400 font-bold">
+                  {acceptedCount}
+                </span>{" "}
+                reportados aceptados /{" "}
+                <span className="text-amber-400 font-bold">{pendingCount}</span>{" "}
+                pend
               </div>
             </div>
           </div>
 
           {/* CANDIDATES LIST CONTAINER */}
           <div className="p-3 sm:p-6 space-y-4">
-          {isAiScanning ? (
-            <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
-              <div className="relative">
-                <div className="w-16 h-16 rounded-full border-4 border-amber-500/20 border-t-amber-400 animate-spin" />
-                <Sparkles className="w-7 h-7 text-amber-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-base font-bold text-white">
-                  Rastreando 30 Empresas Reales con IA...
-                </p>
-                <p className="text-xs text-stone-400 max-w-md mx-auto">
-                  Consultando fuentes en tiempo real de Ciudad del Carmen, Campeche. Verificando teléfonos 938, direcciones físicas y colonias reales.
-                </p>
-              </div>
-            </div>
-          ) : isLoading ? (
-            <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
-              <div className="relative">
-                <div className="w-16 h-16 rounded-full border-4 border-sky-500/20 border-t-sky-400 animate-spin" />
-                <Globe className="w-6 h-6 text-sky-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-bold text-white">
-                  Rastreando negocios en fuentes públicas de Ciudad del Carmen...
-                </p>
-                <p className="text-xs text-stone-400 max-w-md">
-                  Consultando grupos de Facebook, Google Maps y directorios locales. Verificando que cada negocio tenga teléfono de contacto válido.
-                </p>
-              </div>
-            </div>
-          ) : candidates.length === 0 ? (
-            <div className="py-20 text-center space-y-4 px-4">
-              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
-                <Sparkles className="w-8 h-8" />
-              </div>
-              <div className="space-y-2 max-w-md mx-auto">
-                <p className="text-base font-bold text-white">
-                  Bandeja Lista para Rastrear Empresas Reales
-                </p>
-                <p className="text-xs text-stone-400 leading-relaxed">
-                  Pulsa el botón <strong>"Búsqueda con IA (30 Negocios)"</strong> para localizar 30 comercios verificados de Ciudad del Carmen con teléfono y colonia real, o <strong>"Volver a Escanear"</strong> para consultar el catálogo de fuentes.
-                </p>
-                <div className="pt-3 flex flex-wrap items-center justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleScanWithAi}
-                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-black text-xs inline-flex items-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer"
-                  >
-                    <Sparkles className="w-4 h-4 text-stone-950" />
-                    <span>Iniciar Búsqueda con IA (30 Empresas)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={loadCandidates}
-                    className="px-3.5 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs inline-flex items-center gap-1.5 border border-stone-700 cursor-pointer"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5 text-sky-400" />
-                    <span>Escanear Fuentes Locales</span>
-                  </button>
+            {isAiScanning ? (
+              <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-full border-4 border-amber-500/20 border-t-amber-400 animate-spin" />
+                  <Sparkles className="w-7 h-7 text-amber-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-base font-bold text-white">
+                    Rastreando 30 Empresas Reales con IA...
+                  </p>
+                  <p className="text-xs text-stone-400 max-w-md mx-auto">
+                    Consultando fuentes en tiempo real de Ciudad del Carmen,
+                    Campeche. Verificando teléfonos 938, direcciones físicas y
+                    colonias reales.
+                  </p>
                 </div>
               </div>
-            </div>
-          ) : filteredCandidates.length === 0 ? (
-            selectedSource === 'ai' ? (
-              <div className="py-16 text-center space-y-4 max-w-md mx-auto px-4">
-                <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+            ) : isLoading ? (
+              <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-full border-4 border-sky-500/20 border-t-sky-400 animate-spin" />
+                  <Globe className="w-6 h-6 text-sky-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-white">
+                    Rastreando negocios en fuentes públicas de Ciudad del
+                    Carmen...
+                  </p>
+                  <p className="text-xs text-stone-400 max-w-md">
+                    Consultando grupos de Facebook, Google Maps y directorios
+                    locales. Verificando que cada negocio tenga teléfono de
+                    contacto válido.
+                  </p>
+                </div>
+              </div>
+            ) : candidates.length === 0 ? (
+              <div className="py-20 text-center space-y-4 px-4">
+                <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
                   <Sparkles className="w-8 h-8" />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-2 max-w-md mx-auto">
                   <p className="text-base font-bold text-white">
-                    Búsqueda con IA Lista para Iniciar
+                    Bandeja Lista para Rastrear Empresas Reales
                   </p>
                   <p className="text-xs text-stone-400 leading-relaxed">
-                    Pulsa el botón para que el radar con IA rastree 30 empresas reales de Ciudad del Carmen con teléfono y colonia verificada.
+                    Pulsa el botón{" "}
+                    <strong>"Búsqueda con IA (30 Negocios)"</strong> para
+                    localizar 30 comercios verificados de Ciudad del Carmen con
+                    teléfono y colonia real, o{" "}
+                    <strong>"Volver a Escanear"</strong> para consultar el
+                    catálogo de fuentes.
                   </p>
+                  <div className="pt-3 flex flex-wrap items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleScanWithAi}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-black text-xs inline-flex items-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-stone-950" />
+                      <span>Iniciar Búsqueda con IA (30 Empresas)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={loadCandidates}
+                      className="px-3.5 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs inline-flex items-center gap-1.5 border border-stone-700 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Escanear Fuentes Locales</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="pt-2">
+              </div>
+            ) : filteredCandidates.length === 0 ? (
+              selectedSource === "ai" ? (
+                <div className="py-16 text-center space-y-4 max-w-md mx-auto px-4">
+                  <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+                    <Sparkles className="w-8 h-8" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-base font-bold text-white">
+                      Búsqueda con IA Lista para Iniciar
+                    </p>
+                    <p className="text-xs text-stone-400 leading-relaxed">
+                      Pulsa el botón para que el radar con IA rastree 30
+                      empresas reales de Ciudad del Carmen con teléfono y
+                      colonia verificada.
+                    </p>
+                  </div>
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={handleScanWithAi}
+                      className="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-black text-xs inline-flex items-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-stone-950" />
+                      <span>Rastrear 30 Empresas con IA Ahora</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-20 text-center space-y-3">
+                  <Building2 className="w-12 h-12 text-stone-600 mx-auto" />
+                  <p className="text-sm font-bold text-stone-300">
+                    No se encontraron negocios con los filtros aplicados.
+                  </p>
                   <button
                     type="button"
-                    onClick={handleScanWithAi}
-                    className="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-black text-xs inline-flex items-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSelectedCategory("all");
+                      setSelectedSource("all");
+                    }}
+                    className="text-xs text-sky-400 hover:underline"
                   >
-                    <Sparkles className="w-4 h-4 text-stone-950" />
-                    <span>Rastrear 30 Empresas con IA Ahora</span>
+                    Restablecer filtros y ver todas las fuentes
                   </button>
                 </div>
-              </div>
+              )
             ) : (
-              <div className="py-20 text-center space-y-3">
-                <Building2 className="w-12 h-12 text-stone-600 mx-auto" />
-                <p className="text-sm font-bold text-stone-300">
-                  No se encontraron negocios con los filtros aplicados.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSelectedCategory('all');
-                    setSelectedSource('all');
-                  }}
-                  className="text-xs text-sky-400 hover:underline"
-                >
-                  Restablecer filtros y ver todas las fuentes
-                </button>
-              </div>
-            )
-          ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {filteredCandidates.map((candidate, idx) => {
-                const isAccepted = candidate.status === 'accepted';
-                const isApprovingThis = approvingId === candidate.id;
+              <div className="grid grid-cols-1 gap-4">
+                {filteredCandidates.map((candidate, idx) => {
+                  const isAccepted = candidate.status === "accepted";
+                  const isApprovingThis = approvingId === candidate.id;
 
-                return (
-                  <div
-                    key={`${candidate.id || 'cand'}-${idx}`}
-                    className={`p-4 sm:p-5 rounded-2xl border transition-all duration-200 ${
-                      isAccepted
-                        ? 'bg-emerald-950/20 border-emerald-500/40 shadow-sm'
-                        : 'bg-stone-950/60 hover:bg-stone-950 border-stone-800 hover:border-stone-700 shadow-md'
-                    }`}
-                  >
-                    <div className="flex flex-col md:flex-row md:items-start gap-4 justify-between">
-                      
-                      {/* Left: Image & Main Info */}
-                      <div className="flex items-start gap-4 flex-1">
-                        {/* Business Image / Logo */}
-                        <div className="relative shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-stone-800 border border-stone-700 shadow-inner group">
-                          <img
-                            src={candidate.image}
-                            alt={candidate.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            onError={e => {
-                              (e.target as HTMLImageElement).src = '/icons/icon-512.svg';
-                            }}
-                          />
-                          {candidate.hasDelivery && (
-                            <span
-                              className="absolute top-1 left-1 p-1 rounded-md bg-stone-950/80 backdrop-blur-xs text-amber-300"
-                              title="Servicio a domicilio disponible"
-                            >
-                              <Truck className="w-3.5 h-3.5" />
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Text Details */}
-                        <div className="space-y-2 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-base sm:text-lg font-black text-white leading-tight">
-                              {candidate.name}
-                            </h3>
-
-                            {/* Badge Prioritario: Fuente Oficial */}
-                            {candidate.isOfficialSource && (
-                              <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 via-sky-500/20 to-amber-500/20 border border-amber-400/70 text-amber-300 text-[11px] font-black flex items-center gap-1 shadow-xs animate-pulse">
-                                <Sparkles className="w-3.5 h-3.5 text-amber-400" /> 👑 Fuente Oficial Empresas en Carmen
-                              </span>
-                            )}
-
-                            {/* Category badge */}
-                            <span className="px-2.5 py-0.5 rounded-full bg-sky-500/10 border border-sky-500/30 text-sky-300 text-[11px] font-bold">
-                              {candidate.category}
-                            </span>
-
-                            {isAccepted && (
-                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-black flex items-center gap-1">
-                                <Check className="w-3 h-3 text-emerald-400" /> Publicado en Directorio Oficial
-                              </span>
-                            )}
-
-                            {candidate.alreadyRegistered && !isAccepted && (
-                              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-semibold">
-                                Ya existe en catálogo
+                  return (
+                    <div
+                      key={`${candidate.id || "cand"}-${idx}`}
+                      className={`p-4 sm:p-5 rounded-2xl border transition-all duration-200 ${
+                        isAccepted
+                          ? "bg-emerald-950/20 border-emerald-500/40 shadow-sm"
+                          : "bg-stone-950/60 hover:bg-stone-950 border-stone-800 hover:border-stone-700 shadow-md"
+                      }`}
+                    >
+                      <div className="flex flex-col md:flex-row md:items-start gap-4 justify-between">
+                        {/* Left: Image & Main Info */}
+                        <div className="flex items-start gap-4 flex-1">
+                          {/* Business Image / Logo */}
+                          <div className="relative shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-stone-800 border border-stone-700 shadow-inner group">
+                            <img
+                              src={candidate.image}
+                              alt={candidate.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src =
+                                  "/icons/icon-512.svg";
+                              }}
+                            />
+                            {candidate.hasDelivery && (
+                              <span
+                                className="absolute top-1 left-1 p-1 rounded-md bg-stone-950/80 backdrop-blur-xs text-amber-300"
+                                title="Servicio a domicilio disponible"
+                              >
+                                <Truck className="w-3.5 h-3.5" />
                               </span>
                             )}
                           </div>
 
-                          {/* Advertising description */}
-                          <p className="text-xs sm:text-sm text-stone-300 leading-relaxed font-normal bg-stone-900/60 p-2.5 rounded-xl border border-stone-800/80">
-                            "{candidate.description}"
-                          </p>
+                          {/* Text Details */}
+                          <div className="space-y-2 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-base sm:text-lg font-black text-white leading-tight">
+                                {candidate.name}
+                              </h3>
 
-                          {/* Chips: Phone, Address, Delivery, Schedule, Payment */}
-                          <div className="flex flex-wrap items-center gap-2 pt-1">
-                            {/* Phone & WhatsApp (Mandatory highlight) */}
-                            <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs font-mono font-bold">
-                              <Phone className="w-3.5 h-3.5 text-emerald-400" />
-                              <span>{formatPhoneNumber(candidate.phone)}</span>
-                              <a
-                                href={`https://wa.me/52${candidate.whatsapp.replace(/\D/g, '')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="ml-1 text-emerald-400 hover:text-emerald-200"
-                                title="Abrir chat en WhatsApp"
-                              >
-                                <MessageSquare className="w-3.5 h-3.5" />
-                              </a>
+                              {/* Badge Prioritario: Fuente Oficial */}
+                              {candidate.isOfficialSource && (
+                                <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 via-sky-500/20 to-amber-500/20 border border-amber-400/70 text-amber-300 text-[11px] font-black flex items-center gap-1 shadow-xs animate-pulse">
+                                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />{" "}
+                                  👑 Fuente Oficial Empresas en Carmen
+                                </span>
+                              )}
+
+                              {/* Category badge */}
+                              <span className="px-2.5 py-0.5 rounded-full bg-sky-500/10 border border-sky-500/30 text-sky-300 text-[11px] font-bold">
+                                {candidate.category}
+                              </span>
+
+                              {isAccepted && (
+                                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-black flex items-center gap-1">
+                                  <Check className="w-3 h-3 text-emerald-400" />{" "}
+                                  Publicado en Directorio Oficial
+                                </span>
+                              )}
+
+                              {candidate.alreadyRegistered && !isAccepted && (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-semibold">
+                                  Ya existe en catálogo
+                                </span>
+                              )}
                             </div>
 
-                            {/* Delivery */}
-                            <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-900 border border-stone-800 text-amber-300 text-xs">
-                              <Truck className="w-3.5 h-3.5" />
-                              <span className="truncate max-w-[200px]">{candidate.delivery}</span>
-                            </div>
+                            {/* Advertising description */}
+                            <p className="text-xs sm:text-sm text-stone-300 leading-relaxed font-normal bg-stone-900/60 p-2.5 rounded-xl border border-stone-800/80">
+                              "{candidate.description}"
+                            </p>
 
-                            {/* Address / Colonia */}
-                            {candidate.address && (
-                              <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-900 border border-stone-800 text-stone-300 text-xs">
-                                <MapPin className="w-3.5 h-3.5 text-rose-400" />
-                                <span className="truncate max-w-[220px]">
-                                  {candidate.address} ({candidate.colonia})
+                            {/* Chips: Phone, Address, Delivery, Schedule, Payment */}
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              {/* Phone & WhatsApp (Mandatory highlight) */}
+                              <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs font-mono font-bold">
+                                <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>
+                                  {formatPhoneNumber(candidate.phone)}
+                                </span>
+                                <a
+                                  href={`https://wa.me/52${candidate.whatsapp.replace(/\D/g, "")}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="ml-1 text-emerald-400 hover:text-emerald-200"
+                                  title="Abrir chat en WhatsApp"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                </a>
+                              </div>
+
+                              {/* Delivery */}
+                              <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-900 border border-stone-800 text-amber-300 text-xs">
+                                <Truck className="w-3.5 h-3.5" />
+                                <span className="truncate max-w-[200px]">
+                                  {candidate.delivery}
                                 </span>
                               </div>
-                            )}
 
-                            {/* Schedule */}
-                            {candidate.schedule && (
-                              <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-900 border border-stone-800 text-stone-400 text-xs">
-                                <Clock className="w-3.5 h-3.5 text-sky-400" />
-                                <span>{candidate.schedule}</span>
-                              </div>
-                            )}
+                              {/* Address / Colonia */}
+                              {candidate.address && (
+                                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-900 border border-stone-800 text-stone-300 text-xs">
+                                  <MapPin className="w-3.5 h-3.5 text-rose-400" />
+                                  <span className="truncate max-w-[220px]">
+                                    {candidate.address} ({candidate.colonia})
+                                  </span>
+                                </div>
+                              )}
 
-                            {/* Payment */}
-                            {candidate.payment && (
-                              <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-900 border border-stone-800 text-stone-400 text-xs">
-                                <CreditCard className="w-3.5 h-3.5 text-purple-400" />
-                                <span>{candidate.payment}</span>
-                              </div>
-                            )}
-                          </div>
+                              {/* Schedule */}
+                              {candidate.schedule && (
+                                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-900 border border-stone-800 text-stone-400 text-xs">
+                                  <Clock className="w-3.5 h-3.5 text-sky-400" />
+                                  <span>{candidate.schedule}</span>
+                                </div>
+                              )}
 
-                          {/* Source badge */}
-                          <div className="flex items-center gap-1.5 text-[11px] text-stone-400 pt-1">
-                            <span className="font-semibold text-stone-500">Fuente detectada:</span>
-                            <span className="text-sky-300 font-medium">{candidate.source}</span>
+                              {/* Payment */}
+                              {candidate.payment && (
+                                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-900 border border-stone-800 text-stone-400 text-xs">
+                                  <CreditCard className="w-3.5 h-3.5 text-purple-400" />
+                                  <span>{candidate.payment}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Source badge */}
+                            <div className="flex items-center gap-1.5 text-[11px] text-stone-400 pt-1">
+                              <span className="font-semibold text-stone-500">
+                                Fuente detectada:
+                              </span>
+                              <span className="text-sky-300 font-medium">
+                                {candidate.source}
+                              </span>
+                            </div>
                           </div>
                         </div>
+
+                        {/* Right: The 4 requested options (Aceptar, Modificar, Eliminar, Consultar Fuente) */}
+                        <div className="flex md:flex-col items-center justify-end gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-stone-800">
+                          {/* 1. ACEPTAR */}
+                          <button
+                            type="button"
+                            onClick={() => handleAccept(candidate)}
+                            disabled={
+                              RADAR_WRITE_BLOCKED ||
+                              isApprovingThis ||
+                              isAccepted
+                            }
+                            className={`w-full sm:w-auto px-4 py-2 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                              isAccepted
+                                ? "bg-emerald-900/50 text-emerald-300 border border-emerald-700/50 cursor-default"
+                                : "bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95"
+                            }`}
+                            title={RADAR_BLOCK_REASON}
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>
+                              {isApprovingThis
+                                ? "Publicando..."
+                                : isAccepted
+                                  ? "Aceptado ✓"
+                                  : "Aceptar"}
+                            </span>
+                          </button>
+
+                          {/* 2. MODIFICAR */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenModify(candidate)}
+                            className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-sky-950/70 hover:bg-sky-900/80 border border-sky-800 text-sky-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                            title="Editar nombre, giro, teléfono, descripción o imagen antes de publicar"
+                          >
+                            <Edit3 className="w-3.5 h-3.5 text-sky-400" />
+                            <span>Modificar</span>
+                          </button>
+
+                          {/* 3. ELIMINAR */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleDeleteCandidate(
+                                candidate.id,
+                                candidate.name,
+                                candidate.phone,
+                              )
+                            }
+                            className="w-full sm:w-auto px-3 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-950/80 border border-rose-900/60 text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                            title="Ocultar solo en esta sesión, sin guardar rechazo"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                            <span>Ocultar en sesión</span>
+                          </button>
+
+                          {/* 4. VER EN GOOGLE MAPS */}
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(candidate.name + " Ciudad del Carmen Campeche")}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full sm:w-auto px-3 py-2 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/60 text-emerald-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                            title="Buscar este negocio en Google Maps"
+                          >
+                            <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Google Maps</span>
+                          </a>
+
+                          {/* 5. CONSULTAR FUENTE */}
+                          <button
+                            type="button"
+                            onClick={() => handleConsultSource(candidate)}
+                            className="w-full sm:w-auto px-3 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                            title="Ver enlace original, grupo de Facebook o ficha de Google Maps"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5 text-purple-400" />
+                            <span>Consultar Fuente</span>
+                          </button>
+                        </div>
                       </div>
-
-                      {/* Right: The 4 requested options (Aceptar, Modificar, Eliminar, Consultar Fuente) */}
-                      <div className="flex md:flex-col items-center justify-end gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-stone-800">
-                        {/* 1. ACEPTAR */}
-                        <button
-                          type="button"
-                          onClick={() => handleAccept(candidate)}
-                          disabled={isApprovingThis || isAccepted}
-                          className={`w-full sm:w-auto px-4 py-2 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer ${
-                            isAccepted
-                              ? 'bg-emerald-900/50 text-emerald-300 border border-emerald-700/50 cursor-default'
-                              : 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95'
-                          }`}
-                          title="Aprobar y publicar en el Directorio Oficial de Carmen"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>
-                            {isApprovingThis ? 'Publicando...' : isAccepted ? 'Aceptado ✓' : 'Aceptar'}
-                          </span>
-                        </button>
-
-                        {/* 2. MODIFICAR */}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenModify(candidate)}
-                          className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-sky-950/70 hover:bg-sky-900/80 border border-sky-800 text-sky-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                          title="Editar nombre, giro, teléfono, descripción o imagen antes de publicar"
-                        >
-                          <Edit3 className="w-3.5 h-3.5 text-sky-400" />
-                          <span>Modificar</span>
-                        </button>
-
-                        {/* 3. ELIMINAR */}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteCandidate(candidate.id, candidate.name, candidate.phone)}
-                          className="w-full sm:w-auto px-3 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-950/80 border border-rose-900/60 text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                          title="Descartar este negocio de la lista de prospectos"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                          <span>Eliminar</span>
-                        </button>
-
-                        {/* 4. VER EN GOOGLE MAPS */}
-                        <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(candidate.name + ' Ciudad del Carmen Campeche')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full sm:w-auto px-3 py-2 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/60 text-emerald-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                          title="Buscar este negocio en Google Maps"
-                        >
-                          <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Google Maps</span>
-                        </a>
-
-                        {/* 5. CONSULTAR FUENTE */}
-                        <button
-                          type="button"
-                          onClick={() => handleConsultSource(candidate)}
-                          className="w-full sm:w-auto px-3 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                          title="Ver enlace original, grupo de Facebook o ficha de Google Maps"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5 text-purple-400" />
-                          <span>Consultar Fuente</span>
-                        </button>
-                      </div>
-
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* FOOTER */}
+        {/* FOOTER */}
         <div className="p-4 bg-stone-950 border-t border-stone-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-stone-400">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
             <span>
-              Catálogo 100% autónomo:{' '}
-              <strong className="text-white">Persistencia local e integración directa con MariaDB Hostinger</strong>.
+              Candidatos para revisión:{" "}
+              <strong className="text-white">
+                Persistencia del Radar no verificada; no se publican registros
+                desde esta vista
+              </strong>
+              .
             </span>
           </div>
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={closeBusinessRadar}
             className="px-4 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-white font-bold transition-colors cursor-pointer"
           >
             Cerrar Ventana
           </button>
         </div>
-
       </div>
 
       {/* =========================================================================
@@ -1152,25 +1263,40 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
 
             <div className="space-y-4">
               <div>
-                <span className="text-xs text-stone-400 font-bold">Empresa Prospecto:</span>
-                <p className="text-lg font-black text-white">{viewingSourceCandidate.name}</p>
+                <span className="text-xs text-stone-400 font-bold">
+                  Empresa Prospecto:
+                </span>
+                <p className="text-lg font-black text-white">
+                  {viewingSourceCandidate.name}
+                </p>
                 <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-stone-300">
-                  <span className="font-mono text-emerald-400 font-bold">Tel: {viewingSourceCandidate.phone}</span>
+                  <span className="font-mono text-emerald-400 font-bold">
+                    Tel: {viewingSourceCandidate.phone}
+                  </span>
                   {viewingSourceCandidate.address && (
-                    <span className="text-stone-400">· {viewingSourceCandidate.address} ({viewingSourceCandidate.colonia})</span>
+                    <span className="text-stone-400">
+                      · {viewingSourceCandidate.address} (
+                      {viewingSourceCandidate.colonia})
+                    </span>
                   )}
                 </div>
               </div>
 
               <div>
-                <span className="text-xs text-stone-400 font-bold">Origen público registrado:</span>
-                <p className="text-sm font-semibold text-purple-300">{viewingSourceCandidate.source}</p>
+                <span className="text-xs text-stone-400 font-bold">
+                  Origen público registrado:
+                </span>
+                <p className="text-sm font-semibold text-purple-300">
+                  {viewingSourceCandidate.source}
+                </p>
               </div>
 
               {/* Enlace Directo a la Fuente Original Auténtica */}
               <div className="space-y-2 pt-1">
-                <span className="text-xs font-bold text-stone-200 block">Enlace de la Fuente Original Registrada:</span>
-                
+                <span className="text-xs font-bold text-stone-200 block">
+                  Enlace de la Fuente Original Registrada:
+                </span>
+
                 {viewingSourceCandidate.sourceUrl ? (
                   <a
                     href={viewingSourceCandidate.sourceUrl}
@@ -1180,37 +1306,50 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                   >
                     <div className="flex items-center gap-2">
                       <ExternalLink className="w-4 h-4 text-purple-400 shrink-0" />
-                      <span>Abrir publicación o fuente original verificada</span>
+                      <span>Abrir fuente registrada para verificar</span>
                     </div>
-                    <span className="text-[11px] text-purple-300 font-mono">Abrir enlace →</span>
+                    <span className="text-[11px] text-purple-300 font-mono">
+                      Abrir enlace →
+                    </span>
                   </a>
                 ) : (
                   <p className="text-xs text-stone-400 italic bg-stone-950 p-2.5 rounded-xl border border-stone-800">
-                    Fuente local validada directamente por el directorio comercial de Carmen.
+                    Fuente local validada directamente por el directorio
+                    comercial de Carmen.
                   </p>
                 )}
 
                 {/* WhatsApp Directo de Verificación */}
                 {viewingSourceCandidate.phone && (
                   <a
-                    href={`https://wa.me/52${viewingSourceCandidate.phone}?text=${encodeURIComponent('Hola ' + viewingSourceCandidate.name + ', nos comunicamos del Directorio Empresas en Carmen para verificar su información.')}`}
+                    href={`https://wa.me/52${viewingSourceCandidate.phone}?text=${encodeURIComponent("Hola " + viewingSourceCandidate.name + ", nos comunicamos del Directorio Empresas en Carmen para verificar su información.")}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-800 text-emerald-200 font-bold text-xs flex items-center justify-between transition-colors shadow-sm cursor-pointer"
                   >
                     <div className="flex items-center gap-2">
                       <MessageSquare className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>Contactar al negocio por WhatsApp (+52 {viewingSourceCandidate.phone})</span>
+                      <span>
+                        Contactar al negocio por WhatsApp (+52{" "}
+                        {viewingSourceCandidate.phone})
+                      </span>
                     </div>
-                    <span className="text-[10px] text-emerald-400 font-mono">Chatear →</span>
+                    <span className="text-[10px] text-emerald-400 font-mono">
+                      Chatear →
+                    </span>
                   </a>
                 )}
               </div>
 
               <div className="p-3 bg-amber-950/40 border border-amber-600/40 rounded-xl text-xs text-amber-200 space-y-1">
-                <p className="font-bold">⚠️ Política de Veracidad de Empresas en Carmen:</p>
+                <p className="font-bold">
+                  ⚠️ Política de Veracidad de Empresas en Carmen:
+                </p>
                 <p className="text-[11px] text-amber-300/90 leading-relaxed">
-                  Si la dirección, horarios o giro no coinciden exactamente con lo que conoces, usa el botón <strong>"Modificar"</strong> para ajustar los datos reales antes de publicar. Nunca publiques información sin confirmar.
+                  Si la dirección, horarios o giro no coinciden exactamente con
+                  lo que conoces, usa el botón <strong>"Modificar"</strong> para
+                  ajustar los datos reales antes de publicar. Nunca publiques
+                  información sin confirmar.
                 </p>
               </div>
             </div>
@@ -1246,7 +1385,6 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
       {isWhatsAppModalOpen && (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">
           <div className="bg-stone-900 border border-stone-700 rounded-3xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden text-stone-100">
-            
             <div className="p-4 sm:p-5 bg-gradient-to-r from-stone-900 via-emerald-950/60 to-stone-900 border-b border-stone-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
@@ -1260,7 +1398,8 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                     </span>
                   </h3>
                   <p className="text-xs text-stone-400">
-                    Como administrador, puedes importar automáticamente todas las publicaciones y teléfonos de tus grupos.
+                    Como administrador, puedes importar automáticamente todas
+                    las publicaciones y teléfonos de tus grupos.
                   </p>
                 </div>
               </div>
@@ -1273,18 +1412,38 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
               </button>
             </div>
 
-            <form onSubmit={handleParseWhatsApp} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+            <form
+              onSubmit={handleParseWhatsApp}
+              className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4"
+            >
               {/* Instrucciones sencillas */}
               <div className="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-800/60 text-xs text-stone-300 space-y-2">
                 <h4 className="font-bold text-emerald-300 flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4" /> ¿Cómo darle acceso y extraer las empresas de tu grupo?
+                  <Sparkles className="w-4 h-4" /> ¿Cómo darle acceso y extraer
+                  las empresas de tu grupo?
                 </h4>
                 <ol className="list-decimal list-inside space-y-1 text-stone-300 leading-relaxed">
-                  <li>Abre WhatsApp en tu teléfono y entra al grupo donde eres administrador.</li>
-                  <li>Toca el nombre del grupo arriba o los 3 puntos y ve a <strong>"Más" &gt; "Exportar chat"</strong>.</li>
-                  <li>Elige la opción <strong>"Sin archivos"</strong> para generar el archivo de texto plano.</li>
-                  <li>Copia todo el contenido del chat o pégalo directamente en el recuadro de abajo.</li>
-                  <li>El sistema analizará autónomamente cada mensaje, extraerá los números de teléfono (+52 938...), detectará el giro y los preparará para tu revisión.</li>
+                  <li>
+                    Abre WhatsApp en tu teléfono y entra al grupo donde eres
+                    administrador.
+                  </li>
+                  <li>
+                    Toca el nombre del grupo arriba o los 3 puntos y ve a{" "}
+                    <strong>"Más" &gt; "Exportar chat"</strong>.
+                  </li>
+                  <li>
+                    Elige la opción <strong>"Sin archivos"</strong> para generar
+                    el archivo de texto plano.
+                  </li>
+                  <li>
+                    Copia todo el contenido del chat o pégalo directamente en el
+                    recuadro de abajo.
+                  </li>
+                  <li>
+                    El sistema analizará autónomamente cada mensaje, extraerá
+                    los números de teléfono (+52 938...), detectará el giro y
+                    los preparará para tu revisión.
+                  </li>
                 </ol>
               </div>
 
@@ -1296,7 +1455,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                 <input
                   type="text"
                   value={whatsAppGroupName}
-                  onChange={e => setWhatsAppGroupName(e.target.value)}
+                  onChange={(e) => setWhatsAppGroupName(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-stone-950 border border-stone-700 text-sm text-white focus:border-emerald-500 outline-none"
                   placeholder="Ej: Empresas y Emprendedores en Carmen (Grupo 1)"
                   required
@@ -1310,13 +1469,15 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                     Texto del Chat Exportado *
                   </label>
                   <span className="text-[11px] text-stone-500 font-mono">
-                    {whatsAppRawText.length > 0 ? `${whatsAppRawText.length} caracteres` : 'Pega el texto aquí'}
+                    {whatsAppRawText.length > 0
+                      ? `${whatsAppRawText.length} caracteres`
+                      : "Pega el texto aquí"}
                   </span>
                 </div>
                 <textarea
                   rows={8}
                   value={whatsAppRawText}
-                  onChange={e => setWhatsAppRawText(e.target.value)}
+                  onChange={(e) => setWhatsAppRawText(e.target.value)}
                   className="w-full p-3.5 rounded-xl bg-stone-950 border border-stone-700 text-xs text-stone-200 font-mono focus:border-emerald-500 outline-none resize-none leading-relaxed"
                   placeholder="[10/10/26, 10:15:30 AM] Juan Pérez: Vendo tacos al pastor y empanadas, pedidos al 9381234567 con servicio a domicilio en toda la isla...&#10;[10/10/26, 10:20:12 AM] Climas Carmen: Mantenimiento e instalación de minisplits 9381458920..."
                   required
@@ -1337,15 +1498,17 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                   className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <UploadCloud className="w-4 h-4" />
-                  <span>{isParsingWhatsApp ? 'Procesando Chat...' : 'Extraer Negocios Automáticamente'}</span>
+                  <span>
+                    {isParsingWhatsApp
+                      ? "Procesando Chat..."
+                      : "Extraer Negocios Automáticamente"}
+                  </span>
                 </button>
               </div>
             </form>
-
           </div>
         </div>
       )}
-
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   Tag,
   PlusCircle,
@@ -20,40 +20,111 @@ import {
   AlertTriangle,
   RotateCcw,
   CheckSquare,
-  Square
-} from 'lucide-react';
-import { ClassifiedAd } from '../types';
-import { CLASSIFIED_CATEGORIES } from './ClassifiedsView';
-import { formatPhoneNumber, getWhatsAppUrl } from '../utils/phone';
-import {
-  searchClassifiedRadarCandidates,
-  approveClassifiedCandidate,
-  batchApproveClassifiedCandidates
-} from '../services/api';
+  Square,
+} from "lucide-react";
+import { ClassifiedAd } from "../types";
+import { CLASSIFIED_CATEGORIES } from "./ClassifiedsView";
+import { formatPhoneNumber, getWhatsAppUrl } from "../utils/phone";
 
-function resolveSourceSiteName(sourceUrl?: string, sourceField?: string): string {
-  const url = (sourceUrl || '').toLowerCase();
-  if (url.includes('facebook.com/groups/506440126097710')) return 'Grupo FB Empresas en Carmen';
-  if (url.includes('facebook.com/culturacarmenmx')) return 'FB Cultura Carmen';
-  if (url.includes('facebook.com/groups/')) return 'Grupo de Facebook';
-  if (url.includes('facebook.com/marketplace')) return 'FB Marketplace';
-  if (url.includes('facebook.com') || url.includes('fb.com')) return 'Facebook';
-  if (url.includes('computrabajo')) return 'Computrabajo';
-  if (url.includes('occ.com.mx')) return 'OCC Mundial';
-  if (url.includes('indeed.com')) return 'Indeed Empleos';
-  if (url.includes('inmuebles24')) return 'Inmuebles24';
-  if (url.includes('vivanuncios')) return 'Vivanuncios';
-  if (url.includes('segundamano')) return 'Segundamano';
-  if (url.includes('mercadolibre')) return 'MercadoLibre';
-  if (url.includes('lamudi')) return 'Lamudi';
-  if (url.includes('propiedades.com')) return 'Propiedades.com';
-  if (url.includes('trovit')) return 'Trovit';
-  if (url.includes('proeventos.campeche.gob.mx')) return 'ProEventos Campeche';
-  if (url.includes('dashport.run')) return 'Dashport Run';
+// These endpoints do not currently guarantee authorization + durable DB commit.
+const RADAR_WRITE_BLOCKED = true;
+const RADAR_BLOCK_REASON =
+  "Publicación bloqueada: el backend no garantiza autorización y persistencia. Los candidatos se conservan para revisión.";
+async function readRadarResponse(
+  url: string,
+  body: object,
+  controller: AbortController,
+) {
+  const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-    if (sourceUrl) return new URL(sourceUrl).hostname.replace(/^www\./, '');
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!response.ok)
+      throw new Error(
+        `Radar HTTP ${response.status}. No se confirmaron resultados.`,
+      );
+    const data = await response.json();
+    if (
+      !data ||
+      data.success !== true ||
+      !Array.isArray(data.candidates) ||
+      data.candidates.length > 1000
+    )
+      throw new Error(
+        "Respuesta de candidatos inválida. Se conserva la lista anterior.",
+      );
+    if (
+      data.candidates.some(
+        (c: any) =>
+          !c ||
+          typeof c.id !== "string" ||
+          !c.id ||
+          typeof (c.title ?? c.name) !== "string" ||
+          !(c.title ?? c.name).trim() ||
+          (c.sourceUrl &&
+            (typeof c.sourceUrl !== "string" ||
+              !/^https?:\/\//i.test(c.sourceUrl))),
+      )
+    )
+      throw new Error(
+        "Respuesta parcial o con fuentes inválidas. Se conserva la lista anterior.",
+      );
+    if (
+      new Set(data.candidates.map((c: any) => c.id)).size !==
+      data.candidates.length
+    )
+      throw new Error("La respuesta contiene candidatos duplicados.");
+    return data;
+  } catch (error) {
+    if (controller.signal.aborted)
+      throw new Error(
+        "La consulta se canceló o tardó demasiado. No se confirmó su resultado. Puedes reintentar.",
+      );
+    if (error instanceof SyntaxError)
+      throw new Error(
+        "Respuesta JSON inválida. Se conserva la lista anterior.",
+      );
+    if (error instanceof TypeError)
+      throw new Error(
+        "Error de conexión. No se confirmó el resultado; puedes reintentar.",
+      );
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function resolveSourceSiteName(
+  sourceUrl?: string,
+  sourceField?: string,
+): string {
+  const url = (sourceUrl || "").toLowerCase();
+  if (url.includes("facebook.com/groups/506440126097710"))
+    return "Grupo FB Empresas en Carmen";
+  if (url.includes("facebook.com/culturacarmenmx")) return "FB Cultura Carmen";
+  if (url.includes("facebook.com/groups/")) return "Grupo de Facebook";
+  if (url.includes("facebook.com/marketplace")) return "FB Marketplace";
+  if (url.includes("facebook.com") || url.includes("fb.com")) return "Facebook";
+  if (url.includes("computrabajo")) return "Computrabajo";
+  if (url.includes("occ.com.mx")) return "OCC Mundial";
+  if (url.includes("indeed.com")) return "Indeed Empleos";
+  if (url.includes("inmuebles24")) return "Inmuebles24";
+  if (url.includes("vivanuncios")) return "Vivanuncios";
+  if (url.includes("segundamano")) return "Segundamano";
+  if (url.includes("mercadolibre")) return "MercadoLibre";
+  if (url.includes("lamudi")) return "Lamudi";
+  if (url.includes("propiedades.com")) return "Propiedades.com";
+  if (url.includes("trovit")) return "Trovit";
+  if (url.includes("proeventos.campeche.gob.mx")) return "ProEventos Campeche";
+  if (url.includes("dashport.run")) return "Dashport Run";
+  try {
+    if (sourceUrl) return new URL(sourceUrl).hostname.replace(/^www\./, "");
   } catch {}
-  return sourceField || 'Sitio Web';
+  return sourceField || "Sitio Web";
 }
 
 interface AdminClassifiedsTabProps {
@@ -71,27 +142,52 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
   onOpenEdit,
   onDeleteAd,
   onOpenDetail,
-  onRefresh
+  onRefresh,
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCat, setSelectedCat] = useState('all');
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; text: string } | null>(
-    null
-  );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCat, setSelectedCat] = useState("all");
+  const [notification, setNotification] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Radar State
   const [isRadarOpen, setIsRadarOpen] = useState(false);
-  const [radarQuery, setRadarQuery] = useState('');
-  const [radarCat, setRadarCat] = useState('all');
+  const [radarQuery, setRadarQuery] = useState("");
+  const [radarCat, setRadarCat] = useState("all");
   const [radarLoading, setRadarLoading] = useState(false);
   const [radarCandidates, setRadarCandidates] = useState<ClassifiedAd[]>([]);
-  const [radarAiInfo, setRadarAiInfo] = useState<{ usedAi: boolean; quotaExhausted?: boolean; message?: string } | null>(null);
-  const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set());
+  const [radarAiInfo, setRadarAiInfo] = useState<{
+    usedAi: boolean;
+    quotaExhausted?: boolean;
+    message?: string;
+  } | null>(null);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [isBatchApproving, setIsBatchApproving] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
 
+  const radarGeneration = useRef(0),
+    radarBusy = useRef(false),
+    radarController = useRef<AbortController | null>(null),
+    hiddenCandidates = useRef(new Set<string>());
+  useEffect(
+    () => () => {
+      radarGeneration.current++;
+      radarController.current?.abort();
+    },
+    [],
+  );
+  const closeRadar = () => {
+    radarGeneration.current++;
+    radarController.current?.abort();
+    radarBusy.current = false;
+    setRadarLoading(false);
+    setIsRadarOpen(false);
+  };
   const handleOpenRadar = () => {
     setIsRadarOpen(true);
     setModalError(null);
@@ -101,88 +197,57 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
   };
 
   const handleSearchRadar = async (useAiMode: boolean) => {
+    if (radarBusy.current) return;
+    radarBusy.current = true;
+    const version = ++radarGeneration.current;
+    const controller = new AbortController();
+    radarController.current = controller;
     setRadarLoading(true);
     setRadarAiInfo(null);
     setModalError(null);
     try {
-      const res = await searchClassifiedRadarCandidates(radarQuery, radarCat, useAiMode);
-      if (res.success && Array.isArray(res.candidates) && res.candidates.length > 0) {
-        setRadarCandidates(res.candidates);
-        const unpub = res.candidates.filter(c => !c.alreadyPublished).map(c => c.id);
-        setSelectedCandidateIds(new Set(unpub));
-        if (res.aiInfo) {
-          setRadarAiInfo(res.aiInfo);
-        }
-      } else {
-        setModalError(res.message || 'No se encontraron candidatos para los criterios ingresados.');
-      }
-    } catch (err: any) {
-      setModalError(err.message || 'Error de conexión con el radar.');
+      const res = await readRadarResponse(
+        "/api/classifieds/radar-search",
+        { query: radarQuery, category: radarCat, useAi: useAiMode },
+        controller,
+      );
+      if (version !== radarGeneration.current) return;
+      const candidates = res.candidates.filter(
+        (c: ClassifiedAd) => !hiddenCandidates.current.has(c.id),
+      );
+      setRadarCandidates(candidates);
+      setSelectedCandidateIds(new Set());
+      setRadarAiInfo({
+        usedAi: res.aiInfo?.usedAi === true,
+        message: `${candidates.length} candidatos recibidos; fuentes y fechas pendientes de verificación. No se publicaron anuncios.`,
+      });
+    } catch (error: any) {
+      if (version === radarGeneration.current)
+        setModalError(
+          error?.message || "Consulta fallida. Se conserva la lista anterior.",
+        );
     } finally {
-      setRadarLoading(false);
+      if (version === radarGeneration.current) {
+        radarBusy.current = false;
+        setRadarLoading(false);
+      }
     }
   };
 
-  const handleApprove = async (cand: ClassifiedAd) => {
-    setApprovingId(cand.id);
-    // Optimistic removal: remove immediately from radar candidates list so user sees instant reaction!
-    setRadarCandidates(prev => prev.filter(c => c.id !== cand.id));
-    setSelectedCandidateIds(prev => {
-      const next = new Set(prev);
-      next.delete(cand.id);
-      return next;
-    });
-
-    setNotification({
-      type: 'success',
-      text: `¡Anuncio "${cand.title}" verificado y publicado con éxito!`
-    });
-
-    try {
-      const res = await approveClassifiedCandidate(cand);
-      if (res.success) {
-        if (onRefresh) onRefresh();
-      } else {
-        // Keep it published locally in view
-        if (onRefresh) onRefresh();
-      }
-    } catch (_err: any) {
-      if (onRefresh) onRefresh();
-    } finally {
-      setApprovingId(null);
-      setTimeout(() => setNotification(null), 4000);
-    }
+  const handleApprove = (_cand: ClassifiedAd) => {
+    setModalError(RADAR_BLOCK_REASON);
   };
-
-  const handleBatchApprove = async () => {
-    const toApprove = radarCandidates.filter(c => selectedCandidateIds.has(c.id) && !c.alreadyPublished);
-    if (toApprove.length === 0) return;
-
-    setIsBatchApproving(true);
-    const approvedIds = new Set(toApprove.map(c => c.id));
-    // Optimistic removal from radar
-    setRadarCandidates(prev => prev.filter(c => !approvedIds.has(c.id)));
-    setSelectedCandidateIds(new Set());
-
-    setNotification({
-      type: 'success',
-      text: `¡${toApprove.length} anuncios verificados y publicados en Clasificados!`
-    });
-
-    try {
-      await batchApproveClassifiedCandidates(toApprove);
-      if (onRefresh) onRefresh();
-    } catch (_err: any) {
-      if (onRefresh) onRefresh();
-    } finally {
-      setIsBatchApproving(false);
-      setTimeout(() => setNotification(null), 4000);
-    }
+  const handleBatchApprove = () => {
+    setModalError(RADAR_BLOCK_REASON);
   };
 
   const handleDismissCandidate = (id: string) => {
-    setRadarCandidates(prev => prev.filter(c => c.id !== id));
-    setSelectedCandidateIds(prev => {
+    hiddenCandidates.current.add(id);
+    setModalError(
+      "Ocultado en esta sesión. No es un rechazo permanente ni se guardó en el servidor.",
+    );
+    setRadarCandidates((prev) => prev.filter((c) => c.id !== id));
+    setSelectedCandidateIds((prev) => {
       const next = new Set(prev);
       next.delete(id);
       return next;
@@ -190,7 +255,7 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
   };
 
   const toggleSelectCandidate = (id: string) => {
-    setSelectedCandidateIds(prev => {
+    setSelectedCandidateIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -199,7 +264,9 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
   };
 
   const toggleSelectAll = () => {
-    const unpub = radarCandidates.filter(c => !c.alreadyPublished).map(c => c.id);
+    const unpub = radarCandidates
+      .filter((c) => !c.alreadyPublished)
+      .map((c) => c.id);
     if (selectedCandidateIds.size === unpub.length && unpub.length > 0) {
       setSelectedCandidateIds(new Set());
     } else {
@@ -208,14 +275,15 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
   };
 
   const filteredAds = useMemo(() => {
-    return classifieds.filter(ad => {
-      if (selectedCat !== 'all' && ad.category !== selectedCat) return false;
+    return classifieds.filter((ad) => {
+      if (selectedCat !== "all" && ad.category !== selectedCat) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchTitle = ad.title?.toLowerCase().includes(q);
         const matchDesc = ad.description?.toLowerCase().includes(q);
         const matchCol = ad.colonia?.toLowerCase().includes(q);
-        const matchPhone = (ad.phone || '').includes(q) || (ad.whatsapp || '').includes(q);
+        const matchPhone =
+          (ad.phone || "").includes(q) || (ad.whatsapp || "").includes(q);
         if (!matchTitle && !matchDesc && !matchCol && !matchPhone) return false;
       }
       return true;
@@ -223,20 +291,30 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
   }, [classifieds, selectedCat, searchQuery]);
 
   const handleDelete = async (ad: ClassifiedAd) => {
-    if (!window.confirm(`¿Estás seguro de que deseas eliminar permanentemente el anuncio "${ad.title}"?`)) {
+    if (
+      !window.confirm(
+        `¿Estás seguro de que deseas eliminar permanentemente el anuncio "${ad.title}"?`,
+      )
+    ) {
       return;
     }
     setDeletingId(ad.id);
     try {
       const ok = await onDeleteAd(ad.id);
       if (ok) {
-        setNotification({ type: 'success', text: 'Anuncio eliminado correctamente.' });
+        setNotification({
+          type: "success",
+          text: "Anuncio eliminado correctamente.",
+        });
         if (onRefresh) onRefresh();
       } else {
-        setNotification({ type: 'error', text: 'Error al eliminar el anuncio.' });
+        setNotification({
+          type: "error",
+          text: "Error al eliminar el anuncio.",
+        });
       }
     } catch {
-      setNotification({ type: 'error', text: 'Error al eliminar el anuncio.' });
+      setNotification({ type: "error", text: "Error al eliminar el anuncio." });
     } finally {
       setDeletingId(null);
       setTimeout(() => setNotification(null), 3000);
@@ -245,6 +323,12 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
 
   return (
     <div className="space-y-6">
+      <p
+        role="status"
+        className="p-3 rounded-xl bg-amber-50 text-amber-900 text-xs"
+      >
+        {RADAR_BLOCK_REASON} Ocultar un candidato solo afecta esta sesión.
+      </p>
       {/* Top Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-stone-50 border border-stone-200">
         <div>
@@ -257,7 +341,8 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
             </h3>
           </div>
           <p className="text-xs text-stone-500 mt-0.5">
-            Administra avisos clasificados o usa el radar para importar publicaciones del grupo oficial de Facebook con verificación previa.
+            Administra avisos clasificados o usa el radar para importar
+            publicaciones del grupo oficial de Facebook con verificación previa.
           </p>
         </div>
 
@@ -285,12 +370,12 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
       {notification && (
         <div
           className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
-            notification.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border-rose-200'
+            notification.type === "success"
+              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+              : "bg-rose-50 text-rose-800 border-rose-200"
           }`}
         >
-          {notification.type === 'success' ? (
+          {notification.type === "success" ? (
             <CheckCircle className="w-4 h-4 text-emerald-600" />
           ) : (
             <AlertCircle className="w-4 h-4 text-rose-600" />
@@ -306,7 +391,7 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
           <input
             type="text"
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Buscar clasificado por título, contacto o colonia..."
             className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs outline-none focus:border-amber-500"
           />
@@ -315,11 +400,13 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
         <div className="w-full sm:w-60">
           <select
             value={selectedCat}
-            onChange={e => setSelectedCat(e.target.value)}
+            onChange={(e) => setSelectedCat(e.target.value)}
             className="w-full p-2 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-700 font-medium outline-none focus:border-amber-500 cursor-pointer"
           >
-            <option value="all">Todas las categorías ({classifieds.length})</option>
-            {CLASSIFIED_CATEGORIES.map(c => (
+            <option value="all">
+              Todas las categorías ({classifieds.length})
+            </option>
+            {CLASSIFIED_CATEGORIES.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
@@ -350,17 +437,26 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                 </td>
               </tr>
             ) : (
-              filteredAds.map(ad => {
-                const cat = CLASSIFIED_CATEGORIES.find(c => c.id === ad.category);
+              filteredAds.map((ad) => {
+                const cat = CLASSIFIED_CATEGORIES.find(
+                  (c) => c.id === ad.category,
+                );
                 const firstImg = ad.image || (ad.images && ad.images[0]);
 
                 return (
-                  <tr key={ad.id} className="hover:bg-amber-50/40 transition-colors">
+                  <tr
+                    key={ad.id}
+                    className="hover:bg-amber-50/40 transition-colors"
+                  >
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-xl bg-stone-100 overflow-hidden border border-stone-200 shrink-0 flex items-center justify-center">
                           {firstImg ? (
-                            <img src={firstImg} alt="" className="w-full h-full object-cover" />
+                            <img
+                              src={firstImg}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
                           ) : (
                             <Tag className="w-5 h-5 text-stone-300" />
                           )}
@@ -378,34 +474,34 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
 
                     <td className="py-3 px-3">
                       <span className="px-2 py-0.5 rounded bg-stone-100 text-stone-700 font-bold text-[10px]">
-                        {cat?.name.replace(/^\d+\.\s*/, '') || ad.category}
+                        {cat?.name.replace(/^\d+\.\s*/, "") || ad.category}
                       </span>
                     </td>
 
                     <td className="py-3 px-3 font-bold text-stone-900 whitespace-nowrap">
                       {ad.price !== undefined && ad.price !== null
-                        ? `$${Number(ad.price).toLocaleString('es-MX')} ${ad.currency || 'MXN'}`
-                        : 'A convenir'}
+                        ? `$${Number(ad.price).toLocaleString("es-MX")} ${ad.currency || "MXN"}`
+                        : "A convenir"}
                     </td>
 
                     <td className="py-3 px-3 text-stone-600 whitespace-nowrap">
                       <div className="flex items-center gap-1">
                         <MapPin className="w-3 h-3 text-stone-400" />
-                        <span>{ad.colonia || 'Carmen'}</span>
+                        <span>{ad.colonia || "Carmen"}</span>
                       </div>
                     </td>
 
                     <td className="py-3 px-3 font-mono text-stone-700 whitespace-nowrap">
-                      {formatPhoneNumber(ad.whatsapp || ad.phone || 'S/N')}
+                      {formatPhoneNumber(ad.whatsapp || ad.phone || "S/N")}
                     </td>
 
                     <td className="py-3 px-3 text-stone-400 text-[11px] whitespace-nowrap">
                       {ad.createdAt
-                        ? new Date(ad.createdAt).toLocaleDateString('es-MX', {
-                            day: 'numeric',
-                            month: 'short'
+                        ? new Date(ad.createdAt).toLocaleDateString("es-MX", {
+                            day: "numeric",
+                            month: "short",
                           })
-                        : 'Reciente'}
+                        : "Reciente"}
                     </td>
 
                     <td className="py-3 px-3 text-right whitespace-nowrap">
@@ -458,31 +554,32 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
           aria-modal="true"
           className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200"
           style={{
-            background: 'rgba(15, 23, 42, 0.45)',
-            backdropFilter: 'blur(25px)',
-            WebkitBackdropFilter: 'blur(25px)',
+            background: "rgba(15, 23, 42, 0.45)",
+            backdropFilter: "blur(25px)",
+            WebkitBackdropFilter: "blur(25px)",
           }}
-          onClick={() => setIsRadarOpen(false)}
+          onClick={closeRadar}
         >
           <div
             className="w-full max-w-4xl h-[92dvh] sm:h-auto sm:max-h-[88vh] rounded-3xl flex flex-col overflow-hidden"
             style={{
-              background: 'rgba(255, 255, 255, 0.88)',
-              backdropFilter: 'blur(40px) saturate(190%)',
-              WebkitBackdropFilter: 'blur(40px) saturate(190%)',
-              border: '1.5px solid rgba(255, 255, 255, 0.95)',
-              boxShadow: '0 30px 70px -15px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+              background: "rgba(255, 255, 255, 0.88)",
+              backdropFilter: "blur(40px) saturate(190%)",
+              WebkitBackdropFilter: "blur(40px) saturate(190%)",
+              border: "1.5px solid rgba(255, 255, 255, 0.95)",
+              boxShadow:
+                "0 30px 70px -15px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.95)",
             }}
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
             <div
               className="p-3 sm:p-5 flex items-start justify-between gap-3 sm:gap-4 shrink-0"
               style={{
-                background: 'rgba(255, 255, 255, 0.75)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-                borderBottom: '1.5px solid rgba(255, 255, 255, 0.85)',
+                background: "rgba(255, 255, 255, 0.75)",
+                backdropFilter: "blur(20px)",
+                WebkitBackdropFilter: "blur(20px)",
+                borderBottom: "1.5px solid rgba(255, 255, 255, 0.85)",
               }}
             >
               <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
@@ -497,7 +594,7 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                     </span>
                   </h3>
                   <p className="text-xs text-stone-500 mt-0.5 max-w-2xl hidden sm:block">
-                    Rastreador de publicaciones del grupo oficial{' '}
+                    Rastreador de publicaciones del grupo oficial{" "}
                     <a
                       href="https://www.facebook.com/groups/506440126097710"
                       target="_blank"
@@ -507,7 +604,8 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                       Empresas en Carmen (506440126097710)
                       <ExternalLink className="w-3 h-3" />
                     </a>
-                    . El administrador verifica la autenticidad y aprueba cada anuncio antes de publicarlo en el portal.
+                    . El administrador verifica la autenticidad y aprueba cada
+                    anuncio antes de publicarlo en el portal.
                   </p>
                   <p className="text-[11px] text-stone-500 mt-0.5 sm:hidden truncate">
                     Grupo Oficial: Empresas en Carmen (506440126097710)
@@ -517,7 +615,7 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
 
               <button
                 type="button"
-                onClick={() => setIsRadarOpen(false)}
+                onClick={closeRadar}
                 className="p-1.5 sm:p-2 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-200 transition-colors cursor-pointer shrink-0"
                 title="Cerrar Radar"
               >
@@ -533,9 +631,9 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                   <input
                     type="text"
                     value={radarQuery}
-                    onChange={e => setRadarQuery(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') handleSearchRadar(false);
+                    onChange={(e) => setRadarQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSearchRadar(false);
                     }}
                     placeholder="Buscar empleo, departamento, auto, minisplit..."
                     className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs outline-none focus:border-indigo-500 font-medium"
@@ -545,13 +643,13 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                 <div className="sm:col-span-3">
                   <select
                     value={radarCat}
-                    onChange={e => setRadarCat(e.target.value)}
+                    onChange={(e) => setRadarCat(e.target.value)}
                     className="w-full p-2 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-700 font-medium outline-none focus:border-indigo-500 cursor-pointer"
                   >
                     <option value="all">Todas las categorías</option>
-                    {CLASSIFIED_CATEGORIES.map(c => (
+                    {CLASSIFIED_CATEGORIES.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name.replace(/^\d+\.\s*/, '')}
+                        {c.name.replace(/^\d+\.\s*/, "")}
                       </option>
                     ))}
                   </select>
@@ -590,9 +688,18 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                 </div>
               </div>
 
+              <p
+                role="status"
+                className="p-3 rounded-xl bg-amber-50 text-amber-900 text-xs"
+              >
+                {RADAR_BLOCK_REASON}
+              </p>
               {/* Modal Error Alert */}
               {modalError && (
-                <div className="p-3 rounded-xl text-xs bg-rose-50 border border-rose-200 text-rose-800 flex items-center justify-between gap-2">
+                <div
+                  role="alert"
+                  className="p-3 rounded-xl text-xs bg-rose-50 border border-rose-200 text-rose-800 flex items-center justify-between gap-2"
+                >
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
                     <span className="font-medium">{modalError}</span>
@@ -610,12 +717,14 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
               {/* Status & Quota message banner */}
               {radarAiInfo && (
                 <div
+                  role="status"
+                  aria-live="polite"
                   className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
                     radarAiInfo.quotaExhausted
-                      ? 'bg-amber-50 border border-amber-200 text-amber-900'
+                      ? "bg-amber-50 border border-amber-200 text-amber-900"
                       : radarAiInfo.usedAi
-                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-900'
-                      : 'bg-indigo-50 border border-indigo-200 text-indigo-900'
+                        ? "bg-emerald-50 border border-emerald-200 text-emerald-900"
+                        : "bg-indigo-50 border border-indigo-200 text-indigo-900"
                   }`}
                 >
                   {radarAiInfo.quotaExhausted ? (
@@ -633,13 +742,13 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
               {notification && (
                 <div
                   className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between gap-2 shadow-xs animate-in fade-in duration-200 ${
-                    notification.type === 'success'
-                      ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
-                      : 'bg-rose-50 text-rose-900 border-rose-300'
+                    notification.type === "success"
+                      ? "bg-emerald-50 text-emerald-900 border-emerald-300"
+                      : "bg-rose-50 text-rose-900 border-rose-300"
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    {notification.type === 'success' ? (
+                    {notification.type === "success" ? (
                       <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
                     ) : (
                       <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -670,12 +779,15 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                   >
                     {selectedCandidateIds.size > 0 &&
                     selectedCandidateIds.size ===
-                      radarCandidates.filter(c => !c.alreadyPublished).length ? (
+                      radarCandidates.filter((c) => !c.alreadyPublished)
+                        .length ? (
                       <CheckSquare className="w-3.5 h-3.5" />
                     ) : (
                       <Square className="w-3.5 h-3.5" />
                     )}
-                    <span>Seleccionar pendientes ({selectedCandidateIds.size})</span>
+                    <span>
+                      Seleccionar pendientes ({selectedCandidateIds.size})
+                    </span>
                   </button>
                 </div>
 
@@ -683,7 +795,7 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                   <button
                     type="button"
                     onClick={handleBatchApprove}
-                    disabled={isBatchApproving}
+                    disabled={RADAR_WRITE_BLOCKED || isBatchApproving}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer self-start sm:self-auto"
                   >
                     {isBatchApproving ? (
@@ -691,7 +803,9 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                     ) : (
                       <Check className="w-3.5 h-3.5" />
                     )}
-                    <span>Aprobar seleccionados ({selectedCandidateIds.size})</span>
+                    <span>
+                      Aprobar seleccionados ({selectedCandidateIds.size})
+                    </span>
                   </button>
                 )}
               </div>
@@ -700,13 +814,14 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
             {/* Candidates List Body (Scrollable container with native iOS touch momentum) */}
             <div
               className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-5 space-y-3 sm:space-y-4 bg-stone-100/50 touch-pan-y"
-              style={{ WebkitOverflowScrolling: 'touch' }}
+              style={{ WebkitOverflowScrolling: "touch" }}
             >
               {radarLoading ? (
                 <div className="py-16 text-center space-y-3">
                   <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto" />
                   <p className="text-xs font-bold text-stone-600">
-                    Rastreando publicaciones verificables en el grupo de Facebook de Empresas en Carmen...
+                    Rastreando publicaciones verificables en el grupo de
+                    Facebook de Empresas en Carmen...
                   </p>
                 </div>
               ) : radarCandidates.length === 0 ? (
@@ -716,12 +831,15 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                     No se encontraron candidatos para los criterios ingresados.
                   </p>
                   <p className="text-[11px] text-stone-400">
-                    Intenta buscar con palabras clave como "empleo", "renta", "terreno", "versa" o pulsa "Buscar (Sin IA)".
+                    Intenta buscar con palabras clave como "empleo", "renta",
+                    "terreno", "versa" o pulsa "Buscar (Sin IA)".
                   </p>
                 </div>
               ) : (
-                radarCandidates.map(cand => {
-                  const catObj = CLASSIFIED_CATEGORIES.find(c => c.id === cand.category);
+                radarCandidates.map((cand) => {
+                  const catObj = CLASSIFIED_CATEGORIES.find(
+                    (c) => c.id === cand.category,
+                  );
                   const isSelected = selectedCandidateIds.has(cand.id);
                   const isApproving = approvingId === cand.id;
 
@@ -730,10 +848,10 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                       key={cand.id}
                       className={`p-4 rounded-2xl border transition-all ${
                         cand.alreadyPublished
-                          ? 'bg-emerald-50/40 border-emerald-200'
+                          ? "bg-emerald-50/40 border-emerald-200"
                           : isSelected
-                          ? 'bg-white border-indigo-400 shadow-md ring-2 ring-indigo-400/20'
-                          : 'bg-white border-stone-200 hover:border-stone-300 shadow-xs'
+                            ? "bg-white border-indigo-400 shadow-md ring-2 ring-indigo-400/20"
+                            : "bg-white border-stone-200 hover:border-stone-300 shadow-xs"
                       }`}
                     >
                       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
@@ -757,7 +875,8 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                             {/* Badges row */}
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="px-2 py-0.5 rounded-lg bg-stone-100 text-stone-700 font-bold text-[10px]">
-                                {catObj?.name.replace(/^\d+\.\s*/, '') || cand.category}
+                                {catObj?.name.replace(/^\d+\.\s*/, "") ||
+                                  cand.category}
                               </span>
 
                               {cand.alreadyPublished ? (
@@ -771,26 +890,30 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                                 </span>
                               )}
 
-                              {cand.sourceUrl && (() => {
-                                const siteName = resolveSourceSiteName(cand.sourceUrl, cand.source);
-                                return (
-                                  <>
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-stone-100 text-stone-700 font-bold text-[10px] border border-stone-200">
-                                      <span>Fuente: {siteName}</span>
-                                    </span>
-                                    <a
-                                      href={cand.sourceUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] transition-colors shadow-2xs"
-                                      title={`Abrir publicación exacta en ${siteName}: ${cand.sourceUrl}`}
-                                    >
-                                      <span>Ver en {siteName}</span>
-                                      <ExternalLink className="w-2.5 h-2.5" />
-                                    </a>
-                                  </>
-                                );
-                              })()}
+                              {cand.sourceUrl &&
+                                (() => {
+                                  const siteName = resolveSourceSiteName(
+                                    cand.sourceUrl,
+                                    cand.source,
+                                  );
+                                  return (
+                                    <>
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-stone-100 text-stone-700 font-bold text-[10px] border border-stone-200">
+                                        <span>Fuente: {siteName}</span>
+                                      </span>
+                                      <a
+                                        href={cand.sourceUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] transition-colors shadow-2xs"
+                                        title={`Abrir publicación exacta en ${siteName}: ${cand.sourceUrl}`}
+                                      >
+                                        <span>Ver en {siteName}</span>
+                                        <ExternalLink className="w-2.5 h-2.5" />
+                                      </a>
+                                    </>
+                                  );
+                                })()}
                             </div>
 
                             {/* Title & Price */}
@@ -799,9 +922,11 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                                 {cand.title}
                               </h4>
                               <span className="text-xs font-black text-emerald-600">
-                                {cand.price !== undefined && cand.price !== null && cand.price > 0
-                                  ? `$${Number(cand.price).toLocaleString('es-MX')} ${cand.currency || 'MXN'}`
-                                  : 'Consultar precio'}
+                                {cand.price !== undefined &&
+                                cand.price !== null &&
+                                cand.price > 0
+                                  ? `$${Number(cand.price).toLocaleString("es-MX")} ${cand.currency || "MXN"}`
+                                  : "Consultar precio"}
                               </span>
                             </div>
 
@@ -814,7 +939,10 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                             <div className="pt-2 flex items-center gap-4 text-xs text-stone-500 flex-wrap">
                               <div className="flex items-center gap-1 font-medium">
                                 <MapPin className="w-3.5 h-3.5 text-stone-400" />
-                                <span>{cand.colonia || 'Ciudad del Carmen, Campeche'}</span>
+                                <span>
+                                  {cand.colonia ||
+                                    "Ciudad del Carmen, Campeche"}
+                                </span>
                               </div>
 
                               {(cand.phone || cand.whatsapp) && (
@@ -824,13 +952,17 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                                     className="flex items-center gap-1 text-stone-700 hover:text-amber-600 font-mono font-bold"
                                   >
                                     <Phone className="w-3 h-3 text-stone-400" />
-                                    <span>{formatPhoneNumber(cand.phone || cand.whatsapp || '')}</span>
+                                    <span>
+                                      {formatPhoneNumber(
+                                        cand.phone || cand.whatsapp || "",
+                                      )}
+                                    </span>
                                   </a>
 
                                   <a
                                     href={getWhatsAppUrl(
                                       cand.whatsapp || cand.phone,
-                                      `Hola, vi su anuncio "${cand.title}" en el portal de Empresas en Carmen y me interesa información.`
+                                      `Hola, vi su anuncio "${cand.title}" en el portal de Empresas en Carmen y me interesa información.`,
                                     )}
                                     target="_blank"
                                     rel="noopener noreferrer"
@@ -844,7 +976,10 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
 
                               {cand.contactName && (
                                 <span className="text-stone-400 text-[11px]">
-                                  Contacto: <strong className="text-stone-600">{cand.contactName}</strong>
+                                  Contacto:{" "}
+                                  <strong className="text-stone-600">
+                                    {cand.contactName}
+                                  </strong>
                                 </span>
                               )}
                             </div>
@@ -875,9 +1010,9 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                               <button
                                 type="button"
                                 onClick={() => handleApprove(cand)}
-                                disabled={isApproving}
+                                disabled={RADAR_WRITE_BLOCKED || isApproving}
                                 className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-xs transition-transform active:scale-95 disabled:opacity-50 cursor-pointer"
-                                title="Aprobar anuncio para que aparezca en el portal"
+                                title={RADAR_BLOCK_REASON}
                               >
                                 {isApproving ? (
                                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -891,10 +1026,10 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                                 type="button"
                                 onClick={() => handleDismissCandidate(cand.id)}
                                 className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-xl border border-stone-200 text-stone-500 hover:text-rose-600 hover:border-rose-200 transition-colors text-xs font-bold cursor-pointer"
-                                title="Descartar de la lista de candidatos"
+                                title="Ocultar solo en esta sesión"
                               >
                                 <X className="w-3.5 h-3.5" />
-                                <span>Descartar</span>
+                                <span>Ocultar en sesión</span>
                               </button>
                             </>
                           ) : (
@@ -914,10 +1049,10 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
             <div
               className="p-3 sm:p-4 flex items-center justify-between text-xs text-stone-600 font-semibold shrink-0"
               style={{
-                background: 'rgba(255, 255, 255, 0.75)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-                borderTop: '1.5px solid rgba(255, 255, 255, 0.85)',
+                background: "rgba(255, 255, 255, 0.75)",
+                backdropFilter: "blur(20px)",
+                WebkitBackdropFilter: "blur(20px)",
+                borderTop: "1.5px solid rgba(255, 255, 255, 0.85)",
               }}
             >
               <span className="flex items-center gap-1.5">
@@ -927,7 +1062,7 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
 
               <button
                 type="button"
-                onClick={() => setIsRadarOpen(false)}
+                onClick={closeRadar}
                 className="px-4 py-2 rounded-2xl border border-stone-300/80 hover:bg-stone-200/60 active:scale-95 text-stone-800 font-bold text-xs transition-all cursor-pointer"
               >
                 Cerrar

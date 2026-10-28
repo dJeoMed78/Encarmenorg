@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
   Calendar,
   Plus,
@@ -25,8 +25,8 @@ import {
   Eye,
   RefreshCw,
   AlertCircle,
-  CheckCircle2
-} from 'lucide-react';
+  CheckCircle2,
+} from "lucide-react";
 import {
   EventItem,
   getEventsData,
@@ -34,67 +34,152 @@ import {
   updateEventItem,
   deleteEventItem,
   resetEventsDataToDefault,
-  triggerAIRadarScan,
-  getAIRadarStatus,
   AIRadarStatus,
   fetchEventsFromAPI,
-  searchAIRadarCandidates,
-  publishAIRadarCandidates,
-  AIRadarCandidate
-} from '../services/eventsService';
-import { getEventRepresentativeImage, getFallbackThematicImage } from '../utils/eventImages';
+  AIRadarCandidate,
+} from "../services/eventsService";
+import {
+  getEventRepresentativeImage,
+  getFallbackThematicImage,
+} from "../utils/eventImages";
 
-function resolveSourceSiteName(sourceUrl?: string, sourceField?: string): string {
-  const url = (sourceUrl || '').toLowerCase();
-  if (url.includes('facebook.com/groups/506440126097710')) return 'Grupo FB Empresas en Carmen';
-  if (url.includes('facebook.com/culturacarmenmx')) return 'FB Cultura Carmen';
-  if (url.includes('facebook.com/groups/')) return 'Grupo de Facebook';
-  if (url.includes('facebook.com/marketplace')) return 'FB Marketplace';
-  if (url.includes('facebook.com') || url.includes('fb.com')) return 'Facebook';
-  if (url.includes('computrabajo')) return 'Computrabajo';
-  if (url.includes('occ.com.mx')) return 'OCC Mundial';
-  if (url.includes('indeed.com')) return 'Indeed Empleos';
-  if (url.includes('inmuebles24')) return 'Inmuebles24';
-  if (url.includes('vivanuncios')) return 'Vivanuncios';
-  if (url.includes('segundamano')) return 'Segundamano';
-  if (url.includes('mercadolibre')) return 'MercadoLibre';
-  if (url.includes('lamudi')) return 'Lamudi';
-  if (url.includes('propiedades.com')) return 'Propiedades.com';
-  if (url.includes('trovit')) return 'Trovit';
-  if (url.includes('proeventos.campeche.gob.mx')) return 'ProEventos Campeche';
-  if (url.includes('dashport.run')) return 'Dashport Run';
+function resolveSourceSiteName(
+  sourceUrl?: string,
+  sourceField?: string,
+): string {
+  const url = (sourceUrl || "").toLowerCase();
+  if (url.includes("facebook.com/groups/506440126097710"))
+    return "Grupo FB Empresas en Carmen";
+  if (url.includes("facebook.com/culturacarmenmx")) return "FB Cultura Carmen";
+  if (url.includes("facebook.com/groups/")) return "Grupo de Facebook";
+  if (url.includes("facebook.com/marketplace")) return "FB Marketplace";
+  if (url.includes("facebook.com") || url.includes("fb.com")) return "Facebook";
+  if (url.includes("computrabajo")) return "Computrabajo";
+  if (url.includes("occ.com.mx")) return "OCC Mundial";
+  if (url.includes("indeed.com")) return "Indeed Empleos";
+  if (url.includes("inmuebles24")) return "Inmuebles24";
+  if (url.includes("vivanuncios")) return "Vivanuncios";
+  if (url.includes("segundamano")) return "Segundamano";
+  if (url.includes("mercadolibre")) return "MercadoLibre";
+  if (url.includes("lamudi")) return "Lamudi";
+  if (url.includes("propiedades.com")) return "Propiedades.com";
+  if (url.includes("trovit")) return "Trovit";
+  if (url.includes("proeventos.campeche.gob.mx")) return "ProEventos Campeche";
+  if (url.includes("dashport.run")) return "Dashport Run";
   try {
-    if (sourceUrl) return new URL(sourceUrl).hostname.replace(/^www\./, '');
+    if (sourceUrl) return new URL(sourceUrl).hostname.replace(/^www\./, "");
   } catch {}
-  return sourceField || 'Sitio Web';
+  return sourceField || "Sitio Web";
 }
 
 const AVAILABLE_ICONS = [
-  { name: 'Calendar', label: 'Calendario General' },
-  { name: 'ShoppingBag', label: 'Bazar / Emprendedores' },
-  { name: 'Music', label: 'Música / Concierto' },
-  { name: 'Bike', label: 'Deporte / Rodada' },
-  { name: 'UtensilsCrossed', label: 'Gastronomía / Mariscos' },
-  { name: 'Sparkles', label: 'Feria / Festival' }
+  { name: "Calendar", label: "Calendario General" },
+  { name: "ShoppingBag", label: "Bazar / Emprendedores" },
+  { name: "Music", label: "Música / Concierto" },
+  { name: "Bike", label: "Deporte / Rodada" },
+  { name: "UtensilsCrossed", label: "Gastronomía / Mariscos" },
+  { name: "Sparkles", label: "Feria / Festival" },
 ];
+
+// These endpoints do not currently guarantee authorization + durable DB commit.
+const RADAR_WRITE_BLOCKED = true;
+const RADAR_BLOCK_REASON =
+  "Publicación bloqueada: el backend no garantiza autorización y persistencia. Los candidatos se conservan para revisión.";
+async function readRadarResponse(
+  url: string,
+  body: object,
+  controller: AbortController,
+) {
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!response.ok)
+      throw new Error(
+        `Radar HTTP ${response.status}. No se confirmaron resultados.`,
+      );
+    const data = await response.json();
+    if (
+      !data ||
+      data.success !== true ||
+      !Array.isArray(data.candidates) ||
+      data.candidates.length > 1000
+    )
+      throw new Error(
+        "Respuesta de candidatos inválida. Se conserva la lista anterior.",
+      );
+    if (
+      data.candidates.some(
+        (c: any) =>
+          !c ||
+          typeof c.id !== "string" ||
+          !c.id ||
+          typeof (c.title ?? c.name) !== "string" ||
+          !(c.title ?? c.name).trim() ||
+          (c.sourceUrl &&
+            (typeof c.sourceUrl !== "string" ||
+              !/^https?:\/\//i.test(c.sourceUrl))),
+      )
+    )
+      throw new Error(
+        "Respuesta parcial o con fuentes inválidas. Se conserva la lista anterior.",
+      );
+    if (
+      new Set(data.candidates.map((c: any) => c.id)).size !==
+      data.candidates.length
+    )
+      throw new Error("La respuesta contiene candidatos duplicados.");
+    return data;
+  } catch (error) {
+    if (controller.signal.aborted)
+      throw new Error(
+        "La consulta se canceló o tardó demasiado. No se confirmó su resultado. Puedes reintentar.",
+      );
+    if (error instanceof SyntaxError)
+      throw new Error(
+        "Respuesta JSON inválida. Se conserva la lista anterior.",
+      );
+    if (error instanceof TypeError)
+      throw new Error(
+        "Error de conexión. No se confirmó el resultado; puedes reintentar.",
+      );
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export const AdminEventsTab: React.FC = () => {
   const [events, setEvents] = useState<EventItem[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [filterSource, setFilterSource] = useState<'all' | 'ai' | 'manual'>('all');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [filterSource, setFilterSource] = useState<"all" | "ai" | "manual">(
+    "all",
+  );
   const [isScanningRadar, setIsScanningRadar] = useState(false);
   const [radarStatus, setRadarStatus] = useState<AIRadarStatus | null>(null);
-  const [eventToDelete, setEventToDelete] = useState<{ id: string; title: string } | null>(null);
+  const [eventToDelete, setEventToDelete] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // AI Event Search Modal State
   const [isAiSearchModalOpen, setIsAiSearchModalOpen] = useState(false);
-  const [aiSearchQuery, setAiSearchQuery] = useState('');
+  const [aiSearchQuery, setAiSearchQuery] = useState("");
   const [aiSearchLoading, setAiSearchLoading] = useState(false);
   const [aiCandidates, setAiCandidates] = useState<AIRadarCandidate[]>([]);
-  const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set());
-  const [aiSearchMessage, setAiSearchMessage] = useState<{ text: string; type: 'success' | 'warning' | 'error' } | null>(null);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [aiSearchMessage, setAiSearchMessage] = useState<{
+    text: string;
+    type: "success" | "warning" | "error";
+  } | null>(null);
   const [isPublishingCandidates, setIsPublishingCandidates] = useState(false);
 
   // Form State
@@ -103,24 +188,27 @@ export const AdminEventsTab: React.FC = () => {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [formData, setFormData] = useState<Omit<EventItem, 'id'>>({
-    title: '',
-    category: 'Bazares y Emprendedores',
-    categorySlug: 'bazares',
-    date: 'Sábado y Domingo',
-    time: '5:00 PM - 10:00 PM',
-    location: 'Playa Norte, Ciudad del Carmen',
-    cost: 'Entrada Libre',
-    description: '',
-    organizer: 'Emprendedores del Carmen',
-    badge: 'Ambiente Familiar',
-    icon: 'ShoppingBag',
-    image: '',
+  const [formData, setFormData] = useState<Omit<EventItem, "id">>({
+    title: "",
+    category: "Bazares y Emprendedores",
+    categorySlug: "bazares",
+    date: "Sábado y Domingo",
+    time: "5:00 PM - 10:00 PM",
+    location: "Playa Norte, Ciudad del Carmen",
+    cost: "Entrada Libre",
+    description: "",
+    organizer: "Emprendedores del Carmen",
+    badge: "Ambiente Familiar",
+    icon: "ShoppingBag",
+    image: "",
     aiDetected: false,
-    sourceUrl: ''
+    sourceUrl: "",
   });
 
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [message, setMessage] = useState<{
+    text: string;
+    type: "success" | "error";
+  } | null>(null);
 
   const loadData = async () => {
     setEvents(getEventsData());
@@ -134,9 +222,19 @@ export const AdminEventsTab: React.FC = () => {
 
   const loadRadarStatus = async () => {
     try {
-      const st = await getAIRadarStatus();
-      setRadarStatus(st);
-    } catch {}
+      const response = await fetch("/api/events/radar-status");
+      const data = await response.json();
+      if (
+        !response.ok ||
+        data.success !== true ||
+        !Number.isInteger(data.totalEvents) ||
+        data.totalEvents < 0
+      )
+        throw new Error();
+      setRadarStatus(data);
+    } catch {
+      setRadarStatus(null);
+    }
   };
 
   useEffect(() => {
@@ -146,93 +244,79 @@ export const AdminEventsTab: React.FC = () => {
       loadData();
       loadRadarStatus();
     };
-    window.addEventListener('events-billboard-updated', handleUpdate);
-    return () => window.removeEventListener('events-billboard-updated', handleUpdate);
+    window.addEventListener("events-billboard-updated", handleUpdate);
+    return () =>
+      window.removeEventListener("events-billboard-updated", handleUpdate);
   }, []);
 
-  const handleRunRadar = async () => {
-    setIsScanningRadar(true);
-    setMessage(null);
-    try {
-      const res = await triggerAIRadarScan();
-      if (res.success) {
-        setMessage({
-          text: res.message || `¡Radar completado! Se detectaron y publicaron ${res.newEventsAdded} nuevos eventos.`,
-          type: 'success'
-        });
-        loadData();
-        loadRadarStatus();
-      } else {
-        setMessage({
-          text: res.message || 'Error al ejecutar el Radar IA.',
-          type: 'error'
-        });
-      }
-    } catch (err: any) {
-      const errStr = String(err?.message || err || '');
-      const isSyntaxOrPattern = errStr.includes('pattern') || errStr.includes('The string did not match');
-      setMessage({
-        text: isSyntaxOrPattern
-          ? 'Radar completado: Se sincronizó la cartelera con el radar local de respaldo (Modo de protección de red activo).'
-          : (err.message || 'Error de conexión con el Radar de Google/Gemini.'),
-        type: isSyntaxOrPattern ? 'success' : 'error'
-      });
-    } finally {
-      setIsScanningRadar(false);
-    }
+  const radarGeneration = useRef(0),
+    radarBusy = useRef(false),
+    radarController = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      radarGeneration.current++;
+      radarController.current?.abort();
+    },
+    [],
+  );
+  const closeAiRadar = () => {
+    radarGeneration.current++;
+    radarController.current?.abort();
+    radarBusy.current = false;
+    setAiSearchLoading(false);
+    setIsAiSearchModalOpen(false);
+  };
+  const handleRunRadar = () => {
+    setMessage({ text: RADAR_BLOCK_REASON, type: "error" });
   };
 
   const handleOpenAiSearch = async () => {
     setIsAiSearchModalOpen(true);
     setAiSearchMessage(null);
     if (aiCandidates.length === 0) {
-      handleExecuteAiSearch(true);
+      handleExecuteAiSearch(false);
     }
   };
 
-  const handleExecuteAiSearch = async (useAiMode: boolean = true) => {
+  const handleExecuteAiSearch = async (useAiMode: boolean = false) => {
+    if (radarBusy.current) return;
+    radarBusy.current = true;
+    const version = ++radarGeneration.current;
+    const controller = new AbortController();
+    radarController.current = controller;
     setAiSearchLoading(true);
     setAiSearchMessage(null);
     try {
-      const res = await searchAIRadarCandidates(aiSearchQuery, useAiMode);
-      if (res.success && Array.isArray(res.candidates)) {
-        setAiCandidates(res.candidates);
-        const unpub = res.candidates.filter(c => !c.alreadyPublished).map(c => c.id);
-        setSelectedCandidateIds(new Set(unpub));
-
-        if (res.aiInfo?.quotaExhausted) {
-          setAiSearchMessage({
-            text: res.aiInfo.message || '⚠️ Las llamadas gratuitas de la API de Gemini se han agotado por hoy (límite de cuota diaria alcanzado). El servicio gratuito de Google se restablecerá automáticamente mañana. Se usaron los eventos del radar local autónomo.',
-            type: 'warning'
-          });
-        } else if (res.aiInfo?.message) {
-          setAiSearchMessage({
-            text: res.aiInfo.message,
-            type: 'success'
-          });
-        } else {
-          setAiSearchMessage({
-            text: `Se encontraron ${res.candidates.length} eventos candidatos en Ciudad del Carmen.`,
-            type: 'success'
-          });
-        }
-      }
-    } catch (err: any) {
-      const errStr = String(err?.message || err || '');
-      const isSyntaxOrPattern = errStr.includes('pattern') || errStr.includes('The string did not match');
+      const res = await readRadarResponse(
+        "/api/events/radar-search",
+        { query: aiSearchQuery, useAi: useAiMode },
+        controller,
+      );
+      if (version !== radarGeneration.current) return;
+      setAiCandidates(res.candidates);
+      setSelectedCandidateIds(new Set());
       setAiSearchMessage({
-        text: isSyntaxOrPattern
-          ? 'Aviso: Se cargaron los eventos del radar local de Ciudad del Carmen (Protección de proxy activa).'
-          : (err.message || 'Error al ejecutar la búsqueda de eventos con IA.'),
-        type: isSyntaxOrPattern ? 'warning' : 'error'
+        text: `${res.candidates.length} candidatos recibidos para revisión. Ninguno fue publicado; fuente, fecha y localidad requieren verificación.`,
+        type: "warning",
       });
+    } catch (error: any) {
+      if (version === radarGeneration.current)
+        setAiSearchMessage({
+          text:
+            error?.message ||
+            "Consulta fallida; candidatos anteriores conservados.",
+          type: "error",
+        });
     } finally {
-      setAiSearchLoading(false);
+      if (version === radarGeneration.current) {
+        radarBusy.current = false;
+        setAiSearchLoading(false);
+      }
     }
   };
 
   const handleToggleCandidate = (id: string) => {
-    setSelectedCandidateIds(prev => {
+    setSelectedCandidateIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -240,41 +324,21 @@ export const AdminEventsTab: React.FC = () => {
     });
   };
 
-  const handlePublishSelectedCandidates = async () => {
-    const toPublish = aiCandidates.filter(c => selectedCandidateIds.has(c.id) && !c.alreadyPublished);
-    if (toPublish.length === 0) {
-      setAiSearchMessage({ text: 'Por favor selecciona al menos un evento que aún no esté publicado.', type: 'warning' });
-      return;
-    }
-    setIsPublishingCandidates(true);
-    try {
-      const res = await publishAIRadarCandidates(toPublish);
-      if (res.success) {
-        setMessage({
-          text: `¡Éxito! Se publicaron ${res.count} eventos en la cartelera.`,
-          type: 'success'
-        });
-        setIsAiSearchModalOpen(false);
-        loadData();
-        loadRadarStatus();
-      }
-    } catch (err: any) {
-      setMessage({ text: err.message || 'Error al publicar eventos.', type: 'error' });
-    } finally {
-      setIsPublishingCandidates(false);
-    }
+  const handlePublishSelectedCandidates = () => {
+    setAiSearchMessage({ text: RADAR_BLOCK_REASON, type: "error" });
   };
 
-  const categories = Array.from(new Set(events.map(e => e.category)));
-  const aiEventsCount = events.filter(e => e.aiDetected).length;
-  const manualEventsCount = events.filter(e => !e.aiDetected).length;
+  const categories = Array.from(new Set(events.map((e) => e.category)));
+  const aiEventsCount = events.filter((e) => e.aiDetected).length;
+  const manualEventsCount = events.filter((e) => !e.aiDetected).length;
 
-  const filteredEvents = events.filter(evt => {
-    const matchCat = selectedCategory === 'all' || evt.category === selectedCategory;
+  const filteredEvents = events.filter((evt) => {
+    const matchCat =
+      selectedCategory === "all" || evt.category === selectedCategory;
     if (!matchCat) return false;
 
-    if (filterSource === 'ai' && !evt.aiDetected) return false;
-    if (filterSource === 'manual' && evt.aiDetected) return false;
+    if (filterSource === "ai" && !evt.aiDetected) return false;
+    if (filterSource === "manual" && evt.aiDetected) return false;
 
     if (!searchTerm.trim()) return true;
     const q = searchTerm.toLowerCase();
@@ -289,20 +353,20 @@ export const AdminEventsTab: React.FC = () => {
   const handleOpenCreate = () => {
     setEditingId(null);
     setFormData({
-      title: '',
-      category: 'Bazares y Emprendedores',
-      categorySlug: 'bazares',
-      date: 'Fin de Semana',
-      time: '6:00 PM - 10:00 PM',
-      location: 'Ciudad del Carmen, Campeche',
-      cost: 'Entrada Libre',
-      description: '',
-      organizer: 'Comunidad Carmelita',
-      badge: 'Para toda la familia',
-      icon: 'Calendar',
-      image: '',
-      sourceUrl: '',
-      aiDetected: false
+      title: "",
+      category: "Bazares y Emprendedores",
+      categorySlug: "bazares",
+      date: "Fin de Semana",
+      time: "6:00 PM - 10:00 PM",
+      location: "Ciudad del Carmen, Campeche",
+      cost: "Entrada Libre",
+      description: "",
+      organizer: "Comunidad Carmelita",
+      badge: "Para toda la familia",
+      icon: "Calendar",
+      image: "",
+      sourceUrl: "",
+      aiDetected: false,
     });
     setIsFormOpen(true);
   };
@@ -321,9 +385,9 @@ export const AdminEventsTab: React.FC = () => {
       organizer: evt.organizer,
       badge: evt.badge,
       icon: evt.icon,
-      image: evt.image || '',
-      sourceUrl: evt.sourceUrl || '',
-      aiDetected: Boolean(evt.aiDetected)
+      image: evt.image || "",
+      sourceUrl: evt.sourceUrl || "",
+      aiDetected: Boolean(evt.aiDetected),
     });
     setIsFormOpen(true);
   };
@@ -335,7 +399,10 @@ export const AdminEventsTab: React.FC = () => {
   const confirmDeleteEvent = async () => {
     if (!eventToDelete) return;
     await deleteEventItem(eventToDelete.id);
-    setMessage({ text: `Evento "${eventToDelete.title}" eliminado.`, type: 'success' });
+    setMessage({
+      text: `Evento "${eventToDelete.title}" eliminado.`,
+      type: "success",
+    });
     setEventToDelete(null);
     setTimeout(() => setMessage(null), 4000);
   };
@@ -346,7 +413,7 @@ export const AdminEventsTab: React.FC = () => {
 
   const confirmResetDefaults = async () => {
     await resetEventsDataToDefault();
-    setMessage({ text: 'Cartelera de eventos restaurada.', type: 'success' });
+    setMessage({ text: "Cartelera de eventos restaurada.", type: "success" });
     setShowResetConfirm(false);
     setTimeout(() => setMessage(null), 4000);
   };
@@ -355,12 +422,15 @@ export const AdminEventsTab: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setMessage({ text: 'Por favor selecciona un archivo de imagen (JPG, PNG, WebP).', type: 'error' });
+    if (!file.type.startsWith("image/")) {
+      setMessage({
+        text: "Por favor selecciona un archivo de imagen (JPG, PNG, WebP).",
+        type: "error",
+      });
       return;
     }
     if (file.size > 6 * 1024 * 1024) {
-      setMessage({ text: 'La imagen no debe exceder los 6MB.', type: 'error' });
+      setMessage({ text: "La imagen no debe exceder los 6MB.", type: "error" });
       return;
     }
 
@@ -369,25 +439,28 @@ export const AdminEventsTab: React.FC = () => {
     reader.onload = async () => {
       const base64 = reader.result as string;
       try {
-        const res = await fetch('/api/upload-logo', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: base64, filename: file.name })
+        const res = await fetch("/api/upload-logo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: base64, filename: file.name }),
         });
         if (res.ok) {
           const data = await res.json();
           if (data.url) {
-            setFormData(prev => ({ ...prev, image: data.url }));
+            setFormData((prev) => ({ ...prev, image: data.url }));
             setIsUploadingImage(false);
             return;
           }
         }
       } catch (_) {}
-      setFormData(prev => ({ ...prev, image: base64 }));
+      setFormData((prev) => ({ ...prev, image: base64 }));
       setIsUploadingImage(false);
     };
     reader.onerror = () => {
-      setMessage({ text: 'Error leyendo la imagen seleccionada.', type: 'error' });
+      setMessage({
+        text: "Error leyendo la imagen seleccionada.",
+        type: "error",
+      });
       setIsUploadingImage(false);
     };
     reader.readAsDataURL(file);
@@ -396,16 +469,25 @@ export const AdminEventsTab: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim() || !formData.location.trim()) {
-      setMessage({ text: 'El título y la ubicación son obligatorios.', type: 'error' });
+      setMessage({
+        text: "El título y la ubicación son obligatorios.",
+        type: "error",
+      });
       return;
     }
 
     if (editingId) {
       await updateEventItem(editingId, formData);
-      setMessage({ text: `Evento "${formData.title}" actualizado con éxito en la nube.`, type: 'success' });
+      setMessage({
+        text: `Evento "${formData.title}" actualizado con éxito en la nube.`,
+        type: "success",
+      });
     } else {
       await addEventItem(formData);
-      setMessage({ text: `Nuevo evento "${formData.title}" publicado en la cartelera.`, type: 'success' });
+      setMessage({
+        text: `Nuevo evento "${formData.title}" publicado en la cartelera.`,
+        type: "success",
+      });
     }
 
     setIsFormOpen(false);
@@ -414,6 +496,13 @@ export const AdminEventsTab: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col p-4 sm:p-6 space-y-4 overflow-y-auto max-h-[80vh]">
+      <p
+        role="status"
+        className="p-3 rounded-xl bg-amber-50 text-amber-900 text-xs"
+      >
+        {RADAR_BLOCK_REASON} La cartelera puede incluir caché local; el estado
+        Radar recibido no certifica guardado en MariaDB.
+      </p>
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0a192f] p-4 rounded-2xl border border-amber-500/20">
         <div>
@@ -425,7 +514,8 @@ export const AdminEventsTab: React.FC = () => {
             </h2>
           </div>
           <p className="text-xs text-slate-300 mt-1">
-            Gestiona bazares playeros, conciertos en el Malecón, rodadas ciclistas y actividades culturales de la isla.
+            Gestiona bazares playeros, conciertos en el Malecón, rodadas
+            ciclistas y actividades culturales de la isla.
           </p>
         </div>
 
@@ -433,11 +523,11 @@ export const AdminEventsTab: React.FC = () => {
           <button
             type="button"
             onClick={handleRunRadar}
-            disabled={isScanningRadar}
+            disabled={RADAR_WRITE_BLOCKED}
             className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md active:scale-95 border ${
               isScanningRadar
-                ? 'bg-indigo-600/60 text-white cursor-wait border-indigo-400/50'
-                : 'bg-indigo-950/90 hover:bg-indigo-900 text-indigo-200 border-indigo-500/50 hover:text-white'
+                ? "bg-indigo-600/60 text-white cursor-wait border-indigo-400/50"
+                : "bg-indigo-950/90 hover:bg-indigo-900 text-indigo-200 border-indigo-500/50 hover:text-white"
             }`}
             title="Activar radar de detección automática ($0 Costo)"
           >
@@ -503,7 +593,15 @@ export const AdminEventsTab: React.FC = () => {
               Radar Autónomo de Detección y Publicación de Eventos
             </h3>
             <p className="text-xs text-slate-300 leading-relaxed">
-              El Radar inteligente detecta actividades, gastronomía, deportes y eventos culturales de Ciudad del Carmen, asigna fotografías en alta calidad y los <strong className="text-amber-300">publica de inmediato en la cartelera y en la base de datos</strong>. Tú tienes el control: si alguno no te gusta, dale clic en <strong className="text-sky-300">Modificar</strong> o <strong className="text-rose-300">Eliminar</strong>.
+              El Radar inteligente detecta actividades, gastronomía, deportes y
+              eventos culturales de Ciudad del Carmen, asigna fotografías en
+              alta calidad y los{" "}
+              <strong className="text-amber-300">
+                publica de inmediato en la cartelera y en la base de datos
+              </strong>
+              . Tú tienes el control: si alguno no te gusta, dale clic en{" "}
+              <strong className="text-sky-300">Modificar</strong> o{" "}
+              <strong className="text-rose-300">Eliminar</strong>.
             </p>
           </div>
 
@@ -531,11 +629,11 @@ export const AdminEventsTab: React.FC = () => {
             <button
               type="button"
               onClick={handleRunRadar}
-              disabled={isScanningRadar}
+              disabled={RADAR_WRITE_BLOCKED}
               className={`px-4 py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-95 ${
                 isScanningRadar
-                  ? 'bg-indigo-600/60 text-white cursor-wait'
-                  : 'bg-indigo-900/80 hover:bg-indigo-800 text-indigo-200 border border-indigo-500/30'
+                  ? "bg-indigo-600/60 text-white cursor-wait"
+                  : "bg-indigo-900/80 hover:bg-indigo-800 text-indigo-200 border border-indigo-500/30"
               }`}
               title="Activar radar de detección automática sin costo"
             >
@@ -559,17 +657,40 @@ export const AdminEventsTab: React.FC = () => {
           <div className="flex items-center gap-3 flex-wrap">
             <span className="flex items-center gap-1 text-slate-300">
               <Bot className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Detectados por Radar IA: <strong className="text-indigo-300 font-bold">{aiEventsCount}</strong></span>
+              <span>
+                Detectados por Radar IA:{" "}
+                <strong className="text-indigo-300 font-bold">
+                  {aiEventsCount}
+                </strong>
+              </span>
             </span>
             <span className="text-slate-600">•</span>
-            <span>Manuales: <strong className="text-white font-bold">{manualEventsCount}</strong></span>
+            <span>
+              Manuales:{" "}
+              <strong className="text-white font-bold">
+                {manualEventsCount}
+              </strong>
+            </span>
             <span className="text-slate-600">•</span>
-            <span>Total en cartelera: <strong className="text-amber-400 font-bold">{events.length}</strong></span>
+            <span>
+              Total en cartelera:{" "}
+              <strong className="text-amber-400 font-bold">
+                {events.length}
+              </strong>
+            </span>
           </div>
 
           <div className="text-[11px] text-indigo-300 font-mono">
             {radarStatus?.lastScan ? (
-              <span>Último rastreo: {new Date(radarStatus.lastScan).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+              <span>
+                Último rastreo:{" "}
+                {new Date(radarStatus.lastScan).toLocaleDateString("es-MX", {
+                  day: "2-digit",
+                  month: "short",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
             ) : (
               <span>Radar listo para rastrear</span>
             )}
@@ -579,11 +700,18 @@ export const AdminEventsTab: React.FC = () => {
 
       {/* Message alert */}
       {message && (
-        <div className={`p-3 rounded-xl text-xs font-bold flex items-center justify-between gap-2 animate-fadeIn ${
-          message.type === 'success' ? 'bg-emerald-950/80 border border-emerald-500/40 text-emerald-200' : 'bg-rose-950/80 border border-rose-500/40 text-rose-200'
-        }`}>
+        <div
+          className={`p-3 rounded-xl text-xs font-bold flex items-center justify-between gap-2 animate-fadeIn ${
+            message.type === "success"
+              ? "bg-emerald-950/80 border border-emerald-500/40 text-emerald-200"
+              : "bg-rose-950/80 border border-rose-500/40 text-rose-200"
+          }`}
+        >
           <span>{message.text}</span>
-          <button onClick={() => setMessage(null)} className="p-1 hover:opacity-80">
+          <button
+            onClick={() => setMessage(null)}
+            className="p-1 hover:opacity-80"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -596,7 +724,7 @@ export const AdminEventsTab: React.FC = () => {
           <input
             type="text"
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar por título, lugar, organizador o categoría..."
             className="w-full pl-9 pr-3 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-xs text-white placeholder:text-slate-400 focus:outline-none focus:border-amber-500"
           />
@@ -607,7 +735,7 @@ export const AdminEventsTab: React.FC = () => {
           <button
             type="button"
             onClick={handleRunRadar}
-            disabled={isScanningRadar}
+            disabled={RADAR_WRITE_BLOCKED}
             className="px-3 py-2 rounded-xl bg-indigo-950/80 hover:bg-indigo-900 text-indigo-200 border border-indigo-500/40 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95 disabled:opacity-50"
             title="Activar radar de detección automática"
           >
@@ -639,22 +767,22 @@ export const AdminEventsTab: React.FC = () => {
         <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-700 shrink-0">
           <button
             type="button"
-            onClick={() => setFilterSource('all')}
+            onClick={() => setFilterSource("all")}
             className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-              filterSource === 'all'
-                ? 'bg-amber-500 text-stone-950 shadow-xs'
-                : 'text-slate-300 hover:text-white'
+              filterSource === "all"
+                ? "bg-amber-500 text-stone-950 shadow-xs"
+                : "text-slate-300 hover:text-white"
             }`}
           >
             Todos ({events.length})
           </button>
           <button
             type="button"
-            onClick={() => setFilterSource('ai')}
+            onClick={() => setFilterSource("ai")}
             className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 ${
-              filterSource === 'ai'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-indigo-300 hover:text-white'
+              filterSource === "ai"
+                ? "bg-indigo-600 text-white shadow-xs"
+                : "text-indigo-300 hover:text-white"
             }`}
           >
             <Bot className="w-3 h-3" />
@@ -662,11 +790,11 @@ export const AdminEventsTab: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => setFilterSource('manual')}
+            onClick={() => setFilterSource("manual")}
             className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-              filterSource === 'manual'
-                ? 'bg-slate-700 text-white shadow-xs'
-                : 'text-slate-400 hover:text-white'
+              filterSource === "manual"
+                ? "bg-slate-700 text-white shadow-xs"
+                : "text-slate-400 hover:text-white"
             }`}
           >
             Manuales ({manualEventsCount})
@@ -675,12 +803,14 @@ export const AdminEventsTab: React.FC = () => {
 
         <select
           value={selectedCategory}
-          onChange={e => setSelectedCategory(e.target.value)}
+          onChange={(e) => setSelectedCategory(e.target.value)}
           className="w-full sm:w-auto px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500 cursor-pointer"
         >
           <option value="all">Todas las categorías ({events.length})</option>
-          {categories.map(c => (
-            <option key={c} value={c}>{c}</option>
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
           ))}
         </select>
       </div>
@@ -688,17 +818,21 @@ export const AdminEventsTab: React.FC = () => {
       {/* Events Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {filteredEvents.length === 0 ? (
-          filterSource === 'ai' ? (
+          filterSource === "ai" ? (
             <div className="col-span-full py-12 px-4 text-center text-slate-400 text-xs bg-slate-900/50 rounded-2xl border border-indigo-500/30 space-y-3.5">
               <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 flex items-center justify-center mx-auto">
                 <Bot className="w-6 h-6 animate-pulse" />
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-bold text-white">
-                  Aún no hay eventos detectados por Radar IA publicados en la cartelera
+                  Aún no hay eventos detectados por Radar IA publicados en la
+                  cartelera
                 </p>
                 <p className="text-xs text-slate-400 max-w-md mx-auto">
-                  Los {events.length} eventos actuales son registros manuales. Presiona el botón de abajo para hacer una búsqueda manual con IA en Google, revisar las ligas de referencia y seleccionar cuáles publicar.
+                  Los {events.length} eventos actuales son registros manuales.
+                  Presiona el botón de abajo para hacer una búsqueda manual con
+                  IA en Google, revisar las ligas de referencia y seleccionar
+                  cuáles publicar.
                 </p>
               </div>
               <button
@@ -716,13 +850,13 @@ export const AdminEventsTab: React.FC = () => {
             </div>
           )
         ) : (
-          filteredEvents.map(evt => (
+          filteredEvents.map((evt) => (
             <div
               key={evt.id}
               className={`p-4 rounded-2xl border transition-all flex flex-col justify-between space-y-3 ${
                 evt.aiDetected
-                  ? 'border-indigo-500/50 bg-gradient-to-b from-indigo-950/40 to-slate-900/90 shadow-md hover:border-indigo-400'
-                  : 'border-slate-800 bg-slate-900/90 hover:border-amber-500/50 shadow-md'
+                  ? "border-indigo-500/50 bg-gradient-to-b from-indigo-950/40 to-slate-900/90 shadow-md hover:border-indigo-400"
+                  : "border-slate-800 bg-slate-900/90 hover:border-amber-500/50 shadow-md"
               }`}
             >
               <div className="space-y-2">
@@ -730,9 +864,9 @@ export const AdminEventsTab: React.FC = () => {
                 {(() => {
                   const eventImg = getEventRepresentativeImage(evt);
                   const isFlyer = Boolean(
-                    evt.image && 
-                    evt.image.startsWith('http') && 
-                    !evt.image.includes('unsplash')
+                    evt.image &&
+                    evt.image.startsWith("http") &&
+                    !evt.image.includes("unsplash"),
                   );
                   return (
                     <div className="relative h-36 w-full rounded-xl overflow-hidden border border-slate-700/80 bg-slate-950 mb-2 group/img shadow-inner">
@@ -750,7 +884,7 @@ export const AdminEventsTab: React.FC = () => {
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
                       <span className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded-md bg-black/80 text-white text-[9px] font-bold backdrop-blur-xs flex items-center gap-1">
                         <Sparkles className="w-2.5 h-2.5 text-amber-400" />
-                        {isFlyer ? 'Flyer oficial' : 'Foto representativa'}
+                        {isFlyer ? "Flyer oficial" : "Foto representativa"}
                       </span>
                     </div>
                   );
@@ -807,29 +941,40 @@ export const AdminEventsTab: React.FC = () => {
                 <div className="space-y-1 text-xs text-slate-400 pt-1">
                   <div className="flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span className="text-amber-200 font-medium">{evt.date} • {evt.time}</span>
+                    <span className="text-amber-200 font-medium">
+                      {evt.date} • {evt.time}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5 text-rose-400 shrink-0" />
                     <span className="truncate">{evt.location}</span>
                   </div>
                   <div className="text-[11px] text-slate-500 pt-0.5 flex items-center justify-between gap-2">
-                    <span>Organiza: <strong className="text-slate-300 font-medium">{evt.organizer}</strong></span>
-                    {evt.sourceUrl && (() => {
-                      const siteName = resolveSourceSiteName(evt.sourceUrl, evt.organizer || evt.badge);
-                      return (
-                        <a
-                          href={evt.sourceUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-full border border-blue-200 transition-colors"
-                          title={`Abrir publicación exacta en ${siteName}: ${evt.sourceUrl}`}
-                        >
-                          <span>Ver en {siteName}</span>
-                          <ExternalLink className="w-2.5 h-2.5" />
-                        </a>
-                      );
-                    })()}
+                    <span>
+                      Organiza:{" "}
+                      <strong className="text-slate-300 font-medium">
+                        {evt.organizer}
+                      </strong>
+                    </span>
+                    {evt.sourceUrl &&
+                      (() => {
+                        const siteName = resolveSourceSiteName(
+                          evt.sourceUrl,
+                          evt.organizer || evt.badge,
+                        );
+                        return (
+                          <a
+                            href={evt.sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-full border border-blue-200 transition-colors"
+                            title={`Abrir publicación exacta en ${siteName}: ${evt.sourceUrl}`}
+                          >
+                            <span>Ver en {siteName}</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        );
+                      })()}
                   </div>
                 </div>
               </div>
@@ -845,38 +990,43 @@ export const AdminEventsTab: React.FC = () => {
           aria-modal="true"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
           style={{
-            background: 'rgba(15, 23, 42, 0.45)',
-            backdropFilter: 'blur(25px)',
-            WebkitBackdropFilter: 'blur(25px)',
+            background: "rgba(15, 23, 42, 0.45)",
+            backdropFilter: "blur(25px)",
+            WebkitBackdropFilter: "blur(25px)",
           }}
           onClick={() => setIsFormOpen(false)}
         >
           <div
             className="rounded-3xl max-w-lg w-full text-stone-900 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
             style={{
-              background: 'rgba(255, 255, 255, 0.88)',
-              backdropFilter: 'blur(40px) saturate(190%)',
-              WebkitBackdropFilter: 'blur(40px) saturate(190%)',
-              border: '1.5px solid rgba(255, 255, 255, 0.95)',
-              boxShadow: '0 30px 70px -15px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+              background: "rgba(255, 255, 255, 0.88)",
+              backdropFilter: "blur(40px) saturate(190%)",
+              WebkitBackdropFilter: "blur(40px) saturate(190%)",
+              border: "1.5px solid rgba(255, 255, 255, 0.95)",
+              boxShadow:
+                "0 30px 70px -15px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.95)",
             }}
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div
               className="flex items-center justify-between px-6 py-4 sticky top-0 z-10"
               style={{
-                background: 'rgba(255, 255, 255, 0.75)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-                borderBottom: '1.5px solid rgba(255, 255, 255, 0.85)',
+                background: "rgba(255, 255, 255, 0.75)",
+                backdropFilter: "blur(20px)",
+                WebkitBackdropFilter: "blur(20px)",
+                borderBottom: "1.5px solid rgba(255, 255, 255, 0.85)",
               }}
             >
               <h3 className="text-base font-black text-stone-900 flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-amber-500 text-stone-950 flex items-center justify-center font-bold shadow-xs">
                   <Calendar className="w-4 h-4" />
                 </div>
-                <span>{editingId ? 'Editar Evento de la Cartelera' : 'Publicar Nuevo Evento'}</span>
+                <span>
+                  {editingId
+                    ? "Editar Evento de la Cartelera"
+                    : "Publicar Nuevo Evento"}
+                </span>
               </h3>
               <button
                 type="button"
@@ -887,7 +1037,10 @@ export const AdminEventsTab: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 pt-2 space-y-3.5 text-xs">
+            <form
+              onSubmit={handleSubmit}
+              className="p-6 pt-2 space-y-3.5 text-xs"
+            >
               <div>
                 <label className="block text-stone-800 font-bold mb-1">
                   Título del Evento o Actividad *
@@ -896,15 +1049,17 @@ export const AdminEventsTab: React.FC = () => {
                   type="text"
                   required
                   value={formData.title}
-                  onChange={e => setFormData({ ...formData, title: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
                   placeholder="ej. Bazar Emprendedor & Artesanal Playero"
                   className="w-full px-3.5 py-2.5 rounded-2xl text-stone-900 text-xs font-semibold placeholder:text-stone-400 outline-none transition-all focus:ring-2 focus:ring-amber-500/50"
                   style={{
-                    background: 'rgba(255, 255, 255, 0.70)',
-                    backdropFilter: 'blur(10px)',
-                    WebkitBackdropFilter: 'blur(10px)',
-                    border: '1.5px solid rgba(255, 255, 255, 0.90)',
-                    boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.04)',
+                    background: "rgba(255, 255, 255, 0.70)",
+                    backdropFilter: "blur(10px)",
+                    WebkitBackdropFilter: "blur(10px)",
+                    border: "1.5px solid rgba(255, 255, 255, 0.90)",
+                    boxShadow: "inset 0 1px 2px rgba(0, 0, 0, 0.04)",
                   }}
                 />
               </div>
@@ -923,11 +1078,17 @@ export const AdminEventsTab: React.FC = () => {
                         className="w-16 h-14 object-cover rounded-xl border border-stone-200 shrink-0"
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-stone-900">Imagen adjunta</p>
-                        <p className="text-[10px] text-stone-500 truncate">{formData.image}</p>
+                        <p className="text-xs font-bold text-stone-900">
+                          Imagen adjunta
+                        </p>
+                        <p className="text-[10px] text-stone-500 truncate">
+                          {formData.image}
+                        </p>
                         <button
                           type="button"
-                          onClick={() => setFormData(prev => ({ ...prev, image: '' }))}
+                          onClick={() =>
+                            setFormData((prev) => ({ ...prev, image: "" }))
+                          }
                           className="text-[11px] text-rose-600 hover:text-rose-800 font-bold mt-0.5 cursor-pointer"
                         >
                           Quitar imagen
@@ -966,8 +1127,10 @@ export const AdminEventsTab: React.FC = () => {
 
                   <input
                     type="text"
-                    value={formData.image || ''}
-                    onChange={e => setFormData({ ...formData, image: e.target.value })}
+                    value={formData.image || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, image: e.target.value })
+                    }
                     placeholder="O URL directa (https://...)"
                     className="w-full px-3 py-2 rounded-xl text-stone-800 text-[11px] font-medium outline-none border border-stone-200 bg-white/70 focus:border-amber-500"
                   />
@@ -980,21 +1143,39 @@ export const AdminEventsTab: React.FC = () => {
                     <label className="text-stone-800 font-bold">
                       Categoría (Datacombo) *
                     </label>
-                    <span className="text-[10px] text-amber-600 font-bold">Ver opciones</span>
+                    <span className="text-[10px] text-amber-600 font-bold">
+                      Ver opciones
+                    </span>
                   </div>
                   <input
                     type="text"
                     required
                     list="event-category-options"
                     value={formData.category}
-                    onChange={e => {
+                    onChange={(e) => {
                       const val = e.target.value;
-                      let slug = 'cultura';
-                      if (val.toLowerCase().includes('bazar')) slug = 'bazares';
-                      else if (val.toLowerCase().includes('depor') || val.toLowerCase().includes('bici')) slug = 'deportes';
-                      else if (val.toLowerCase().includes('gastro') || val.toLowerCase().includes('comida')) slug = 'gastronomia';
-                      else if (val.toLowerCase().includes('feria') || val.toLowerCase().includes('expo')) slug = 'ferias';
-                      setFormData({ ...formData, category: val, categorySlug: slug });
+                      let slug = "cultura";
+                      if (val.toLowerCase().includes("bazar")) slug = "bazares";
+                      else if (
+                        val.toLowerCase().includes("depor") ||
+                        val.toLowerCase().includes("bici")
+                      )
+                        slug = "deportes";
+                      else if (
+                        val.toLowerCase().includes("gastro") ||
+                        val.toLowerCase().includes("comida")
+                      )
+                        slug = "gastronomia";
+                      else if (
+                        val.toLowerCase().includes("feria") ||
+                        val.toLowerCase().includes("expo")
+                      )
+                        slug = "ferias";
+                      setFormData({
+                        ...formData,
+                        category: val,
+                        categorySlug: slug,
+                      });
                     }}
                     placeholder="Elige o escribe categoría..."
                     className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 font-semibold"
@@ -1009,27 +1190,55 @@ export const AdminEventsTab: React.FC = () => {
                     <option value="Infantil & Comunitario" />
                   </datalist>
                   <select
-                    value={formData.category || ''}
-                    onChange={e => {
+                    value={formData.category || ""}
+                    onChange={(e) => {
                       if (!e.target.value) return;
                       const val = e.target.value;
-                      let slug = 'cultura';
-                      if (val.toLowerCase().includes('bazar')) slug = 'bazares';
-                      else if (val.toLowerCase().includes('depor') || val.toLowerCase().includes('bici')) slug = 'deportes';
-                      else if (val.toLowerCase().includes('gastro') || val.toLowerCase().includes('comida')) slug = 'gastronomia';
-                      else if (val.toLowerCase().includes('feria') || val.toLowerCase().includes('expo')) slug = 'ferias';
-                      setFormData({ ...formData, category: val, categorySlug: slug });
+                      let slug = "cultura";
+                      if (val.toLowerCase().includes("bazar")) slug = "bazares";
+                      else if (
+                        val.toLowerCase().includes("depor") ||
+                        val.toLowerCase().includes("bici")
+                      )
+                        slug = "deportes";
+                      else if (
+                        val.toLowerCase().includes("gastro") ||
+                        val.toLowerCase().includes("comida")
+                      )
+                        slug = "gastronomia";
+                      else if (
+                        val.toLowerCase().includes("feria") ||
+                        val.toLowerCase().includes("expo")
+                      )
+                        slug = "ferias";
+                      setFormData({
+                        ...formData,
+                        category: val,
+                        categorySlug: slug,
+                      });
                     }}
                     className="w-full mt-1 px-2.5 py-1 bg-white/80 border border-stone-200 rounded-lg text-stone-700 text-[11px] outline-none focus:border-amber-500 cursor-pointer font-medium"
                   >
                     <option value="">▼ O selecciona del listado...</option>
                     <option value="Cultura & Música">Cultura & Música</option>
-                    <option value="Ferias, Exposiciones y Tradición">Ferias, Exposiciones y Tradición</option>
-                    <option value="Deportes & Rodadas">Deportes & Rodadas</option>
-                    <option value="Bazares y Emprendedores">Bazares y Emprendedores</option>
-                    <option value="Gastronomía & Sabores">Gastronomía & Sabores</option>
-                    <option value="Entretenimiento & Familia">Entretenimiento & Familia</option>
-                    <option value="Infantil & Comunitario">Infantil & Comunitario</option>
+                    <option value="Ferias, Exposiciones y Tradición">
+                      Ferias, Exposiciones y Tradición
+                    </option>
+                    <option value="Deportes & Rodadas">
+                      Deportes & Rodadas
+                    </option>
+                    <option value="Bazares y Emprendedores">
+                      Bazares y Emprendedores
+                    </option>
+                    <option value="Gastronomía & Sabores">
+                      Gastronomía & Sabores
+                    </option>
+                    <option value="Entretenimiento & Familia">
+                      Entretenimiento & Familia
+                    </option>
+                    <option value="Infantil & Comunitario">
+                      Infantil & Comunitario
+                    </option>
                   </select>
                 </div>
 
@@ -1038,13 +1247,17 @@ export const AdminEventsTab: React.FC = () => {
                     <label className="text-stone-800 font-bold">
                       Insignia / Badge
                     </label>
-                    <span className="text-[10px] text-amber-600 font-bold">Ver distintivos</span>
+                    <span className="text-[10px] text-amber-600 font-bold">
+                      Ver distintivos
+                    </span>
                   </div>
                   <input
                     type="text"
                     list="event-badge-options"
                     value={formData.badge}
-                    onChange={e => setFormData({ ...formData, badge: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, badge: e.target.value })
+                    }
                     placeholder="Elige o escribe distintivo..."
                     className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 font-semibold"
                   />
@@ -1062,21 +1275,33 @@ export const AdminEventsTab: React.FC = () => {
                     <option value="Dashport" />
                   </datalist>
                   <select
-                    value={formData.badge || ''}
-                    onChange={e => {
+                    value={formData.badge || ""}
+                    onChange={(e) => {
                       if (!e.target.value) return;
                       setFormData({ ...formData, badge: e.target.value });
                     }}
                     className="w-full mt-1 px-2.5 py-1 bg-white/80 border border-stone-200 rounded-lg text-stone-700 text-[11px] outline-none focus:border-amber-500 cursor-pointer font-medium"
                   >
-                    <option value="">▼ O selecciona insignia sugerida...</option>
+                    <option value="">
+                      ▼ O selecciona insignia sugerida...
+                    </option>
                     <option value="GRATUITO">GRATUITO (Entrada libre)</option>
-                    <option value="FAMILIAR">FAMILIAR (Para toda la familia)</option>
-                    <option value="DESTACADO">DESTACADO (Evento estelar)</option>
+                    <option value="FAMILIAR">
+                      FAMILIAR (Para toda la familia)
+                    </option>
+                    <option value="DESTACADO">
+                      DESTACADO (Evento estelar)
+                    </option>
                     <option value="IMPERDIBLE">IMPERDIBLE (Recomendado)</option>
-                    <option value="TRADICIÓN">TRADICIÓN (Fiestas patronales)</option>
-                    <option value="CULTURA">CULTURA (Música, arte y danza)</option>
-                    <option value="RADAR IA">RADAR IA (Detección automática)</option>
+                    <option value="TRADICIÓN">
+                      TRADICIÓN (Fiestas patronales)
+                    </option>
+                    <option value="CULTURA">
+                      CULTURA (Música, arte y danza)
+                    </option>
+                    <option value="RADAR IA">
+                      RADAR IA (Detección automática)
+                    </option>
                     <option value="PROMOCIONADO">PROMOCIONADO</option>
                     <option value="NOVEDAD">NOVEDAD</option>
                     <option value="ProEventos">ProEventos Campeche</option>
@@ -1094,7 +1319,9 @@ export const AdminEventsTab: React.FC = () => {
                     type="text"
                     required
                     value={formData.date}
-                    onChange={e => setFormData({ ...formData, date: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, date: e.target.value })
+                    }
                     placeholder="ej. Sábado y Domingo"
                     className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 font-semibold"
                   />
@@ -1108,7 +1335,9 @@ export const AdminEventsTab: React.FC = () => {
                     type="text"
                     required
                     value={formData.time}
-                    onChange={e => setFormData({ ...formData, time: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, time: e.target.value })
+                    }
                     placeholder="ej. 5:00 PM - 10:30 PM"
                     className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 font-semibold"
                   />
@@ -1123,7 +1352,9 @@ export const AdminEventsTab: React.FC = () => {
                   type="text"
                   required
                   value={formData.location}
-                  onChange={e => setFormData({ ...formData, location: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, location: e.target.value })
+                  }
                   placeholder="ej. Playa Norte (Junto al Barco Galeón), Ciudad del Carmen"
                   className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 font-semibold"
                 />
@@ -1137,7 +1368,9 @@ export const AdminEventsTab: React.FC = () => {
                   <input
                     type="text"
                     value={formData.cost}
-                    onChange={e => setFormData({ ...formData, cost: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, cost: e.target.value })
+                    }
                     placeholder="ej. Entrada Libre"
                     className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 font-semibold"
                   />
@@ -1150,7 +1383,9 @@ export const AdminEventsTab: React.FC = () => {
                   <input
                     type="text"
                     value={formData.organizer}
-                    onChange={e => setFormData({ ...formData, organizer: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, organizer: e.target.value })
+                    }
                     placeholder="ej. Colectivo Emprendedores"
                     className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 font-semibold"
                   />
@@ -1162,11 +1397,15 @@ export const AdminEventsTab: React.FC = () => {
                   </label>
                   <select
                     value={formData.icon}
-                    onChange={e => setFormData({ ...formData, icon: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, icon: e.target.value })
+                    }
                     className="w-full px-3 py-2 bg-white/80 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 cursor-pointer font-semibold"
                   >
-                    {AVAILABLE_ICONS.map(i => (
-                      <option key={i.name} value={i.name}>{i.label}</option>
+                    {AVAILABLE_ICONS.map((i) => (
+                      <option key={i.name} value={i.name}>
+                        {i.label}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -1179,7 +1418,9 @@ export const AdminEventsTab: React.FC = () => {
                 <textarea
                   rows={3}
                   value={formData.description}
-                  onChange={e => setFormData({ ...formData, description: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
                   placeholder="ej. Más de 40 marcas locales, artesanías carmelitas, repostería y música..."
                   className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 resize-none font-medium"
                 />
@@ -1191,8 +1432,10 @@ export const AdminEventsTab: React.FC = () => {
                 </label>
                 <input
                   type="url"
-                  value={formData.sourceUrl || ''}
-                  onChange={e => setFormData({ ...formData, sourceUrl: e.target.value })}
+                  value={formData.sourceUrl || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, sourceUrl: e.target.value })
+                  }
                   placeholder="https://carmen.gob.mx o https://facebook.com/..."
                   className="w-full px-3 py-2 bg-white/70 border border-stone-200 rounded-xl text-stone-900 outline-none focus:border-amber-500 text-xs font-semibold"
                 />
@@ -1210,7 +1453,7 @@ export const AdminEventsTab: React.FC = () => {
                   type="submit"
                   className="px-6 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-stone-950 font-black text-xs shadow-md transition-all cursor-pointer"
                 >
-                  {editingId ? 'Guardar Cambios' : 'Publicar en Cartelera'}
+                  {editingId ? "Guardar Cambios" : "Publicar en Cartelera"}
                 </button>
               </div>
             </form>
@@ -1225,22 +1468,23 @@ export const AdminEventsTab: React.FC = () => {
           aria-modal="true"
           className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200"
           style={{
-            background: 'rgba(15, 23, 42, 0.45)',
-            backdropFilter: 'blur(25px)',
-            WebkitBackdropFilter: 'blur(25px)',
+            background: "rgba(15, 23, 42, 0.45)",
+            backdropFilter: "blur(25px)",
+            WebkitBackdropFilter: "blur(25px)",
           }}
-          onClick={() => setIsAiSearchModalOpen(false)}
+          onClick={closeAiRadar}
         >
           <div
             className="rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden"
             style={{
-              background: 'rgba(15, 23, 42, 0.90)',
-              backdropFilter: 'blur(40px) saturate(190%)',
-              WebkitBackdropFilter: 'blur(40px) saturate(190%)',
-              border: '1.5px solid rgba(168, 85, 247, 0.35)',
-              boxShadow: '0 30px 70px -15px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.15)',
+              background: "rgba(15, 23, 42, 0.90)",
+              backdropFilter: "blur(40px) saturate(190%)",
+              WebkitBackdropFilter: "blur(40px) saturate(190%)",
+              border: "1.5px solid rgba(168, 85, 247, 0.35)",
+              boxShadow:
+                "0 30px 70px -15px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.15)",
             }}
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-purple-500/20 bg-gradient-to-r from-purple-950/80 via-slate-900 to-indigo-950/80 flex items-center justify-between">
@@ -1258,14 +1502,15 @@ export const AdminEventsTab: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-xs text-slate-300 mt-0.5">
-                    Descubre y estructura eventos locales para la cartelera de Ciudad del Carmen con un solo clic.
+                    Descubre y estructura eventos locales para la cartelera de
+                    Ciudad del Carmen con un solo clic.
                   </p>
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={() => setIsAiSearchModalOpen(false)}
+                onClick={closeAiRadar}
                 className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -1282,9 +1527,9 @@ export const AdminEventsTab: React.FC = () => {
                     <input
                       type="text"
                       value={aiSearchQuery}
-                      onChange={e => setAiSearchQuery(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') handleExecuteAiSearch(true);
+                      onChange={(e) => setAiSearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleExecuteAiSearch(true);
                       }}
                       placeholder="ej. Conciertos en el Malecón, bazares playeros, rodadas, mariscos..."
                       className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-purple-500/30 rounded-2xl text-white placeholder-slate-400 text-xs sm:text-sm outline-none focus:border-purple-400 transition-colors"
@@ -1324,19 +1569,21 @@ export const AdminEventsTab: React.FC = () => {
 
                 {/* Quick suggestions chips */}
                 <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                  <span className="text-slate-400 font-semibold mr-1">Sugerencias:</span>
+                  <span className="text-slate-400 font-semibold mr-1">
+                    Sugerencias:
+                  </span>
                   {[
-                    '🎶 Conciertos & Malecón',
-                    '🛍️ Bazares Playa Norte',
-                    '🚴 Rodadas & Deportes',
-                    '🍤 Mariscos & Gastronomía',
-                    '🎭 Teatro & Cultura Carmelita'
-                  ].map(chip => (
+                    "🎶 Conciertos & Malecón",
+                    "🛍️ Bazares Playa Norte",
+                    "🚴 Rodadas & Deportes",
+                    "🍤 Mariscos & Gastronomía",
+                    "🎭 Teatro & Cultura Carmelita",
+                  ].map((chip) => (
                     <button
                       key={chip}
                       type="button"
                       onClick={() => {
-                        const cleanQuery = chip.replace(/^[^\w\s]+/, '').trim();
+                        const cleanQuery = chip.replace(/^[^\w\s]+/, "").trim();
                         setAiSearchQuery(cleanQuery);
                       }}
                       className="px-2.5 py-1 rounded-xl bg-purple-950/60 hover:bg-purple-900/80 text-purple-200 border border-purple-500/20 transition-colors cursor-pointer"
@@ -1348,24 +1595,33 @@ export const AdminEventsTab: React.FC = () => {
               </div>
 
               {/* Status Message Notification */}
+              <p
+                role="status"
+                className="p-3 rounded-xl bg-amber-50 text-amber-900 text-xs"
+              >
+                {RADAR_BLOCK_REASON}
+              </p>
               {aiSearchMessage && (
                 <div
+                  role="status"
                   className={`p-3.5 rounded-2xl border text-xs flex items-start gap-2.5 ${
-                    aiSearchMessage.type === 'warning'
-                      ? 'bg-amber-950/50 border-amber-500/40 text-amber-200'
-                      : aiSearchMessage.type === 'error'
-                      ? 'bg-rose-950/50 border-rose-500/40 text-rose-200'
-                      : 'bg-emerald-950/50 border-emerald-500/40 text-emerald-200'
+                    aiSearchMessage.type === "warning"
+                      ? "bg-amber-950/50 border-amber-500/40 text-amber-200"
+                      : aiSearchMessage.type === "error"
+                        ? "bg-rose-950/50 border-rose-500/40 text-rose-200"
+                        : "bg-emerald-950/50 border-emerald-500/40 text-emerald-200"
                   }`}
                 >
-                  {aiSearchMessage.type === 'warning' ? (
+                  {aiSearchMessage.type === "warning" ? (
                     <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                  ) : aiSearchMessage.type === 'error' ? (
+                  ) : aiSearchMessage.type === "error" ? (
                     <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                   ) : (
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                   )}
-                  <span className="leading-relaxed">{aiSearchMessage.text}</span>
+                  <span className="leading-relaxed">
+                    {aiSearchMessage.text}
+                  </span>
                 </div>
               )}
 
@@ -1379,7 +1635,9 @@ export const AdminEventsTab: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        const allUnpub = aiCandidates.filter(c => !c.alreadyPublished).map(c => c.id);
+                        const allUnpub = aiCandidates
+                          .filter((c) => !c.alreadyPublished)
+                          .map((c) => c.id);
                         setSelectedCandidateIds(new Set(allUnpub));
                       }}
                       className="text-purple-400 hover:text-purple-300 font-semibold cursor-pointer underline text-[11px]"
@@ -1401,19 +1659,22 @@ export const AdminEventsTab: React.FC = () => {
                   <div className="py-16 text-center space-y-3 bg-slate-900/60 rounded-2xl border border-purple-500/20">
                     <Loader2 className="w-8 h-8 text-purple-400 animate-spin mx-auto" />
                     <p className="text-sm font-semibold text-slate-200">
-                      Rastreando y estructurando eventos carmelitas con Inteligencia Artificial...
+                      Rastreando y estructurando eventos carmelitas con
+                      Inteligencia Artificial...
                     </p>
                     <p className="text-xs text-slate-400">
-                      Asignando ubicaciones reales, fechas y fotografías en alta definición.
+                      Asignando ubicaciones reales, fechas y fotografías en alta
+                      definición.
                     </p>
                   </div>
                 ) : aiCandidates.length === 0 ? (
                   <div className="py-12 text-center text-slate-400 text-xs bg-slate-900/40 rounded-2xl border border-slate-800">
-                    Escribe un término de búsqueda arriba o pulsa "Buscar con IA" para descubrir actividades.
+                    Escribe un término de búsqueda arriba o pulsa "Buscar con
+                    IA" para descubrir actividades.
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                    {aiCandidates.map(cand => {
+                    {aiCandidates.map((cand) => {
                       const isSelected = selectedCandidateIds.has(cand.id);
                       const isPublished = Boolean(cand.alreadyPublished);
                       return (
@@ -1424,10 +1685,10 @@ export const AdminEventsTab: React.FC = () => {
                           }}
                           className={`p-3.5 rounded-2xl border transition-all flex gap-3 text-left ${
                             isPublished
-                              ? 'bg-slate-900/40 border-slate-800 opacity-60 cursor-not-allowed'
+                              ? "bg-slate-900/40 border-slate-800 opacity-60 cursor-not-allowed"
                               : isSelected
-                              ? 'bg-purple-950/40 border-purple-500/70 shadow-md shadow-purple-500/10 cursor-pointer'
-                              : 'bg-slate-900/70 border-slate-800 hover:border-slate-700 cursor-pointer'
+                                ? "bg-purple-950/40 border-purple-500/70 shadow-md shadow-purple-500/10 cursor-pointer"
+                                : "bg-slate-900/70 border-slate-800 hover:border-slate-700 cursor-pointer"
                           }`}
                         >
                           {/* Checkbox */}
@@ -1437,7 +1698,7 @@ export const AdminEventsTab: React.FC = () => {
                               checked={isSelected}
                               disabled={isPublished}
                               onChange={() => handleToggleCandidate(cand.id)}
-                              onClick={e => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
                               className="w-4 h-4 rounded text-purple-600 accent-purple-500 cursor-pointer"
                             />
                           </div>
@@ -1448,9 +1709,9 @@ export const AdminEventsTab: React.FC = () => {
                               src={cand.image}
                               alt={cand.title}
                               className="w-full h-full object-cover"
-                              onError={e => {
+                              onError={(e) => {
                                 (e.currentTarget as HTMLImageElement).src =
-                                  'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80';
+                                  "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80";
                               }}
                             />
                             {cand.aiDetected && (
@@ -1485,7 +1746,9 @@ export const AdminEventsTab: React.FC = () => {
                               </div>
                               <div className="flex items-center gap-1 truncate text-slate-400">
                                 <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
-                                <span className="truncate">{cand.location}</span>
+                                <span className="truncate">
+                                  {cand.location}
+                                </span>
                               </div>
                             </div>
 
@@ -1495,27 +1758,31 @@ export const AdminEventsTab: React.FC = () => {
                               </p>
                             )}
 
-                            {cand.sourceUrl && (() => {
-                              const siteName = resolveSourceSiteName(cand.sourceUrl, cand.badge || cand.organizer);
-                              return (
-                                <div className="pt-1.5 flex items-center justify-between gap-2 flex-wrap">
-                                  <span className="text-[10px] font-semibold text-purple-200/90 truncate">
-                                    Fuente: <strong>{siteName}</strong>
-                                  </span>
-                                  <a
-                                    href={cand.sourceUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={e => e.stopPropagation()}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-[10px] shadow-xs transition-colors"
-                                    title={`Validar evento directamente en ${siteName}: ${cand.sourceUrl}`}
-                                  >
-                                    <span>Ver en {siteName}</span>
-                                    <ExternalLink className="w-2.5 h-2.5" />
-                                  </a>
-                                </div>
-                              );
-                            })()}
+                            {cand.sourceUrl &&
+                              (() => {
+                                const siteName = resolveSourceSiteName(
+                                  cand.sourceUrl,
+                                  cand.badge || cand.organizer,
+                                );
+                                return (
+                                  <div className="pt-1.5 flex items-center justify-between gap-2 flex-wrap">
+                                    <span className="text-[10px] font-semibold text-purple-200/90 truncate">
+                                      Fuente: <strong>{siteName}</strong>
+                                    </span>
+                                    <a
+                                      href={cand.sourceUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-[10px] shadow-xs transition-colors"
+                                      title={`Validar evento directamente en ${siteName}: ${cand.sourceUrl}`}
+                                    >
+                                      <span>Ver en {siteName}</span>
+                                      <ExternalLink className="w-2.5 h-2.5" />
+                                    </a>
+                                  </div>
+                                );
+                              })()}
                           </div>
                         </div>
                       );
@@ -1530,10 +1797,12 @@ export const AdminEventsTab: React.FC = () => {
               <div className="text-xs text-slate-300">
                 <span>Seleccionados para publicar: </span>
                 <strong className="text-purple-300 font-bold">
-                  {Array.from(selectedCandidateIds).filter(id => {
-                    const c = aiCandidates.find(item => item.id === id);
-                    return c && !c.alreadyPublished;
-                  }).length}{' '}
+                  {
+                    Array.from(selectedCandidateIds).filter((id) => {
+                      const c = aiCandidates.find((item) => item.id === id);
+                      return c && !c.alreadyPublished;
+                    }).length
+                  }{" "}
                   eventos
                 </strong>
               </div>
@@ -1541,7 +1810,7 @@ export const AdminEventsTab: React.FC = () => {
               <div className="flex items-center gap-2.5 w-full sm:w-auto">
                 <button
                   type="button"
-                  onClick={() => setIsAiSearchModalOpen(false)}
+                  onClick={closeAiRadar}
                   className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
                 >
                   Cerrar
@@ -1550,13 +1819,7 @@ export const AdminEventsTab: React.FC = () => {
                 <button
                   type="button"
                   onClick={handlePublishSelectedCandidates}
-                  disabled={
-                    isPublishingCandidates ||
-                    Array.from(selectedCandidateIds).filter(id => {
-                      const c = aiCandidates.find(item => item.id === id);
-                      return c && !c.alreadyPublished;
-                    }).length === 0
-                  }
+                  disabled={RADAR_WRITE_BLOCKED}
                   className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-stone-950 font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {isPublishingCandidates ? (
@@ -1582,19 +1845,19 @@ export const AdminEventsTab: React.FC = () => {
         <div
           className="fixed inset-0 z-60 flex items-center justify-center p-4"
           style={{
-            background: 'rgba(15, 23, 42, 0.4)',
-            backdropFilter: 'blur(25px)',
-            WebkitBackdropFilter: 'blur(25px)'
+            background: "rgba(15, 23, 42, 0.4)",
+            backdropFilter: "blur(25px)",
+            WebkitBackdropFilter: "blur(25px)",
           }}
         >
           <div
             className="w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4 animate-scaleUp"
             style={{
-              background: 'rgba(255, 255, 255, 0.9)',
-              backdropFilter: 'blur(35px) saturate(190%)',
-              WebkitBackdropFilter: 'blur(35px) saturate(190%)',
-              border: '1.5px solid rgba(255, 255, 255, 0.95)',
-              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)'
+              background: "rgba(255, 255, 255, 0.9)",
+              backdropFilter: "blur(35px) saturate(190%)",
+              WebkitBackdropFilter: "blur(35px) saturate(190%)",
+              border: "1.5px solid rgba(255, 255, 255, 0.95)",
+              boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.3)",
             }}
           >
             <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto shadow-sm">
@@ -1606,7 +1869,11 @@ export const AdminEventsTab: React.FC = () => {
                 ¿Eliminar evento?
               </h4>
               <p className="text-xs text-stone-600 leading-relaxed">
-                ¿Seguro que deseas eliminar <strong className="text-stone-950 font-bold">{eventToDelete.title}</strong> de la cartelera oficial?
+                ¿Seguro que deseas eliminar{" "}
+                <strong className="text-stone-950 font-bold">
+                  {eventToDelete.title}
+                </strong>{" "}
+                de la cartelera oficial?
               </p>
             </div>
 
@@ -1635,19 +1902,19 @@ export const AdminEventsTab: React.FC = () => {
         <div
           className="fixed inset-0 z-60 flex items-center justify-center p-4"
           style={{
-            background: 'rgba(15, 23, 42, 0.4)',
-            backdropFilter: 'blur(25px)',
-            WebkitBackdropFilter: 'blur(25px)'
+            background: "rgba(15, 23, 42, 0.4)",
+            backdropFilter: "blur(25px)",
+            WebkitBackdropFilter: "blur(25px)",
           }}
         >
           <div
             className="w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4 animate-scaleUp"
             style={{
-              background: 'rgba(255, 255, 255, 0.9)',
-              backdropFilter: 'blur(35px) saturate(190%)',
-              WebkitBackdropFilter: 'blur(35px) saturate(190%)',
-              border: '1.5px solid rgba(255, 255, 255, 0.95)',
-              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)'
+              background: "rgba(255, 255, 255, 0.9)",
+              backdropFilter: "blur(35px) saturate(190%)",
+              WebkitBackdropFilter: "blur(35px) saturate(190%)",
+              border: "1.5px solid rgba(255, 255, 255, 0.95)",
+              boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.3)",
             }}
           >
             <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto shadow-sm">
@@ -1659,7 +1926,8 @@ export const AdminEventsTab: React.FC = () => {
                 ¿Restaurar cartelera oficial?
               </h4>
               <p className="text-xs text-stone-600 leading-relaxed">
-                ¿Deseas restaurar la lista oficial de eventos predeterminados de Ciudad del Carmen?
+                ¿Deseas restaurar la lista oficial de eventos predeterminados de
+                Ciudad del Carmen?
               </p>
             </div>
 
