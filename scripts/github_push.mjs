@@ -6,12 +6,14 @@ export const OWNER = 'dJeoMed78';
 export const REPO = 'Encarmenorg';
 
 // Rama autorizada exclusiva para esta tarea (validación positiva estricta)
+// NOTA: Este script está configurado específicamente para la tarea ENC-GOOGLE-DEV-ISOLATION-001.
+// No es un mecanismo general de publicación para otras tareas sin autorización previa.
 export const AUTHORIZED_TASK_BRANCH = 'work/ENC-GOOGLE-DEV-ISOLATION-001';
 
 // Ramas protegidas críticas (defensa en profundidad)
 export const PROTECTED_BRANCHES = ['main', 'ia-desarrollo', 'google-ai-studio-limpieza'];
 
-// Archivos explícitamente autorizados para la tarea
+// Archivos explícitamente autorizados para esta tarea
 export const AUTHORIZED_TASK_FILES = [
   'scripts/github_push.mjs',
   'docs/DEV_WORKFLOW_ISOLATION.md'
@@ -58,7 +60,7 @@ export function validateTargetBranch(branchInput, env = process.env) {
   // 2. Comprobar presencia explícita de la rama destino
   if (!branchInput || typeof branchInput !== 'string' || branchInput.trim() === '') {
     throw new SecurityValidationError(
-      "[SECURITY ERROR]: La rama destino debe proporcionarse de forma explícita. " +
+      "[SECURITY ERROR]: La rama destino debe proporcionarse de forma explícita como primer argumento. " +
       "No se permite selección implícita ni valores por defecto no declarados."
     );
   }
@@ -129,10 +131,98 @@ export function verifyAuthorizedFiles(changedFiles, authorizedList = AUTHORIZED_
 
   if (unauthorized.length > 0) {
     throw new SecurityValidationError(
-      `[SECURITY ERROR]: Se detectaron archivos modificados fuera del alcance autorizado:\n` +
+      `[SECURITY ERROR]: Se detectaron archivos fuera del alcance autorizado para esta tarea:\n` +
       unauthorized.map((f) => `  - ${f}`).join('\n') +
-      `\nArchivos permitidos exclusivamente para esta tarea:\n` +
+      `\nArchivos permitidos exclusivamente:\n` +
       authorizedList.map((f) => `  + ${f}`).join('\n')
+    );
+  }
+}
+
+/**
+ * Inspección estricta de Git sin retorno silencioso de listas vacías.
+ * Detecta:
+ * 1. Modificaciones locales no committeadas en el working tree.
+ * 2. Modificaciones preparadas en el índice (staged).
+ * 3. Archivos no rastreados (untracked) que no sean artefactos transitorios.
+ * 4. Cambios incorporados en commits locales anteriores respecto a origin/ia-desarrollo.
+ * 
+ * Regla: Cualquier fallo o error de ejecución de Git detiene la publicación inmediatamente.
+ */
+export function getLocalModifiedFiles(execFn = execSync) {
+  try {
+    // 1. Working tree no committeado
+    const trackedModified = execFn('git diff --name-only HEAD', { encoding: 'utf8' })
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    // 2. Índice staged
+    const staged = execFn('git diff --cached --name-only', { encoding: 'utf8' })
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    // 3. Archivos untracked
+    const untracked = execFn('git ls-files --others --exclude-standard', { encoding: 'utf8' })
+      .split('\n')
+      .map((s) => s.trim())
+      .filter((filePath) => {
+        if (!filePath) return false;
+        // Filtrar exclusivamente artefactos transitorios generados por el entorno o pruebas
+        if (
+          filePath.startsWith('.aistudio') ||
+          filePath.startsWith('dist/') ||
+          filePath.startsWith('public/assets/aistudio/') ||
+          filePath.startsWith('public/uploads/') ||
+          filePath.startsWith('uploads/') ||
+          filePath === 'classifieds_db.json' ||
+          filePath === 'events_db.json'
+        ) {
+          return false;
+        }
+        return true;
+      });
+
+    // 4. Commits locales anteriores respecto al punto de partida (origin/ia-desarrollo)
+    let commitsDiff = [];
+    try {
+      commitsDiff = execFn('git diff --name-only origin/ia-desarrollo...HEAD', { encoding: 'utf8' })
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean);
+    } catch (diffErr) {
+      throw new SecurityValidationError(
+        `[SECURITY ERROR]: Imposible verificar commits locales anteriores respecto a 'origin/ia-desarrollo': ${diffErr.message}`
+      );
+    }
+
+    return Array.from(new Set([...trackedModified, ...staged, ...untracked, ...commitsDiff]));
+  } catch (err) {
+    if (err instanceof SecurityValidationError) {
+      throw err;
+    }
+    // Criterio estricto: ante cualquier falla de Git, detener la publicación inmediatamente.
+    throw new SecurityValidationError(
+      `[SECURITY ERROR]: Falló la inspección de Git (${err.message}). Publicación abortada para garantizar el alcance.`
+    );
+  }
+}
+
+/**
+ * Valida que la copia local no esté desactualizada respecto a la referencia remota base.
+ * Evita sobreescribir commits remotos con versiones locales obsoletas.
+ */
+export function verifyNotBehind(baseCommitSha, execFn = execSync) {
+  if (!baseCommitSha) return;
+
+  try {
+    // Comprobar si baseCommitSha es ancestro de HEAD o coincide con HEAD
+    execFn(`git merge-base --is-ancestor ${baseCommitSha} HEAD`, { stdio: 'pipe' });
+  } catch (_) {
+    throw new SecurityValidationError(
+      `[SECURITY ERROR]: La copia local está desactualizada respecto al commit remoto ${baseCommitSha}. ` +
+      `Publicación abortada para impedir sobreescritura con versiones obsoletas. Realice sincronización previa.`
     );
   }
 }
@@ -184,47 +274,7 @@ export async function ghRequest(endpoint, method = 'GET', body = null, token = p
 }
 
 /**
- * Obtiene lista de archivos modificados localmente que no sean artefactos transitorios del entorno.
- */
-export function getLocalModifiedFiles() {
-  try {
-    const trackedModified = execSync('git diff --name-only HEAD', { encoding: 'utf8' })
-      .split('\n')
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    const staged = execSync('git diff --cached --name-only', { encoding: 'utf8' })
-      .split('\n')
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    const untracked = execSync('git ls-files --others --exclude-standard', { encoding: 'utf8' })
-      .split('\n')
-      .map((s) => s.trim())
-      .filter((filePath) => {
-        if (!filePath) return false;
-        if (
-          filePath.startsWith('.aistudio') ||
-          filePath.startsWith('dist/') ||
-          filePath.startsWith('public/assets/aistudio/') ||
-          filePath.startsWith('public/uploads/') ||
-          filePath.startsWith('uploads/') ||
-          filePath === 'classifieds_db.json' ||
-          filePath === 'events_db.json'
-        ) {
-          return false;
-        }
-        return true;
-      });
-
-    return Array.from(new Set([...trackedModified, ...staged, ...untracked]));
-  } catch (_) {
-    return [];
-  }
-}
-
-/**
- * Flujo principal de sincronización con protecciones completas.
+ * Flujo principal de sincronización con protecciones completas y control de concurrencia.
  */
 export async function run() {
   console.log('[GitHub Push Seguro] Iniciando verificación de seguridad...');
@@ -237,7 +287,7 @@ export async function run() {
   console.log(`[GitHub Push Seguro] Rama destino validada positivamente: '${targetBranch}'`);
   console.log(`[GitHub Push Seguro] Mensaje de commit: "${commitMessage}"`);
 
-  // 2. Verificar que no haya archivos fuera de alcance en el diff local
+  // 2. Verificar alcance de archivos (incluyendo working tree, staged y commits locales previos)
   const modifiedFiles = getLocalModifiedFiles();
   verifyAuthorizedFiles(modifiedFiles, AUTHORIZED_TASK_FILES);
   console.log(`[GitHub Push Seguro] Alcance de archivos validado (${modifiedFiles.length} detectados, todos autorizados).`);
@@ -264,7 +314,13 @@ export async function run() {
     }
   }
 
-  // 4. Preparar blobs exclusivamente de los archivos autorizados que existen localmente
+  // 4. Validar que la copia local no sea obsoleta respecto a la referencia remota
+  if (!isNewBranch) {
+    verifyNotBehind(baseCommitSha);
+    console.log(`[GitHub Push Seguro] Árbol local comprobado al día respecto al remoto base (${baseCommitSha.slice(0, 7)}).`);
+  }
+
+  // 5. Preparar blobs exclusivamente de los archivos autorizados
   const commitData = await ghRequest(`/git/commits/${baseCommitSha}`);
   const baseTreeSha = commitData.tree.sha;
 
@@ -293,7 +349,7 @@ export async function run() {
     return;
   }
 
-  // 5. Crear el árbol y el nuevo commit
+  // 6. Crear el árbol y el nuevo commit
   const newTree = await ghRequest('/git/trees', 'POST', {
     base_tree: baseTreeSha,
     tree: treeItems
@@ -312,7 +368,7 @@ export async function run() {
   });
   console.log(`[GitHub Push Seguro] Commit creado: ${newCommit.sha}`);
 
-  // 6. Actualización segura y control de concurrencia
+  // 7. Actualización con control de concurrencia y force: false
   if (isNewBranch) {
     const createdRef = await ghRequest('/git/refs', 'POST', {
       ref: `refs/heads/${targetBranch}`,
@@ -320,21 +376,34 @@ export async function run() {
     });
     console.log(`[GitHub Push Seguro] Rama creada exitosamente en ${createdRef.ref} (${createdRef.object.sha})`);
   } else {
-    // Control de concurrencia: re-verificar que el SHA remoto no haya cambiado
+    // Control de concurrencia Nivel 1: re-verificar SHA remoto antes del PATCH
     const verifyRef = await ghRequest(`/git/ref/heads/${targetBranch}`);
     if (verifyRef.object.sha !== baseCommitSha) {
       throw new ConcurrencyError(
         `[CONCURRENCY ERROR]: La rama remota '${targetBranch}' fue modificada concurrentemente ` +
         `(esperado: ${baseCommitSha}, actual: ${verifyRef.object.sha}). ` +
-        `Operación cancelada para evitar sobreescritura de cambios ajenos.`
+        `Operación abortada para evitar sobreescritura de cambios de otros trabajadores.`
       );
     }
 
-    const updatedRef = await ghRequest(`/git/refs/heads/${targetBranch}`, 'PATCH', {
-      sha: newCommit.sha,
-      force: false
-    });
-    console.log(`[GitHub Push Seguro] ¡Rama '${targetBranch}' actualizada a ${updatedRef.object.sha} (Fast-forward, sin force)!`);
+    // Control de concurrencia Nivel 2: PATCH con force: false
+    // Nota técnica: Si otro cliente actualizó la rama inmediatamente antes de esta llamada,
+    // GitHub devolverá HTTP 422 ("Update is not a fast forward").
+    try {
+      const updatedRef = await ghRequest(`/git/refs/heads/${targetBranch}`, 'PATCH', {
+        sha: newCommit.sha,
+        force: false
+      });
+      console.log(`[GitHub Push Seguro] ¡Rama '${targetBranch}' actualizada a ${updatedRef.object.sha} (Fast-forward, sin force)!`);
+    } catch (patchErr) {
+      if (patchErr instanceof GitHubApiError && patchErr.status === 422) {
+        throw new ConcurrencyError(
+          `[CONCURRENCY ERROR]: GitHub rechazó la actualización (HTTP 422) porque la referencia ya no es fast-forward. ` +
+          `Otro trabajador o proceso actualizó la rama en el intervalo de publicación.`
+        );
+      }
+      throw patchErr;
+    }
   }
 }
 
