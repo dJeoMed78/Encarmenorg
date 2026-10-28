@@ -1,0 +1,9 @@
+# ENC-REVIEWS-COMMENTS-002
+
+## Inicio — 2026-10-28T10:57:37.657Z
+Estado EN_PROGRESO. Rama work/enc-reviews-comments-002; base 1455e568a93629dcd7ae3f58df61d03c76a64f4d.
+Instrucción blob 92380799f74dd3c04f302733c49b4bc5fc2f7ffa. Corrección Glass publicada en f3046a1354057ed09f4bed3b007545aeb186ea59 y 12 pruebas PASS previas.
+Auditoría breve: PR #4 abierto/no integrado; NO se editará ficha Glass ni App. Montaje público en StarRatingWidget. business_ratings ya dispone de comment y contrato de 200 caracteres; se conservará límite 10–200 para no migrar ni ampliar esquema. Componente admin identificado inequívocamente: AdminBusinessesTab.tsx; NO se editará porque moderación queda bloqueada por gestión insegura de credenciales (cambio de contraseña sin autorización fiable), aunque existe token efímero servidor. No se habilitará borrado, ocultamiento o reporte persistente sin contrato/auditoría segura.
+Plan autorizado: política de texto puro compartida BusinessCommentsPolicy.tsx, lectura paginada filtrada, formulario explícito de estrellas+comentario, límites de solicitudes y feature gate servidor default off. Sin nuevas tablas/columnas; sin SQL ejecutado. La activación requerirá coordinación y moderación segura/plan de abuso. Stars sin comentario mantendrán RATINGS_SCHEMA_APPROVED.
+Archivos previstos: StarRatingWidget.tsx, nuevos BusinessComments*.tsx/.css, services/api.ts, utils/realRatings.ts, server.ts solo ratings/comments, db/mariadb.ts solo repositorio de ratings/comments, WORK_RESULTADOS y este progreso. Sin dependencias nuevas ni autenticación global.
+Pruebas previstas: política inerte, rutas extraídas Express con repositorio falso, cliente/navegador y concurrencia simulada; nunca ejecutar server.ts completo ni conectar MariaDB.
