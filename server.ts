@@ -46,7 +46,11 @@ import {
   dbGetUploadedFile,
   dbSaveDismissedCandidate,
   dbLoadDismissedCandidates,
-  dbGetRatingStats, dbGetBusinessRating, dbInsertRating
+  dbGetRatingStats, dbGetBusinessRating, dbInsertRating,
+  isStagingEnvironment,
+  isWritePermitted,
+  validateStagingDbConfiguration,
+  PRODUCTION_DB_NAME
 } from './src/db/mariadb.ts';
 
 let _filenameStr = '';
@@ -74,20 +78,24 @@ app.use((req: Request, res: Response, next) => {
   next();
 });
 
-// Staging safety: do not allow requests that can modify shared production data.
-// This is a defense-in-depth measure; MariaDB must ALSO use a SELECT-only account.
-if (process.env.STAGING_READ_ONLY === 'true') {
-  app.use((req: Request, res: Response, next: NextFunction) => {
+// Staging safety & write protection: do not allow requests that can modify shared production data.
+// In Staging or when read-only mode is active, block mutating HTTP methods (POST, PUT, DELETE, PATCH).
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (!isWritePermitted()) {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
+      // Excepción para búsquedas o consultas enviadas por POST que no modifican datos
+      if (req.path === '/api/events/radar-search' || req.path === '/api/ratings/get') {
+        return next();
+      }
       return res.status(403).json({
         success: false,
         error: 'STAGING_READ_ONLY',
-        message: 'Entorno de pruebas en modo solo lectura. No se guardaron cambios.'
+        message: 'Entorno de pruebas en modo solo lectura / seguro. No se permiten modificaciones para proteger producción.'
       });
     }
-    next();
-  });
-}
+  }
+  next();
+});
 
 // 1. REGLA GEOIP CLOUDFLARE: SOLO PERMITIR TRÁFICO DESDE MÉXICO (MX)
 // Si la petición proviene de cualquier otro país (US, ES, CN, etc.), desviar a https://www.google.com
@@ -1358,6 +1366,9 @@ function isEventPast(dateStr?: string, timeStr?: string): boolean {
 }
 
 async function pruneExpiredEvents(): Promise<number> {
+  if (!isWritePermitted()) {
+    return 0;
+  }
   const initialCount = eventsCache.length;
   const expiredIds: string[] = [];
   eventsCache = eventsCache.filter(evt => {
@@ -1417,17 +1428,42 @@ function loadDismissedCandidatesLocal() {
 }
 loadDismissedCandidatesLocal();
 
+// Validar aislamiento de Staging al arrancar
+if (isStagingEnvironment()) {
+  const stagingCheck = validateStagingDbConfiguration();
+  if (!stagingCheck.valid) {
+    console.error(`========================================================================`);
+    console.error(`[ALERTA CRÍTICA DE AISLAMIENTO DE STAGING]`);
+    console.error(`Error: ${stagingCheck.error}`);
+    console.error(`Para proteger producción, el servidor opera en modo ultra-seguro sin conexiones`);
+    console.error(`destructivas ni escrituras permitidas.`);
+    console.error(`========================================================================`);
+    if (process.env.STAGING_STRICT_BOOT === 'true') {
+      console.error(`[STAGING_STRICT_BOOT] Deteniendo el proceso para evitar cualquier arranque con configuración insegura.`);
+      process.exit(1);
+    }
+  }
+}
+
 // Initialize Hostinger MariaDB if configured
 initMariaDb().then(async (active) => {
   if (active) {
     console.log('[MariaDB] Conexión establecida con Hostinger MariaDB.');
+    const canSyncStartupWrites = isWritePermitted();
+    if (!canSyncStartupWrites) {
+      console.log('[Staging Guard] Modo solo lectura o aislamiento de Staging activo: se omiten escrituras de sincronización y limpieza destructiva al arrancar.');
+    }
 
     // 0. Cargar y sincronizar configuración persistente del portal
     try {
       const dbConfig = await dbLoadPortalConfig();
       if (dbConfig) {
         portalConfig = { ...portalConfig, ...dbConfig };
-        fs.writeFileSync(portalConfigPath, JSON.stringify(portalConfig, null, 2), 'utf8');
+        if (canSyncStartupWrites) {
+          try {
+            fs.writeFileSync(portalConfigPath, JSON.stringify(portalConfig, null, 2), 'utf8');
+          } catch (_) {}
+        }
         console.log('[MariaDB] Configuración del portal sincronizada desde la base de datos.');
       }
       const dbNotes = await dbLoadPortalNotes();
@@ -1446,7 +1482,7 @@ initMariaDb().then(async (active) => {
     if (dbBusinesses.length > 0) {
       const dbIdSet = new Set(dbBusinesses.map(b => String(b.id)));
       const missingInDb = businessesCache.filter(b => !dbIdSet.has(String(b.id)));
-      if (missingInDb.length > 0) {
+      if (missingInDb.length > 0 && canSyncStartupWrites) {
         console.log(`[MariaDB] Añadiendo ${missingInDb.length} empresas del catálogo local que no existían en Hostinger MariaDB...`);
         for (const b of missingInDb) {
           await dbSaveBusiness(b);
@@ -1457,7 +1493,7 @@ initMariaDb().then(async (active) => {
         businessesCache = dbBusinesses;
       }
       console.log(`[MariaDB] ${businessesCache.length} empresas cargadas autoritativamente desde Hostinger MariaDB.`);
-    } else {
+    } else if (canSyncStartupWrites) {
       console.log(`[MariaDB] Base de datos vacía. Sincronizando ${businessesCache.length} empresas completas hacia Hostinger MariaDB...`);
       for (const b of businessesCache) {
         await dbSaveBusiness(b);
@@ -1465,6 +1501,8 @@ initMariaDb().then(async (active) => {
       const reloaded = await dbLoadAllBusinesses();
       if (reloaded.length > 0) businessesCache = reloaded;
       console.log(`[MariaDB] ${businessesCache.length} empresas aseguradas en Hostinger MariaDB.`);
+    } else {
+      console.log(`[Staging Guard] Base de datos sin empresas en modo seguro/read-only. Catálogo local preservado en memoria sin mutar MariaDB.`);
     }
 
     // 2. Reports
@@ -1484,7 +1522,7 @@ initMariaDb().then(async (active) => {
           : getEventRepresentativeImageServer(e)
       }));
       console.log(`[MariaDB] ${eventsCache.length} eventos cargados desde Hostinger MariaDB.`);
-    } else if (eventsCache.length > 0) {
+    } else if (eventsCache.length > 0 && canSyncStartupWrites) {
       for (const evt of eventsCache) {
         await dbSaveEvent(evt);
       }
@@ -1496,7 +1534,7 @@ initMariaDb().then(async (active) => {
     if (dbPromos.length > 0) {
       promotionsCache = dbPromos;
       console.log(`[MariaDB] ${promotionsCache.length} promociones cargadas desde Hostinger MariaDB.`);
-    } else if (promotionsCache.length > 0) {
+    } else if (promotionsCache.length > 0 && canSyncStartupWrites) {
       for (const pr of promotionsCache) {
         await dbSavePromotion(pr);
       }
@@ -1514,7 +1552,7 @@ initMariaDb().then(async (active) => {
     if (dbClassifieds.length > 0) {
       classifiedsCache = dbClassifieds;
       console.log(`[MariaDB] ${classifiedsCache.length} avisos clasificados cargados desde Hostinger MariaDB.`);
-    } else if (classifiedsCache.length > 0) {
+    } else if (classifiedsCache.length > 0 && canSyncStartupWrites) {
       for (const c of classifiedsCache) {
         await dbSaveClassified(c);
       }
@@ -1525,7 +1563,7 @@ initMariaDb().then(async (active) => {
     if (dbServices.length > 0) {
       emergencyServicesCache = dbServices;
       console.log(`[MariaDB] ${emergencyServicesCache.length} servicios de emergencia cargados desde Hostinger MariaDB.`);
-    } else if (emergencyServicesCache.length > 0) {
+    } else if (emergencyServicesCache.length > 0 && canSyncStartupWrites) {
       for (const s of emergencyServicesCache) {
         await dbSaveEmergencyService(s);
       }
@@ -1546,9 +1584,11 @@ initMariaDb().then(async (active) => {
     } catch (_) {}
 
     // 9. Auto-eliminar eventos cuya fecha y hora ya pasaron
-    try {
-      await pruneExpiredEvents();
-    } catch (_) {}
+    if (canSyncStartupWrites) {
+      try {
+        await pruneExpiredEvents();
+      } catch (_) {}
+    }
   }
 }).catch(e => console.warn('[MariaDB] Error inicializando:', e.message));
 
@@ -1564,9 +1604,23 @@ setInterval(() => {
 // Database Status & Engine Inspection
 app.get('/api/database-status', (_req: Request, res: Response) => {
   const mariadbConfig = getMariaDbConfig();
+  const isStaging = isStagingEnvironment();
+  const writePermitted = isWritePermitted();
+  const validation = isStaging ? validateStagingDbConfiguration() : { valid: true };
+
   res.json({
     success: true,
     activeEngine: isMariaDbActive() ? 'mariadb_hostinger' : 'local_json',
+    environment: isStaging ? 'staging' : (process.env.NODE_ENV || 'production'),
+    stagingIsolation: {
+      isStaging,
+      readOnly: !writePermitted,
+      writePermitted,
+      isolationValid: validation.valid,
+      isolationError: validation.valid ? null : (validation as any).error,
+      databaseName: mariadbConfig?.database || null,
+      isProductionDb: (mariadbConfig?.database || '') === PRODUCTION_DB_NAME
+    },
     mariadb: {
       connected: isMariaDbActive(),
       configured: Boolean(mariadbConfig),
@@ -1583,10 +1637,17 @@ app.get('/api/database-status', (_req: Request, res: Response) => {
 
 // System health and status check
 app.get(['/api/health', '/api/system/status'], (_req: Request, res: Response) => {
+  const isStaging = isStagingEnvironment();
   res.json({
     status: 'ok',
     uptime: Math.round(process.uptime()),
     timestamp: new Date().toISOString(),
+    environment: isStaging ? 'staging' : (process.env.NODE_ENV || 'production'),
+    staging: {
+      isStaging,
+      readOnly: !isWritePermitted(),
+      writesPermitted: isWritePermitted()
+    },
     businesses: businessesCache.length,
     events: eventsCache.length,
     classifieds: classifiedsCache.length,
@@ -2418,6 +2479,10 @@ const IS_WP_SYNC_ENABLED = process.env.ENABLE_WP_SYNC === 'true';
 
 // Helper to purge LiteSpeed, Cloudflare and local cache across encarmen.org and empresasencarmen.com
 async function purgeWordPressCache(slugs: string[] = []): Promise<void> {
+  if (isStagingEnvironment() || process.env.ENABLE_CACHE_PURGE === 'false') {
+    console.log('[Staging Guard] Purga de caché en producción deshabilitada (entorno Staging o ENABLE_CACHE_PURGE=false).');
+    return;
+  }
   try {
     const urls = [
       'https://' + 'encarmen.org/',
