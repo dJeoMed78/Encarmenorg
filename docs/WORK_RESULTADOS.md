@@ -359,3 +359,8 @@ Dictamen:APTO PARA REVISIÓN DE CANDIDATA FRONTEND CONSOLIDADA; integración ún
 
 ### Reversión
 Antes de integrar:descartar candidata sin tocar ia o registrar reversión por commits normales, nunca force. Si Coordinación la integra en futuro y requiere rollback:revertir commits de código de esta tarea sobre su entorno autorizado, o restaurar los4 archivos desde cad1222618c94f4eb3dabb589b6e58836191dcb7 después de comprobar cambios posteriores. No revertir implementaciones ajenas ni usar la rama histórica del editor como referencia visual. Mantener cierre de funciones inseguras. No rollbackSQL porque no se modificaron datos. Documentación histórica se conserva.
+
+# ENC-VISUAL-DEMO-001
+## Inicio 2026-10-28T18:15:33.077Z
+Estado EN_PROGRESO. Rama work/ENC-VISUAL-DEMO-001 creada exclusivamente desde66faa550de82925f6a9f04cdc135977068a2463b, sin tocar release/ia/main. Documento de tarea en coordinación404; autorización directa de sesión registrada. Reutilizar componentes reales sin cambiar comprobaciones de aplicación normal; entrada/build/adaptadores exclusivosdemo, datos totalmente ficticios y memoria de navegador sin credenciales/tokens, APIs, almacenamiento persistente ni subidas remotas. Se permite únicamente GoogleMaps tras consentimiento explícito.
+Se investiga vista previa nativa Work mediante sites-preview; Sites hospedado es despliegue separado y NO se utilizará sin autorización adicional. Preparar además HTML autocontenido compilado, pruebas reproducibles y capturas, para que sea utilizable aunque URLinterna no sea compartible. Sin DB/SQL/infraestructura/PR/merge/despliegue externo.
