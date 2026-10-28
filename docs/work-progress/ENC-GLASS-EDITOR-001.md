@@ -21,3 +21,186 @@
 - Tipado enfocado del editor/dependencias PASA. Build Vite completo PASA. tsc global falla por TS2339 preexistente de AdminEventsTab.tsx:1499, archivo reservado a coordinación: NO se modifica.
 - Errores de preparación/prueba: descarga de Chromium de Playwright inválida; se usó binario temporal de paquete, sin cambiar dependencias del proyecto. Primera prueba detectó nombre accesible ambiguo en textarea (corregido); otra detectó carrera en reset del harness (corregida con cierre renderizado). No se presentan esos intentos como pruebas aprobadas.
 - Siguiente hito: terminar batería ampliada, conservar evidencias, verificar diff de tres archivos y registrar resultados. Sin merge/rebase automático, despliegue ni SQL.
+
+## Cierre — 2026-10-28T03:37:48.629Z
+- Estado IMPLEMENTADO_SIN_VERIFICAR: frontend local probado, fidelidad exacta y persistencia real pendientes.
+- Commit de implementación: 85d02e1d9e0d90c48dc0da7aeb370c903bfd8abc; el cierre añade evidencia completa y formato legible del componente.
+- 40 comprobaciones Chromium 153.0.8010.0 APROBADAS; servidor estático solo en 127.0.0.1, peticiones upload interceptadas con respuestas sintéticas; sin errores JS ni solicitudes externas. No se inicia server.ts ni se llama BD.
+- Tipado enfocado del editor/dependencias TypeScript 7.0.2 APROBADO. tsc global en base 6004ef6 FALLA solo por TS2339 de AdminEventsTab.tsx:1499; prohibido modificar ese archivo. Vite 8.3.5 completo APROBADO (1719 módulos), advertencia chunk >500kB. Sin npm run build/prebuild, sin cambios de versión.
+- Nueve capturas reales de Chromium: inicio/horarios en escritorio 1440x1050, tablet 834x1112, móvil 390x844 y ancho reducido 320x700; más administración/fotos. Datos sintéticos visibles y sin BD.
+- Evidencia: [ENC-GLASS-EDITOR-001-capturas.zip](https://chatgpt.com/library?file_id=libfile_94254a3a7a008191b23294484005dfaa&account_id=personal).
+- Inspección visual propia: ambiente azul/rosa, blanco translúcido, campos legibles, pie visible al desplazar, cuatro pagos principales con quinto histórico en avanzados, sin superposición horizontal. No se afirma coincidencia con imagen no disponible ni validación Safari/iOS.
+- Primera prueba falló al localizar una textarea por etiqueta ambigua: se corrigió su nombre accesible. Otra falló por el reset del harness (cierre/reapertura batidos en la misma actualización); se corrigió la fixture mediante flushSync y se repitió la batería completa. Intentos no aprobados documentados, sin presentarlos como integración.
+- La descarga estándar de Chromium falló por ZIP inválido; la extracción de fonts del paquete alternativo dio EINVAL/chown. El ejecutable temporal ya extraído pudo arrancar y ejecutó realmente las pruebas. No se alteraron dependencias del repositorio.
+- Campos no editados se omiten del PATCH: horarios/pagos/entrega/galería/categorías/contactos/slug y metadatos ajenos no se sustituyen con defaults. Datos desconocidos y categorías secundarias se conservan; no se inventan días ni ciudad. Descripción heredada >500 se conserva si no se edita; al editar rige límite 500.
+- onSave debe confirmar success===true para cerrar. Fallo mantiene borrador; operaciones pendientes bloquean cierre/doble envío. Se ignoran respuestas viejas. Subidas requieren URL de servidor; data URI del helper compartido se trata como falta de confirmación. No se cambió api.ts.
+- Carga de imágenes sigue usando servicio existente. Cancelar no puede borrar archivos que el servicio ya recibió; un lote parcialmente fallido puede dejar archivos sin asociar. No se implementa borrado remoto ni se prueba contra hosting. El borrado visual de foto/galería solo actualiza borrador hasta guardar.
+- Ciudad es campo opcional adicional enviado solo si se edita; la ruta existente mezcla campos del PATCH y raw_data, revisado estáticamente. Persistencia de ese campo y aliases requiere prueba real autorizada.
+- Referencia original, Safari/iOS, teclado móvil y persistencia/recarga con backend real pendientes. Permisos definitivos siguen siendo responsabilidad del backend existente.
+
+### Concurrencia de coordinación
+- Base original y única base de esta rama: 6004ef637021ee0bea72f5c892a815696c1c8c13.
+- Durante ejecución ia-desarrollo avanzó a 1455e568a93629dcd7ae3f58df61d03c76a64f4d (merge PR #2 de coordinación, observado mediante lectura; NO realizado por Work en esta tarea).
+- Sus cambios corresponden a calificaciones; EditBusinessModal.tsx conserva blob 00eeb741068d731988cf13b6ee49edd12182016b, idéntico al inicial.
+- Sin rebase/merge automático ni incorporación de código de calificaciones. WORK_RESULTADOS se toma acumulativo desde el SHA concurrente para preservar entradas existentes al agregar esta tarea, sin modificar estados previos.
+- La coordinación deberá revisar integración sobre su base actual y conciliar WORK_RESULTADOS, archivo documental compartido. No se infiere despliegue de ese merge.
+
+### Comandos ejecutados
+Copia de validación local aislada desde base original. Herramientas temporales: Node 24.22.1, TypeScript 7.0.2, Vite 8.3.5, esbuild 0.28.2, React 19.3.1, Playwright y Chromium temporal. Sin instalación npm ci del lockfile ni equivalencia afirmada con hosting.
+```sh
+# Desde la copia local de la rama, sin ejecutar scripts de arranque:
+/tmp/enc-reviews-tools/node_modules/.bin/tsc --noEmit
+/tmp/enc-reviews-tools/node_modules/.bin/tsc --project /tmp/enc-glass-validation/tsconfig.editor.json --noEmit
+/tmp/enc-reviews-tools/node_modules/.bin/vite build --outDir /tmp/enc-glass-validation/vite-dist --emptyOutDir
+/tmp/enc-reviews-tools/node_modules/.bin/esbuild /tmp/enc-glass-validation/harness.tsx --bundle --platform=browser --outfile=/tmp/enc-glass-validation/harness.js
+node /tmp/enc-glass-validation/test-editor.cjs
+```
+tsconfig.editor.json se genera copiando compilerOptions del tsconfig original y files apuntando solo a EditBusinessModal.tsx (include/exclude vacíos). El compilador recorre sus dependencias reales, sin incluir componentes ajenos al editor.
+Para repetir el harness, ajustar rutas absolutas a la copia local y a herramientas temporales, usar un Chromium local instalado y crear index.html estático con root y harness.js. El script no sirve la aplicación Express ni carga .env; solo sirve HTML/JS local y simula respuestas de upload/onSave.
+Se formateó únicamente el archivo autorizado con Prettier temporal, incluido su CSS acotado, y se repitieron tipado/build/40 pruebas.
+
+### Salida final del navegador
+```text
+PASS Seis tarjetas, cinco chips de entrega y cuatro de pago
+PASS Opciones avanzadas inicialmente plegadas
+PASS Horario estructurado carga días y horas reales
+PASS WhatsApp ausente no se rellena con teléfono
+PASS Chromium desktop 1440x1050: panel/footer visibles, sin desborde horizontal, blur real
+PASS Chromium tablet 834x1112: panel/footer visibles, sin desborde horizontal, blur real
+PASS Chromium mobile 390x844: panel/footer visibles, sin desborde horizontal, blur real
+PASS Chromium narrow 320x700: panel/footer visibles, sin desborde horizontal, blur real
+PASS Pie permanece visible al desplazar el contenido
+PASS Clic exterior no cierra durante selección de texto
+PASS Foco de teclado contenido dentro del diálogo
+PASS Guardado rechazado conserva borrador; sin editar envía delta vacío
+PASS Falla de red mantiene edición visible
+PASS Sin teléfono ni WhatsApp válido no se invoca guardado
+PASS Teléfono largo no se trunca para convertirlo en válido
+PASS Normalización explícita +52 sin inventar WhatsApp
+PASS Horario libre, pagos, entrega, categorías, multimedia y campos desconocidos no se sobrescriben al editar nombre
+PASS Horario semanal incompleto se rechaza sin persistencia
+PASS Edición semanal explícita y cierre al día siguiente
+PASS Conservar horario original elimina conversión pendiente
+PASS Descripción limitada a 500 con contador
+PASS Descripción heredada larga se conserva si no fue editada
+PASS Chips azules multiselección conservan métodos adicionales
+PASS Quinto pago disponible en avanzados; usuario normal no envía privilegios
+PASS Admin conserva edición de enlace/distintivos sin reescribir historial
+PASS Upload 503 detecta fallback data URI del helper sin cambiar imagen
+PASS Upload confirmado actualiza imagen en borrador y payload
+PASS Quitar foto conserva galería
+PASS Eliminar una foto de galería conserva logotipo
+PASS Archivo no permitido se rechaza antes de upload
+PASS Cambiar categoría principal conserva categorías secundarias
+PASS Ciudad se envía solo al editar sin inventar valor inicial
+PASS Límite de galería no recorta ni sustituye fotos existentes
+PASS Imagen mayor de 5 MB se rechaza antes de upload
+PASS Guardado pendiente bloquea cierre y doble envío
+PASS Diálogo cierra únicamente tras success=true confirmado por callback
+PASS Refresco de objeto mismo ID no destruye borrador
+PASS Respuesta de guardado de otro negocio no cierra el nuevo editor
+PASS Escape sin operación pendiente cierra y restaura scroll
+PASS Sin errores JavaScript ni solicitudes a servicios externos
+RESULTADO: 40 comprobaciones Chromium aprobadas. Callbacks/upload simulados; sin backend/BD/Staging.
+```
+
+### SHA-256 de capturas
+```json
+{
+  "admin-avanzados.png": "77cde04fa9faf43f853258cfd2ca06644e90e5df923ce50f91c57a98af98d86d",
+  "desktop-horarios.png": "fc3be207570030accbd7f4461ac37de0df4b5988a0d3f2fb16f61ef3807b0b2f",
+  "desktop.png": "0033c7c8ecc465e898f3633051ece8a57e1ec4bc4fc72271f4b919907113d953",
+  "mobile-horarios.png": "b259b1be7249bec7683910f9b508cbf6f751d1d3298b4b2a352f07c2e1330be5",
+  "mobile.png": "7306eacfab1ca3ec527e624bdd5b0e5909f7da4bb4d0df3a3b4a27bdd9ad1694",
+  "narrow-horarios.png": "067b76e96f356557ff9d74a2cfeb57b21dc2f7decbbe56df0507a65c6cf77dd8",
+  "narrow.png": "5981dce996a914d1ddc7fc6513e56a07aeb6a6226eb82dbd9e29c4204794dd45",
+  "tablet-horarios.png": "99354d60be5c7f18f03b320b7e38e5b5a75d7d654d36bd7efa607a3b2a1a443e",
+  "tablet.png": "ec01893c0cfb42a9711d66ad06a2e9199e3d5fe14c8e764a9c338bd203c2b0d3"
+}
+```
+
+### Harness reproducible (datos sintéticos, no incorporar a producción)
+```tsx
+import React from '/tmp/enc-reviews-tools/node_modules/react/index.js';
+import { flushSync } from '/tmp/enc-reviews-tools/node_modules/react-dom/index.js';
+import { createRoot } from '/tmp/enc-reviews-tools/node_modules/react-dom/client.js';
+import { EditBusinessModal } from '/workspace/scratch/e1cd9bd12722/glass-editor-001/src/components/EditBusinessModal';
+const picture='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="120" height="120" fill="#7c96bb"/><text x="60" y="74" text-anchor="middle" fill="white" font-family="sans-serif" font-size="42">E</text></svg>');
+const fixture={id:4242,name:'Estudio de prueba local',category:'Servicios',categories:['Servicios','Categoría secundaria'],description:'Datos sintéticos para revisar el editor. Esta vista funciona sin conexión a Staging ni producción.',phone:'9381234567',whatsapp:'',address:'Dirección de prueba',colonia:'Colonia heredada de prueba',city:'Ciudad de prueba',postalCode:'',schedule:'Lun, Mar, Mié, Jue, Vie 09:00 - 18:00',payment:'Efectivo, Tarjetas de Débito y Crédito, Vales de prueba',delivery:'Atención en el Local de la empresa, Servicio a domicilio con costo',image:picture,gallery:[picture,picture],slug:'estudio-local',previousSlugs:['anterior-local'],previousNames:['Nombre anterior'],isTopBusiness:true,isRecommended:true,unknownField:'preservar en servidor'};
+const state={calls:[] as any[],closes:0,mode:'error',resolve:null as null|((value:any)=>void)};
+function App(){
+ const [business,setBusiness]=React.useState<any>(fixture),[open,setOpen]=React.useState(true),[admin,setAdmin]=React.useState(false);
+ React.useEffect(()=>{(window as any).glassTest={state,fixture,reset:(changes={},isAdmin=false)=>{state.calls=[];state.closes=0;state.mode='error';flushSync(()=>setOpen(false));setTimeout(()=>{setBusiness({...fixture,...changes});setAdmin(isAdmin);setOpen(true)},0)},refresh:(changes:any)=>setBusiness((b:any)=>({...b,...changes})),replace:(changes:any)=>setBusiness({...fixture,...changes}),setMode:(mode:string)=>{state.mode=mode},open:()=>setOpen(true)};},[]);
+ return <><div className="validation-notice">PRUEBA LOCAL · DATOS SINTÉTICOS · SIN BD</div><EditBusinessModal business={business} isOpen={open} isAdmin={admin} categories={[{id:1,name:'Servicios',slug:'servicios',count:0},{id:2,name:'Comercio',slug:'comercio',count:0}]} onClose={()=>{state.closes++;setOpen(false)}} onSave={async(id,payload)=>{state.calls.push({id,payload});if(state.mode==='pending')return await new Promise(resolve=>{state.resolve=resolve});if(state.mode==='throw')throw new Error('Falla de red simulada');return {success:state.mode==='success',message:'Error simulado: no se confirmó el guardado.'};}} /></>;
+}
+createRoot(document.getElementById('root')!).render(<App/>);
+```
+
+### Pruebas reproducibles
+```javascript
+const assert=require('node:assert/strict');const http=require('node:http');const fs=require('node:fs');
+const {chromium}=require('/opt/codex/runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+let checks=0;const pass=s=>{checks++;console.log('PASS',s)};
+(async()=>{
+ const server=http.createServer((req,res)=>{if(req.url==='/harness.js'){res.setHeader('Content-Type','application/javascript');res.end(fs.readFileSync('/tmp/enc-glass-validation/harness.js'));}else if(req.url==='/'){res.setHeader('Content-Type','text/html');res.end(fs.readFileSync('/tmp/enc-glass-validation/index.html'));}else{res.writeHead(404);res.end();}});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ const browser=await chromium.launch({executablePath:'/tmp/chromium',args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu'],headless:true});
+ const page=await browser.newPage({viewport:{width:1440,height:1050}});const errors=[],blocked=[];page.on('pageerror',e=>errors.push(e.message));
+ let uploadMode='error',pendingUpload=null;
+ await page.route('**/*',async route=>{const url=new URL(route.request().url());if(url.pathname==='/api/upload-logo'){if(uploadMode==='pending'){pendingUpload=route;return;}return route.fulfill({status:uploadMode==='success'?200:503,contentType:'application/json',body:JSON.stringify(uploadMode==='success'?{success:true,url:'/uploaded-test.png'}:{success:false,message:'Falla simulada de imagen'})});}if(url.hostname!=='127.0.0.1'){blocked.push(url.hostname);return route.abort();}return route.continue();});
+ await page.goto(`http://127.0.0.1:${server.address().port}/`);await page.getByRole('dialog').waitFor();
+ const reset=async(changes={},admin=false)=>{await page.evaluate(({changes,admin})=>window.glassTest.reset(changes,admin),{changes,admin});await page.getByRole('dialog').waitFor();await page.waitForTimeout(35);};
+ const setMode=mode=>page.evaluate(m=>window.glassTest.setMode(m),mode);
+ const calls=()=>page.evaluate(()=>window.glassTest.state.calls);
+ const save=()=>page.getByRole('button',{name:'Guardar Cambios',exact:true}).click();
+ const advanced=async()=>{const x=page.locator('details');if(!await x.getAttribute('open')){await x.locator('summary').click();}};
+ assert.equal(await page.locator('.enc-glass-card').count(),6);assert.equal(await page.locator('.enc-glass-delivery button').count(),5);assert.equal(await page.locator('.enc-glass-payments button').count(),4);pass('Seis tarjetas, cinco chips de entrega y cuatro de pago');
+ assert.equal(await page.locator('details').getAttribute('open'),null);pass('Opciones avanzadas inicialmente plegadas');
+ assert.equal(await page.getByLabel('Atención Lun',{exact:true}).getAttribute('aria-pressed'),'true');assert.equal(await page.getByLabel('Apertura',{exact:true}).inputValue(),'09:00');pass('Horario estructurado carga días y horas reales');
+ assert.equal(await page.getByLabel('WhatsApp (10 dígitos)',{exact:true}).inputValue(),'');pass('WhatsApp ausente no se rellena con teléfono');
+ for(const [name,width,height] of [['desktop',1440,1050],['tablet',834,1112],['mobile',390,844],['narrow',320,700]]){
+  await page.setViewportSize({width,height});await page.waitForTimeout(100);
+  const layout=await page.evaluate(()=>{const panel=document.querySelector('.enc-glass-dialog').getBoundingClientRect(),footer=document.querySelector('.enc-glass-footer').getBoundingClientRect(),scroll=document.querySelector('.enc-glass-scroll');return {panel:{x:panel.x,y:panel.y,right:panel.right,bottom:panel.bottom},footer:{y:footer.y,bottom:footer.bottom},window:{w:innerWidth,h:innerHeight},overflow:scroll.scrollWidth>scroll.clientWidth+1,blur:getComputedStyle(document.querySelector('.enc-glass-dialog')).backdropFilter};});
+  assert(layout.panel.x>=0&&layout.panel.right<=width+1&&layout.panel.bottom<=height+1&&layout.footer.bottom<=height+1);assert(!layout.overflow);assert.notEqual(layout.blur,'none');
+  await page.screenshot({path:`/tmp/enc-glass-validation/${name}.png`});await page.locator('.enc-glass-scroll').evaluate(e=>e.scrollTop=e.scrollHeight);await page.screenshot({path:`/tmp/enc-glass-validation/${name}-horarios.png`});await page.locator('.enc-glass-scroll').evaluate(e=>e.scrollTop=0);pass(`Chromium ${name} ${width}x${height}: panel/footer visibles, sin desborde horizontal, blur real`);
+ }
+ await page.setViewportSize({width:1440,height:1050});
+ const footerBefore=await page.locator('.enc-glass-footer').boundingBox();await page.locator('.enc-glass-scroll').evaluate(e=>e.scrollTop=e.scrollHeight);const footerAfter=await page.locator('.enc-glass-footer').boundingBox();assert(Math.abs(footerBefore.y-footerAfter.y)<1);pass('Pie permanece visible al desplazar el contenido');
+ await page.mouse.click(4,300);assert.equal(await page.getByRole('dialog').count(),1);pass('Clic exterior no cierra durante selección de texto');
+ await page.getByRole('button',{name:'Cerrar editor'}).focus();await page.keyboard.press('Shift+Tab');assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Guardar Cambios');await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement.getAttribute('aria-label')),'Cerrar editor');pass('Foco de teclado contenido dentro del diálogo');
+ await reset();await save();await page.getByRole('alert').waitFor();assert.equal((await calls()).length,1);assert.deepEqual((await calls())[0].payload,{});assert.equal(await page.getByRole('dialog').count(),1);pass('Guardado rechazado conserva borrador; sin editar envía delta vacío');
+ await page.getByLabel('Nombre del negocio *',{exact:true}).fill('Nombre editado');await setMode('throw');await save();await page.getByRole('alert').waitFor();assert.equal(await page.getByLabel('Nombre del negocio *',{exact:true}).inputValue(),'Nombre editado');assert.match(await page.getByRole('alert').innerText(),/red simulada/);pass('Falla de red mantiene edición visible');
+ await reset({phone:'',whatsapp:''});await save();assert.equal((await calls()).length,0);assert.match(await page.getByRole('alert').innerText(),/10 dígitos/);pass('Sin teléfono ni WhatsApp válido no se invoca guardado');
+ await reset();await page.getByLabel('Teléfono (10 dígitos)',{exact:true}).fill('123456789012345');await save();assert.equal((await calls()).length,0);pass('Teléfono largo no se trunca para convertirlo en válido');
+ await page.getByLabel('Teléfono (10 dígitos)',{exact:true}).fill('+52 938 123 4567');await save();assert.equal((await calls())[0].payload.phone,'9381234567');assert(!Object.hasOwn((await calls())[0].payload,'whatsapp'));pass('Normalización explícita +52 sin inventar WhatsApp');
+ await reset({schedule:'Lunes 8 a 12; miércoles solo con cita',payment:'Vales especiales',delivery:'Servicio acordado',openingHours:'Texto alternativo',phone:'+52 938 123 4567',whatsapp:''});await page.getByLabel('Nombre del negocio *',{exact:true}).fill('Otro nombre');await save();const untouched=(await calls())[0].payload;assert.deepEqual(untouched,{name:'Otro nombre'});pass('Horario libre, pagos, entrega, categorías, multimedia y campos desconocidos no se sobrescriben al editar nombre');
+ await reset({schedule:'Horario libre heredado'});await page.getByLabel('Atención Lun',{exact:true}).click();await save();assert.equal((await calls()).length,0);pass('Horario semanal incompleto se rechaza sin persistencia');
+ await page.getByLabel('Apertura',{exact:true}).fill('22:00');await page.getByLabel('Cierre',{exact:true}).fill('02:00');await save();assert.equal((await calls())[0].payload.schedule,'Lun 22:00 - 02:00');pass('Edición semanal explícita y cierre al día siguiente');
+ await reset({schedule:'Lunes a Viernes 08:30 - 17:45'});await page.getByLabel('Atención Sáb',{exact:true}).click();await page.getByRole('button',{name:'Conservar horario original'}).click();await save();assert(!Object.hasOwn((await calls())[0].payload,'schedule'));pass('Conservar horario original elimina conversión pendiente');
+ await reset();await page.getByLabel('Descripción del negocio',{exact:true}).fill('x'.repeat(501));assert.equal((await page.getByLabel('Descripción del negocio',{exact:true}).inputValue()).length,500);assert.match(await page.locator('.enc-glass-count').innerText(),/500\/500/);pass('Descripción limitada a 500 con contador');
+ await reset({description:'x'.repeat(550)});await save();assert(!Object.hasOwn((await calls())[0].payload,'description'));pass('Descripción heredada larga se conserva si no fue editada');
+ await reset();await page.getByRole('button',{name:'CoDi / QR',exact:true}).click();assert.equal(await page.getByRole('button',{name:'CoDi / QR',exact:true}).getAttribute('aria-pressed'),'true');await save();assert.match((await calls())[0].payload.payment,/Vales de prueba/);pass('Chips azules multiselección conservan métodos adicionales');
+ await reset();await advanced();assert.equal(await page.getByRole('checkbox',{name:'Empresa TOP',exact:true}).count(),0);await page.getByRole('button',{name:'Pago contra entrega',exact:true}).click();await save();assert.match((await calls())[0].payload.payment,/Pago contra entrega/);assert(!Object.hasOwn((await calls())[0].payload,'isTopBusiness'));assert(!Object.hasOwn((await calls())[0].payload,'slug'));pass('Quinto pago disponible en avanzados; usuario normal no envía privilegios');
+ await reset({},true);await advanced();await page.getByLabel('Enlace personalizado',{exact:true}).fill('Nueva Ruta');await page.getByRole('checkbox',{name:'Empresa TOP',exact:true}).uncheck();await page.locator('.enc-glass-scroll').evaluate(e=>e.scrollTop=e.scrollHeight);await page.screenshot({path:'/tmp/enc-glass-validation/admin-avanzados.png'});await save();assert.equal((await calls())[0].payload.slug,'nuevaruta');assert.equal((await calls())[0].payload.isTopBusiness,false);assert(!Object.hasOwn((await calls())[0].payload,'previousSlugs'));pass('Admin conserva edición de enlace/distintivos sin reescribir historial');
+ await reset();await advanced();const originalImage=await page.getByLabel('URL de fotografía o logotipo',{exact:true}).inputValue();const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6f8AAAAASUVORK5CYII=','base64');await page.getByLabel('Subir fotografía o logotipo',{exact:true}).setInputFiles({name:'prueba.png',mimeType:'image/png',buffer:png});await page.getByRole('alert').waitFor();assert.match(await page.getByRole('alert').innerText(),/No se confirmó la carga/);assert.equal(await page.getByLabel('URL de fotografía o logotipo',{exact:true}).inputValue(),originalImage);pass('Upload 503 detecta fallback data URI del helper sin cambiar imagen');
+ uploadMode='success';await page.getByLabel('Subir fotografía o logotipo',{exact:true}).setInputFiles({name:'prueba.png',mimeType:'image/png',buffer:png});await page.waitForFunction(()=>document.querySelector('input[aria-label="Subir fotografía o logotipo"]').disabled===false&&document.querySelector('.enc-glass-logo').getAttribute('src')==='/uploaded-test.png');await save();assert.equal((await calls())[0].payload.image,'/uploaded-test.png');pass('Upload confirmado actualiza imagen en borrador y payload');
+ await reset();await advanced();await page.getByRole('button',{name:'Quitar foto',exact:true}).click();await save();assert.equal((await calls())[0].payload.image,'');assert(!Object.hasOwn((await calls())[0].payload,'gallery'));pass('Quitar foto conserva galería');
+ await reset();await advanced();await page.getByRole('button',{name:'Quitar foto de galería 1',exact:true}).click();await save();assert.equal((await calls())[0].payload.gallery.length,1);assert(!Object.hasOwn((await calls())[0].payload,'image'));pass('Eliminar una foto de galería conserva logotipo');
+ await reset();await advanced();await page.getByLabel('Subir fotos de galería',{exact:true}).setInputFiles({name:'script.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg/>')});await page.getByRole('alert').waitFor();assert.match(await page.getByRole('alert').innerText(),/5 MB/);pass('Archivo no permitido se rechaza antes de upload');
+ await reset();await page.getByLabel('Categoría',{exact:true}).selectOption('Comercio');await save();assert.deepEqual((await calls())[0].payload.categories,['Comercio','Categoría secundaria']);pass('Cambiar categoría principal conserva categorías secundarias');
+ await reset();await page.getByLabel('Ciudad',{exact:true}).fill('Ciudad editada de prueba');await save();assert.deepEqual((await calls())[0].payload,{city:'Ciudad editada de prueba'});pass('Ciudad se envía solo al editar sin inventar valor inicial');
+ await reset();await advanced();await page.getByLabel('Subir fotos de galería',{exact:true}).setInputFiles(Array.from({length:9},(_,i)=>({name:`extra${i}.png`,mimeType:'image/png',buffer:png})));await page.getByRole('alert').waitFor();assert.match(await page.getByRole('alert').innerText(),/galería admite 10/);assert.equal(await page.locator('.enc-glass-gallery img').count(),2);pass('Límite de galería no recorta ni sustituye fotos existentes');
+ await reset();await advanced();await page.getByLabel('Subir fotografía o logotipo',{exact:true}).setInputFiles({name:'grande.png',mimeType:'image/png',buffer:Buffer.alloc(5*1024*1024+1)});await page.getByRole('alert').waitFor();assert.match(await page.getByRole('alert').innerText(),/5 MB/);pass('Imagen mayor de 5 MB se rechaza antes de upload');
+ await reset();await setMode('pending');await save();assert.equal(await page.getByRole('button',{name:'Cerrar editor'}).isDisabled(),true);await page.keyboard.press('Escape');assert.equal(await page.getByRole('dialog').count(),1);await page.evaluate(()=>document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));assert.equal((await calls()).length,1);pass('Guardado pendiente bloquea cierre y doble envío');await page.evaluate(()=>window.glassTest.state.resolve({success:true,message:'Confirmado por mock'}));await page.getByRole('dialog').waitFor({state:'hidden'});pass('Diálogo cierra únicamente tras success=true confirmado por callback');
+ await reset();await page.getByLabel('Nombre del negocio *',{exact:true}).fill('Borrador activo');await page.evaluate(()=>window.glassTest.refresh({description:'Refresco concurrente'}));assert.equal(await page.getByLabel('Nombre del negocio *',{exact:true}).inputValue(),'Borrador activo');pass('Refresco de objeto mismo ID no destruye borrador');
+ await setMode('pending');await save();await page.evaluate(()=>window.glassTest.replace({id:4243,name:'Otro registro local'}));await page.getByLabel('Nombre del negocio *',{exact:true}).waitFor();await page.waitForTimeout(40);await page.evaluate(()=>window.glassTest.state.resolve({success:true,message:'Respuesta vieja'}));await page.waitForTimeout(40);assert.equal(await page.getByRole('dialog').count(),1);assert.equal(await page.getByLabel('Nombre del negocio *',{exact:true}).inputValue(),'Otro registro local');pass('Respuesta de guardado de otro negocio no cierra el nuevo editor');
+ await reset();await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});assert.equal(await page.evaluate(()=>document.body.style.overflow),'');pass('Escape sin operación pendiente cierra y restaura scroll');
+ assert.equal(errors.length,0);assert.equal(blocked.length,0);pass('Sin errores JavaScript ni solicitudes a servicios externos');
+ console.log('RESULTADO:',checks,'comprobaciones Chromium aprobadas. Callbacks/upload simulados; sin backend/BD/Staging.');
+ await browser.close();await new Promise(r=>server.close(r));
+})().catch(e=>{console.error(e);process.exitCode=1;setTimeout(()=>process.exit(1),100)});
+```
+
+### Rollback y dictamen
+Descartar rama o revertir commits mediante commits normales, sin force push; esta tarea no cambia datos ni requiere rollback SQL. No revertir la integración ajena de calificaciones.
+APTO para revisión de implementación y capturas locales. No validado como reproducción exacta de referencia ni como persistencia real; no integrado ni desplegado. Esperar revisión de coordinación.
