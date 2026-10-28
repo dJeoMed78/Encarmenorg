@@ -171,3 +171,42 @@ Recomendación:
 - Coordinar revisión de código y pruebas; luego autorizar por separado entorno aislado, ensayo, SQL exacto/destino/operador/ventana/reversión, integración y despliegue. Producción excluida.
 - Revisión del coordinador: PENDIENTE, reservada al coordinador.
 - Integración y comprobación Staging: NO REALIZADAS, reservadas al coordinador.
+
+## ENC-REVIEWS-COMMENTS-002 — entrega parcial segura (2026-10-28T11:06:15.592Z)
+Estado: PROBADO_POR_WORK en entorno simulado; ACTIVACIÓN PÚBLICA Y MODERACIÓN BLOQUEADAS.
+Rama work/enc-reviews-comments-002; base 1455e568a93629dcd7ae3f58df61d03c76a64f4d.
+Checkpoint 0297bf369cb2bac1fc90cd15d3df1ff886643248; implementación ef220ce878f1cb5371452fecfc0c32270a9ceab7.
+Instrucción 92380799f74dd3c04f302733c49b4bc5fc2f7ffa. Leídos WORK_INSTRUCCIONES (c4ef37ba0f690f60cd9fb5189190afd2be9a8faa), CONTEXTO, COMMENTS-001 y código de base. Sin actualizar CONTEXTO por regla de alcance.
+
+### Implementación
+- StarRatingWidget: selección de puntuación sin envío inmediato; texto opcional, contador/vista previa, confirmación explícita; quitar/corregir comentario sin perder borrador por rechazo. Errores y reconciliación del voto existentes conservados.
+- BusinessComments.tsx/CSS: lista paginada con abort/generación para respuestas obsoletas, DTO sin IP/visitor_id, texto renderizado por React, cero nombres/fechas/fotos inventados. Página vacía diferenciada de indisponibilidad. Sin fechas porque el contrato no las garantiza.
+- BusinessCommentsPolicy.tsx: política compartida server/repositorio/cliente, NFKC, controles/bidi/invisibles rechazados, texto 10–200 unidades UTF-16 (mínimo por caracteres) y 800 bytes, sin HTML/código/enlaces/contactos/direcciones identificables; heurísticas conservadoras de español, insultos, amenazas/publicidad y repetición. No servicios externos/dependencias nuevas. Lenguaje y datos personales NO se detectan con garantía absoluta; falsos positivos/negativos requieren moderación humana.
+- Contrato compatible POST /api/ratings con comment opcional; límites 200 del esquema/contrato existente conservados en lugar de 500 propuestos; estrellas sin comentario siguen disponibles bajo RATINGS_SCHEMA_APPROVED.
+- GET /api/ratings/:businessId/comments?limit=1..20&cursor=<id público>: consulta parametrizada, máximo 21 filas exploradas, filtrado también sobre legado; cursor opaco de fila, no fecha cronológica. IDs públicos de comentario, puntuación y texto únicamente.
+- JSON restringido a 2kb para /api/ratings antes del parser global; esquema estricto. Límites por minuto: IP 30 escrituras/120 lecturas, visitante 5, negocio 60, mismo texto/negocio 1; Retry-After 60. Mapa acotado a 5000 claves, HMAC efímera de IP sin persistencia/logs. Límite por proceso: no sustituye control distribuido, bots/desafío ni identidad humana; verificar proxy antes de activación.
+- RATINGS_COMMENTS_APPROVED debe ser exactamente true para lectura y publicación. DEFAULT OFF. No se cambió ninguna variable real. Repositorio también falla cerrado. Sin comentario, las estrellas no dependen del nuevo gate.
+- POST .../comments/:commentId/moderation devuelve siempre 403; no mutación ni confianza en isAdmin/token del cliente. No implementa eliminación. No se habilitaron controles administrativos.
+- Repositorio reutiliza business_ratings.comment, transacción/lock/índice UNIQUE existentes. No columnas/tablas nuevas ni migración propuesta/ejecutada. Consultas parametrizadas escritas en código para revisión futura; NINGUNA consulta fue ejecutada contra BD.
+
+### Bloqueos
+1. Moderación, reporte persistente, auditoría/retirada y bloqueo urgente por comentario NO implementados: gestión de contraseña administrativa permite cambio sin autorización fiable. El token efímero servidor existente no basta para confiar en la identidad de administrador. Cambiar autenticación global queda fuera del alcance.
+2. AdminBusinessesTab.tsx fue identificado inequívocamente como panel real ANTES de editar; se mantuvo sin cambios por el bloqueo anterior. No se entregan los dos controles eliminar; módulo NO completo.
+3. PR #4 seguía abierto/no integrado al comenzar. Se respetó la precondición: base ia-desarrollo 1455e568a93629dcd7ae3f58df61d03c76a64f4d, sin editar BusinessPublicDetail, su CSS, adaptadores, App ni logo. Montaje en widget compartido actual. Tras integración de Glass, coordinación debe resolver su aviso estático anterior “Comentarios todavía no disponibles” antes de activar texto. No se mezcló la rama Glass.
+4. Sin pruebas reales de MariaDB, esquema activo, permisos, concurrencia de BD o dos navegadores contra persistencia real. Activar texto requiere revisión de esquema ya aprobado, pruebas autorizadas de persistencia y moderación/plan de abuso seguro. NO APTO para habilitación pública ahora.
+
+### Pruebas realmente ejecutadas
+- tsc --noEmit -p comments-002/tsconfig.json: PASS.
+- vite build directo, sin scripts de versión: PASS, 1723 módulos; advertencia chunk >500kb.
+- node /tmp/enc-comments-validation/test-routes.cjs: 37 PASS. Política, español/crítica negativa, URLs espaciadas/fullwidth, email/teléfono/dirección, HTML, Unicode invisible/bidi, repetición, idioma inglés evidente, insulto separado, amenaza, publicidad, tamaño, esquema, GET en cliente separado, duplicado/carrera simulada, 400/403/409/413/429/503, gate cerrado y estrellas sin texto.
+- node /tmp/enc-comments-validation/test-browser.cjs: 13 PASS en Chromium 153. Confirmación explícita, negativo 1 estrella, recuperación mediante GET, 1440x1050/834x1112/390x844, borrador rechazado sin envío, quitar texto, pendiente/doble envío bloqueado, 400/409/429/503 sin éxito falso, gate cerrado y cero errores JS.
+- HTTP de pruebas real local con repositorio EN MEMORIA y API browser interceptada. Se extrajo únicamente registerRatingsRoutes para el harness; NO se importó/ejecutó el servidor completo, NO se abrió conexión MariaDB y NO se ejecutó SQL.
+- La prueba inicial descubrió evasión de dominio con letras espaciadas; corregida y repetida batería 37/37. No se afirma eficacia total del filtro.
+- Capturas sobre ficha existente de la base, no Glass aún sin integrar. Logo Glass no modificado; 12 responsive de la corrección siguen en rama Glass, no se atribuyen a estas pruebas.
+
+### Evidencia y archivos
+4 capturas sintéticas: comentarios desktop/tablet/mobile y gate cerrado:
+https://chatgpt.com/library?file_id=libfile_2bcafafc336c81919b5b5d39ac891ae3&account_id=personal
+Archivos modificados: server.ts, src/db/mariadb.ts, src/services/api.ts, src/utils/realRatings.ts, src/components/StarRatingWidget.tsx; nuevos src/components/BusinessComments.tsx, BusinessCommentsPolicy.tsx, BusinessComments.css; WORK_RESULTADOS y progreso de esta tarea.
+Sin App, editor, Radar, auth global ni dependencias. No PR/merge/despliegue/SQL. Rollback propuesto: revertir commits de esta rama en una integración futura; gate default off conserva no publicación de texto. No rollback de datos porque no se escribió BD.
+Dictamen: APTO PARA REVISIÓN DEL CÓDIGO PREPARADO; NO APTO PARA ACTIVAR COMENTARIOS PÚBLICOS NI MODERACIÓN. Se concluye el trabajo seguro posible y continúa Radar sin nueva espera.
