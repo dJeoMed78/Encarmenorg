@@ -27,3 +27,11 @@ ENC-REVIEWS-006 de Work está modificando server.ts y src/services/api.ts. No ed
 - Build, TypeScript, pruebas automatizadas y navegador: NO EJECUTADOS en esta intervención.
 - Pruebas de persistencia MariaDB y Staging: NO EJECUTADAS.
 **Estado:** frontend corregido por inspección estática; NO APTO para integrar/desplegar sin corregir backend y probar.
+
+
+## Actualización — corrección del Radar de eventos (rama aislada)
+- Commit `5b384ba1ca5c26f2f1cff6532f39a181e13ba856`: src/components/AdminEventsTab.tsx deja de presentar como éxito las excepciones de patrón/proxy; reporta errores reales de escaneo/búsqueda; maneja fallo y conteo incompleto en publicación de candidatos.
+- Commit `3d13ccc475a91e845f10040ed5794698ec813a47`: src/services/eventsService.ts elimina tres fallbacks engañosos: (1) escaneo que reportaba `newEventsAdded: 1` aunque fallara la red, (2) búsqueda que reciclaba eventos locales como resultados de Radar, (3) publicación que guardaba únicamente en el navegador y devolvía `success:true`. Ahora exige respuesta HTTP correcta y contrato de servidor, o informa error.
+- Comparación GitHub `ia-desarrollo...coord/radar-classifieds-fix-001`: **tres commits**, únicamente `src/components/AdminClassifiedsTab.tsx`, `src/components/AdminEventsTab.tsx` y `src/services/eventsService.ts`. No se tocaron `server.ts` ni `src/services/api.ts` de Work.
+- **No se han ejecutado** TypeScript, build, pruebas automatizadas ni navegador sobre esta rama. Las rutas del servidor siguen requiriendo auditoría de persistencia y autorización. **NO APTO PARA INTEGRACIÓN**.
+- Nota de diseño: se preserva el almacenamiento local de eventos recibidos con éxito del servidor como caché de presentación; se eliminan las simulaciones de éxito cuando falla el servidor.
