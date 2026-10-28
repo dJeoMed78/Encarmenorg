@@ -15,21 +15,111 @@ import { createHash, randomUUID } from "node:crypto";
 var pool = null;
 var isConnected = false;
 var lastConnectionError = null;
+var PRODUCTION_DB_NAME = "u293982346_encarmenapp";
+var PRODUCTION_DB_USER = "u293982346_appuser";
+var PRODUCTION_DB_HOST = "srv1356.hstgr.io";
+function isStagingEnvironment() {
+  const env = (process.env.APP_ENV || process.env.NODE_ENV || "").toLowerCase().trim();
+  const isStagingFlag = process.env.STAGING === "true" || process.env.STAGING_SAFE_MODE === "true";
+  const isStagingHost = (process.env.APP_URL || process.env.PUBLIC_URL || "").toLowerCase().includes("staging.encarmen.org");
+  return env === "staging" || isStagingFlag || isStagingHost;
+}
+function isWritePermitted() {
+  if (process.env.STAGING_READ_ONLY === "true") {
+    return false;
+  }
+  if (isStagingEnvironment()) {
+    const rawDbName = (process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE || "").trim();
+    if (!rawDbName || rawDbName === PRODUCTION_DB_NAME) {
+      return false;
+    }
+    if (process.env.STAGING_DB_CONFIRMED !== "true") {
+      return false;
+    }
+  }
+  return true;
+}
+function guardWrite(operationName) {
+  if (!isWritePermitted()) {
+    console.warn(`[Staging Guard] Escritura bloqueada en '${operationName}': base de datos en modo seguro/lectura o sin confirmar aislamiento de Staging.`);
+    return false;
+  }
+  return true;
+}
+function validateStagingDbConfiguration() {
+  const isStaging = isStagingEnvironment();
+  if (!isStaging) {
+    const config2 = getMariaDbConfig();
+    return { valid: Boolean(config2), isStaging: false, config: config2 || void 0 };
+  }
+  const rawDbName = (process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE || "").trim();
+  const rawDbHost = (process.env.DB_HOST || process.env.MYSQL_HOST || process.env.MARIADB_HOST || "").trim();
+  const rawDbUser = (process.env.DB_USER || process.env.MYSQL_USER || process.env.MARIADB_USER || "").trim();
+  const isReadOnly = process.env.STAGING_READ_ONLY === "true";
+  const isConfirmed = process.env.STAGING_DB_CONFIRMED === "true";
+  if (!rawDbName) {
+    return {
+      valid: false,
+      isStaging: true,
+      error: "En Staging se rechaza el fallback autom\xE1tico a producci\xF3n. Debe definir DB_NAME expl\xEDcitamente (ej. u293982346_encarmentest)."
+    };
+  }
+  if (rawDbName === PRODUCTION_DB_NAME) {
+    if (!isReadOnly) {
+      return {
+        valid: false,
+        isStaging: true,
+        error: `[PELIGRO DE PRODUCCI\xD3N]: Staging tiene configurada la base de datos de PRODUCCI\xD3N '${PRODUCTION_DB_NAME}' sin STAGING_READ_ONLY=true. Esto est\xE1 estrictamente prohibido para evitar sobreescritura de producci\xF3n.`
+      };
+    }
+    if (rawDbUser === PRODUCTION_DB_USER) {
+      return {
+        valid: false,
+        isStaging: true,
+        error: `[PELIGRO DE PRODUCCI\xD3N]: Staging no puede reutilizar el usuario con permisos de escritura de producci\xF3n '${PRODUCTION_DB_USER}'. Debe utilizar un usuario dedicado con privilegios SELECT exclusivamente.`
+      };
+    }
+  }
+  if (!isReadOnly && !isConfirmed) {
+    return {
+      valid: false,
+      isStaging: true,
+      error: `Para habilitar escrituras en Staging (STAGING_READ_ONLY=false), debe confirmar expl\xEDcitamente el aislamiento mediante STAGING_DB_CONFIRMED=true en una base de datos distinta a producci\xF3n.`
+    };
+  }
+  const config = getMariaDbConfig();
+  return { valid: Boolean(config), isStaging: true, config: config || void 0 };
+}
 function getLastDbError() {
   return lastConnectionError;
 }
 function getMariaDbConfig() {
-  const host = process.env.DB_HOST || process.env.MYSQL_HOST || process.env.MARIADB_HOST || "srv1356.hstgr.io";
-  const user = process.env.DB_USER || process.env.MYSQL_USER || process.env.MARIADB_USER || "u293982346_appuser";
+  const isStaging = isStagingEnvironment();
+  let host = process.env.DB_HOST || process.env.MYSQL_HOST || process.env.MARIADB_HOST;
+  let user = process.env.DB_USER || process.env.MYSQL_USER || process.env.MARIADB_USER;
+  let database = process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE;
   const password = process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || process.env.MARIADB_PASSWORD;
-  const database = process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE || "u293982346_encarmenapp";
   const port = Number(process.env.DB_PORT || process.env.MYSQL_PORT || 3306);
+  if (!isStaging) {
+    host = host || PRODUCTION_DB_HOST;
+    user = user || PRODUCTION_DB_USER;
+    database = database || PRODUCTION_DB_NAME;
+  }
   if (host && user && database && password) {
     return { host, user, password, database, port };
   }
   return null;
 }
 async function initMariaDb() {
+  const isStaging = isStagingEnvironment();
+  if (isStaging) {
+    const validation = validateStagingDbConfiguration();
+    if (!validation.valid) {
+      lastConnectionError = validation.error || "Configuraci\xF3n inv\xE1lida de Staging";
+      console.error(`[Staging Guard] Conexi\xF3n MariaDB bloqueada: ${lastConnectionError}`);
+      return false;
+    }
+  }
   const config = getMariaDbConfig();
   if (!config) {
     return false;
@@ -58,10 +148,11 @@ async function initMariaDb() {
       isConnected = true;
       lastConnectionError = null;
       console.log(`[MariaDB/Hostinger] Conectado exitosamente a ${config.database} en ${candidateHost}`);
-      if (process.env.STAGING_READ_ONLY !== "true") {
+      const canRunDdl = !isStaging ? process.env.STAGING_READ_ONLY !== "true" : process.env.STAGING_ALLOW_SCHEMA_INIT === "true" && config.database !== PRODUCTION_DB_NAME;
+      if (canRunDdl) {
         await createTablesIfNotExist();
       } else {
-        console.log("[Staging] MariaDB schema initialization disabled (read-only).");
+        console.log("[Staging Guard] Inicializaci\xF3n de esquema DDL deshabilitada (modo seguro/read-only).");
       }
       return true;
     } catch (err) {
@@ -234,6 +325,7 @@ async function createTablesIfNotExist() {
   }
 }
 async function dbSaveUploadedFile(filename, mimeType, buffer) {
+  if (!guardWrite("dbSaveUploadedFile")) return false;
   if (!pool) return false;
   try {
     const q = `
@@ -331,6 +423,7 @@ async function dbGetBusinessesSignature() {
   }
 }
 async function dbSaveBusiness(biz) {
+  if (!guardWrite("dbSaveBusiness")) return false;
   if (!pool) return false;
   try {
     const id = String(biz.id);
@@ -394,6 +487,7 @@ async function dbSaveBusiness(biz) {
   }
 }
 async function dbSaveDismissedCandidate(id, name, phone = "") {
+  if (!guardWrite("dbSaveDismissedCandidate")) return false;
   if (!pool) return false;
   try {
     const q = `
@@ -419,6 +513,7 @@ async function dbLoadDismissedCandidates() {
   }
 }
 async function dbDeleteBusiness(id) {
+  if (!guardWrite("dbDeleteBusiness")) return false;
   if (!pool) return false;
   try {
     await pool.query("DELETE FROM businesses WHERE id = ?", [String(id)]);
@@ -439,6 +534,7 @@ async function dbLoadAllReports() {
   }
 }
 async function dbSaveReport(report) {
+  if (!guardWrite("dbSaveReport")) return false;
   if (!pool) return false;
   try {
     const query = `
@@ -462,6 +558,7 @@ async function dbSaveReport(report) {
   }
 }
 async function dbDeleteReport(id) {
+  if (!guardWrite("dbDeleteReport")) return false;
   if (!pool) return false;
   try {
     await pool.query("DELETE FROM reports WHERE id = ?", [id]);
@@ -501,6 +598,7 @@ async function dbLoadAllEvents() {
   }
 }
 async function dbSaveEvent(event) {
+  if (!guardWrite("dbSaveEvent")) return false;
   if (!pool) return false;
   try {
     const id = String(event.id);
@@ -536,6 +634,7 @@ async function dbSaveEvent(event) {
   }
 }
 async function dbDeleteEvent(id) {
+  if (!guardWrite("dbDeleteEvent")) return false;
   if (!pool) return false;
   try {
     await pool.query("DELETE FROM events WHERE id = ?", [String(id)]);
@@ -575,6 +674,7 @@ async function dbLoadAllPromotions() {
   }
 }
 async function dbSavePromotion(promo) {
+  if (!guardWrite("dbSavePromotion")) return false;
   if (!pool) return false;
   try {
     const id = String(promo.id);
@@ -610,6 +710,7 @@ async function dbSavePromotion(promo) {
   }
 }
 async function dbDeletePromotion(id) {
+  if (!guardWrite("dbDeletePromotion")) return false;
   if (!pool) return false;
   try {
     await pool.query("DELETE FROM promotions WHERE id = ?", [String(id)]);
@@ -647,6 +748,7 @@ async function dbLoadAllCoupons() {
   }
 }
 async function dbSaveCoupon(coupon) {
+  if (!guardWrite("dbSaveCoupon")) return false;
   if (!pool) return false;
   try {
     const id = String(coupon.id);
@@ -674,6 +776,7 @@ async function dbSaveCoupon(coupon) {
   }
 }
 async function dbUpdateCouponStatus(idOrCode, status) {
+  if (!guardWrite("dbUpdateCouponStatus")) return false;
   if (!pool) return false;
   try {
     await pool.query("UPDATE claimed_coupons SET status = ? WHERE id = ? OR code = ?", [status, idOrCode, idOrCode]);
@@ -684,6 +787,7 @@ async function dbUpdateCouponStatus(idOrCode, status) {
   }
 }
 async function dbDeleteCoupon(idOrCode) {
+  if (!guardWrite("dbDeleteCoupon")) return false;
   if (!pool) return false;
   try {
     await pool.query("DELETE FROM claimed_coupons WHERE id = ? OR code = ?", [idOrCode, idOrCode]);
@@ -726,6 +830,7 @@ async function dbLoadAllClassifieds() {
   }
 }
 async function dbSaveClassified(ad) {
+  if (!guardWrite("dbSaveClassified")) return false;
   if (!pool) return false;
   try {
     const id = String(ad.id);
@@ -769,6 +874,7 @@ async function dbSaveClassified(ad) {
   }
 }
 async function dbDeleteClassified(id) {
+  if (!guardWrite("dbDeleteClassified")) return false;
   if (!pool) return false;
   try {
     await pool.query("DELETE FROM classifieds WHERE id = ?", [String(id)]);
@@ -809,6 +915,7 @@ async function dbLoadAllEmergencyServices() {
   }
 }
 async function dbSaveEmergencyService(item) {
+  if (!guardWrite("dbSaveEmergencyService")) return false;
   if (!pool) return false;
   try {
     const id = String(item.id);
@@ -847,6 +954,7 @@ async function dbSaveEmergencyService(item) {
   }
 }
 async function dbDeleteEmergencyService(id) {
+  if (!guardWrite("dbDeleteEmergencyService")) return false;
   if (!pool) return false;
   try {
     await pool.query("DELETE FROM emergency_services WHERE id = ?", [String(id)]);
@@ -870,6 +978,7 @@ async function dbLoadPortalConfig() {
   }
 }
 async function dbSavePortalConfig(config) {
+  if (!guardWrite("dbSavePortalConfig")) return false;
   if (!pool) return false;
   try {
     const val = JSON.stringify(config);
@@ -903,6 +1012,7 @@ async function dbLoadPortalNotes() {
   }
 }
 async function dbSavePortalNotes(notes) {
+  if (!guardWrite("dbSavePortalNotes")) return false;
   if (!pool) return false;
   try {
     const query = `
@@ -1091,6 +1201,7 @@ async function dbGetBusinessRating(id, visitorKey) {
   return ratingsRepository().getBusiness(id, visitorKey);
 }
 async function dbInsertRating(id, visitorKey, rating, comment) {
+  if (!isWritePermitted()) throw ratingsError("RATINGS_DATABASE_READ_ONLY");
   return ratingsRepository().insert(id, visitorKey, rating, comment);
 }
 
@@ -1169,18 +1280,21 @@ app.use((req, res, next) => {
   }
   next();
 });
-if (process.env.STAGING_READ_ONLY === "true") {
-  app.use((req, res, next) => {
+app.use((req, res, next) => {
+  if (!isWritePermitted()) {
     if (!["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) {
+      if (req.path === "/api/events/radar-search" || req.path === "/api/ratings/get") {
+        return next();
+      }
       return res.status(403).json({
         success: false,
         error: "STAGING_READ_ONLY",
-        message: "Entorno de pruebas en modo solo lectura. No se guardaron cambios."
+        message: "Entorno de pruebas en modo solo lectura / seguro. No se permiten modificaciones para proteger producci\xF3n."
       });
     }
-    next();
-  });
-}
+  }
+  next();
+});
 app.use((req, res, next) => {
   if (req.path === "/api/health" || req.path === "/api/version") {
     return next();
@@ -2004,6 +2118,9 @@ function isEventPast(dateStr, timeStr) {
   return endDate.getTime() < Date.now();
 }
 async function pruneExpiredEvents() {
+  if (!isWritePermitted()) {
+    return 0;
+  }
   const initialCount = eventsCache.length;
   const expiredIds = [];
   eventsCache = eventsCache.filter((evt) => {
@@ -2060,14 +2177,38 @@ function loadDismissedCandidatesLocal() {
   }
 }
 loadDismissedCandidatesLocal();
+if (isStagingEnvironment()) {
+  const stagingCheck = validateStagingDbConfiguration();
+  if (!stagingCheck.valid) {
+    console.error(`========================================================================`);
+    console.error(`[ALERTA CR\xCDTICA DE AISLAMIENTO DE STAGING]`);
+    console.error(`Error: ${stagingCheck.error}`);
+    console.error(`Para proteger producci\xF3n, el servidor opera en modo ultra-seguro sin conexiones`);
+    console.error(`destructivas ni escrituras permitidas.`);
+    console.error(`========================================================================`);
+    if (process.env.STAGING_STRICT_BOOT === "true") {
+      console.error(`[STAGING_STRICT_BOOT] Deteniendo el proceso para evitar cualquier arranque con configuraci\xF3n insegura.`);
+      process.exit(1);
+    }
+  }
+}
 initMariaDb().then(async (active) => {
   if (active) {
     console.log("[MariaDB] Conexi\xF3n establecida con Hostinger MariaDB.");
+    const canSyncStartupWrites = isWritePermitted();
+    if (!canSyncStartupWrites) {
+      console.log("[Staging Guard] Modo solo lectura o aislamiento de Staging activo: se omiten escrituras de sincronizaci\xF3n y limpieza destructiva al arrancar.");
+    }
     try {
       const dbConfig = await dbLoadPortalConfig();
       if (dbConfig) {
         portalConfig = { ...portalConfig, ...dbConfig };
-        fs.writeFileSync(portalConfigPath, JSON.stringify(portalConfig, null, 2), "utf8");
+        if (canSyncStartupWrites) {
+          try {
+            fs.writeFileSync(portalConfigPath, JSON.stringify(portalConfig, null, 2), "utf8");
+          } catch (_) {
+          }
+        }
         console.log("[MariaDB] Configuraci\xF3n del portal sincronizada desde la base de datos.");
       }
       const dbNotes = await dbLoadPortalNotes();
@@ -2084,7 +2225,7 @@ initMariaDb().then(async (active) => {
     if (dbBusinesses.length > 0) {
       const dbIdSet = new Set(dbBusinesses.map((b) => String(b.id)));
       const missingInDb = businessesCache.filter((b) => !dbIdSet.has(String(b.id)));
-      if (missingInDb.length > 0) {
+      if (missingInDb.length > 0 && canSyncStartupWrites) {
         console.log(`[MariaDB] A\xF1adiendo ${missingInDb.length} empresas del cat\xE1logo local que no exist\xEDan en Hostinger MariaDB...`);
         for (const b of missingInDb) {
           await dbSaveBusiness(b);
@@ -2095,7 +2236,7 @@ initMariaDb().then(async (active) => {
         businessesCache = dbBusinesses;
       }
       console.log(`[MariaDB] ${businessesCache.length} empresas cargadas autoritativamente desde Hostinger MariaDB.`);
-    } else {
+    } else if (canSyncStartupWrites) {
       console.log(`[MariaDB] Base de datos vac\xEDa. Sincronizando ${businessesCache.length} empresas completas hacia Hostinger MariaDB...`);
       for (const b of businessesCache) {
         await dbSaveBusiness(b);
@@ -2103,6 +2244,8 @@ initMariaDb().then(async (active) => {
       const reloaded = await dbLoadAllBusinesses();
       if (reloaded.length > 0) businessesCache = reloaded;
       console.log(`[MariaDB] ${businessesCache.length} empresas aseguradas en Hostinger MariaDB.`);
+    } else {
+      console.log(`[Staging Guard] Base de datos sin empresas en modo seguro/read-only. Cat\xE1logo local preservado en memoria sin mutar MariaDB.`);
     }
     const dbReports = await dbLoadAllReports();
     if (dbReports.length > 0) {
@@ -2116,7 +2259,7 @@ initMariaDb().then(async (active) => {
         image: e.image && typeof e.image === "string" && e.image.trim() ? e.image.trim() : getEventRepresentativeImageServer(e)
       }));
       console.log(`[MariaDB] ${eventsCache.length} eventos cargados desde Hostinger MariaDB.`);
-    } else if (eventsCache.length > 0) {
+    } else if (eventsCache.length > 0 && canSyncStartupWrites) {
       for (const evt of eventsCache) {
         await dbSaveEvent(evt);
       }
@@ -2126,7 +2269,7 @@ initMariaDb().then(async (active) => {
     if (dbPromos.length > 0) {
       promotionsCache = dbPromos;
       console.log(`[MariaDB] ${promotionsCache.length} promociones cargadas desde Hostinger MariaDB.`);
-    } else if (promotionsCache.length > 0) {
+    } else if (promotionsCache.length > 0 && canSyncStartupWrites) {
       for (const pr of promotionsCache) {
         await dbSavePromotion(pr);
       }
@@ -2140,7 +2283,7 @@ initMariaDb().then(async (active) => {
     if (dbClassifieds.length > 0) {
       classifiedsCache = dbClassifieds;
       console.log(`[MariaDB] ${classifiedsCache.length} avisos clasificados cargados desde Hostinger MariaDB.`);
-    } else if (classifiedsCache.length > 0) {
+    } else if (classifiedsCache.length > 0 && canSyncStartupWrites) {
       for (const c of classifiedsCache) {
         await dbSaveClassified(c);
       }
@@ -2149,7 +2292,7 @@ initMariaDb().then(async (active) => {
     if (dbServices.length > 0) {
       emergencyServicesCache = dbServices;
       console.log(`[MariaDB] ${emergencyServicesCache.length} servicios de emergencia cargados desde Hostinger MariaDB.`);
-    } else if (emergencyServicesCache.length > 0) {
+    } else if (emergencyServicesCache.length > 0 && canSyncStartupWrites) {
       for (const s of emergencyServicesCache) {
         await dbSaveEmergencyService(s);
       }
@@ -2167,9 +2310,11 @@ initMariaDb().then(async (active) => {
       }
     } catch (_) {
     }
-    try {
-      await pruneExpiredEvents();
-    } catch (_) {
+    if (canSyncStartupWrites) {
+      try {
+        await pruneExpiredEvents();
+      } catch (_) {
+      }
     }
   }
 }).catch((e) => console.warn("[MariaDB] Error inicializando:", e.message));
@@ -2179,9 +2324,22 @@ setInterval(() => {
 }, 15 * 60 * 1e3);
 app.get("/api/database-status", (_req, res) => {
   const mariadbConfig = getMariaDbConfig();
+  const isStaging = isStagingEnvironment();
+  const writePermitted = isWritePermitted();
+  const validation = isStaging ? validateStagingDbConfiguration() : { valid: true };
   res.json({
     success: true,
     activeEngine: isMariaDbActive() ? "mariadb_hostinger" : "local_json",
+    environment: isStaging ? "staging" : process.env.NODE_ENV || "production",
+    stagingIsolation: {
+      isStaging,
+      readOnly: !writePermitted,
+      writePermitted,
+      isolationValid: validation.valid,
+      isolationError: validation.valid ? null : validation.error,
+      databaseName: mariadbConfig?.database || null,
+      isProductionDb: (mariadbConfig?.database || "") === PRODUCTION_DB_NAME
+    },
     mariadb: {
       connected: isMariaDbActive(),
       configured: Boolean(mariadbConfig),
@@ -2196,10 +2354,17 @@ app.get("/api/database-status", (_req, res) => {
   });
 });
 app.get(["/api/health", "/api/system/status"], (_req, res) => {
+  const isStaging = isStagingEnvironment();
   res.json({
     status: "ok",
     uptime: Math.round(process.uptime()),
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    environment: isStaging ? "staging" : process.env.NODE_ENV || "production",
+    staging: {
+      isStaging,
+      readOnly: !isWritePermitted(),
+      writesPermitted: isWritePermitted()
+    },
     businesses: businessesCache.length,
     events: eventsCache.length,
     classifieds: classifiedsCache.length,
@@ -2798,6 +2963,10 @@ function buildWooCommerceImagesPayload(biz) {
 }
 var IS_WP_SYNC_ENABLED = process.env.ENABLE_WP_SYNC === "true";
 async function purgeWordPressCache(slugs = []) {
+  if (isStagingEnvironment() || process.env.ENABLE_CACHE_PURGE === "false") {
+    console.log("[Staging Guard] Purga de cach\xE9 en producci\xF3n deshabilitada (entorno Staging o ENABLE_CACHE_PURGE=false).");
+    return;
+  }
   try {
     const urls = [
       "https://encarmen.org/",
