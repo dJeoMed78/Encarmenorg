@@ -276,3 +276,8 @@ Enlace registrado en la documentación publicada en GitHub; sin añadir archivos
 Sin bloqueo real para esta corrección. Validación limitada a Chromium local y datos sintéticos; Safari/iOS y revisión del propietario siguen pendientes.
 No se ejecutaron SQL, migraciones, despliegues, fusiones ni conexiones a bases de datos. No se modificaron producción, Staging, main, ia-desarrollo ni otras ramas.
 Dictamen: APTO PARA REVISIÓN FINAL DE LA CORRECCIÓN DEL LOGOTIPO. Esperando coordinación; sin integración ni despliegue.
+
+# ENC-STAGING-RELEASE-001
+## Inicio 2026-10-28T17:43:32.079Z
+Estado EN_PROGRESO. Autorización directa de Coordinación01: consolidar selectivamente EditorR1 y Logo/Maps en rama candidata, sin integrar/desplegar. Rama work/ENC-STAGING-RELEASE-001 no existía al consultar; se crea únicamente esta rama desde ia-desarrollo cad1222618c94f4eb3dabb589b6e58836191dcb7. Documento de tarea en coordinación consultado:404; prevalece instrucción expresa de la sesión. Se leyeron reglas generales/contexto y los checkpoints de fuentes13326fdf616c45a0322ce1b1cd52973a264d1f83 y62dd05a1ba734ae035bb0792f09c0fbe6b3a00ca.
+Alcance: EditBusinessModal.tsx conciliado, BusinessPublicDetail.tsx/CSS y types.ts para logo/map; WORK_RESULTADOS y este checkpoint. No Auth/Radar/Comentarios/API/DB/servidor/secretos/infraestructura. Reutilizar correcciones sin sustituir diseño actual; mantener puertas de permisos y operaciones inseguras deshabilitadas. Pruebas locales aisladas de proyecto/componentes, solo mocks explícitos y sin backend real. Se recuperará fuente exacta para compilación global; clon Git anónimo no disponible, se utiliza lectura GitHub autorizada. Pendiente implementación y pruebas, sin resultados inventados.
