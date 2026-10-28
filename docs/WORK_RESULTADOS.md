@@ -369,3 +369,16 @@ Entregas observadas al cierre: Trabajador1 en2ebe21c6ce2848b5c7c5e69bf1288ddd7f0
 No package/lock/frontend/infraestructura/auth/DB modificados. Copia aislada y dependencias temporales fuera del repositorio; builds con entorno vacío salvo PATH. Frontend generado temporalmente, no se publica dist. No credenciales reales, SQL, backup real, Hostinger, arranque completo, PR, merge, integración ni despliegue. Main/ia-desarrollo preservados.
 Riesgos no resueltos por guard: arranque/semillas/limpieza y conexión productiva, permisos cruzados, estáticos externos/CDN/caché, symlinks/renombrados. Falta autorización y evidencia operativa; Staging NO declarado protegido. Reversión debe mantener contención y artefactos coherentes, sin restaurar BD ni abrir descargas a ciegas.
 
+
+
+## ENC-F008-R2 / ENC-F009 — contactos visibles y protección de recuperación
+
+Fecha: 2026-10-28. Estado: PROBADO_POR_WORK localmente; pendiente revisión operativa. Rama exclusiva `work/enc-f008-contactos-visibilidad`, base ia-desarrollo `0d231cb2779b7a14d8d336fc2f4de3782663c738`.
+
+Diagnóstico público verificado: Staging informa local_json/json_cache, 205 negocios, MariaDB desconectada y aislamiento inválido; base configurada de Staging. ID1081 Yuss Nails Beautiful Hands devuelve contactos vacíos. Producción rechaza GET con403. No acceso a hPanel/SSH ni SQL real. Restauración de174 por base reportada por Coordinación, no repetida.
+
+Implementación: SQL phone/whatsapp autoritativos frente a raw_data; lecturas estrictas frescas con fuente identificable/no-store y503 explícito; sin fallback de contactos semilla en App/servicio; conservación atómica en upsert de campos omitidos/vacíos y cachés antiguas; sustitución explícita mediante PATCH y readback; eliminación por clearContacts con sesión validada en servidor. Arranque de negocios sin seed/upsert; sync-catalog y WooCommerce retirados con410. Validación MX común en tarjetas, Glass y landing sin inferir WhatsApp. Filtros/contadores reales por conjunto de búsqueda antes de paginar y aviso sin contactos; API contacts/offset/limit y paginación local24. Editor/Logotipo/Radar/Comentarios no se mezclan.
+
+Pruebas: nueve grupos PASS con Node24.22.1/esbuild0.28.2/jsdom30.1.3; handlers Express reales con pool simulado, componentes React en DOM jsdom, App error/reintento/ficha actualizada, serialización, PATCH, eliminación403/400, preservación de caché, arranque/fallo/vacío y reinicio simulado, rutas410 sin consultas. TypeScript7.0.2 PASS; Vite8.3.5 PASS1723 módulos, warningchunk>500kB; bundlebackend PASS sin ejecutarlo. No pruebas de MariaDB/persistencia/autenticación reales ni llamadas/envíos físicos. Se documentan iteraciones fallidas y límites en el checkpoint.
+
+Trazabilidad completa, archivos, reproducción y rollback: [docs/work-progress/ENC-F008-R2.md](work-progress/ENC-F008-R2.md). Pruebas reproducibles: `tests/contacts-r2.test.mjs`. Sin main/ia, PR, integración, despliegue, SQL, credenciales ni infraestructura. Candidato apto para revisión de código; NO APTO para despliegue inmediato hasta conexión/aislamiento y verificación independiente del ID1081/API/UI. No activar confirmaciones de escritura sin comprobar permisos y aislamiento. Espera Coordinación.

@@ -13,7 +13,6 @@ import { DigitalCardModal } from './components/DigitalCardModal';
 import { EditBusinessModal } from './components/EditBusinessModal';
 import { WordPressSyncModal } from './components/WordPressSyncModal';
 import { MessageSquare, RefreshCw, Lock, X, Globe, ChevronDown } from 'lucide-react';
-import seedBusinesses from './data/businesses_seed.json';
 import seedPromotions from './data/promotions_seed.json';
 import seedEvents from './data/events_carmen.json';
 import ALL_COLONIAS_CARMEN from './data/colonias_carmen.json';
@@ -294,54 +293,39 @@ export default function App() {
     return () => { alive = false; window.removeEventListener(RATINGS_UPDATED, reload); window.removeEventListener('focus', reload); };
   }, []);
 
-  const [businessesList, setBusinessesList] = useState<Business[]>(() => (seedBusinesses as unknown as Business[]) || []);
+  const [businessesList, setBusinessesList] = useState<Business[]>([]);
+  const [businessesStatus, setBusinessesStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [businessesReload, setBusinessesReload] = useState(0);
 
   useEffect(() => {
-    fetch('/api/businesses?t=' + Date.now(), { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data && Array.isArray(data.businesses) && data.businesses.length > 0) {
-          setBusinessesList(data.businesses);
-          const slug = getBusinessSlugFromUrl();
-          if (slug) {
-            const match = findBusinessInList(data.businesses, slug);
-            if (match) {
-              setLandingBusiness(match);
-            }
-          }
-        }
-      })
-      .catch(() => {});
+    let alive = true;
+    const controller = new AbortController();
+    setBusinessesStatus('loading');
+    fetch('/api/businesses', { cache: 'no-store', signal: controller.signal })
+      .then(async r => {
+        if (!r.ok) throw new Error('Business source unavailable');
+        const data = await r.json();
+        if (!Array.isArray(data.businesses)) throw new Error('Invalid business response');
+        if (!alive) return;
+        setBusinessesList(data.businesses);
+        setBusinessOverrides({});
+        setBusinessesStatus('ready');
+        const slug = getBusinessSlugFromUrl();
+        if (slug) setLandingBusiness(findBusinessInList(data.businesses, slug));
+        setSelectedBusiness(previous => previous ? data.businesses.find((b: Business) => String(b.id) === String(previous.id)) || null : null);
+      }).catch(() => { if (alive) { setBusinessesStatus('error'); setBusinessesList([]); setSelectedBusiness(null); setLandingBusiness(null); } });
+    return () => { alive = false; controller.abort(); };
+  }, [businessesReload]);
+
+  useEffect(() => {
+    const refresh = () => setBusinessesReload(previous => previous + 1);
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
   }, []);
 
-  // Detect direct business landing page or tab on initial load
   useEffect(() => {
-    const slug = getBusinessSlugFromUrl();
-    if (slug) {
-      const match = findBusinessInList(businessesList, slug);
-      if (match) {
-        setLandingBusiness(match);
-      } else {
-        // Query endpoint directly in case business was just registered in DB
-        fetch(`/api/businesses/${encodeURIComponent(slug)}`)
-          .then((r) => (r.ok ? r.json() : null))
-          .then((resData) => {
-            if (resData && resData.business) {
-              setLandingBusiness(resData.business);
-              setBusinessesList((prev) => [
-                resData.business,
-                ...prev.filter((b) => String(b.id) !== String(resData.business.id)),
-              ]);
-            }
-          })
-          .catch(() => {});
-      }
-    } else {
-      const cleanPath = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
-      if (['promociones', 'eventos', 'clasificados', 'registro'].includes(cleanPath)) {
-        setActiveTab(cleanPath);
-      }
-    }
+    const cleanPath = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
+    if (['promociones', 'eventos', 'clasificados', 'registro'].includes(cleanPath)) setActiveTab(cleanPath);
   }, []);
 
   // Listen to browser Back/Forward (popstate)
@@ -1339,6 +1323,11 @@ export default function App() {
         isAdmin={isAdminLoggedIn}
       />
 
+      {businessesStatus !== 'ready' && <div role="status" className="fixed bottom-4 left-4 right-4 z-[110] rounded-2xl bg-white/95 border border-amber-300 p-3 text-sm shadow-lg">
+        {businessesStatus === 'error' ? 'No se pudieron consultar los negocios vigentes. No se muestran contactos de respaldo.' : 'Consultando negocios vigentes…'}
+        {businessesStatus === 'error' && <button type="button" aria-label="Reintentar carga de negocios" className="ml-3 underline font-bold" onClick={() => setBusinessesReload(n => n + 1)}>Reintentar</button>}
+      </div>}
+
       {/* MODAL / SISTEMA OPERATIVO DE ADMINISTRACIÓN (VINCULADO AL BOTÓN π) */}
       <WordPressSyncModal
         isOpen={isAdminModalOpen}
@@ -1352,7 +1341,7 @@ export default function App() {
         onTriggerSync={async () => {}}
         isSyncing={false}
         syncResultMsg={null}
-        onBusinessUpdated={async () => {}}
+        onBusinessUpdated={async () => { setBusinessesReload(n => n + 1); }}
         categories={categoriasList.map((c) => ({ id: c, name: c })) as any}
         coloniasList={[]}
         onSelectBusiness={(b) => {
@@ -1370,3 +1359,4 @@ export default function App() {
     </div>
   );
 }
+

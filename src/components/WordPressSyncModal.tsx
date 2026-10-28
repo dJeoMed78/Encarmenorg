@@ -1604,6 +1604,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
           {activeTab === 'businesses' ? (
             <AdminBusinessesTab
+              onContactsUpdated={onBusinessUpdated}
               businesses={businesses}
               categories={categories}
               coloniasList={coloniasList}
@@ -2894,4 +2895,5 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     </div>
   );
 };
+
 

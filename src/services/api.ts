@@ -1,5 +1,5 @@
-import { Business, Category, DirectoryStats, WpHealth, AutoBusinessCandidate } from '../types';
 import seedBusinesses from '../data/businesses_seed.json';
+import { Business, Category, DirectoryStats, WpHealth, AutoBusinessCandidate } from '../types';
 import seedCategories from '../data/categories_seed.json';
 
 const API_BASE = '/api';
@@ -54,53 +54,8 @@ export async function fetchBusinesses(params: {
       businesses: data.businesses
     };
   } catch (err) {
-    console.warn('API fetch failed, fallback to local seed dataset:', err);
-    // Local filter fallback
-    let list: Business[] = seedBusinesses as unknown as Business[];
-
-    if (params.q) {
-      const term = params.q.toLowerCase();
-      list = list.filter(b =>
-        b.name.toLowerCase().includes(term) ||
-        b.description.toLowerCase().includes(term) ||
-        b.address.toLowerCase().includes(term) ||
-        b.categories.some(c => c.toLowerCase().includes(term))
-      );
-    }
-    if (params.subcategory) {
-      const sub = params.subcategory.toLowerCase();
-      list = list.filter(b =>
-        b.categorySlugs.some(s => s.toLowerCase() === sub) ||
-        b.categories.some(c => c.toLowerCase() === sub)
-      );
-    } else if (params.category && params.category !== 'all') {
-      const cat = params.category.toLowerCase();
-      list = list.filter(b =>
-        b.categorySlugs.some(s => s.toLowerCase() === cat) ||
-        b.categories.some(c => c.toLowerCase() === cat)
-      );
-    }
-    if (params.colonia && params.colonia !== 'todas') {
-      const col = params.colonia.toLowerCase();
-      list = list.filter(b => b.colonia && b.colonia.toLowerCase().includes(col));
-    }
-    if (params.hasWhatsapp) {
-      list = list.filter(b => Boolean(b.whatsapp));
-    }
-    if (params.hasDelivery) {
-      list = list.filter(b => Boolean(b.delivery && !b.delivery.toLowerCase().includes('no')));
-    }
-    if (params.hasPhone) {
-      list = list.filter(b => Boolean(b.phone));
-    }
-    if (params.hasAddress) {
-      list = list.filter(b => Boolean(b.address && b.address.length > 5));
-    }
-
-    return {
-      total: list.length,
-      businesses: list
-    };
+    // Never substitute historical contacts for the current database response.
+    throw err;
   }
 }
 
@@ -447,14 +402,16 @@ export async function deleteReport(id: string): Promise<boolean> {
   }
 }
 
-export async function adminUpdateBusiness(id: number, data: Partial<import('../types').Business>): Promise<{ success: boolean; message: string; business?: import('../types').Business }> {
+export async function adminUpdateBusiness(id: number, data: Partial<import('../types').Business> & { clearContacts?: ('phone' | 'whatsapp')[] }): Promise<{ success: boolean; message: string; business?: import('../types').Business }> {
   try {
     const res = await fetch(`${API_BASE}/businesses/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', ...(sessionStorage.getItem('encarmen_admin_session_token') ? { 'X-Encarmen-Admin-Token': sessionStorage.getItem('encarmen_admin_session_token')! } : {}) },
       body: JSON.stringify(data)
     });
-    return await parseJsonResponse(res, 'Error al actualizar negocio');
+    const parsed = await parseJsonResponse<{success:boolean;message:string;business?:Business}>(res, 'Error al actualizar negocio');
+    if (!res.ok) return {success:false, message:parsed.message || `HTTP ${res.status}`};
+    return parsed;
   } catch (err: any) {
     return { success: false, message: err.message || 'Error al actualizar negocio' };
   }
@@ -1261,3 +1218,4 @@ export async function submitBusinessRating(params: {
   }
   return { success: true, message: 'Calificación guardada.', rating: stats.average, reviewCount: stats.count, stats };
 }
+

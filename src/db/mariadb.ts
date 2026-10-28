@@ -415,8 +415,8 @@ export async function dbGetUploadedFile(filename: string): Promise<{ mimeType: s
 }
 
 // MariaDB CRUD Operations
-export async function dbLoadAllBusinesses(): Promise<any[]> {
-  if (!pool) return [];
+export async function dbLoadAllBusinesses(strict = true): Promise<any[]> {
+  if (!pool) { if (strict) throw new Error("BUSINESSES_SOURCE_UNAVAILABLE"); return []; }
   try {
     const [rows]: any = await pool.query('SELECT * FROM businesses ORDER BY id ASC');
     return rows.map((r: any) => {
@@ -438,8 +438,9 @@ export async function dbLoadAllBusinesses(): Promise<any[]> {
         address: extra.address || r.address || '',
         colonia: extra.colonia || r.colonia || '',
         postalCode: extra.postalCode || '',
-        phone: extra.phone || r.phone || '',
-        whatsapp: extra.whatsapp || r.whatsapp || '',
+        // Dedicated columns are authoritative, including explicit empty values.
+        phone: String(r.phone ?? ''),
+        whatsapp: String(r.whatsapp ?? ''),
         email: extra.email || r.email || '',
         website: extra.website || r.website || '',
         facebook: extra.facebook || r.facebook || '',
@@ -461,6 +462,7 @@ export async function dbLoadAllBusinesses(): Promise<any[]> {
     });
   } catch (err: any) {
     console.warn('[MariaDB] Error cargando businesses:', err.message);
+    if (strict) throw new Error('BUSINESSES_SOURCE_UNAVAILABLE');
     return [];
   }
 }
@@ -483,7 +485,7 @@ export async function dbGetBusinessesSignature(): Promise<{ lastUpdate: string |
   }
 }
 
-export async function dbSaveBusiness(biz: any): Promise<boolean> {
+export async function dbSaveBusiness(biz: any, options: { clearContacts?: readonly ('phone' | 'whatsapp')[]; updateContacts?: boolean } = {}): Promise<boolean> {
   if (!guardWrite('dbSaveBusiness')) return false;
   if (!pool) return false;
   try {
@@ -502,8 +504,8 @@ export async function dbSaveBusiness(biz: any): Promise<boolean> {
         description = VALUES(description),
         address = VALUES(address),
         colonia = VALUES(colonia),
-        phone = VALUES(phone),
-        whatsapp = VALUES(whatsapp),
+        phone = IF(?, '', IF(?, COALESCE(NULLIF(TRIM(VALUES(phone)), ''), phone), phone)),
+        whatsapp = IF(?, '', IF(?, COALESCE(NULLIF(TRIM(VALUES(whatsapp)), ''), whatsapp), whatsapp)),
         email = VALUES(email),
         website = VALUES(website),
         facebook = VALUES(facebook),
@@ -539,7 +541,11 @@ export async function dbSaveBusiness(biz: any): Promise<boolean> {
       biz.verified ? 1 : 0,
       biz.featured ? 1 : 0,
       biz.status || 'published',
-      rawData
+      rawData,
+      options.clearContacts?.includes('phone') ? 1 : 0,
+      options.updateContacts === true ? 1 : 0,
+      options.clearContacts?.includes('whatsapp') ? 1 : 0,
+      options.updateContacts === true ? 1 : 0
     ]);
     return true;
   } catch (err: any) {
@@ -1256,3 +1262,4 @@ export async function dbInsertRating(id: string, visitorKey: string, rating: num
   return ratingsRepository().insert(id, visitorKey, rating, comment);
 }
 // ENC-REVIEWS-006 RATINGS REPOSITORY END
+

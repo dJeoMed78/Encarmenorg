@@ -1,3 +1,4 @@
+import { contactDigits } from '../utils/businessContacts';
 import React from 'react';
 import { Phone, Star, CheckCircle2, Bookmark, MapPin } from 'lucide-react';
 import { CATEGORY_VISUALS } from '../data/categoryVisuals';
@@ -21,11 +22,10 @@ export function BusinessCard({
   isFavorite = false,
   onToggleFavorite,
 }: BusinessCardProps) {
-  const phoneClean = business.phone ? business.phone.replace(/\D/g, '') : '';
-  const waClean = business.whatsapp ? business.whatsapp.replace(/\D/g, '') : '';
-  const targetCall = phoneClean || waClean;
-  const rawWhatsApp = waClean || phoneClean;
-  const targetWa = /^521\d{10}$/.test(rawWhatsApp) ? `52${rawWhatsApp.slice(3)}` : /^52\d{10}$/.test(rawWhatsApp) ? rawWhatsApp : /^\d{10}$/.test(rawWhatsApp) ? `52${rawWhatsApp}` : '';
+  const phoneClean = contactDigits(business.phone);
+  const waClean = contactDigits(business.whatsapp);
+  const targetCall = phoneClean ? `52${phoneClean}` : '';
+  const targetWa = waClean ? `52${waClean}` : '';
 
   const handleWhatsApp = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -208,3 +208,4 @@ export function BusinessCard({
     </div>
   );
 }
+

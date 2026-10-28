@@ -1,3 +1,4 @@
+import { contactDigits } from '../utils/businessContacts';
 import React, { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -45,10 +46,8 @@ function safeUrl(value?: string): string | undefined {
   }
 }
 function phone(value?: string) {
-  const n = (value || "").replace(/\D/g, "");
-  if (/^\d{10}$/.test(n)) return `52${n}`;
-  if (/^52\d{10}$/.test(n)) return n;
-  if (/^521\d{10}$/.test(n)) return `52${n.slice(3)}`;
+  const digits = contactDigits(value);
+  return digits ? `52${digits}` : undefined;
 }
 // Only known Google Maps origins can become links/frames; no address/name geocoding.
 export function businessMapPresentation(b: {
@@ -679,3 +678,4 @@ export function BusinessPublicDetail({
     </div>
   );
 }
+

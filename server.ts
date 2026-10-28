@@ -1,3 +1,4 @@
+import { prepareContactPatch, ContactPatchError, contactDigits, contactCounts, matchesContactFilter, CONTACT_FILTERS, type ContactFilter } from './src/utils/businessContacts';
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 import express from 'express';
@@ -1475,32 +1476,14 @@ initMariaDb().then(async (active) => {
       console.warn('[MariaDB] Error al cargar configuración del portal:', e.message);
     }
 
-    // 1. Businesses
-    const dbBusinesses = await dbLoadAllBusinesses();
-    if (dbBusinesses.length > 0) {
-      const dbIdSet = new Set(dbBusinesses.map(b => String(b.id)));
-      const missingInDb = businessesCache.filter(b => !dbIdSet.has(String(b.id)));
-      if (missingInDb.length > 0 && canSyncStartupWrites) {
-        console.log(`[MariaDB] Añadiendo ${missingInDb.length} empresas del catálogo local que no existían en Hostinger MariaDB...`);
-        for (const b of missingInDb) {
-          await dbSaveBusiness(b);
-        }
-        const reloaded = await dbLoadAllBusinesses();
-        if (reloaded.length > 0) businessesCache = reloaded;
-      } else {
-        businessesCache = dbBusinesses;
-      }
-      console.log(`[MariaDB] ${businessesCache.length} empresas cargadas autoritativamente desde Hostinger MariaDB.`);
-    } else if (canSyncStartupWrites) {
-      console.log(`[MariaDB] Base de datos vacía. Sincronizando ${businessesCache.length} empresas completas hacia Hostinger MariaDB...`);
-      for (const b of businessesCache) {
-        await dbSaveBusiness(b);
-      }
-      const reloaded = await dbLoadAllBusinesses();
-      if (reloaded.length > 0) businessesCache = reloaded;
-      console.log(`[MariaDB] ${businessesCache.length} empresas aseguradas en Hostinger MariaDB.`);
-    } else {
-      console.log(`[Staging Guard] Base de datos sin empresas en modo seguro/read-only. Catálogo local preservado en memoria sin mutar MariaDB.`);
+    // 1. Businesses: startup is read-only for this catalog.
+    // Failed read is not an empty table: never seed/upsert historical contacts.
+    try {
+      businessesCache = await dbLoadAllBusinesses(true);
+      console.log(`[MariaDB] ${businessesCache.length} empresas cargadas desde la fuente autorizada; sin importación automática.`);
+    } catch {
+      businessesCache = [];
+      console.warn('[MariaDB] Catálogo no disponible; no se importaron semillas ni se escribieron negocios.');
     }
 
     // 2. Reports
@@ -1685,43 +1668,14 @@ app.post('/api/mariadb/reconnect', async (_req: Request, res: Response) => {
   }
 });
 
-// Push entire active catalog to Hostinger MariaDB
-app.post('/api/mariadb/sync-catalog', async (_req: Request, res: Response) => {
-  try {
-    if (!isMariaDbActive()) {
-      const ok = await initMariaDb();
-      if (!ok) {
-        return res.status(400).json({
-          success: false,
-          message: 'Hostinger MariaDB no está conectada. Verifique las credenciales.',
-          error: getLastDbError()
-        });
-      }
-    }
+// WordPress is retired. Block legacy imports before any historical handlers.
+app.post(['/api/sync', '/api/webhook/woocommerce', '/api/businesses/:id/sync-wp'], (_req: Request, res: Response) => {
+  return res.status(410).json({success:false, message:'Sincronización WooCommerce retirada. Los contactos se administran en MariaDB.'});
+});
 
-    let saved = 0;
-    for (const b of businessesCache) {
-      try {
-        await dbSaveBusiness(b);
-        saved++;
-      } catch (err: any) {
-        console.warn(`[MariaDB Sync] Error guardando ${b.id}:`, err.message);
-      }
-    }
-
-    const reloaded = await dbLoadAllBusinesses();
-    if (reloaded.length > 0) {
-      businessesCache = reloaded;
-    }
-
-    return res.json({
-      success: true,
-      message: `¡${saved} empresas sincronizadas exitosamente en Hostinger MariaDB!`,
-      businessesCount: businessesCache.length
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
+// Retired seed/cache-to-database import. No stale catalog may overwrite restored contacts.
+app.post('/api/mariadb/sync-catalog', (_req: Request, res: Response) => {
+  return res.status(410).json({success:false, message:'La importación de semillas/caché está retirada. MariaDB es la fuente autorizada; actualiza el directorio mediante su lectura normal.'});
 });
 
 // Download SQL dump for Hostinger phpMyAdmin
@@ -1929,7 +1883,16 @@ let lastDbPollTime = 0;
 const DB_POLL_INTERVAL_MS = 20000; // 20 seconds
 let cachedDbSignature: { lastUpdate: string | null; total: number } | null = null;
 
-async function refreshBusinessesFromDbIfNeeded() {
+async function refreshBusinessesFromDbIfNeeded(requireFresh = false) {
+  // Contact restores can leave MAX(updated_at) and COUNT(*) unchanged.
+  // Public reads must not silently return seed/cache contacts on source failure.
+  if (requireFresh) {
+    if (!isMariaDbActive()) throw new Error('BUSINESSES_SOURCE_UNAVAILABLE');
+    const list = await dbLoadAllBusinesses(true);
+    businessesCache = list;
+    cachedDbSignature = null;
+    return;
+  }
   if (!isMariaDbActive()) return;
   const now = Date.now();
   if (now - lastDbPollTime < DB_POLL_INTERVAL_MS) return;
@@ -2023,7 +1986,9 @@ registerRatingsRoutes(app);
 
 // Businesses List with search & filters
 app.get('/api/businesses', async (req: Request, res: Response) => {
-  await refreshBusinessesFromDbIfNeeded();
+  res.setHeader('Cache-Control', 'no-store');
+  try { await refreshBusinessesFromDbIfNeeded(true); res.setHeader('X-Encarmen-Business-Source', 'mariadb'); }
+  catch { res.setHeader('X-Encarmen-Business-Source', 'unavailable'); return res.status(503).json({success:false, message:'Los negocios no están disponibles desde MariaDB. Reintenta más tarde.'}); }
 
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
   res.setHeader('Pragma', 'no-cache');
@@ -2071,17 +2036,27 @@ app.get('/api/businesses', async (req: Request, res: Response) => {
     list = list.filter(b => b.colonia && b.colonia.toLowerCase().includes(colLow));
   }
 
-  if (hasWhatsapp) list = list.filter(b => Boolean(b.whatsapp));
+  if (hasWhatsapp) list = list.filter(b => Boolean(contactDigits(b.whatsapp)));
   if (hasDelivery) list = list.filter(b => Boolean(b.hasDelivery));
-  if (hasPhone) list = list.filter(b => Boolean(b.phone));
+  if (hasPhone) list = list.filter(b => Boolean(contactDigits(b.phone)));
   if (hasAddress) list = list.filter(b => Boolean(b.address));
 
+  const contacts = String(req.query.contacts || 'all');
+  if (!CONTACT_FILTERS.includes(contacts as ContactFilter)) return res.status(400).json({success:false, message:'Filtro de contactos inválido.'});
+  const coverage = contactCounts(list); // Entire search/category scope, before contact filter and pagination.
+  list = list.filter(b => matchesContactFilter(b, contacts as ContactFilter));
+  const parsePage = (value: unknown, fallback: number) => value === undefined ? fallback : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN;
+  const offset = parsePage(req.query.offset, 0);
+  const limit = parsePage(req.query.limit, list.length);
+  if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || (req.query.limit !== undefined && (limit < 1 || limit > 200))) return res.status(400).json({success:false, message:'Paginación inválida.'});
   res.json({
+    source: 'mariadb',
     total: list.length,
-    count: list.length,
-    offset: 0,
-    limit: list.length,
-    businesses: list
+    count: list.slice(offset, offset + limit).length,
+    offset,
+    limit,
+    contactCounts: coverage,
+    businesses: list.slice(offset, offset + limit)
   });
 });
 
@@ -2092,7 +2067,9 @@ app.get('/api/businesses/:id', async (req: Request, res: Response, next: NextFun
     return next();
   }
 
-  await refreshBusinessesFromDbIfNeeded();
+  res.setHeader('Cache-Control', 'no-store');
+  try { await refreshBusinessesFromDbIfNeeded(true); res.setHeader('X-Encarmen-Business-Source', 'mariadb'); }
+  catch { res.setHeader('X-Encarmen-Business-Source', 'unavailable'); return res.status(503).json({success:false, message:'Los negocios no están disponibles desde MariaDB. Reintenta más tarde.'}); }
 
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
   res.setHeader('Pragma', 'no-cache');
@@ -2401,7 +2378,7 @@ function buildWooCommerceImagesPayload(biz: any): { src: string }[] {
 
 // Flag de sincronización externa con WordPress/WooCommerce
 // Por defecto FALSE: El portal opera en modo 100% autónomo (cero dependencias externas y cero envíos a WordPress)
-const IS_WP_SYNC_ENABLED = process.env.ENABLE_WP_SYNC === 'true';
+const IS_WP_SYNC_ENABLED = false; // WordPress retired: configuration cannot revive contact imports.
 
 // Helper to purge LiteSpeed, Cloudflare and local cache across encarmen.org and empresasencarmen.com
 async function purgeWordPressCache(slugs: string[] = []): Promise<void> {
@@ -2578,330 +2555,9 @@ function getWpAuthHeader(): string | null {
   return null;
 }
 
-// Full bidirectional sync helper:
-// 1. Pulls all products from WordPress WooCommerce into MariaDB / cache
-// 2. Finds businesses in local DB that do not exist in WooCommerce and pushes them to WordPress (Disabled in autonomous mode)
+// Retired import helper: no environment flag may revive legacy contact synchronization.
 async function syncAllWooCommerceProducts(): Promise<{ count: number; newCount: number; pushedToWpCount: number }> {
-  if (!IS_WP_SYNC_ENABLED) {
-    console.info('[WooCommerce Sync] Modo autónomo activo: Sincronización cruzada con WordPress desactivada.');
-    return { count: businessesCache.length, newCount: 0, pushedToWpCount: 0 };
-  }
-  const authHeader = getWpAuthHeader();
-  if (!authHeader) {
-    return { count: businessesCache.length, newCount: 0, pushedToWpCount: 0 };
-  }
-
-  try {
-    let page = 1;
-    const allProducts: any[] = [];
-
-    while (true) {
-      const wpRes = await fetch(`https://empresasencarmen.com/wp-json/wc/v3/products?per_page=100&page=${page}`, {
-        headers: { 'Authorization': authHeader }
-      });
-      if (!wpRes.ok) break;
-      const batch: any = await wpRes.json();
-      if (!Array.isArray(batch) || batch.length === 0) break;
-      allProducts.push(...batch);
-      if (batch.length < 100) break;
-      page++;
-    }
-
-    const existingMap = new Map<number, any>();
-    for (const b of businessesCache) {
-      existingMap.set(Number(b.id), b);
-    }
-
-    // 1. Build lookup maps of WooCommerce products
-    const wpProductIds = new Set<number>();
-    const wpProductByName = new Map<string, any>();
-    const wpProductByPhone = new Map<string, any>();
-    const wpProductBySlug = new Map<string, any>();
-
-    for (const p of allProducts) {
-      const pId = Number(p.id);
-      wpProductIds.add(pId);
-      if (p.name) wpProductByName.set(normalizeBusinessName(p.name), p);
-      if (p.slug) wpProductBySlug.set(p.slug.toLowerCase().trim(), p);
-      if (Array.isArray(p.meta_data)) {
-        const ph = p.meta_data.find((m: any) => m.key === 'telefono' || m.key === 'phone' || m.key === 'whatsapp')?.value;
-        if (ph) {
-          const clean = String(ph).replace(/\D/g, '').slice(-10);
-          if (clean.length >= 7) wpProductByPhone.set(clean, p);
-        }
-      }
-    }
-
-    // 2. Import / Update products from WooCommerce (Pull Phase)
-    let newCount = 0;
-    for (const p of allProducts) {
-      const parsed = parseWooCommerceProduct(p);
-      if (!existingMap.has(p.id)) {
-        newCount++;
-        existingMap.set(p.id, parsed);
-      } else {
-        const old = existingMap.get(p.id) || {};
-        const isPendingLocalEdit = Boolean(
-          old.isLocallyEdited &&
-          old.updatedAt &&
-          p.date_modified &&
-          new Date(old.updatedAt) > new Date(p.date_modified)
-        );
-        const hasLocalCustomizations = Boolean(
-          isPendingLocalEdit ||
-          (old.image && old.image.startsWith('/uploads/')) ||
-          (old.gallery && old.gallery.some((img: string) => img.startsWith('/uploads/'))) ||
-          (Array.isArray(old.previousSlugs) && old.previousSlugs.length > 0) ||
-          (Array.isArray(old.previousNames) && old.previousNames.length > 0)
-        );
-
-        if (hasLocalCustomizations) {
-          // Local changes TAKE PRECEDENCE over stale WooCommerce data
-          const mergedCategories = (old.categories && old.categories.length > 0) ? old.categories : parsed.categories;
-          const mergedCategorySlugs = (old.categorySlugs && old.categorySlugs.length > 0) ? old.categorySlugs : parsed.categorySlugs;
-          const mergedCategory = old.category || (mergedCategories[0] || 'Comercios y Servicios');
-
-          existingMap.set(p.id, {
-            ...parsed,
-            ...old,
-            name: old.name || parsed.name,
-            slug: old.slug || parsed.slug,
-            description: old.description || parsed.description,
-            image: old.image || parsed.image,
-            gallery: (old.gallery && old.gallery.length > 0) ? old.gallery : parsed.gallery,
-            categories: mergedCategories,
-            categorySlugs: mergedCategorySlugs,
-            category: mergedCategory,
-            colonia: old.colonia || parsed.colonia,
-            phone: old.phone || parsed.phone,
-            whatsapp: old.whatsapp || parsed.whatsapp,
-            address: old.address || parsed.address,
-            schedule: old.schedule || parsed.schedule,
-            payment: old.payment || parsed.payment,
-            delivery: old.delivery || parsed.delivery,
-            facebook: old.facebook || parsed.facebook,
-            instagram: old.instagram || parsed.instagram,
-            website: old.website || parsed.website,
-            previousSlugs: old.previousSlugs || [],
-            previousNames: old.previousNames || [],
-            isLocallyEdited: isPendingLocalEdit,
-            updatedAt: old.updatedAt || new Date().toISOString()
-          });
-        } else {
-          existingMap.set(p.id, {
-            ...old,
-            ...parsed,
-            isLocallyEdited: false,
-            previousSlugs: old.previousSlugs || [],
-            previousNames: old.previousNames || []
-          });
-        }
-      }
-    }
-
-    // 3. Export businesses missing in WooCommerce (Push Phase - Two-Way Sync)
-    let pushedToWpCount = 0;
-    for (const b of businessesCache) {
-      const bId = Number(b.id);
-      const bNameNorm = normalizeBusinessName(b.name || '');
-      const bSlug = (b.slug || '').toLowerCase().trim();
-      const bPhoneClean = (b.phone || b.whatsapp || '').replace(/\D/g, '').slice(-10);
-
-      // Check if this business already exists in WooCommerce by ID, slug, name, or phone
-      let matchingWp: any = wpProductIds.has(bId) ? allProducts.find(p => Number(p.id) === bId) : null;
-      if (!matchingWp && bSlug && wpProductBySlug.has(bSlug)) {
-        matchingWp = wpProductBySlug.get(bSlug);
-      }
-      if (!matchingWp && bNameNorm && wpProductByName.has(bNameNorm)) {
-        matchingWp = wpProductByName.get(bNameNorm);
-      }
-      if (!matchingWp && bPhoneClean && bPhoneClean.length >= 7 && wpProductByPhone.has(bPhoneClean)) {
-        matchingWp = wpProductByPhone.get(bPhoneClean);
-      }
-
-      if (matchingWp) {
-        const targetWpId = Number(matchingWp.id);
-        if (targetWpId !== bId) {
-          // Business exists in WooCommerce with a different ID (e.g. temporary local ID)
-          const oldId = b.id;
-          b.oldId = oldId;
-          b.id = targetWpId;
-          if (matchingWp.permalink) b.permalink = matchingWp.permalink;
-          if (matchingWp.slug) b.slug = matchingWp.slug;
-          b.source = 'synced';
-          b.isNewSubmission = false;
-
-          existingMap.delete(Number(oldId));
-          existingMap.set(targetWpId, b);
-
-          if (isMariaDbActive()) {
-            try {
-              await dbDeleteBusiness(oldId);
-              await dbSaveBusiness(b);
-            } catch (_) {}
-          }
-          console.log(`[WooCommerce Match] Empresa "${b.name}" vinculada con producto en WordPress ID #${targetWpId}.`);
-        }
-
-        // Check if matching product in WooCommerce needs sync (local edits, missing categories, shortcode, slug, or images)
-        const fullWpProduct = allProducts.find(p => Number(p.id) === targetWpId) || matchingWp;
-        const wpCatList = Array.isArray(fullWpProduct.categories) ? fullWpProduct.categories : [];
-        const wpValidCats = wpCatList.filter((c: any) => c.id !== 15 && (c.name || '').toLowerCase() !== 'sin categorizar');
-        const wpShortDesc = typeof fullWpProduct.short_description === 'string' ? fullWpProduct.short_description : '';
-        const wpHasShortcode = wpShortDesc.includes('ficha_empresa') || wpShortDesc.includes('fe-wrapper');
-        const wpSlugMismatch = Boolean(b.slug && fullWpProduct.slug && b.slug.toLowerCase().trim() !== fullWpProduct.slug.toLowerCase().trim());
-        
-        const decodeHtml = (str: string) => (str || '').replace(/&amp;/g, '&').replace(/&#8211;/g, '-').replace(/&#8217;/g, "'").replace(/&quot;/g, '"').trim();
-        const wpNameMismatch = Boolean(b.name && fullWpProduct.name && decodeHtml(b.name).toLowerCase() !== decodeHtml(fullWpProduct.name).toLowerCase());
-
-        const hasRealDifferences = wpValidCats.length === 0 || !wpHasShortcode || wpSlugMismatch || wpNameMismatch;
-        const hasNewerLocalEdits = Boolean(
-          b.isLocallyEdited &&
-          b.updatedAt &&
-          fullWpProduct.date_modified &&
-          new Date(b.updatedAt) > new Date(fullWpProduct.date_modified)
-        );
-
-        if (!hasRealDifferences && !hasNewerLocalEdits && b.isLocallyEdited) {
-          b.isLocallyEdited = false;
-          if (existingMap.has(targetWpId)) {
-            const it = existingMap.get(targetWpId);
-            if (it) it.isLocallyEdited = false;
-          }
-        }
-
-        if (hasRealDifferences || hasNewerLocalEdits) {
-          try {
-            const catPayload = resolveWooCommerceCategoryIds(b);
-            const cleanDesc = cleanWooCommerceDescription(b.description || b.name);
-            const fichaShortcode = buildFichaEmpresaShortcode(b);
-            const wpImages = buildWooCommerceImagesPayload(b);
-
-            const putPayload: any = {
-              name: b.name,
-              slug: b.slug,
-              categories: catPayload,
-              description: `<p>${cleanDesc}</p>`,
-              short_description: fichaShortcode,
-              meta_data: [
-                { key: 'telefono', value: String(b.phone || '') },
-                { key: 'phone', value: String(b.phone || '') },
-                { key: 'whatsapp', value: String(b.whatsapp || b.phone || '') },
-                { key: 'direccion', value: String(b.address || '') },
-                { key: 'address', value: String(b.address || '') },
-                { key: 'colonia', value: String(b.colonia || '') },
-                { key: 'horario', value: String(b.schedule || '') },
-                { key: 'pagos', value: String(b.payment || '') },
-                { key: 'envio', value: String(b.delivery || '') },
-                { key: 'facebook', value: String(b.facebook || '') },
-                { key: 'website', value: String(b.website || '') },
-                { key: 'mapsUrl', value: String(b.mapsUrl || '') }
-              ]
-            };
-
-            // CRITICAL: NEVER re-upload images to WooCommerce if product already has images!
-            // Passing images: [{ src: '...' }] causes WordPress to re-download the image and regenerate 10+ thumbnails each time, exhausting Hostinger inodes!
-            const existingWpImages = Array.isArray(fullWpProduct.images) ? fullWpProduct.images : [];
-            if (existingWpImages.length === 0 && wpImages.length > 0) {
-              putPayload.images = wpImages;
-            }
-
-            try {
-              const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 15000);
-              const wpPutRes = await fetch(`https://empresasencarmen.com/wp-json/wc/v3/products/${targetWpId}`, {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': authHeader
-                },
-                body: JSON.stringify(putPayload),
-                signal: controller.signal
-              });
-              clearTimeout(timeout);
-
-              if (wpPutRes.ok) {
-                b.isLocallyEdited = false;
-                if (existingMap.has(targetWpId)) {
-                  const it = existingMap.get(targetWpId);
-                  if (it) it.isLocallyEdited = false;
-                }
-                purgeWordPressCache([b.slug, ...(b.previousSlugs || [])]);
-                console.log(`[WooCommerce Sync] Actualizadas categorías, imágenes y estructura para "${b.name}" en WordPress ID #${targetWpId}.`);
-              } else {
-                console.info(`[WooCommerce Sync] Aviso al actualizar "${b.name}" en WordPress: HTTP ${wpPutRes.status}`);
-              }
-            } catch (err: any) {
-              console.info(`[WooCommerce Sync] Servidor WordPress empresasencarmen.com en espera temporal para "${b.name}":`, err.message);
-            }
-
-            // Gentle delay to respect LiteSpeed connection rate limits
-            await new Promise(resolve => setTimeout(resolve, 300));
-          } catch (syncErr: any) {
-            console.info(`[WooCommerce Sync] Aviso procesando "${b.name}":`, syncErr.message);
-          }
-        }
-      } else if (!matchingWp) {
-        // Business does NOT exist in WooCommerce at all! Push it!
-        console.log(`[WooCommerce Sync] Exportando empresa local "${b.name}" a empresasencarmen.com...`);
-        const exportRes = await exportBusinessToWooCommerce(b, authHeader);
-        if (exportRes.success && exportRes.wpId) {
-          pushedToWpCount++;
-          const oldId = b.id;
-          b.oldId = oldId;
-          b.id = exportRes.wpId;
-          if (exportRes.permalink) b.permalink = exportRes.permalink;
-          if (exportRes.slug) b.slug = exportRes.slug;
-          b.source = 'synced';
-          b.isNewSubmission = false;
-
-          existingMap.delete(Number(oldId));
-          existingMap.set(exportRes.wpId, b);
-
-          if (isMariaDbActive()) {
-            try {
-              if (oldId !== b.id) await dbDeleteBusiness(oldId);
-              await dbSaveBusiness(b);
-            } catch (_) {}
-          }
-          
-          console.log(`[WooCommerce Sync] ¡Empresa "${b.name}" exportada y creada exitosamente en WordPress WooCommerce ID #${exportRes.wpId}!`);
-        } else {
-          console.warn(`[WooCommerce Sync] No se pudo exportar "${b.name}" a WooCommerce:`, exportRes.error);
-        }
-      }
-    }
-
-    businessesCache = Array.from(existingMap.values());
-    console.log(`[WooCommerce Sync] Sincronización bidireccional exitosa: ${businessesCache.length} comercios totales (${newCount} importados, ${pushedToWpCount} exportados a WordPress).`);
-
-    // Save updated catalog to disk
-    try {
-      const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
-      fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
-    } catch (_) {}
-
-
-
-    // Save to Hostinger MariaDB
-    if (isMariaDbActive()) {
-      for (const b of businessesCache) {
-        dbSaveBusiness(b).catch(() => {});
-      }
-    }
-
-    return { count: businessesCache.length, newCount, pushedToWpCount };
-  } catch (err: any) {
-    console.info('[WooCommerce Sync] Aviso:', err.message);
-    return { count: businessesCache.length, newCount: 0, pushedToWpCount: 0 };
-  }
-}
-
-// Initial background sync from WooCommerce on startup (only if explicitly enabled)
-if (!process.env.VERCEL && IS_WP_SYNC_ENABLED) {
-  setTimeout(() => {
-    syncAllWooCommerceProducts().catch(() => {});
-  }, 5000);
+  throw new Error('Sincronización WooCommerce retirada. MariaDB es la fuente autorizada.');
 }
 
 // Helper to check duplicates by phone or normalized name
@@ -3117,7 +2773,7 @@ const isVerifiedAdminSession = (req: Request): boolean => {
 // Admin update business
 app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: Response) => {
   try {
-    await refreshBusinessesFromDbIfNeeded();
+    await refreshBusinessesFromDbIfNeeded(true);
     const id = req.params.id;
     const idParam = String(id).toLowerCase().trim();
     const idx = businessesCache.findIndex(b =>
@@ -3131,6 +2787,11 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
     }
 
     const oldBiz = businessesCache[idx];
+    const contactIntent = prepareContactPatch(req.body || {}, isVerifiedAdminSession(req));
+    const safeBody = { ...req.body };
+    delete safeBody.phone;
+    delete safeBody.whatsapp;
+    delete safeBody.clearContacts;
     const privilegedFields = ['slug','isTopBusiness','isRecommended','previousSlugs','previousNames'];
     if (!isVerifiedAdminSession(req) && privilegedFields.some(key => Object.prototype.hasOwnProperty.call(req.body || {}, key) && JSON.stringify(req.body[key]) !== JSON.stringify((oldBiz as any)[key]))) {
       return res.status(403).json({success:false,message:'Solo un administrador autenticado puede modificar enlaces y distintivos.'});
@@ -3168,9 +2829,10 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
       return res.status(409).json({ success: false, message: 'El enlace personalizado ya pertenece a otra empresa o es una dirección histórica reservada.' });
     }
 
-    const updated = {
+    let updated = {
       ...oldBiz,
-      ...req.body,
+      ...safeBody,
+      ...contactIntent.patch,
       slug: newSlug,
       categories: finalCategories,
       categorySlugs: (req.body.category || req.body.categories)
@@ -3186,11 +2848,18 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
     if (!isMariaDbActive()) {
       return res.status(503).json({ success: false, message: 'MariaDB no está disponible. Los cambios no se guardaron.' });
     }
-    const persisted = await dbSaveBusiness(updated);
+    const persisted = await dbSaveBusiness({ ...updated,
+      phone: contactIntent.patch.phone,
+      whatsapp: contactIntent.patch.whatsapp
+    }, { clearContacts: contactIntent.clear, updateContacts: true });
     if (!persisted) {
       return res.status(503).json({ success: false, message: 'No fue posible guardar los cambios en MariaDB.' });
     }
-    businessesCache[idx] = updated;
+    const confirmed = (await dbLoadAllBusinesses(true)).find(b => String(b.id) === String(oldBiz.id));
+    if (!confirmed) return res.status(503).json({success:false, message:'No se pudo verificar el resultado del guardado; recarga antes de reintentar.'});
+    updated = confirmed;
+    if (contactIntent.clear.length) console.info('[Business contacts] Authorized explicit removal', { businessId: String(oldBiz.id), fields: contactIntent.clear });
+    businessesCache = businessesCache.map(b => String(b.id) === String(oldBiz.id) ? updated : b);
     cachedDbSignature = null;
     try {
       const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
@@ -3255,7 +2924,8 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
 
     return res.json({ success: true, message: 'Empresa actualizada con éxito', business: updated });
   } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
+    if (err instanceof ContactPatchError) return res.status(err.status).json({success:false, message:err.message});
+    return res.status(503).json({ success: false, message: 'No fue posible confirmar el guardado en MariaDB.' });
   }
 });
 
@@ -8514,5 +8184,6 @@ if (!process.env.VERCEL) {
 }
 
 export default app;
+
 
 
