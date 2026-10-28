@@ -1003,7 +1003,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
               <button type="button" className="block px-3 py-2 rounded-xl bg-white/50 border border-white/80 text-rose-700 text-xs disabled:opacity-50" disabled={!logoAllowed||isUploadingLogo||isUploadingPhoto||isUploadingGallery||isSaving||!formData.logo_url} onClick={()=>{setFormData(prev=>({...prev,logo_url:''}));}}>Quitar logotipo</button></div>
             </div>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 pt-1">
             <label className="text-xs font-bold text-stone-700 flex items-center justify-between">
               <span>Fotografía de portada</span>
               {isUploadingPhoto && <span className="text-[10px] text-amber-600 animate-pulse">Subiendo...</span>}
