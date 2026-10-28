@@ -76,3 +76,13 @@ No ejecutar npm run build/prebuild, npm run dev, start, el bundle de servidor ni
 - Rollback: conservar estos commits aislados/no integrarlos; si se autoriza integrar después, revertir sus commits de código sin SQL. Revertir devuelve los riesgos de semillas/caché/sobrescritura, por lo que debe evaluarse antes. No restaurar datos ni modificar producción como rollback de código.
 
 Dictamen: IMPLEMENTADO y PROBADO LOCALMENTE con aislamiento. Evidencia pública de diagnóstico verificada; conexión/persistencia/autenticación reales pendientes. NO INTEGRADO, NO DESPLEGADO, NO APROBADO por el propio trabajador. Espera revisión independiente de Coordinación.
+
+
+## Publicación y comprobación remota
+
+- Implementación publicada: https://github.com/dJeoMed78/Encarmenorg/commit/053b729bb82f852fa61063802a6a757947cf8b12
+- Comparación: https://github.com/dJeoMed78/Encarmenorg/compare/0d231cb2779b7a14d8d336fc2f4de3782663c738...053b729bb82f852fa61063802a6a757947cf8b12
+- Lectura remota posterior: 13/13 archivos coinciden exactamente con los contenidos probados/publicados; comparación ahead_by=1, behind_by=0 antes del cierre documental. Ref remota confirmada en el SHA anterior.
+- Blobs de Editor, CSS Glass, types, semilla, package.json y ambos bundles de servidor conservados. No hay archivos de otras tareas en el diff.
+- Advertencia de integración: se entrega fuente y se verificó un bundle temporal, NO se actualizaron server.js ni api/server.bundle.js. Antes de ejecutar el candidato, Coordinación debe garantizar la recompilación desde server.ts y la coherencia de ambos artefactos; iniciar los bundles heredados no incorpora esta corrección. No ejecutar el bundle temporal contra entornos reales.
+- Base ia-desarrollo nuevamente comprobada en 0d231cb2779b7a14d8d336fc2f4de3782663c738 antes del cierre. Estas comprobaciones son de GitHub/código; no certifican despliegue ni conexión de Hostinger.
