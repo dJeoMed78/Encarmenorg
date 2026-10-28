@@ -40,3 +40,12 @@
 
 ## Próximo paso
 La coordinación revisará contratos y propondrá tarea de implementación con rama `work/enc-reviews-comments-001` cuando Work termine su tarea activa o exista autorización expresa para ejecutarlas en paralelo. No modificar archivos ahora.
+
+## Requisito obligatorio del propietario — eliminación administrativa desde dos interfaces
+- **En la ficha pública (frontend):** cada comentario muestra control **Eliminar** únicamente a administradores autenticados y autorizados; visitantes nunca lo ven. Confirmación previa y actualización inmediata solo tras éxito real del backend.
+- **En el módulo de administración:** listado de comentarios por negocio con búsqueda, filtros y control **Eliminar** individual. Estado y resultados persistidos, paginación y errores visibles.
+- **Un mismo endpoint seguro** para ambas interfaces; autorización en backend obligatoria, no depender de ocultar botones ni confiar en un rol enviado por el cliente. Definir y verificar permisos administrativos reales del proyecto antes de implementar.
+- **Semántica de eliminación:** preferir eliminación lógica/ocultamiento con marca de fecha, administrador responsable y motivo cuando sea apropiado; el comentario desaparece inmediatamente de las vistas públicas y puede auditarse. El borrado irreversible requiere decisión expresa y política de retención.
+- **Conservar estrellas:** retirar el texto de un comentario **no debe eliminar ni modificar automáticamente la calificación** asociada, ni alterar el promedio. Si se detecta fraude en la calificación, diseñar acción separada y auditada.
+- **Pruebas obligatorias:** admin autorizado elimina desde ficha y panel; visitante y usuario sin permisos reciben 403; comentarios eliminados no aparecen tras recargar ni en segundo navegador; fallo de API no muestra falso éxito; puntuación y conteo de votos se conservan.
+- **Alcance pendiente de implementación:** ambos controles deben entregarse en la misma tarea de comentarios o en subtareas dependientes claramente definidas; no declarar módulo completo sin ambos.
