@@ -58,8 +58,8 @@ export const NewestBusinessesBanner: React.FC<NewestBusinessesBannerProps> = ({
         image: item.image,
         categories: item.categories || ['Comercio Local'],
         categorySlugs: [],
-        rating: 5.0,
-        reviewCount: 1,
+        rating: 0,
+        reviewCount: 0,
         permalink: `https://empresasencarmen.com/empresa/${item.slug || ''}/`
       });
     }

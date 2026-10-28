@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Star, CheckCircle, Award, Sparkles, Loader2 } from 'lucide-react';
-import { getVisitorId, hasVisitorRatedBusiness, getVisitorRating, saveLocalRating } from '../utils/ratings';
-import { submitBusinessRating, fetchBusinessRating, BusinessRatingStats } from '../services/api';
+import { useBusinessRatings } from '../utils/realRatings';
 
 interface StarRatingWidgetProps {
   businessId: number | string;
@@ -23,102 +22,37 @@ const RATING_LABELS: Record<number, string> = {
 export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
   businessId,
   businessName,
-  initialRating = 5.0,
-  initialReviewCount = 0,
   onRatingUpdated,
   compact = false
 }) => {
-  const [visitorId] = useState<string>(() => getVisitorId());
-  const [hasRated, setHasRated] = useState<boolean>(() => hasVisitorRatedBusiness(businessId));
-  const [userRating, setUserRating] = useState<number | null>(() => getVisitorRating(businessId));
-  
-  const [hoverRating, setHoverRating] = useState<number>(0);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const [stats, setStats] = useState<BusinessRatingStats>({
-    average: Number(initialRating) || 5.0,
-    count: Number(initialReviewCount) || 0
-  });
-
-  // Sync latest stats from server
-  useEffect(() => {
-    let isMounted = true;
-    fetchBusinessRating(businessId, visitorId).then(res => {
-      if (!isMounted) return;
-      setStats(prev => ({
-        ...prev,
-        average: res.average || prev.average,
-        count: res.count !== undefined ? res.count : prev.count,
-        distribution: res.distribution
-      }));
-      if (res.hasRated) {
-        setHasRated(true);
-        if (res.userRating) {
-          setUserRating(res.userRating);
-          saveLocalRating(businessId, res.userRating);
-        }
-      }
-    }).catch(() => {});
-    return () => { isMounted = false; };
-  }, [businessId, visitorId]);
+  // Catalog initialRating/initialReviewCount are intentionally not authoritative.
+  const { summary: stats, loading, available, submitting: isSubmitting, error: errorMessage, saved, rate, retry } = useBusinessRatings(businessId);
+  const hasRated = stats.hasRated === true;
+  const userRating = stats.userRating;
+  const [hoverRating, setHoverRating] = useState(0);
+  useEffect(() => { setHoverRating(0); }, [businessId]);
+  const successMessage = saved ? 'Gracias. El servidor confirmó tu calificación.' : null;
+  const summaryLabel = loading ? 'Consultando calificaciones…' : !available ? 'Calificaciones no disponibles' :
+    stats.count === 0 ? 'Sin calificaciones' : stats.average.toFixed(1);
 
   const handleRate = async (star: number) => {
-    if (hasRated || isSubmitting) return;
-
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    try {
-      const res = await submitBusinessRating({
-        businessId,
-        rating: star,
-        visitorId
-      });
-
-      if (res.success) {
-        saveLocalRating(businessId, star);
-        setHasRated(true);
-        setUserRating(star);
-        const newAvg = res.rating !== undefined ? res.rating : star;
-        const newCount = res.reviewCount !== undefined ? res.reviewCount : stats.count + 1;
-        setStats({
-          average: newAvg,
-          count: newCount,
-          distribution: res.stats?.distribution
-        });
-        setSuccessMessage(`¡Gracias! Calificaste con ${star} estrella${star > 1 ? 's' : ''}.`);
-        if (onRatingUpdated) {
-          onRatingUpdated(newAvg, newCount);
-        }
-      } else {
-        if (res.message && res.message.includes('anteriormente')) {
-          saveLocalRating(businessId, star);
-          setHasRated(true);
-        }
-        setErrorMessage(res.message || 'No se pudo guardar la calificación.');
-      }
-    } catch {
-      setErrorMessage('Error al registrar la calificación.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    const result = await rate(star);
+    if (result) onRatingUpdated?.(result.average, result.count);
   };
 
   // Compact variant (e.g. for small headers or cards)
   if (compact) {
     return (
-      <div className="flex items-center gap-1.5 text-xs">
+      <div className="flex items-center gap-1.5 text-xs" role="status">
         <div className="flex items-center text-amber-500">
           <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
           <span className="ml-1 font-bold text-stone-800">
-            {stats.average ? stats.average.toFixed(1) : '5.0'}
+            {summaryLabel}
           </span>
         </div>
+        {errorMessage && <button type="button" onClick={retry}>Reintentar consulta</button>}
         <span className="text-stone-400 font-normal">
-          ({stats.count || 0})
+          {available && !loading ? `(${stats.count})` : ''}
         </span>
       </div>
     );
@@ -142,7 +76,7 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
             <span>Calificación de la Comunidad</span>
           </h4>
           <p className="text-xs text-stone-500">
-            Opiniones de visitantes y clientes de Ciudad del Carmen
+            Calificaciones registradas para este negocio
           </p>
         </div>
 
@@ -156,12 +90,12 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
           <Star className="w-5 h-5 fill-amber-400 text-amber-500" />
           <div className="flex items-baseline gap-1">
             <span className="text-lg font-black text-stone-900">
-              {stats.average ? stats.average.toFixed(1) : '5.0'}
+              {summaryLabel}
             </span>
-            <span className="text-xs text-stone-500 font-medium">/ 5</span>
+            {available && !loading && stats.count > 0 && <span className="text-xs text-stone-500 font-medium">/ 5</span>}
           </div>
           <span className="text-[11px] text-stone-400 ml-1 border-l border-stone-200 pl-2">
-            {stats.count === 1 ? '1 voto' : `${stats.count} votos`}
+            {available && !loading ? (stats.count === 1 ? '1 voto' : `${stats.count} votos`) : ''}
           </span>
         </div>
       </div>
@@ -174,9 +108,9 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
             <div>
               <span>Ya calificaste este negocio con </span>
               <strong className="text-emerald-700 font-bold">
-                {userRating || '5'} estrella{Number(userRating) === 1 ? '' : 's'}
+                {userRating} estrella{Number(userRating) === 1 ? '' : 's'}
               </strong>
-              <span>. ¡Solo se permite un voto por persona para garantizar transparencia!</span>
+              <span>. Voto registrado para este identificador de visitante.</span>
             </div>
           </div>
         ) : (
@@ -205,8 +139,9 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
                 return (
                   <button
                     key={star}
+                    aria-label={`Calificar con ${star} estrellas`}
                     type="button"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || loading || Boolean(errorMessage)}
                     onMouseEnter={() => setHoverRating(star)}
                     onMouseLeave={() => setHoverRating(0)}
                     onClick={() => handleRate(star)}
@@ -237,11 +172,13 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
 
         {/* Error message */}
         {errorMessage && (
-          <div className="text-xs font-medium text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
+          <div role="alert" className="text-xs font-medium text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
             {errorMessage}
+            <button type="button" disabled={isSubmitting || loading} onClick={retry} className="ml-2 underline">Reintentar consulta</button>
           </div>
         )}
       </div>
+      <p className="text-[11px] text-stone-500">El identificador de este navegador ayuda a detectar duplicados; no verifica la identidad de una persona.</p>
     </div>
   );
 };

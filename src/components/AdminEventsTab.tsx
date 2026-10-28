@@ -1496,7 +1496,7 @@ export const AdminEventsTab: React.FC = () => {
                             )}
 
                             {cand.sourceUrl && (() => {
-                              const siteName = resolveSourceSiteName(cand.sourceUrl, cand.source || cand.badge || cand.organizer);
+                              const siteName = resolveSourceSiteName(cand.sourceUrl, cand.badge || cand.organizer);
                               return (
                                 <div className="pt-1.5 flex items-center justify-between gap-2 flex-wrap">
                                   <span className="text-[10px] font-semibold text-purple-200/90 truncate">

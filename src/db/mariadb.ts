@@ -1,4 +1,5 @@
 import mysql from 'mysql2/promise';
+import { createHash, randomUUID } from 'node:crypto';
 
 export interface MariaDbConfig {
   host?: string;
@@ -247,16 +248,8 @@ async function createTablesIfNotExist() {
       \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 
-    `CREATE TABLE IF NOT EXISTS \`business_ratings\` (
-      \`id\` VARCHAR(64) PRIMARY KEY,
-      \`business_id\` VARCHAR(64) NOT NULL,
-      \`rating\` TINYINT NOT NULL,
-      \`visitor_id\` VARCHAR(100) NOT NULL,
-      \`ip\` VARCHAR(50) DEFAULT '',
-      \`comment\` TEXT,
-      \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
-      INDEX idx_biz_visitor (\`business_id\`, \`visitor_id\`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
+    // Ratings schema is deliberately prepared separately: never migrate it at startup.
+
   ];
 
 
@@ -984,3 +977,143 @@ export async function dbSavePortalNotes(notes: { cambios_al_portal: string; fall
   }
 }
 
+
+
+// ENC-REVIEWS-006 RATINGS REPOSITORY START
+export type RatingStats = { average: number; count: number; distribution: Record<number, number> };
+const emptyRatingStats = (): RatingStats => ({ average: 0, count: 0, distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } });
+const ratingsError = (code: string) => Object.assign(new Error(code), { code });
+
+// Injection is for isolated tests; the application uses only the existing pool.
+// No schema creation, catalog writes, IP persistence, or JSON fallback occurs here.
+export function createRatingsRepository(db: Pick<mysql.Pool, 'getConnection'>) {
+  async function verifySchema(connection: any) {
+    const [tables]: any = await connection.query("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'business_ratings'");
+    if (tables.length !== 1 || tables[0].ENGINE !== 'InnoDB') throw ratingsError('RATINGS_SCHEMA_REQUIRED');
+    const [columns]: any = await connection.query('SHOW FULL COLUMNS FROM business_ratings');
+    for (const field of ['id', 'business_id', 'visitor_id', 'rating']) {
+      const column = columns.find((c: any) => c.Field === field);
+      if (!column || column.Null !== 'NO') throw ratingsError('RATINGS_SCHEMA_REQUIRED');
+      const type = String(column.Type).toLowerCase();
+      if (field === 'rating' ? !/^tinyint(?:\(\d+\))?(?: unsigned)?$/.test(type) :
+          !/^(?:var)?char\(\d+\)$/.test(type) || Number(type.match(/\d+/)?.[0]) < 64) throw ratingsError('RATINGS_SCHEMA_REQUIRED');
+    }
+    const [indexes]: any = await connection.query('SHOW INDEX FROM business_ratings');
+    const keys = new Map<string, any[]>();
+    for (const part of indexes) if (Number(part.Non_unique) === 0) {
+      const parts = keys.get(part.Key_name) || []; parts.push(part); keys.set(part.Key_name, parts);
+    }
+    const primary = keys.get('PRIMARY');
+    if (!primary || primary.length !== 1 || primary[0].Column_name !== 'id' || primary[0].Sub_part != null) throw ratingsError('RATINGS_SCHEMA_REQUIRED');
+    if (![...keys.values()].some(parts => parts.length === 2 && parts.every(p => p.Sub_part == null) &&
+      parts.sort((a, b) => a.Seq_in_index - b.Seq_in_index).map(p => p.Column_name).join(',') === 'business_id,visitor_id')) {
+      throw ratingsError('RATINGS_UNIQUE_INDEX_REQUIRED');
+    }
+    // Legacy keys/IDs are never silently converted. The approved migration must settle provenance.
+    const [invalid]: any = await connection.query(`SELECT COUNT(*) AS invalid_count FROM business_ratings r
+      LEFT JOIN businesses b ON r.business_id = b.id
+      WHERE b.id IS NULL OR BINARY r.business_id <> BINARY b.id
+        OR r.business_id = '' OR r.visitor_id IS NULL
+        OR BINARY r.visitor_id NOT REGEXP '^[0-9a-f]{64}$'
+        OR r.rating IS NULL OR r.rating NOT BETWEEN 1 AND 5
+        OR (r.comment IS NOT NULL AND CHAR_LENGTH(r.comment) > 200)`);
+    if (Number(invalid[0]?.invalid_count) !== 0) throw ratingsError('RATINGS_DATA_REVIEW_REQUIRED');
+  }
+  async function canonicalId(connection: any, requestedId: string) {
+    const [rows]: any = await connection.query('SELECT id FROM businesses WHERE id = ? LIMIT 1', [requestedId]);
+    if (rows.length !== 1) throw ratingsError('RATING_BUSINESS_NOT_FOUND');
+    const id = String(rows[0].id);
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) throw ratingsError('RATINGS_BUSINESS_ID_UNSUPPORTED');
+    return id;
+  }
+  async function statsOn(connection: any, businessId?: string): Promise<Record<string, RatingStats>> {
+    const [rows]: any = await connection.query(
+      'SELECT business_id, rating, COUNT(*) AS votes FROM business_ratings' +
+      (businessId === undefined ? '' : ' WHERE business_id = ?') + ' GROUP BY business_id, rating',
+      businessId === undefined ? [] : [businessId]);
+    const stats: Record<string, RatingStats> = Object.create(null);
+    for (const row of rows) {
+      const rating = Number(row.rating), votes = Number(row.votes);
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5 || !Number.isSafeInteger(votes) || votes < 1) throw ratingsError('RATINGS_INVALID_AGGREGATE');
+      const item = stats[String(row.business_id)] ||= emptyRatingStats();
+      item.count += votes; item.average += rating * votes; item.distribution[rating] += votes;
+    }
+    for (const item of Object.values(stats)) item.average = Math.round(item.average / item.count * 10) / 10;
+    return stats;
+  }
+  return {
+    async getAll() {
+      const connection = await db.getConnection();
+      try { await verifySchema(connection); return await statsOn(connection); }
+      finally { connection.release(); }
+    },
+    async getBusiness(requestedId: string, visitorKey: string | null) {
+      const connection = await db.getConnection();
+      let transaction = false, reusable = true;
+      try {
+        await verifySchema(connection);
+        // Single snapshot for aggregate and personal vote; never lock businesses rows.
+        reusable = false; // Do not return a session with pending transaction characteristics.
+        await connection.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        await connection.beginTransaction(); transaction = true; reusable = true;
+        const id = await canonicalId(connection, requestedId);
+        const stats = (await statsOn(connection, id))[id] || emptyRatingStats();
+        const [votes]: any = visitorKey ? await connection.query(
+          'SELECT rating FROM business_ratings WHERE business_id = ? AND visitor_id = ? LIMIT 1', [id, visitorKey]) : [[]];
+        await connection.commit(); transaction = false;
+        return { ...stats, hasRated: votes.length > 0, userRating: votes.length ? Number(votes[0].rating) : null };
+      } catch (error) { if (transaction) { try { await connection.rollback(); } catch { reusable = false; } } throw error; }
+      finally { if (reusable) connection.release(); else connection.destroy(); }
+    },
+    async insert(requestedId: string, visitorKey: string, rating: number, comment: string) {
+      if (!/^[0-9a-f]{64}$/.test(visitorKey) || !Number.isInteger(rating) || rating < 1 || rating > 5 ||
+          comment.length > 200 || /[<>\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(comment)) throw ratingsError('RATINGS_INVALID_INPUT');
+      const connection = await db.getConnection();
+      let lock: string | null = null, transaction = false, reusable = true;
+      try {
+        await verifySchema(connection);
+        const id = await canonicalId(connection, requestedId);
+        const [context]: any = await connection.query('SELECT DATABASE() AS db_name');
+        if (!context[0]?.db_name) throw ratingsError('RATINGS_DATABASE_UNAVAILABLE');
+        const name = 'enc-ratings:' + createHash('sha256').update(String(context[0].db_name) + '\0' + id).digest('hex').slice(0, 48);
+        reusable = false; // A lost acquisition reply may leave a connection-scoped lock behind.
+        const [acquired]: any = await connection.query('SELECT GET_LOCK(?, 5) AS acquired', [name]);
+        if (acquired[0]?.acquired === 0) { reusable = true; throw ratingsError('RATINGS_BUSY'); }
+        if (Number(acquired[0]?.acquired) !== 1) throw ratingsError('RATINGS_BUSY');
+        lock = name; reusable = true;
+        reusable = false; // Do not return a session with pending transaction characteristics.
+        await connection.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        await connection.beginTransaction(); transaction = true; reusable = true;
+        // Recheck the catalog after waiting. This is a read, not a write or FOR UPDATE lock.
+        if (await canonicalId(connection, requestedId) !== id) throw ratingsError('RATINGS_BUSINESS_CHANGED');
+        await connection.query('INSERT INTO business_ratings (id, business_id, rating, visitor_id, comment) VALUES (?, ?, ?, ?, ?)',
+          [randomUUID(), id, rating, visitorKey, comment.trim()]);
+        const stats = (await statsOn(connection, id))[id];
+        if (!stats) throw ratingsError('RATINGS_INVALID_AGGREGATE');
+        await connection.commit(); transaction = false;
+        return stats;
+      } catch (error) {
+        if (transaction) { try { await connection.rollback(); } catch { reusable = false; } }
+        throw error;
+      } finally {
+        if (lock) {
+          try {
+            const [released]: any = await connection.query('SELECT RELEASE_LOCK(?) AS released', [lock]);
+            if (Number(released[0]?.released) !== 1) reusable = false;
+          } catch { reusable = false; }
+        }
+        if (reusable) connection.release(); else connection.destroy();
+      }
+    }
+  };
+}
+function ratingsRepository() {
+  if (!pool) throw ratingsError('RATINGS_DATABASE_UNAVAILABLE');
+  // Fail closed until the coordinator confirms schema/key provenance and enables this feature.
+  if (process.env.RATINGS_SCHEMA_APPROVED !== 'true') throw ratingsError('RATINGS_SCHEMA_APPROVAL_REQUIRED');
+  return createRatingsRepository(pool);
+}
+export async function dbGetRatingStats() { return ratingsRepository().getAll(); }
+export async function dbGetBusinessRating(id: string, visitorKey: string | null) { return ratingsRepository().getBusiness(id, visitorKey); }
+export async function dbInsertRating(id: string, visitorKey: string, rating: number, comment: string) { return ratingsRepository().insert(id, visitorKey, rating, comment); }
+// ENC-REVIEWS-006 RATINGS REPOSITORY END
