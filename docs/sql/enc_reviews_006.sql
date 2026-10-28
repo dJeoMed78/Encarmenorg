@@ -23,6 +23,8 @@
 --    SHA-256 de archivos, acceso restringido y restauración ensayada en instancia
 --    sin conectividad a producción. Los 35.6 MB reportados no prueban restaurabilidad.
 -- 6. Ensayar con misma versión/engine/charset, presupuesto de disco/tiempo y bloqueos;
+--    verificar endpoint escritor único/topología y compatibilidad de GET_LOCK
+--    (no es un bloqueo distribuido ni seguro para statement-based replication);
 --    fijar límites de espera con el operador. No forzar ALGORITHM/LOCK sin ensayo.
 --    DDL hace commit implícito: ROLLBACK no lo deshace. No usar IGNORE ni REPLACE.
 --

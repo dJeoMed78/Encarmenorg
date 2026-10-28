@@ -1053,8 +1053,9 @@ export function createRatingsRepository(db: Pick<mysql.Pool, 'getConnection'>) {
       try {
         await verifySchema(connection);
         // Single snapshot for aggregate and personal vote; never lock businesses rows.
+        reusable = false; // Do not return a session with pending transaction characteristics.
         await connection.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
-        await connection.beginTransaction(); transaction = true;
+        await connection.beginTransaction(); transaction = true; reusable = true;
         const id = await canonicalId(connection, requestedId);
         const stats = (await statsOn(connection, id))[id] || emptyRatingStats();
         const [votes]: any = visitorKey ? await connection.query(
@@ -1080,8 +1081,9 @@ export function createRatingsRepository(db: Pick<mysql.Pool, 'getConnection'>) {
         if (acquired[0]?.acquired === 0) { reusable = true; throw ratingsError('RATINGS_BUSY'); }
         if (Number(acquired[0]?.acquired) !== 1) throw ratingsError('RATINGS_BUSY');
         lock = name; reusable = true;
+        reusable = false; // Do not return a session with pending transaction characteristics.
         await connection.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
-        await connection.beginTransaction(); transaction = true;
+        await connection.beginTransaction(); transaction = true; reusable = true;
         // Recheck the catalog after waiting. This is a read, not a write or FOR UPDATE lock.
         if (await canonicalId(connection, requestedId) !== id) throw ratingsError('RATINGS_BUSINESS_CHANGED');
         await connection.query('INSERT INTO business_ratings (id, business_id, rating, visitor_id, comment) VALUES (?, ?, ?, ?, ?)',

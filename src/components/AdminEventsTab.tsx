@@ -1685,4 +1685,3 @@ export const AdminEventsTab: React.FC = () => {
     </div>
   );
 };
-

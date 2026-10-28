@@ -1975,60 +1975,61 @@ async function refreshBusinessesFromDbIfNeeded() {
 
 // ==========================================
 // BASE DE DATOS Y GESTIÓN DE CALIFICACIONES (1 A 5 ESTRELLAS)
-// Garantiza que un visitante solo pueda calificar una vez por negocio
+// Un voto por identificador auxiliar y negocio; no verifica identidad humana.
 // ==========================================
 // ENC-REVIEWS-006 RATINGS ROUTES START
 export function registerRatingsRoutes(app: Pick<express.Express, 'get' | 'post'>, repository = {
   getAll: dbGetRatingStats, getBusiness: dbGetBusinessRating, insert: dbInsertRating
 }) {
-const validRatingBusinessId = (value: unknown): value is string | number =>
-  (typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value)) ||
-  (typeof value === 'number' && Number.isSafeInteger(value) && value > 0);
-const validRatingVisitor = (value: unknown): value is string =>
-  typeof value === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value);
-const ratingVisitorKey = (visitor: string) => crypto.createHash('sha256').update(visitor).digest('hex');
-const ratingError = (res: Response, error: any) => {
-  const status = error?.code === 'ER_DUP_ENTRY' ? 409 : error?.code === 'RATING_BUSINESS_NOT_FOUND' ? 404 : 503;
-  return res.status(status).json({ success: false, message: status === 409
-    ? 'Ya has calificado este negocio anteriormente. Solo se permite una calificación por visitante para garantizar transparencia.'
-    : status === 404 ? 'Negocio no encontrado.' : 'No fue posible consultar o guardar la calificación. Intenta más tarde.' });
-};
+  const validRatingBusinessId = (value: unknown): value is string | number =>
+    (typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value)) ||
+    (typeof value === 'number' && Number.isSafeInteger(value) && value > 0);
+  const validRatingVisitor = (value: unknown): value is string =>
+    typeof value === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value);
+  const ratingVisitorKey = (visitor: string) => crypto.createHash('sha256').update(visitor).digest('hex');
+  const ratingError = (res: Response, error: any) => {
+    const status = error?.code === 'ER_DUP_ENTRY' ? 409 : error?.code === 'RATING_BUSINESS_NOT_FOUND' ? 404 : 503;
+    return res.status(status).json({ success: false, message: status === 409
+      ? 'Ya existe una calificación para este identificador de visitante en el negocio.'
+      : status === 404 ? 'Negocio no encontrado.' : 'No fue posible consultar o guardar la calificación. Intenta más tarde.' });
+  };
 
-app.get('/api/ratings', async (_req: Request, res: Response) => {
-  try { return res.json({ stats: await repository.getAll() }); }
-  catch (error) { return ratingError(res, error); }
-});
+  app.get('/api/ratings', async (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store');
+    try { return res.json({ stats: await repository.getAll() }); }
+    catch (error) { return ratingError(res, error); }
+  });
 
-app.get('/api/ratings/:businessId', async (req: Request, res: Response) => {
-  const businessId = req.params.businessId;
-  const visitorId = req.query.visitorId;
-  if (!validRatingBusinessId(businessId) || (visitorId !== undefined && visitorId !== '' && !validRatingVisitor(visitorId))) {
-    return res.status(400).json({ success: false, message: 'Identificadores inválidos.' });
-  }
-  try {
-    return res.json(await repository.getBusiness(String(businessId), visitorId ? ratingVisitorKey(String(visitorId)) : null));
-  } catch (error) { return ratingError(res, error); }
-});
+  app.get('/api/ratings/:businessId', async (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const businessId = req.params.businessId;
+    const visitorId = req.query.visitorId;
+    if (!validRatingBusinessId(businessId) || (visitorId !== undefined && visitorId !== '' && !validRatingVisitor(visitorId))) {
+      return res.status(400).json({ success: false, message: 'Identificadores inválidos.' });
+    }
+    try {
+      return res.json(await repository.getBusiness(String(businessId), visitorId ? ratingVisitorKey(String(visitorId)) : null));
+    } catch (error) { return ratingError(res, error); }
+  });
 
-app.post('/api/ratings', async (req: Request, res: Response) => {
-  const { businessId, rating, visitorId, comment } = req.body || {};
-  if (!validRatingBusinessId(businessId) || typeof rating !== 'number' || !Number.isInteger(rating) || rating < 1 || rating > 5 ||
-      !validRatingVisitor(visitorId) || (comment !== undefined && (typeof comment !== 'string' || comment.length > 200))) {
-    return res.status(400).json({ success: false, message: 'Datos inválidos: calificación entera de 1 a 5 y comentario de hasta 200 caracteres.' });
-  }
-  // Store plain text only. Reject markup instead of attempting partial HTML sanitization.
-  if (typeof comment === 'string' && /[<>\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(comment)) {
-    return res.status(400).json({ success: false, message: 'El comentario debe ser texto sin HTML ni caracteres de control.' });
-  }
-  try {
-    const stats = await repository.insert(String(businessId), ratingVisitorKey(visitorId), rating, (comment || '').trim());
-    return res.json({ success: true,
-      message: `¡Muchas gracias! Tu calificación de ${rating} estrella${rating > 1 ? 's' : ''} ha sido registrada exitosamente.`,
-      rating: stats.average, reviewCount: stats.count, stats });
-  } catch (error) { return ratingError(res, error); }
-});
-
-
+  app.post('/api/ratings', async (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const { businessId, rating, visitorId, comment } = req.body || {};
+    if (!validRatingBusinessId(businessId) || typeof rating !== 'number' || !Number.isInteger(rating) || rating < 1 || rating > 5 ||
+        !validRatingVisitor(visitorId) || (comment !== undefined && (typeof comment !== 'string' || comment.length > 200))) {
+      return res.status(400).json({ success: false, message: 'Datos inválidos: calificación entera de 1 a 5 y comentario de hasta 200 caracteres.' });
+    }
+    // Store plain text only. Reject markup instead of attempting partial HTML sanitization.
+    if (typeof comment === 'string' && /[<>\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(comment)) {
+      return res.status(400).json({ success: false, message: 'El comentario debe ser texto sin HTML ni caracteres de control.' });
+    }
+    try {
+      const stats = await repository.insert(String(businessId), ratingVisitorKey(visitorId), rating, (comment || '').trim());
+      return res.json({ success: true,
+        message: `¡Muchas gracias! Tu calificación de ${rating} estrella${rating > 1 ? 's' : ''} ha sido registrada exitosamente.`,
+        rating: stats.average, reviewCount: stats.count, stats });
+    } catch (error) { return ratingError(res, error); }
+  });
 }
 // ENC-REVIEWS-006 RATINGS ROUTES END
 registerRatingsRoutes(app);
@@ -8522,5 +8523,4 @@ if (!process.env.VERCEL) {
 }
 
 export default app;
-
 
