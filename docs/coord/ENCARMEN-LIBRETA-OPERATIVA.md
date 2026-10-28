@@ -52,3 +52,11 @@ Distinguir siempre: **configuración declarada**, **estructura SQL verificada**,
 - **Alcance propuesto, sujeto a aprobación:** comentarios textuales asociados a negocios reales; persistencia en MariaDB; validación, antispam, moderación administrativa, manejo de errores, permisos y presentación responsive en ficha Glass. Evaluar fotografías de comentarios, reportes y políticas de publicación antes de autorizar alcance.
 - **Seguridad:** no crear tablas ni migrar datos ni modificar Staging o producción sin autorización específica; definir controles de privacidad y abuso.
 - **Coordinación:** evitar colisiones con Work en editor Glass y con módulos de calificaciones/Radar. Priorizar tras estabilizar lo ya integrado, salvo autorización de paralelismo en archivos aislados.
+
+### Decisión funcional del propietario — comentarios vinculados a estrellas (2026-10-27)
+- El visitante **primero selecciona estrellas** y luego recibe la **opción de dejar un comentario**, no un sistema independiente en la experiencia de usuario.
+- El comentario es **opcional**: una calificación sin comentario debe ser válida.
+- El comentario, si existe, se asocia al negocio y a la calificación/visitante correspondientes; no duplicar votos por agregar comentarios.
+- Propuesta técnica pendiente de diseño y autorización: moderación previa de texto, controles antispam, privacidad, reglas de edición, y visualización pública de opiniones aprobadas.
+- Revisar el esquema y API actuales antes de decidir migración: la tabla histórica `business_ratings` ya incluye columna `comment`, pero **eso no demuestra que exista el flujo funcional de comentarios ni su moderación**. Reutilizarla si el análisis lo permite, sin asumir cambios de BD.
+- **Estado:** requisito aprobado a nivel de experiencia de usuario; implementación, pruebas e integración pendientes.
