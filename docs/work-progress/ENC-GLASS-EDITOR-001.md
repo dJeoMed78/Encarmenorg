@@ -204,3 +204,7 @@ let checks=0;const pass=s=>{checks++;console.log('PASS',s)};
 ### Rollback y dictamen
 Descartar rama o revertir commits mediante commits normales, sin force push; esta tarea no cambia datos ni requiere rollback SQL. No revertir la integración ajena de calificaciones.
 APTO para revisión de implementación y capturas locales. No validado como reproducción exacta de referencia ni como persistencia real; no integrado ni desplegado. Esperar revisión de coordinación.
+
+## Revisión secuencial sin rediseño — inicio 2026-10-28T12:26:53.790Z
+Instrucción directa: revisar, no sustituir diseño por PR#3. HEAD Work d49ec7004874a0004bf2cf8f03a67bd8b7a89de0; ia actual cad1222618c94f4eb3dabb589b6e58836191dcb7; PR#3 abierto/no integrado. Comparación diverged, Work3 commits propios/10 detrás. Archivos de la rama: solo editor y dos docs. Fuente Work d80a5a83871f129b7c033343be859c5410830cc9 vs ia00eeb741068d731988cf13b6ee49edd12182016b; NO son el mismo editor. Imagen original específica del editor no disponible en esta tarea; referencia de ficha pública no sustituye esa aprobación. No se alterará código ni se hará reemplazo automático.
+Plan: prueba de compatibilidad TypeScript con consumidores actuales en copia aislada, render comparativo sintético y pruebas de callbacks/horarios/contacto/uploads, sin App/servicio/BD/SQL. Findings y recomendaciones documentados únicamente en archivos autorizados. Nueva sección de logo en otra rama NO se copiará ni mezclará con este editor.
