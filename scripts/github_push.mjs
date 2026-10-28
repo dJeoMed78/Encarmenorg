@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { execSync } from 'child_process';
 
 export const OWNER = 'dJeoMed78';
@@ -42,6 +43,15 @@ export class ConcurrencyError extends Error {
     super(message);
     this.name = 'ConcurrencyError';
   }
+}
+
+/**
+ * Calcula el hash SHA-1 canónico de Git para un buffer dado.
+ * Formato: sha1("blob " + size + "\0" + content)
+ */
+export function computeGitBlobSha(buffer) {
+  const header = Buffer.from(`blob ${buffer.length}\0`);
+  return crypto.createHash('sha1').update(Buffer.concat([header, buffer])).digest('hex');
 }
 
 /**
@@ -119,7 +129,7 @@ export function resolveCommitMessage(targetBranch, argv = process.argv, env = pr
 }
 
 /**
- * Validador estricto de archivos en alcance.
+ * Validador estricto de archivos en alcance local.
  * Si existe cualquier archivo modificado fuera de la lista autorizada, se detiene la operación.
  */
 export function verifyAuthorizedFiles(changedFiles, authorizedList = AUTHORIZED_TASK_FILES) {
@@ -140,14 +150,33 @@ export function verifyAuthorizedFiles(changedFiles, authorizedList = AUTHORIZED_
 }
 
 /**
+ * Validador del diff efectivo entre árboles o commits en GitHub.
+ * Asegura que el cambio real que se aplicará en el repositorio contenga única
+ * y exclusivamente archivos autorizados.
+ */
+export function verifyEffectiveDiff(diffFiles, authorizedList = AUTHORIZED_TASK_FILES) {
+  if (!Array.isArray(diffFiles)) {
+    throw new SecurityValidationError("[SECURITY ERROR]: Lista de archivos del diff efectivo inválida.");
+  }
+
+  const unauthorized = diffFiles.filter((file) => !authorizedList.includes(file));
+  if (unauthorized.length > 0) {
+    throw new SecurityValidationError(
+      `[SECURITY ERROR]: El diff efectivo del commit en GitHub contiene archivos no autorizados:\n` +
+      unauthorized.map((f) => `  - ${f}`).join('\n') +
+      `\nArchivos permitidos exclusivamente para esta tarea:\n` +
+      authorizedList.map((f) => `  + ${f}`).join('\n')
+    );
+  }
+
+  return {
+    hasChanges: diffFiles.length > 0,
+    files: diffFiles
+  };
+}
+
+/**
  * Inspección estricta de Git sin retorno silencioso de listas vacías.
- * Detecta:
- * 1. Modificaciones locales no committeadas en el working tree.
- * 2. Modificaciones preparadas en el índice (staged).
- * 3. Archivos no rastreados (untracked) que no sean artefactos transitorios.
- * 4. Cambios incorporados en commits locales anteriores respecto a origin/ia-desarrollo.
- * 
- * Regla: Cualquier fallo o error de ejecución de Git detiene la publicación inmediatamente.
  */
 export function getLocalModifiedFiles(execFn = execSync) {
   try {
@@ -169,7 +198,6 @@ export function getLocalModifiedFiles(execFn = execSync) {
       .map((s) => s.trim())
       .filter((filePath) => {
         if (!filePath) return false;
-        // Filtrar exclusivamente artefactos transitorios generados por el entorno o pruebas
         if (
           filePath.startsWith('.aistudio') ||
           filePath.startsWith('dist/') ||
@@ -202,7 +230,6 @@ export function getLocalModifiedFiles(execFn = execSync) {
     if (err instanceof SecurityValidationError) {
       throw err;
     }
-    // Criterio estricto: ante cualquier falla de Git, detener la publicación inmediatamente.
     throw new SecurityValidationError(
       `[SECURITY ERROR]: Falló la inspección de Git (${err.message}). Publicación abortada para garantizar el alcance.`
     );
@@ -211,13 +238,11 @@ export function getLocalModifiedFiles(execFn = execSync) {
 
 /**
  * Valida que la copia local no esté desactualizada respecto a la referencia remota base.
- * Evita sobreescribir commits remotos con versiones locales obsoletas.
  */
 export function verifyNotBehind(baseCommitSha, execFn = execSync) {
   if (!baseCommitSha) return;
 
   try {
-    // Comprobar si baseCommitSha es ancestro de HEAD o coincide con HEAD
     execFn(`git merge-base --is-ancestor ${baseCommitSha} HEAD`, { stdio: 'pipe' });
   } catch (_) {
     throw new SecurityValidationError(
@@ -274,7 +299,7 @@ export async function ghRequest(endpoint, method = 'GET', body = null, token = p
 }
 
 /**
- * Flujo principal de sincronización con protecciones completas y control de concurrencia.
+ * Flujo principal de sincronización con protecciones completas, validación del árbol real y control de concurrencia.
  */
 export async function run() {
   console.log('[GitHub Push Seguro] Iniciando verificación de seguridad...');
@@ -287,10 +312,10 @@ export async function run() {
   console.log(`[GitHub Push Seguro] Rama destino validada positivamente: '${targetBranch}'`);
   console.log(`[GitHub Push Seguro] Mensaje de commit: "${commitMessage}"`);
 
-  // 2. Verificar alcance de archivos (incluyendo working tree, staged y commits locales previos)
+  // 2. Verificar alcance de archivos locales
   const modifiedFiles = getLocalModifiedFiles();
   verifyAuthorizedFiles(modifiedFiles, AUTHORIZED_TASK_FILES);
-  console.log(`[GitHub Push Seguro] Alcance de archivos validado (${modifiedFiles.length} detectados, todos autorizados).`);
+  console.log(`[GitHub Push Seguro] Alcance de archivos locales validado (${modifiedFiles.length} detectados, todos autorizados).`);
 
   // 3. Inspeccionar el estado de la referencia remota diferenciando HTTP 404 de otros errores
   let baseCommitSha = null;
@@ -308,7 +333,6 @@ export async function run() {
       isNewBranch = true;
       console.log(`[GitHub Push Seguro] Base de creación desde ia-desarrollo: ${baseCommitSha}`);
     } else {
-      // HTTP 401, 403, 429, 500 o fallos de red: DETENER INMEDIATAMENTE
       console.error(`[GitHub Push Seguro] ERROR CRÍTICO al verificar rama remota: ${err.message}`);
       throw err;
     }
@@ -320,22 +344,42 @@ export async function run() {
     console.log(`[GitHub Push Seguro] Árbol local comprobado al día respecto al remoto base (${baseCommitSha.slice(0, 7)}).`);
   }
 
-  // 5. Preparar blobs exclusivamente de los archivos autorizados
+  // 5. Comparar el contenido que se pretende publicar contra el árbol remoto base
   const commitData = await ghRequest(`/git/commits/${baseCommitSha}`);
   const baseTreeSha = commitData.tree.sha;
 
+  // Consultar el árbol remoto base para conocer los blobs existentes
+  const baseTreeData = await ghRequest(`/git/trees/${baseTreeSha}`);
+  const remoteTreeMap = new Map();
+  if (Array.isArray(baseTreeData.tree)) {
+    for (const item of baseTreeData.tree) {
+      remoteTreeMap.set(item.path, item.sha);
+    }
+  }
+
   const treeItems = [];
+  let filesWithDiffCount = 0;
+
   for (const f of AUTHORIZED_TASK_FILES) {
     if (!fs.existsSync(f)) {
       console.warn(`[GitHub Push Seguro] Archivo autorizado omitido por ausencia local: ${f}`);
       continue;
     }
     const buf = fs.readFileSync(f);
+    const localBlobSha = computeGitBlobSha(buf);
+    const remoteBlobSha = remoteTreeMap.get(f);
+
+    if (remoteBlobSha === localBlobSha) {
+      console.log(`[GitHub Push Seguro] Archivo sin cambios efectivos respecto al árbol remoto: ${f} (${localBlobSha.slice(0, 7)})`);
+    } else {
+      filesWithDiffCount++;
+      console.log(`[GitHub Push Seguro] Cambio efectivo detectado en ${f}: remoto=${remoteBlobSha ? remoteBlobSha.slice(0, 7) : 'nuevo'} -> local=${localBlobSha.slice(0, 7)}`);
+    }
+
     const blobRes = await ghRequest('/git/blobs', 'POST', {
       content: buf.toString('base64'),
       encoding: 'base64'
     });
-    console.log(`[GitHub Push Seguro] Blob creado para ${f} (${blobRes.sha.slice(0, 7)})`);
     treeItems.push({
       path: f,
       mode: '100644',
@@ -344,18 +388,26 @@ export async function run() {
     });
   }
 
-  if (treeItems.length === 0) {
-    console.log('[GitHub Push Seguro] No hay archivos autorizados para subir.');
-    return;
+  // Regla: si no hay diferencias efectivas entre el contenido local y el árbol remoto, evitar commit redundante
+  if (filesWithDiffCount === 0) {
+    console.log('[GitHub Push Seguro] Ninguno de los archivos autorizados presenta cambios respecto al árbol base.');
+    console.log('[GitHub Push Seguro] Operación completada: no se crean commits innecesarios con diff vacío.');
+    return { created: false, reason: 'empty_diff' };
   }
 
-  // 6. Crear el árbol y el nuevo commit
+  // 6. Crear el nuevo árbol
   const newTree = await ghRequest('/git/trees', 'POST', {
     base_tree: baseTreeSha,
     tree: treeItems
   });
   console.log(`[GitHub Push Seguro] Árbol creado: ${newTree.sha}`);
 
+  if (newTree.sha === baseTreeSha) {
+    console.log('[GitHub Push Seguro] El árbol generado es idéntico al árbol base remoto. Operación completada sin crear commit.');
+    return { created: false, reason: 'identical_tree' };
+  }
+
+  // 7. Crear el commit candidato
   const newCommit = await ghRequest('/git/commits', 'POST', {
     message: commitMessage,
     tree: newTree.sha,
@@ -366,9 +418,20 @@ export async function run() {
       date: new Date().toISOString()
     }
   });
-  console.log(`[GitHub Push Seguro] Commit creado: ${newCommit.sha}`);
+  console.log(`[GitHub Push Seguro] Commit candidato creado: ${newCommit.sha}`);
 
-  // 7. Actualización con control de concurrencia y force: false
+  // 8. Validación final del diff efectivo antes de actualizar cualquier referencia remota
+  const compareData = await ghRequest(`/compare/${baseCommitSha}...${newCommit.sha}`);
+  const effectiveDiffFiles = Array.isArray(compareData.files) ? compareData.files.map((cf) => cf.filename) : [];
+
+  const diffValidation = verifyEffectiveDiff(effectiveDiffFiles, AUTHORIZED_TASK_FILES);
+  if (!diffValidation.hasChanges) {
+    console.log('[GitHub Push Seguro] La comparación contra el commit base indica diff vacío. No se actualiza la referencia.');
+    return { created: false, reason: 'empty_compare_diff' };
+  }
+  console.log(`[GitHub Push Seguro] Diff efectivo en GitHub validado positivamente: [${effectiveDiffFiles.join(', ')}].`);
+
+  // 9. Actualización con control de concurrencia y force: false
   if (isNewBranch) {
     const createdRef = await ghRequest('/git/refs', 'POST', {
       ref: `refs/heads/${targetBranch}`,
@@ -382,19 +445,18 @@ export async function run() {
       throw new ConcurrencyError(
         `[CONCURRENCY ERROR]: La rama remota '${targetBranch}' fue modificada concurrentemente ` +
         `(esperado: ${baseCommitSha}, actual: ${verifyRef.object.sha}). ` +
-        `Operación abortada para evitar sobreescritura de cambios de otros trabajadores.`
+        `Operación abortada para evitar sobreescritura de cambios ajenos.`
       );
     }
 
     // Control de concurrencia Nivel 2: PATCH con force: false
-    // Nota técnica: Si otro cliente actualizó la rama inmediatamente antes de esta llamada,
-    // GitHub devolverá HTTP 422 ("Update is not a fast forward").
     try {
       const updatedRef = await ghRequest(`/git/refs/heads/${targetBranch}`, 'PATCH', {
         sha: newCommit.sha,
         force: false
       });
       console.log(`[GitHub Push Seguro] ¡Rama '${targetBranch}' actualizada a ${updatedRef.object.sha} (Fast-forward, sin force)!`);
+      return { created: true, sha: updatedRef.object.sha };
     } catch (patchErr) {
       if (patchErr instanceof GitHubApiError && patchErr.status === 422) {
         throw new ConcurrencyError(

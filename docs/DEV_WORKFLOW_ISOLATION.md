@@ -1,6 +1,6 @@
 # Protocolo de Aislamiento de Desarrollo — Google AI Studio (Trabajador 04)
 
-**Identificador de Tarea:** `ENC-GOOGLE-DEV-ISOLATION-001-R2`  
+**Identificador de Tarea:** `ENC-GOOGLE-DEV-ISOLATION-001-R3`  
 **Repositorio Oficial:** `dJeoMed78/Encarmenorg`  
 **Coordinación Principal:** ChatGPT — 01  
 **Ejecutor:** Google AI Studio — 04  
@@ -38,13 +38,13 @@
   - El desarrollo debe limitarse a lecturas seguras o emulaciones locales en memoria/JSON.
 
 ### 2.4 Invalidación de Caché (Cloudflare / LiteSpeed)
-- En `scripts/update_version.cjs`, se suprimió la emisión de llamadas `PURGE` automáticas hacia `encarmen.org` durante compilaciones de desarrollo/staging.
+- En `scripts/update_version.cjs`, se confirmó la ausencia de emisión de llamadas `PURGE` automáticas hacia `encarmen.org` durante compilaciones de desarrollo/staging.
 
 ---
 
 ## 3. Comportamiento y Reglas de `scripts/github_push.mjs`
 
-El script `scripts/github_push.mjs` implementa los siguientes controles estrictos:
+El script `scripts/github_push.mjs` implementa los siguientes controles estrictos de seguridad y alcance:
 
 1. **Sin excepciones ni bypass:**  
    No existe ninguna variable de entorno que permita eludir las protecciones. Si se detecta la presencia de `ALLOW_PROTECTED_PUSH` en el entorno, la ejecución aborta inmediatamente con `SecurityValidationError`.
@@ -55,7 +55,7 @@ El script `scripts/github_push.mjs` implementa los siguientes controles estricto
    *Nota importante:* El script está bloqueado intencionalmente para esta tarea específica; **no es un mecanismo general de publicación para otras tareas** sin previa autorización y ajuste por Coordinación.
 4. **Manejo diferenciado de códigos de estado HTTP:**  
    Solo el código HTTP 404 (Not Found) se interpreta como ausencia de la rama en el remoto. Errores HTTP 401 (no autorizado), 403 (permisos/límite de tasa), 429 (límite de peticiones), 500 (error del servidor) o fallas de red detienen la operación inmediatamente sin asumir un estado remoto inexistente.
-5. **Inspección de alcance de archivos estricta (sin retorno silencioso):**  
+5. **Inspección de alcance de archivos locales (sin retorno silencioso):**  
    - La función `getLocalModifiedFiles()` inspecciona:
      a) Cambios en working tree no committeados (`git diff --name-only HEAD`).
      b) Cambios preparados en el índice (`git diff --cached --name-only`).
@@ -63,31 +63,31 @@ El script `scripts/github_push.mjs` implementa los siguientes controles estricto
      d) Cambios incorporados en commits locales anteriores respecto a `origin/ia-desarrollo`.
    - **Criterio estricto:** Cualquier error en la ejecución de comandos Git aborta inmediatamente la publicación; nunca devuelve listas vacías ni asume éxito ante fallos.
    - Si se detecta cualquier archivo fuera de la lista autorizada (`scripts/github_push.mjs` y `docs/DEV_WORKFLOW_ISOLATION.md`), la publicación es rechazada de inmediato.
-6. **Validación contra versiones locales obsoletas:**  
+6. **Validación del contenido real del árbol y diff efectivo en GitHub:**  
+   - Antes de actualizar la referencia remota, se compara el contenido contra el árbol base remoto:
+     a) Se computa el hash canónico de Git (`computeGitBlobSha`) de cada archivo autorizado y se compara contra los blobs del árbol base remoto.
+     b) Si no hay cambios efectivos (o `newTree.sha === baseTreeSha`), la operación se detiene para evitar commits innecesarios o redundantes.
+     c) Tras generar el commit candidato, se invoca la API de comparación de GitHub (`/compare/${baseCommitSha}...${newCommit.sha}`) y la función `verifyEffectiveDiff` comprueba que el diff real contenga única y exclusivamente archivos de la lista autorizada.
+7. **Validación contra versiones locales obsoletas:**  
    Mediante `verifyNotBehind(baseCommitSha)`, el script comprueba que el commit remoto base sea ancestro de la copia local (`git merge-base --is-ancestor`). Si la copia local está desactualizada respecto al remoto, aborta la operación para impedir sobreescrituras con código obsoleto.
-7. **Control de concurrencia y limitaciones técnicas:**  
+8. **Control de concurrencia y limitaciones técnicas:**  
    - **Nivel 1 (Pre-verificación):** Antes de enviar el `PATCH`, se re-consulta el SHA remoto de la rama. Si cambió respecto a la lectura inicial, aborta con `ConcurrencyError`.
    - **Nivel 2 (Fast-forward garantizado):** La llamada `PATCH` utiliza obligatoriamente `force: false`. Si la rama remota divergió, GitHub rechaza la solicitud con HTTP 422 ("Update is not a fast forward").
    - **Limitación técnica documentada:** La API REST de GitHub Database (`/git/refs`) no proporciona encabezados de condición atómica (Compare-And-Swap / ETag / If-Match). Por tanto, aunque el doble nivel previene sobreescrituras no fast-forward y detecta desfases concurrentes, no es posible afirmar una atomicidad matemática absoluta en el transporte HTTP REST.
 
 ---
 
-## 4. Procedimiento de Ejecución y Comandos Reales Disponibles
+## 4. Procedimiento de Publicación Autorizado
 
-### Auditoría de `package.json`
-- Se auditó el archivo `package.json` en la raíz del proyecto.
-- **Resultado confirmado:** El script `"push:github"` **NO existe** en `package.json`. No está permitida la modificación de `package.json` sin autorización de Coordinación.
-- Por tanto, **NO debe invocarse `npm run push:github`**.
+### Exclusividad del Script Protegido
+- **`git push` convencional NO es un sustituto ni alternativa válida:**  
+  Un comando `git push` estándar interactúa con el protocolo Git sin ejecutar las validaciones positivas de rama, el cálculo de diff efectivo sobre el árbol remoto ni las barreras de alcance implementadas en este protocolo. Por ello, **queda prohibido el uso de `git push` directo como método de publicación de la tarea**.
 
-### Comandos Reales y Disponibles
-Para publicar dentro de la rama autorizada:
+### Comando Único Autorizado
+La publicación de los cambios autorizados para esta tarea debe ejecutarse exclusivamente mediante:
 
 ```bash
-# Invocación directa mediante Node.js:
-node scripts/github_push.mjs work/ENC-GOOGLE-DEV-ISOLATION-001 "feat(isolation): descripción del cambio"
-
-# O publicación estándar mediante Git CLI (autenticado):
-git push origin work/ENC-GOOGLE-DEV-ISOLATION-001
+node scripts/github_push.mjs work/ENC-GOOGLE-DEV-ISOLATION-001 "feat(isolation): descripción clara"
 ```
 
-Cualquier invocación sin argumentos o hacia otra rama resultará en la terminación inmediata del proceso.
+Cualquier invocación sin argumentos, hacia otra rama o con archivos fuera del alcance autorizado resultará en la detención inmediata del proceso sin alterar el repositorio remoto.
