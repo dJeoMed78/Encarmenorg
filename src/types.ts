@@ -20,6 +20,8 @@ export interface Business {
   facebook?: string;
   instagram?: string;
   image: string;
+  /** Independent company logo, preserved by the existing raw_data contract. */
+  logo_url?: string;
   imageUrl?: string;
   gallery?: string[];
   subcategory?: string;
@@ -318,3 +320,4 @@ export interface AutoBusinessCandidate {
   matchedExistingName?: string;
   status?: 'pending' | 'accepted' | 'rejected' | 'modified';
 }
+

@@ -624,3 +624,30 @@
     transition: none !important;
   }
 }
+
+/* Map region only; preserve approved identity position and public grid. */
+.bpd-map-container {
+  margin-bottom: 10px;
+  min-width: 0;
+}
+.bpd-map-container .bpd-map {
+  margin-bottom: 0;
+  padding: 10px;
+}
+.bpd-map-container small {
+  font-size: 10px;
+  line-height: 1.4;
+  color: #52677e;
+}
+.bpd-map-container button {
+  font-size: 11px;
+  padding: 8px;
+}
+.bpd-map-embed {
+  display: block;
+  width: 100%;
+  height: 220px;
+  border: 0;
+  border-radius: 13px;
+  background: #e8f0f3;
+}

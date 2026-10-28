@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
   Building2,
@@ -28,9 +28,7 @@ import {
 } from 'lucide-react';
 import { Business, Category } from '../types';
 import { uploadBusinessLogo } from '../services/api';
-import { cleanPhoneNumber } from '../utils/phone';
 import { formatBusinessName, formatAddressText } from '../utils/textUtils';
-import { DELIVERY_OPTIONS, normalizeDeliveryOption } from '../constants/delivery';
 import {
   ALL_POSTAL_CODES,
   getPostalCodeForColonia,
@@ -63,6 +61,76 @@ function ensureString(val: any, fallback = ''): string {
   if (typeof val === 'string') return val;
   if (val === null || val === undefined) return fallback;
   return String(val);
+}
+
+const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const fold = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+function splitOptions(value: string, options: string[]) {
+  const selected: string[] = [],
+    extra: string[] = [];
+  for (const part of value
+    .split(/[,;]/)
+    .map((v) => v.trim())
+    .filter(Boolean)) {
+    const match = options.find((opt) => fold(opt) === fold(part));
+    if (match) {
+      if (!selected.includes(match)) selected.push(match);
+    } else extra.push(part);
+  }
+  return { selected, extra };
+}
+function contactNumber(value: string) {
+  let raw = value.trim();
+  try {
+    if (/^https?:/i.test(raw)) {
+      const url = new URL(raw);
+      if (url.hostname === 'wa.me') raw = url.pathname.replace(/^\//, '');
+      else if (
+        ['api.whatsapp.com', 'wa.me', 'web.whatsapp.com'].includes(url.hostname)
+      )
+        raw = url.searchParams.get('phone') || '';
+      else return '';
+    }
+  } catch {
+    return '';
+  }
+  raw = raw.replace(/^tel:/i, '');
+  if (!/^[\d\s()+-]+$/.test(raw)) return '';
+  let digits = raw.replace(/\D/g, '');
+  if (digits.length === 13 && digits.startsWith('521'))
+    digits = digits.slice(3);
+  else if (digits.length === 12 && digits.startsWith('52'))
+    digits = digits.slice(2);
+  return digits.length === 10 ? digits : '';
+}
+function parseWeek(value: string) {
+  const empty = { days: DAYS.map(() => false), open: '', close: '' };
+  const match = value
+    .trim()
+    .match(/^(.+?)\s+(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})$/);
+  if (
+    !match ||
+    ![match[2], match[3]].every((t) => /^(?:[01]?\d|2[0-3]):[0-5]\d$/.test(t))
+  )
+    return empty;
+  const prefix = fold(match[1]);
+  let days: boolean[];
+  if (/^lunes a viernes$/.test(prefix))
+    days = [true, true, true, true, true, false, false];
+  else if (/^lunes a sabado$/.test(prefix))
+    days = [true, true, true, true, true, true, false];
+  else {
+    const names = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo'];
+    const tokens = prefix.split(',').map(s => { const token=s.trim(); const index=names.indexOf(token); return index < 0 ? token : fold(DAYS[index]); });
+    if (!tokens.every((s) => DAYS.some((d) => fold(d) === s))) return empty;
+    days = DAYS.map((d) => tokens.includes(fold(d)));
+  }
+  return { days, open: match[2].padStart(5, '0'), close: match[3].padStart(5, '0') };
 }
 
 class ModalErrorBoundary extends React.Component<
@@ -109,6 +177,12 @@ class ModalErrorBoundary extends React.Component<
   }
 }
 
+function safeCompanyLogo(value:unknown):string|undefined{if(value==='')return '';if(typeof value!=='string'||!value||value.length>2048||(!value.startsWith('/')&&!/^https?:\/\//i.test(value)))return;try{const u=new URL(value,window.location.origin);if(['http:','https:'].includes(u.protocol)&&!u.username&&!u.password)return value;}catch{}}
+async function serverAllowsCompanyLogo(signal?:AbortSignal):Promise<boolean>{
+  const controller=new AbortController(),abort=()=>controller.abort();if(signal?.aborted)controller.abort();signal?.addEventListener('abort',abort,{once:true});const timer=setTimeout(abort,5000);
+  try{const token=sessionStorage.getItem('encarmen_admin_session_token')||'';if(!/^[0-9a-f]{64}$/.test(token))return false;const response=await fetch('/api/admin/session',{cache:'no-store',headers:{'X-Encarmen-Admin-Token':token},signal:controller.signal});const data=await response.json();return response.ok&&data.success===true&&Number.isFinite(data.expiresAt)&&data.expiresAt>Date.now()&&Array.isArray(data.permissions)&&data.permissions.includes('business:manage');}catch{return false;}finally{clearTimeout(timer);signal?.removeEventListener('abort',abort);}
+}
+
 interface EditBusinessModalProps {
   business: Business | null;
   isOpen: boolean;
@@ -141,6 +215,36 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isUploadingGallery, setIsUploadingGallery] = useState(false);
+  const [logoAllowed, setLogoAllowed] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [logoPreviewFailed, setLogoPreviewFailed] = useState(false);
+  const initialDraft = useRef<Partial<Business>>({});
+  const originalBusiness = useRef<Business | null>(null);
+  const saveBusy = useRef(false), uploadBusy = useRef(false), version = useRef(0);
+  const activeKey = `${isOpen}:${business?.id ?? ''}`;
+  const currentKey = useRef(activeKey);
+  currentKey.current = activeKey;
+  useEffect(() => {
+    version.current++;
+    saveBusy.current = false;
+    uploadBusy.current = false;
+    setIsSaving(false);
+    setIsUploadingPhoto(false);
+    setIsUploadingGallery(false);
+    setIsUploadingLogo(false);
+    return () => { version.current++; };
+  }, [isOpen, business?.id]);
+  const validOperation = (v: number, key: string) => version.current === v && currentKey.current === key;
+  useEffect(() => {
+    const controller = new AbortController(), v = version.current, key = activeKey;
+    setLogoAllowed(false);
+    if (isOpen && business) void serverAllowsCompanyLogo(controller.signal).then(allowed => {
+      if (!controller.signal.aborted && validOperation(v, key)) setLogoAllowed(allowed);
+    });
+    return () => controller.abort();
+  }, [isOpen, business?.id]);
+  useEffect(() => setLogoPreviewFailed(false), [formData.logo_url]);
+  const requestClose = () => { if (!saveBusy.current && !uploadBusy.current) onClose(); };
 
   // Lista plana y exhaustiva de todas las categorías y subcategorías disponibles en el sistema (Falla 13)
   const allAvailableCategories = useMemo(() => {
@@ -192,47 +296,10 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         const initialCp = (typeof business.postalCode === 'string' && business.postalCode) || getPostalCodeForColonia(initialCol);
         setPostalCode(initialCp);
 
-        // Parse existing delivery into multi-select
-        const rawDel = ensureString(business.delivery).trim();
-        const rawDelLow = rawDel.toLowerCase();
-        const existingParts = rawDel ? rawDel.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
-        const initialDel = STANDARDIZED_DELIVERY_OPTIONS.filter(opt => {
-          const oLow = opt.toLowerCase();
-          // Exact match with whole string or part
-          if (existingParts.some(p => p === oLow || p.includes(oLow)) || rawDelLow.includes(oLow)) return true;
-          // Specific semantic match per option
-          if (opt === 'Atención en el Local de la empresa') {
-            return existingParts.some(p => (p.includes('local') && !p.includes('paqueter')) || p.includes('mostrador') || p.includes('sucursal') || p.includes('tienda'));
-          }
-          if (opt === 'Servicio a domicilio gratis') {
-            return existingParts.some(p => p.includes('gratis') || p.includes('sin costo'));
-          }
-          if (opt === 'Servicio a domicilio con costo') {
-            return existingParts.some(p => p.includes('con costo') || p.includes('costo') || p.includes('mandadito') || (p.includes('domicilio') && !p.includes('gratis') && !p.includes('cliente')));
-          }
-          if (opt === 'Servicio a domicilio en el lugar del cliente') {
-            return existingParts.some(p => p.includes('lugar del cliente') || p.includes('en sitio') || p.includes('a domicilio en el lugar'));
-          }
-          if (opt === 'Envíos por paquetería local y foránea') {
-            return existingParts.some(p => p.includes('paqueter') || p.includes('foráneo') || p.includes('foranea') || (p.includes('envío') && !p.includes('domicilio')));
-          }
-          return false;
-        });
-        const parsedDel = initialDel.length > 0 ? initialDel : ['Atención en el Local de la empresa'];
+        // Project recognized choices without inventing defaults or rewriting legacy text.
+        const parsedDel = splitOptions(ensureString(business.delivery), STANDARDIZED_DELIVERY_OPTIONS).selected;
+        const parsedPay = splitOptions(ensureString(business.payment), STANDARDIZED_PAYMENT_OPTIONS).selected;
         setSelectedDeliveryOptions(parsedDel);
-
-        // Parse existing payments into multi-select
-        const rawPay = ensureString(business.payment).toLowerCase();
-        const initialPay = STANDARDIZED_PAYMENT_OPTIONS.filter(opt => {
-          const oLow = opt.toLowerCase();
-          if (oLow.includes('efectivo') && rawPay.includes('efectivo')) return true;
-          if (oLow.includes('tarjeta') && rawPay.includes('tarjeta')) return true;
-          if (oLow.includes('transferencia') && (rawPay.includes('transferencia') || rawPay.includes('spei'))) return true;
-          if (oLow.includes('codi') && rawPay.includes('codi')) return true;
-          if (oLow.includes('contra entrega') && rawPay.includes('contra entrega')) return true;
-          return false;
-        });
-        const parsedPay = initialPay.length > 0 ? initialPay : ['Efectivo', 'Transferencia Bancaria (SPEI)'];
         setSelectedPaymentOptions(parsedPay);
 
         const safeCats = ensureArray(business.categories);
@@ -240,38 +307,39 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         const safePrevNames = ensureArray(business.previousNames);
         const safeGallery = ensureArray(business.gallery);
 
-        setFormData({
+        const loadedFields: Partial<Business> = {
           name: ensureString(business.name),
           category: safeCats[0] || ensureString(business.category, 'Servicios'),
           categories: safeCats.length > 0 ? safeCats : [ensureString(business.category, 'Servicios')],
           description: ensureString(business.description),
-          phone: cleanPhoneNumber(ensureString(business.phone)) || '',
-          whatsapp: cleanPhoneNumber(ensureString(business.whatsapp)) || cleanPhoneNumber(ensureString(business.phone)) || '',
+          phone: ensureString(business.phone),
+          whatsapp: ensureString(business.whatsapp),
           address: ensureString(business.address),
           colonia: initialCol,
           postalCode: initialCp,
-          schedule: ensureString(business.schedule, 'Lunes a Sábado'),
-          payment: parsedPay.join(', '),
-          delivery: parsedDel.join(', '),
+          schedule: ensureString(business.schedule),
+          payment: ensureString(business.payment),
+          delivery: ensureString(business.delivery),
           hasDelivery: parsedDel.some(d => d.toLowerCase().includes('domicilio') || d.toLowerCase().includes('envío')),
           facebook: ensureString(business.facebook),
           instagram: ensureString(business.instagram),
           website: ensureString(business.website),
           image: ensureString(business.image),
+          logo_url: ensureString(business.logo_url),
           gallery: safeGallery,
           slug: ensureString(business.slug),
           previousSlugs: safePrevSlugs,
           previousNames: safePrevNames,
           isRecommended: Boolean(business.isRecommended),
           isTopBusiness: Boolean(business.isTopBusiness)
-        });
-        const schedule = ensureString(business.schedule,'Lunes a Sábado');
-        const normalized = schedule.toLowerCase();
-        const days=['lun','mar','mié','jue','vie','sáb','dom'];
-        const times=schedule.match(/\\d{1,2}:\\d{2}/g);
-        setWeeklyDays(/lunes a s[aá]bado/i.test(schedule)?[true,true,true,true,true,true,false]:/lunes a viernes/i.test(schedule)?[true,true,true,true,true,false,false]:days.some(d=>normalized.includes(d))?days.map(d=>normalized.includes(d)):[true,true,true,true,true,true,false]);
-        setOpeningTime(times?.[0] || '08:00');
-        setClosingTime(times?.[1] || '18:00');
+        };
+        initialDraft.current = loadedFields;
+        originalBusiness.current = business;
+        setFormData(loadedFields);
+        const week = parseWeek(ensureString(business.schedule));
+        setWeeklyDays(week.days);
+        setOpeningTime(week.open);
+        setClosingTime(week.close);
         setWeeklyEdited(false);
         setErrorMsg(null);
         setSuccessMsg(null);
@@ -279,135 +347,122 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         console.error('Error initializing EditBusinessModal:', err);
       }
     }
-  }, [business, isOpen]);
+  }, [business?.id, isOpen]);
 
   if (!isOpen || !business) return null;
 
-  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    const currentGallery = (formData.gallery || []) as string[];
-    const available = 10 - currentGallery.length;
-    if (available <= 0) {
-      setErrorMsg('Límite de 10 fotos alcanzado.');
+  const changed = (key: keyof Business) => JSON.stringify(formData[key]) !== JSON.stringify(initialDraft.current[key]);
+  const upload = async (event: React.ChangeEvent<HTMLInputElement>, gallery: boolean, companyLogo = false) => {
+    const input = event.currentTarget, files = Array.from(input.files || []);
+    input.value = '';
+    if (!files.length || saveBusy.current || uploadBusy.current) return;
+    if (companyLogo && !logoAllowed) { setErrorMsg('El logotipo requiere sesión administrativa verificada.'); return; }
+    if (files.length > (gallery ? 10 - (formData.gallery?.length || 0) : 1)) {
+      setErrorMsg('La galería admite hasta 10 fotos. No se reemplazaron las existentes.');
       return;
     }
-
-    setIsUploadingGallery(true);
+    if (files.some(file => !(companyLogo ? /^image\/(jpeg|png|webp)$/ : /^image\/(jpeg|png|webp|gif)$/).test(file.type) || file.size > 5 * 1024 * 1024)) {
+      setErrorMsg('Elige imágenes JPG, PNG, WebP o GIF de hasta 5 MB.');
+      return;
+    }
+    uploadBusy.current = true;
+    if (companyLogo) setIsUploadingLogo(true);
+    else if (gallery) setIsUploadingGallery(true);
+    else setIsUploadingPhoto(true);
     setErrorMsg(null);
-
+    const v = version.current, key = activeKey;
     try {
-      const newUrls: string[] = [];
-      for (const file of files.slice(0, available)) {
-        const base64 = await new Promise<string>((resolve) => {
+      if (companyLogo && !await serverAllowsCompanyLogo()) { setLogoAllowed(false); throw new Error('La sesión no permite cambiar el logotipo.'); }
+      if (!validOperation(v, key)) return;
+      const urls: string[] = [];
+      for (const file of files) {
+        const data = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
+          reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('No fue posible leer la imagen.'));
+          reader.onerror = reader.onabort = () => reject(new Error('No fue posible leer la imagen.'));
           reader.readAsDataURL(file);
         });
-
-        try {
-          const res = await uploadBusinessLogo(base64, file.name);
-          if (res.success && res.url) {
-            newUrls.push(res.url);
-          } else {
-            newUrls.push(base64);
-          }
-        } catch {
-          newUrls.push(base64);
-        }
+        if (!validOperation(v, key)) return;
+        const response = await uploadBusinessLogo(data, file.name);
+        if (!validOperation(v, key)) return;
+        // Shared helper can return success + dataURI after HTTP503; that is not a remote upload.
+        const url = response?.url;
+        if (response?.success !== true || !url || !/^(?:https?:\/\/|\/(?!\/))/.test(url))
+          throw new Error('No se confirmó la carga de la imagen en el servidor. Intenta de nuevo.');
+        const parsed = new URL(url, window.location.origin);
+        if (parsed.username || parsed.password) throw new Error('La URL de imagen no es válida.');
+        urls.push(url);
       }
-
-      setFormData(prev => ({
-        ...prev,
-        gallery: [...(prev.gallery || []), ...newUrls].slice(0, 10)
-      }));
-    } catch (err) {
-      console.error('Error uploading gallery:', err);
+      if (validOperation(v, key)) setFormData(prev => companyLogo ? {...prev, logo_url: urls[0]} : gallery ? {...prev, gallery: [...(prev.gallery || []), ...urls]} : {...prev, image: urls[0]});
+    } catch (failure) {
+      if (validOperation(v, key)) setErrorMsg(failure instanceof Error ? failure.message : 'No fue posible cargar las imágenes.');
     } finally {
-      setIsUploadingGallery(false);
-      e.target.value = '';
-    }
-  };
-
-  const handleRemoveGalleryPhoto = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      gallery: (prev.gallery || []).filter((_, i) => i !== index)
-    }));
-  };
-
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMsg('La imagen no debe superar los 5MB.');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const base64Data = reader.result as string;
-      setIsUploadingPhoto(true);
-      try {
-        const uploadRes = await uploadBusinessLogo(base64Data, file.name);
-        if (uploadRes.success && uploadRes.url) {
-          setFormData(prev => ({ ...prev, image: uploadRes.url! }));
-        } else {
-          setFormData(prev => ({ ...prev, image: base64Data }));
-        }
-      } catch {
-        setFormData(prev => ({ ...prev, image: base64Data }));
-      } finally {
+      if (validOperation(v, key)) {
+        uploadBusy.current = false;
+        setIsUploadingGallery(false);
         setIsUploadingPhoto(false);
+        setIsUploadingLogo(false);
       }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name?.trim()) {
-      setErrorMsg('El nombre de la empresa es obligatorio.');
-      return;
     }
+  };
+  const handleGalleryUpload = (event: React.ChangeEvent<HTMLInputElement>) => upload(event, true);
+  const handleCompanyLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => upload(event, false, true);
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => upload(event, false);
+  const handleRemoveGalleryPhoto = (index: number) => {
+    if (!saveBusy.current && !uploadBusy.current) setFormData(prev => ({...prev, gallery: (prev.gallery || []).filter((_, i) => i !== index)}));
+  };
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (saveBusy.current || uploadBusy.current || !originalBusiness.current) return;
+    if (!formData.name?.trim()) { setErrorMsg('El nombre de la empresa es obligatorio.'); return; }
+    const phone = contactNumber(formData.phone || ''), whatsapp = contactNumber(formData.whatsapp || '');
+    if (!phone && !whatsapp) { setErrorMsg('Ingresa al menos un teléfono o WhatsApp válido de 10 dígitos.'); return; }
+    for (const [key, clean] of [['phone', phone], ['whatsapp', whatsapp]] as const) {
+      if (changed(key) && formData[key]?.trim() && !clean) {
+        setErrorMsg(`${key === 'phone' ? 'El teléfono' : 'WhatsApp'} debe contener 10 dígitos; también se acepta +52.`);
+        return;
+      }
+    }
+    if (weeklyEdited && (!weeklyDays.some(Boolean) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(openingTime) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(closingTime) || openingTime === closingTime)) {
+      setErrorMsg('Selecciona al menos un día y horas de apertura/cierre válidas y distintas.'); return;
+    }
+    if (changed('logo_url') && safeCompanyLogo(formData.logo_url) === undefined) { setErrorMsg('El logotipo debe tener una URL válida confirmada por el servidor.'); return; }
+    const payload: Partial<Business> = {};
+    for (const key of Object.keys(formData) as (keyof Business)[]) {
+      if (changed(key) && !['previousNames', 'previousSlugs', 'hasDelivery', 'categories', 'schedule', 'slug', 'isTopBusiness', 'isRecommended'].includes(key))
+        Object.assign(payload, {[key]: formData[key]});
+    }
+    if (changed('name')) payload.name = formatBusinessName(formData.name.trim());
+    if (changed('address')) payload.address = formatAddressText(formData.address || '');
+    if (changed('phone')) payload.phone = formData.phone?.trim() ? phone : '';
+    if (changed('whatsapp')) payload.whatsapp = formData.whatsapp?.trim() ? whatsapp : '';
+    if (changed('category')) payload.categories = [formData.category || '', ...ensureArray(originalBusiness.current.categories).filter(c => c !== initialDraft.current.category && c !== formData.category)].filter(Boolean);
+    if (changed('delivery')) payload.hasDelivery = /domicilio|cliente|env[ií]o|paqueter/i.test(formData.delivery || '');
+    if (weeklyEdited) payload.schedule = DAYS.filter((_, i) => weeklyDays[i]).join(', ') + ` ${openingTime} - ${closingTime}`;
+    if (isAdmin) {
+      if (changed('slug')) {
+        const slug = (formData.slug || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9-_]/g, '');
+        if (!slug) { setErrorMsg('El enlace personalizado no puede quedar vacío.'); return; }
+        payload.slug = slug;
+      }
+      if (changed('isTopBusiness')) payload.isTopBusiness = formData.isTopBusiness;
+      if (changed('isRecommended')) payload.isRecommended = formData.isRecommended;
+    }
+    const v = version.current, key = activeKey, id = originalBusiness.current.id;
+    saveBusy.current = true;
     setIsSaving(true);
     setErrorMsg(null);
     try {
-      const cleanName = formatBusinessName(formData.name.trim());
-      const cleanAddress = formatAddressText(formData.address || '');
-      const cleanPhone = cleanPhoneNumber(formData.phone);
-      const cleanWa = cleanPhoneNumber(formData.whatsapp) || cleanPhone;
-      const cleanDelivery = selectedDeliveryOptions.length > 0
-        ? selectedDeliveryOptions.join(', ')
-        : (normalizeDeliveryOption(formData.delivery) || 'Atención en el Local de la empresa');
-      const cleanSlug = (formData.slug || '')
-        .toLowerCase()
-        .trim()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9-_]/g, '');
-
-      const res = await onSave(business.id, {
-        ...formData,
-        schedule: weeklyEdited ? ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].filter((_,i)=>weeklyDays[i]).join(', ') + ' ' + openingTime + ' - ' + closingTime : formData.schedule,
-        ...(isAdmin ? { slug: cleanSlug || undefined, isTopBusiness: formData.isTopBusiness, isRecommended: formData.isRecommended } : { slug: business.slug, isTopBusiness: business.isTopBusiness, isRecommended: business.isRecommended }),
-        name: cleanName,
-        address: cleanAddress,
-        phone: cleanPhone,
-        whatsapp: cleanWa,
-        delivery: cleanDelivery,
-        hasDelivery: selectedDeliveryOptions.some(d => d.toLowerCase().includes('domicilio') || d.toLowerCase().includes('envío'))
-      });
-      if (res.success) {
-        setSuccessMsg('¡Negocio actualizado correctamente!');
-        onClose();
-      } else {
-        setErrorMsg(res.message || 'Error al guardar los cambios.');
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Error de conexión.');
+      if (changed('logo_url') && !await serverAllowsCompanyLogo()) { setLogoAllowed(false); throw new Error('La sesión venció o no permite guardar el logotipo.'); }
+      if (!validOperation(v, key)) return;
+      const response = await onSave(id, payload);
+      if (!validOperation(v, key)) return;
+      if (response?.success === true) { setSuccessMsg('¡Negocio actualizado correctamente!'); onClose(); }
+      else setErrorMsg(response?.message || 'El servidor no confirmó los cambios. Conservamos la edición para reintentar.');
+    } catch (failure) {
+      if (validOperation(v, key)) setErrorMsg(failure instanceof Error ? failure.message : 'Error de conexión. No se confirmó el guardado.');
     } finally {
-      setIsSaving(false);
+      if (validOperation(v, key)) { saveBusy.current = false; setIsSaving(false); }
     }
   };
 
@@ -502,7 +557,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={requestClose}
+            disabled={isSaving || isUploadingPhoto || isUploadingGallery || isUploadingLogo}
             className="p-2 rounded-full hover:bg-stone-200/60 text-stone-500 hover:text-stone-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -526,7 +582,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           )}
 
           {/* Approved glass basic-information card */}
-          <div className="encarmen-glass-scroll px-2 py-1 min-h-0 flex-1 overflow-y-auto space-y-[6px]">
+          <div inert={isSaving || isUploadingPhoto || isUploadingGallery || isUploadingLogo} className="encarmen-glass-scroll px-2 py-1 min-h-0 flex-1 overflow-y-auto space-y-[6px]">
           <section className="encarmen-glass-card">
           <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-amber"><Building2 size={19}/></span><span><strong>Información Básica</strong><small>Datos principales de tu negocio</small></span></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -536,7 +592,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 type="text"
                 value={formData.name || ''}
                 onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                onBlur={() => setFormData(prev => ({ ...prev, name: formatBusinessName(prev.name || '') }))}
+                onBlur={() => { if (changed('name')) setFormData(prev => ({ ...prev, name: formatBusinessName(prev.name || '') })); }}
                 className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm font-bold text-stone-900 focus:border-amber-500 outline-none bg-white"
                 required
               />
@@ -617,19 +673,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
               <input
                 type="text"
                 value={formData.phone || ''}
-                onChange={e => {
-                  const val = e.target.value;
-                  if (val.includes('http') || val.includes('tel:')) {
-                    setFormData(prev => ({ ...prev, phone: cleanPhoneNumber(val) }));
-                  } else {
-                    setFormData(prev => ({ ...prev, phone: val.replace(/[^\d\s\+\-]/g, '') }));
-                  }
-                }}
-                onBlur={() => {
-                  if (formData.phone) {
-                    setFormData(prev => ({ ...prev, phone: cleanPhoneNumber(formData.phone) }));
-                  }
-                }}
+                onChange={e => setFormData(prev => ({ ...prev, phone: e.target.value }))}
                 placeholder="Ej. 9381458462"
                 className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none font-mono bg-white pl-9"
               /></div>
@@ -641,19 +685,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
               <input
                 type="text"
                 value={formData.whatsapp || ''}
-                onChange={e => {
-                  const val = e.target.value;
-                  if (val.includes('http') || val.includes('whatsapp') || val.includes('wa.me')) {
-                    setFormData(prev => ({ ...prev, whatsapp: cleanPhoneNumber(val) }));
-                  } else {
-                    setFormData(prev => ({ ...prev, whatsapp: val.replace(/[^\d\s\+\-]/g, '') }));
-                  }
-                }}
-                onBlur={() => {
-                  if (formData.whatsapp) {
-                    setFormData(prev => ({ ...prev, whatsapp: cleanPhoneNumber(formData.whatsapp) }));
-                  }
-                }}
+                onChange={e => setFormData(prev => ({ ...prev, whatsapp: e.target.value }))}
                 placeholder="Ej. 9381458462"
                 className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs sm:text-sm text-stone-800 focus:border-amber-500 outline-none font-mono font-bold bg-white pl-9"
               /></div>
@@ -761,7 +793,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                       setSelectedDeliveryOptions(next);
                       setFormData(prev => ({
                         ...prev,
-                        delivery: next.join(', ') || 'No especificado',
+                        delivery: [...next, ...splitOptions(ensureString(originalBusiness.current?.delivery), STANDARDIZED_DELIVERY_OPTIONS).extra].join(', '),
                         hasDelivery: next.some(o => o.toLowerCase().includes('domicilio') || o.toLowerCase().includes('envío'))
                       }));
                     }}
@@ -813,7 +845,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                       setSelectedPaymentOptions(next);
                       setFormData(prev => ({
                         ...prev,
-                        payment: next.join(', ') || 'Efectivo'
+                        payment: [...next, ...splitOptions(ensureString(originalBusiness.current?.payment), STANDARDIZED_PAYMENT_OPTIONS).extra].join(', ')
                       }));
                     }}
                     className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all text-left cursor-pointer ${
@@ -963,9 +995,17 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           {/* Image Upload / URL */}
           <section className="encarmen-photo-glass rounded-[18px] border border-white/75 bg-white/25 backdrop-blur-xl p-3 shadow-[inset_0_1px_0_rgba(255,255,255,.85),0_8px_22px_rgba(80,112,155,.10)]">
           <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-blue"><Upload size={19}/></span><span><strong>Fotografías de tu Negocio</strong><small>Personaliza tu imagen y galería</small></span></div>
+          <div className="space-y-2 py-3 border-b border-white/70" aria-label="Logotipo independiente">
+            <strong className="text-xs text-stone-700">Logotipo de la empresa</strong>
+            <p role="status" className="text-[11px] text-stone-600">{!logoAllowed?'Edición no disponible: requiere una sesión verificada por el servidor.':isUploadingLogo?'Cargando logotipo…':changed('logo_url')?'Logotipo en borrador. Guarda cambios para conservarlo.':'El logotipo es independiente de la portada y la galería.'}</p>
+            <div className="flex items-center gap-3"><div className="w-16 h-16 border border-white/80 rounded-xl bg-white/60 overflow-hidden flex items-center justify-center">{safeCompanyLogo(formData.logo_url)&&!logoPreviewFailed?<img src={safeCompanyLogo(formData.logo_url)} alt="Logotipo de la empresa" className="w-full h-full object-contain" onError={()=>setLogoPreviewFailed(true)}/>:<Building2 aria-label="Sin vista previa de logotipo" className="w-7 h-7 text-stone-400"/>}</div>
+              <div className="space-y-2"><label className="inline-flex gap-2 items-center px-3 py-2 rounded-xl bg-white/50 border border-white/80 text-xs font-bold"><Upload size={14}/>{formData.logo_url?'Cambiar logotipo':'Subir logotipo'}<input aria-label="Archivo de logotipo" type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={!logoAllowed||isUploadingLogo||isUploadingPhoto||isUploadingGallery||isSaving} onChange={handleCompanyLogoUpload}/></label>
+              <button type="button" className="block px-3 py-2 rounded-xl bg-white/50 border border-white/80 text-rose-700 text-xs disabled:opacity-50" disabled={!logoAllowed||isUploadingLogo||isUploadingPhoto||isUploadingGallery||isSaving||!formData.logo_url} onClick={()=>{setFormData(prev=>({...prev,logo_url:''}));}}>Quitar logotipo</button></div>
+            </div>
+          </div>
           <div className="space-y-1 pt-1">
             <label className="text-xs font-bold text-stone-700 flex items-center justify-between">
-              <span>Fotografía / Logotipo</span>
+              <span>Fotografía de portada</span>
               {isUploadingPhoto && <span className="text-[10px] text-amber-600 animate-pulse">Subiendo...</span>}
             </label>
             <div className="flex items-center gap-3">
@@ -980,14 +1020,14 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/45 border border-white/80 hover:bg-white/75 text-slate-800 text-xs font-bold cursor-pointer backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,.8)] transition-colors">
                   <Upload className="w-3.5 h-3.5 text-stone-600" />
                   <span>{formData.image ? 'Cambiar foto desde tu dispositivo' : 'Subir foto desde tu dispositivo'}</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+                  <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={isSaving || isUploadingPhoto || isUploadingGallery || isUploadingLogo} />
                 </label>
                 {formData.image && (
                   <button
                     type="button"
                     onClick={() => setFormData(prev => ({ ...prev, image: '' }))}
-                    disabled={isUploadingPhoto}
-                    aria-label="Quitar fotografía o logotipo"
+                    disabled={isSaving || isUploadingPhoto || isUploadingGallery || isUploadingLogo}
+                    aria-label="Quitar fotografía de portada"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/45 border border-rose-200/80 hover:bg-rose-50/80 text-rose-700 text-xs font-bold cursor-pointer backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,.8)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
@@ -1015,7 +1055,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/85 bg-white/40 hover:bg-white/70 text-blue-700 text-xs font-bold cursor-pointer backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,.8)] transition-colors">
                   <Upload className="w-3.5 h-3.5 text-blue-600" />
                   <span>{isUploadingGallery ? 'Subiendo fotos...' : '+ Agregar fotos de trabajos (múltiples)'}</span>
-                  <input type="file" multiple accept="image/*" className="hidden" onChange={handleGalleryUpload} disabled={isUploadingGallery} />
+                  <input type="file" multiple accept="image/*" className="hidden" onChange={handleGalleryUpload} disabled={isSaving || isUploadingPhoto || isUploadingGallery || isUploadingLogo} />
                 </label>
               </div>
             )}
@@ -1056,14 +1096,15 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           <div className="encarmen-glass-footer shrink-0 flex items-center justify-end gap-2.5">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
+            disabled={isSaving || isUploadingPhoto || isUploadingGallery || isUploadingLogo}
               className="px-4 py-2 rounded-xl border border-white/65 bg-white/35 hover:bg-white/60 active:scale-95 text-slate-800 text-[11px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,.65)] backdrop-blur-xl transition-all cursor-pointer"
             >
               <X size={13} className="inline-block mr-1.5 align-[-2px]" />Cancelar
             </button>
             <button
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || isUploadingPhoto || isUploadingGallery || isUploadingLogo}
               className="px-5 py-2 rounded-xl border border-blue-400/60 bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-500 hover:to-blue-700 active:scale-95 text-white font-bold text-[11px] shadow-[0_5px_15px_rgba(27,106,234,.28),inset_0_1px_0_rgba(255,255,255,.3)] transition-all cursor-pointer disabled:opacity-50"
             >
               <span className="inline-flex items-center gap-1.5"><Save size={14} />{isSaving ? 'Guardando...' : 'Guardar Cambios'}</span>
