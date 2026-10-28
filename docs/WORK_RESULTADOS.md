@@ -276,3 +276,13 @@ Enlace registrado en la documentación publicada en GitHub; sin añadir archivos
 Sin bloqueo real para esta corrección. Validación limitada a Chromium local y datos sintéticos; Safari/iOS y revisión del propietario siguen pendientes.
 No se ejecutaron SQL, migraciones, despliegues, fusiones ni conexiones a bases de datos. No se modificaron producción, Staging, main, ia-desarrollo ni otras ramas.
 Dictamen: APTO PARA REVISIÓN FINAL DE LA CORRECCIÓN DEL LOGOTIPO. Esperando coordinación; sin integración ni despliegue.
+
+
+## ENC-STAGING-INTEGRATION-READINESS-001 — candidata de integración
+Fecha UTC 2026-10-28T17:49:31.788Z. Estado PROBADO_POR_WORK localmente; sin integración/despliegue.
+Rama work/ENC-STAGING-INTEGRATION-READINESS-001, base cad1222618c94f4eb3dabb589b6e58836191dcb7; checkpoint 581c0cba919609047bc6a9aabb7f95736d35e275.
+Fuente autorizada b6b26fefcce0b4d268ba0f715433d2d534e0b1a2. Incorporados idénticos cinco archivos: server.ts, server.js, api/server.bundle.js, scripts/create_release_zip.js y tests/backup-security-002.test.cjs. Sin cambios de comportamiento. Documentación: esta entrada acumulativa y docs/work-progress/ENC-STAGING-INTEGRATION-READINESS-001.md (plan canónico único, matriz, comandos, condiciones C1–C8 y reversión).
+Node22.23.4: TypeScript7.0.2/Vite8.3.5/esbuild0.28.2 PASS; recompilación backend idéntica a ambos ejecutables. Tres modos de harness PASS (27 tests/927 solicitudes localhost), sin importar servidor completo/BD; CLI solo fixtures y snapshots preservados. SHA256 bundle01b6cab6b6560b7b1f00fb26b4c58b7f42b612791c3788ed1a1eacd71e39137e. Advertencias no bloqueantes: chunk Vite>500kB, npm http-proxy y EnvHttpProxyAgent experimental en check sintáctico. Sin errores de validación ni correcciones adicionales.
+Entregas observadas al cierre: Trabajador1 en2ebe21c6ce2848b5c7c5e69bf1288ddd7f014dbd, solo checkpoint EN_PROGRESO; Google ENV enSHA base, sin diferencias. Ninguna incorporada ni supuesta terminada/aprobada. Conciliación futura descrita, sin esperar indefinidamente.
+No package/lock/frontend/infraestructura/auth/DB modificados. Copia aislada y dependencias temporales fuera del repositorio; builds con entorno vacío salvo PATH. Frontend generado temporalmente, no se publica dist. No credenciales reales, SQL, backup real, Hostinger, arranque completo, PR, merge, integración ni despliegue. Main/ia-desarrollo preservados.
+Riesgos no resueltos por guard: arranque/semillas/limpieza y conexión productiva, permisos cruzados, estáticos externos/CDN/caché, symlinks/renombrados. Falta autorización y evidencia operativa; Staging NO declarado protegido. Reversión debe mantener contención y artefactos coherentes, sin restaurar BD ni abrir descargas a ciegas.
