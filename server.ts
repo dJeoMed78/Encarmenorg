@@ -188,6 +188,11 @@ app.use((req: Request, res: Response, next) => {
 });
 
 // Ratings/comments only: enforce a small body before the legacy global parser.
+app.use('/api/ratings', (req: Request, res: Response, next: express.NextFunction) => {
+  if (req.method === 'POST' && !req.is('application/json')) return res.status(415).json({success:false,message:'Envía el cuerpo como JSON.'});
+  if (req.method === 'POST' && Number(req.get('Content-Length') || 0) > 2048) return res.status(413).json({success:false,message:'Cuerpo JSON demasiado grande.'});
+  next();
+});
 app.use('/api/ratings', express.json({ limit: '2kb', strict: true }), (error: any, _req: Request, res: Response, next: express.NextFunction) => {
   if (!error) return next();
   return res.status(error.status === 413 ? 413 : 400).json({success:false,message:'Cuerpo JSON inválido o demasiado grande.'});

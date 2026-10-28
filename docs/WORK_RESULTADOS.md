@@ -217,3 +217,8 @@ Dictamen: APTO PARA REVISIÓN DEL CÓDIGO PREPARADO; NO APTO PARA ACTIVAR COMENT
 - Los ocho archivos de código publicados fueron leídos de vuelta y coinciden exactamente con la copia probada.
 - Cambio concurrente verificado: PR #4 ya fue integrado por coordinación en cad1222618c94f4eb3dabb589b6e58836191dcb7 después de la base de esta tarea. Work no integró ni rebasó Comentarios. Se mantiene la dependencia de adaptar el aviso estático de Glass en integración revisada; código de logo intacto.
 - Entrega final sigue siendo PARCIAL PREPARADA, gate default off y moderación bloqueada. No activar ni declarar módulo completo.
+
+### Corrección final de parser de ratings — 2026-10-28T11:22:37.597Z
+Se detectó que el parser JSON de 2kb no impedía que cuerpos no JSON llegaran al parser urlencoded global de 50mb. Corregido exclusivamente en /api/ratings: POST no JSON devuelve 415 antes de parsear y Content-Length >2048 devuelve 413; el parser JSON mantiene límite para cuerpos chunked/descomprimidos. No se cambió el parser de otras rutas.
+Se extrajo también el middleware REAL al harness: 38 pruebas de política/rutas/middleware PASS, incluidas 413 y 415; TypeScript y bundle esbuild del backend PASS. Harness rutas actualizado SHA256 b7f41ffa06712883fccf80bd1a4d2ae3cae8c0a175d6453323d9e23e7c8c44a2. Una ejecución inicial del harness falló por resolución de body-parser al empaquetar Express; se marcó Express externo en el harness y la batería completa pasó. No es fallo de aplicación.
+La batería Chromium de 13 PASS sigue vigente: no hubo cambios frontend tras ella. Gate cerrado por defecto y bloqueos administrativos intactos. Sin servidor completo, SQL ni BD.
