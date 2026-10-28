@@ -1,0 +1,9 @@
+# ENC-RADAR-RELIABILITY-002
+
+## Inicio — 2026-10-28T11:08:18.889Z
+Estado EN_PROGRESO. Rama work/enc-radar-reliability-002, base actual cad1222618c94f4eb3dabb589b6e58836191dcb7. Instrucción blob 8f08849510d17a31f4e104ba344f12f5826ea217. Comentarios cerró trabajo seguro en be987c9703329488a66b9f6367fb83cbd9c3cf7d con activación/moderación bloqueadas; sigue sin mezclar ramas.
+Cambio concurrente: ia-desarrollo incorporó Glass por coordinación mientras se ejecutaba Comentarios; esta tarea nace del HEAD nuevo, sin rebase/merge de Work.
+Revisión previa coord/radar-classifieds-fix-001: 3 commits propios/10 detrás de base nueva; modifica Classifieds, Events y eventsService.ts. Sus cambios esperan success/count, pero NO garantizan transacción ni autenticación; no se copiarán ni fusionarán. Se documentará PR posterior de servicio tras resolver persistencia.
+Bloqueos backend confirmados por lectura: classifieds approve/batch captura y silencia error DB; businesses approve/multiple hace lo mismo y fabrica campos/llama legado WP; events publish/scan sin autorización fiable y silencia DB; dismiss negocio sin autorización y persistencia best-effort. eventsService retorna candidatos/publicación/scan de respaldo como success. Cambiar servidor/api/servicio está fuera de alcance.
+Decisión segura: deshabilitar aprobaciones individuales/lotes y scan que publica; cero requests de mutación desde Radar. Mantener candidatos ante supuestos éxitos/respuestas parciales; rechazo solo sesión, sin localStorage ni endpoint destructivo. Lecturas de búsqueda con timeout/abort/validación y generaciones; events evita servicio con fallback ficticio y consulta endpoint de candidatos directamente. Ningún dato faltante será rellenado como verificado.
+Solo archivos de escritura: AdminClassifiedsTab.tsx, AdminEventsTab.tsx, AdminAutoBusinessesModal.tsx, WORK_RESULTADOS, este progreso. No cambios de servicio/backend/auth/dependencias/Glass/calificaciones/comentarios/editor.
