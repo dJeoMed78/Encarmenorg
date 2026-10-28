@@ -148,8 +148,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   const [isUploadingGallery, setIsUploadingGallery] = useState(false);
 
   const [logoAllowed,setLogoAllowed]=useState(false),[logoDirty,setLogoDirty]=useState(false),[logoUploading,setLogoUploading]=useState(false),[logoPreviewFailed,setLogoPreviewFailed]=useState(false);
-  const logoEpoch=useRef(0),logoBusy=useRef(false),logoDraftId=useRef<number|null>(null);
-  useEffect(()=>{const version=++logoEpoch.current,controller=new AbortController();setLogoAllowed(false);setLogoDirty(false);logoDraftId.current=null;setLogoUploading(false);logoBusy.current=false;if(isOpen&&business)void serverAllowsCompanyLogo(controller.signal).then(ok=>{if(version===logoEpoch.current&&!controller.signal.aborted)setLogoAllowed(ok)});return()=>{logoEpoch.current++;controller.abort();};},[isOpen,business?.id]);
+  const logoEpoch=useRef(0),logoBusy=useRef(false),logoDraftId=useRef<number|null>(null),logoInitialDraft=useRef<Partial<Business>|null>(null),logoSubmitBusy=useRef(false);
+  useEffect(()=>{const version=++logoEpoch.current,controller=new AbortController();if(logoSubmitBusy.current)setIsSaving(false);logoSubmitBusy.current=false;logoInitialDraft.current=null;setLogoAllowed(false);setLogoDirty(false);logoDraftId.current=null;setLogoUploading(false);logoBusy.current=false;if(isOpen&&business)void serverAllowsCompanyLogo(controller.signal).then(ok=>{if(version===logoEpoch.current&&!controller.signal.aborted)setLogoAllowed(ok)});return()=>{logoEpoch.current++;controller.abort();};},[isOpen,business?.id]);
   useEffect(()=>setLogoPreviewFailed(false),[formData.logo_url]);
   // Lista plana y exhaustiva de todas las categorías y subcategorías disponibles en el sistema (Falla 13)
   const allAvailableCategories = useMemo(() => {
@@ -249,7 +249,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         const safePrevNames = ensureArray(business.previousNames);
         const safeGallery = ensureArray(business.gallery);
 
-        setFormData({
+        const loadedFields:Partial<Business>={
           name: ensureString(business.name),
           category: safeCats[0] || ensureString(business.category, 'Servicios'),
           categories: safeCats.length > 0 ? safeCats : [ensureString(business.category, 'Servicios')],
@@ -274,7 +274,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           previousNames: safePrevNames,
           isRecommended: Boolean(business.isRecommended),
           isTopBusiness: Boolean(business.isTopBusiness)
-        });
+        };
+        logoInitialDraft.current=loadedFields;setFormData(loadedFields);
         const schedule = ensureString(business.schedule,'Lunes a Sábado');
         const normalized = schedule.toLowerCase();
         const days=['lun','mar','mié','jue','vie','sáb','dom'];
@@ -395,6 +396,9 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       setErrorMsg('El nombre de la empresa es obligatorio.');
       return;
     }
+    const savingLogo=logoDirty,logoSaveVersion=logoEpoch.current;
+    if(savingLogo&&logoSubmitBusy.current)return;
+    if(savingLogo)logoSubmitBusy.current=true;
     setIsSaving(true);
     setErrorMsg(null);
     try {
@@ -417,7 +421,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         .replace(/[\u0300-\u036f]/g, '')
         .replace(/[^a-z0-9-_]/g, '');
 
-      const res = await onSave(business.id, {
+      const draftPayload:Partial<Business>={
         ...businessFields,
         ...(logoDirty?{logo_url:logo}:{}),
         schedule: weeklyEdited ? ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].filter((_,i)=>weeklyDays[i]).join(', ') + ' ' + openingTime + ' - ' + closingTime : formData.schedule,
@@ -428,7 +432,14 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         whatsapp: cleanWa,
         delivery: cleanDelivery,
         hasDelivery: selectedDeliveryOptions.some(d => d.toLowerCase().includes('domicilio') || d.toLowerCase().includes('envío'))
-      });
+      };
+      // Logo edits must not persist normalization/defaults from untouched legacy fields.
+      const changed=(key:string)=>JSON.stringify((formData as Record<string,unknown>)[key])!==JSON.stringify((logoInitialDraft.current as Record<string,unknown>|null)?.[key]);
+      const related:Record<string,string[]>={categories:['category','categories'],hasDelivery:['delivery','hasDelivery']};
+      const payload=savingLogo?Object.fromEntries(Object.entries(draftPayload).filter(([key])=>key==='logo_url'||(key==='schedule'&&weeklyEdited)||(related[key]||[key]).some(changed))):draftPayload;
+      if(savingLogo&&logoSaveVersion!==logoEpoch.current)return;
+      const res=await onSave(business.id,payload);
+      if(savingLogo&&logoSaveVersion!==logoEpoch.current)return;
       if (res.success) {
         setSuccessMsg('¡Negocio actualizado correctamente!');
         onClose();
@@ -438,7 +449,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
     } catch (err: any) {
       setErrorMsg(err.message || 'Error de conexión.');
     } finally {
-      setIsSaving(false);
+      if(!savingLogo||logoSaveVersion===logoEpoch.current){if(savingLogo)logoSubmitBusy.current=false;setIsSaving(false);}
     }
   };
 
