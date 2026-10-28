@@ -1,6 +1,6 @@
 # ENC-GLASS-BUSINESS-DETAIL-001 — Ficha pública de negocio, diseño Glass de referencia
 
-**Estado:** DEFINIDA PARA ASIGNACIÓN, NO IMPLEMENTADA. **Rama base:** `ia-desarrollo`. **Rama de trabajo propuesta:** `work/enc-glass-business-detail-001`. **Repositorio:** `dJeoMed78/Encarmenorg`.
+**Estado:** AUTORIZADA PARA AUDITORÍA E IMPLEMENTACIÓN CONDICIONAL EN UNA SOLA EJECUCIÓN; NO INTEGRADA. **Rama base:** `ia-desarrollo`. **Rama de trabajo propuesta:** `work/enc-glass-business-detail-001`. **Repositorio:** `dJeoMed78/Encarmenorg`.
 
 ## Corrección explícita del propietario
 La tarea ENC-GLASS-EDITOR-001 fue un error de alcance de coordinación. El propietario NO pidió rediseñar el formulario Editar Negocio. El objetivo verdadero es la **ficha pública de negocio** que ve el visitante, siguiendo el mockup aportado por el propietario el 2026-10-27 (imagen en conversación de coordinación, 630×614 aproximadamente). **No modificar `src/components/EditBusinessModal.tsx`**. PR #3 de la tarea equivocada queda en borrador y **NO debe integrarse**. Conservar editor existente en `ia-desarrollo`.
@@ -21,8 +21,8 @@ Pantalla de ficha de negocio estilo Glass, fondo panorámico suave y tarjetas tr
 3. Entregar a coordinación propuesta de **archivos exactos** a modificar y dependencias, antes de cambios de código. Revisar colisiones con Radar y comentarios.
 4. La imagen de referencia no está en GitHub: pedir al propietario/coord acceso al archivo antes de afirmar fidelidad píxel a píxel. La descripción textual es guía, no sustituto de comparación.
 
-## Fase 2 — Implementación (requiere autorización explícita de coordinación)
-- Implementar únicamente en los archivos que coordinación autorice tras Fase 1; no modificar archivos de backend, migraciones, calificaciones, Radar o editor por iniciativa propia.
+## Fase 2 — Implementación (PREAUTORIZADA SI PASA FASE 1)
+- **Autorización condicional anticipada del propietario:** si la auditoría confirma que la ficha pública está inequívocamente identificada, que los archivos necesarios pertenecen exclusivamente a su presentación frontend, que no hay colisiones con cambios recientes y que no requiere alterar contratos/API/backend/BD, continuar **en la misma ejecución** con la implementación sin esperar otra orden. Autoriza los archivos frontend que realmente implementen la ficha pública y componentes visuales propios, identificándolos en el checkpoint antes de editarlos. No modificar editor, Radar, backend, migraciones, calificaciones ni archivos ajenos. Si necesita cualquiera de esos cambios, DETENERSE y solicitar ampliación de alcance; no improvisar.
 - Conservar navegación, enlaces, permisos, SEO, datos, accesibilidad, estados de error, mobile, y comportamientos existentes.
 - Sin `main`, despliegues, migraciones ni SQL. Trabajar en rama independiente desde `ia-desarrollo`.
 - Pruebas de frontend reales y compilación; API/DB solo cuando se autoricen; documentar límites.
@@ -37,4 +37,11 @@ Pantalla de ficha de negocio estilo Glass, fondo panorámico suave y tarjetas tr
 - No integración automática: PR y revisión independiente de coordinación, Staging requiere autorización específica.
 
 ## Estado y decisión
-Tarea especificada. **Work no debe implementar Fase 2 hasta que coordinación apruebe lista de archivos**. PR #3 permanece sin integrar. Producción protegida.
+Tarea preautorizada para fases 1 y 2 consecutivas, **solo si** pasa la verificación de alcance, compatibilidad y seguridad. Si falla cualquier condición, Work informa y NO implementa. PR #3 permanece sin integrar. Producción protegida.
+
+## Instrucción de ejecución acelerada (prioritaria)
+1. Leer instrucciones y código actual de `ia-desarrollo`, comparar con los cambios concurrentes y verificar componente/ruta reales de la ficha pública. No confundir con editor ni con modal de administración.
+2. **Si todo es compatible**, registrar archivos frontend seleccionados y razonamiento en checkpoint de la rama `work/enc-glass-business-detail-001`; implementar el diseño Glass de la ficha pública inmediatamente, con pruebas y commits autorizados en esa rama. No esperar aprobación adicional para continuar.
+3. **Si algo falla** (componente incierto, archivo compartido en conflicto, dependencia de backend/BD, falta de permisos, riesgo de pérdida de funcionalidad, o cambio que exceda alcance): **no ejecutar implementación**; informar bloqueo y alternativa segura. Ausencia de imagen exacta en repo NO impide crear primera versión basada en especificación textual, pero impide afirmar fidelidad exacta; conservar referencia de propietario para validación posterior.
+4. Usar datos reales; si comentarios no existen, mostrar estado vacío honesto, no crear testimonios ni promedios falsos. Mantener la calificación ya integrada. Si se requiere refactor de estrellas/backend, parar y pedir autorización.
+5. Realizar pruebas locales y documentar resultados verificables; publicar commits y reporte en rama de Work. No crear PR, merge ni despliegue sin autorización posterior. No modificar `main` ni `ia-desarrollo`.
