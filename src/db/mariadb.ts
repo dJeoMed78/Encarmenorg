@@ -1,3 +1,4 @@
+import { validateBusinessComment } from '../components/BusinessCommentsPolicy';
 import mysql from 'mysql2/promise';
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -1065,9 +1066,26 @@ export function createRatingsRepository(db: Pick<mysql.Pool, 'getConnection'>) {
       } catch (error) { if (transaction) { try { await connection.rollback(); } catch { reusable = false; } } throw error; }
       finally { if (reusable) connection.release(); else connection.destroy(); }
     },
+    async getComments(requestedId: string, cursor = '', limit = 10) {
+      if (!/^[A-Za-z0-9_-]{1,64}$/.test(requestedId) || (cursor && !/^[A-Za-z0-9_-]{1,64}$/.test(cursor)) || !Number.isInteger(limit) || limit < 1 || limit > 20) throw ratingsError('RATINGS_INVALID_INPUT');
+      const connection = await db.getConnection();
+      try {
+        await verifySchema(connection);
+        const id = await canonicalId(connection, requestedId);
+        const [rows]: any = await connection.query('SELECT id, rating, comment FROM business_ratings WHERE business_id = ? AND id > ? AND comment IS NOT NULL AND comment <> ? ORDER BY id ASC LIMIT ?', [id, cursor, '', limit + 1]);
+        const scanned = rows.slice(0,limit);
+        const comments = scanned.flatMap((row: any) => {
+          const valid = validateBusinessComment(row.comment);
+          return valid.ok && valid.text && /^[A-Za-z0-9_-]{1,64}$/.test(String(row.id)) && Number.isInteger(Number(row.rating)) && Number(row.rating)>=1 && Number(row.rating)<=5 ? [{id:String(row.id),rating:Number(row.rating),comment:valid.text}] : [];
+        });
+        return {comments,nextCursor:rows.length>limit && scanned.length ? String(scanned[scanned.length-1].id) : null};
+      } finally { connection.release(); }
+    },
     async insert(requestedId: string, visitorKey: string, rating: number, comment: string) {
       if (!/^[0-9a-f]{64}$/.test(visitorKey) || !Number.isInteger(rating) || rating < 1 || rating > 5 ||
           comment.length > 200 || /[<>\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(comment)) throw ratingsError('RATINGS_INVALID_INPUT');
+      const validated = validateBusinessComment(comment);
+      if (!validated.ok || (validated.text && process.env.RATINGS_COMMENTS_APPROVED !== 'true')) throw ratingsError('RATINGS_COMMENTS_UNAVAILABLE');
       const connection = await db.getConnection();
       let lock: string | null = null, transaction = false, reusable = true;
       try {
@@ -1087,7 +1105,7 @@ export function createRatingsRepository(db: Pick<mysql.Pool, 'getConnection'>) {
         // Recheck the catalog after waiting. This is a read, not a write or FOR UPDATE lock.
         if (await canonicalId(connection, requestedId) !== id) throw ratingsError('RATINGS_BUSINESS_CHANGED');
         await connection.query('INSERT INTO business_ratings (id, business_id, rating, visitor_id, comment) VALUES (?, ?, ?, ?, ?)',
-          [randomUUID(), id, rating, visitorKey, comment.trim()]);
+          [randomUUID(), id, rating, visitorKey, validated.text]);
         const stats = (await statsOn(connection, id))[id];
         if (!stats) throw ratingsError('RATINGS_INVALID_AGGREGATE');
         await connection.commit(); transaction = false;
@@ -1116,4 +1134,8 @@ function ratingsRepository() {
 export async function dbGetRatingStats() { return ratingsRepository().getAll(); }
 export async function dbGetBusinessRating(id: string, visitorKey: string | null) { return ratingsRepository().getBusiness(id, visitorKey); }
 export async function dbInsertRating(id: string, visitorKey: string, rating: number, comment: string) { return ratingsRepository().insert(id, visitorKey, rating, comment); }
+export async function dbGetBusinessComments(id: string, cursor: string, limit: number) {
+  if (process.env.RATINGS_COMMENTS_APPROVED !== 'true') throw ratingsError('RATINGS_COMMENTS_UNAVAILABLE');
+  return ratingsRepository().getComments(id, cursor, limit);
+}
 // ENC-REVIEWS-006 RATINGS REPOSITORY END

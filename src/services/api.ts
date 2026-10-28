@@ -1261,3 +1261,15 @@ export async function submitBusinessRating(params: {
   }
   return { success: true, message: 'Calificación guardada.', rating: stats.average, reviewCount: stats.count, stats };
 }
+
+export interface PublicBusinessComment { id: string; rating: number; comment: string }
+export interface BusinessCommentsPage { comments: PublicBusinessComment[]; nextCursor: string | null }
+export async function fetchBusinessComments(businessId: number | string, cursor = '', signal?: AbortSignal): Promise<BusinessCommentsPage> {
+ const data = await ratingResponse(await fetch(`${API_BASE}/ratings/${encodeURIComponent(String(businessId))}/comments?limit=10${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, {cache:'no-store',signal}));
+ if (!Array.isArray(data.comments) || data.comments.length>20 || !(data.nextCursor === null || typeof data.nextCursor==='string' && /^[A-Za-z0-9_-]{1,64}$/.test(data.nextCursor))) throw new RatingApiError('Respuesta de comentarios inválida.');
+ const comments = data.comments.map((c: any) => {
+  if (!c || typeof c.id!=='string' || !/^[A-Za-z0-9_-]{1,64}$/.test(c.id) || typeof c.comment!=='string' || c.comment.length>200 || !Number.isInteger(c.rating) || c.rating<1 || c.rating>5) throw new RatingApiError('Comentario inválido.');
+  return {id:c.id,rating:c.rating,comment:c.comment};
+ });
+ return {comments,nextCursor:data.nextCursor};
+}

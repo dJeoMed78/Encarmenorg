@@ -1,3 +1,4 @@
+import { validateBusinessComment } from './src/components/BusinessCommentsPolicy';
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 import express from 'express';
@@ -46,7 +47,7 @@ import {
   dbGetUploadedFile,
   dbSaveDismissedCandidate,
   dbLoadDismissedCandidates,
-  dbGetRatingStats, dbGetBusinessRating, dbInsertRating
+  dbGetRatingStats, dbGetBusinessRating, dbInsertRating, dbGetBusinessComments
 } from './src/db/mariadb.ts';
 
 let _filenameStr = '';
@@ -186,6 +187,11 @@ app.use((req: Request, res: Response, next) => {
   next();
 });
 
+// Ratings/comments only: enforce a small body before the legacy global parser.
+app.use('/api/ratings', express.json({ limit: '2kb', strict: true }), (error: any, _req: Request, res: Response, next: express.NextFunction) => {
+  if (!error) return next();
+  return res.status(error.status === 413 ? 413 : 400).json({success:false,message:'Cuerpo JSON inválido o demasiado grande.'});
+});
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -1979,8 +1985,19 @@ async function refreshBusinessesFromDbIfNeeded() {
 // ==========================================
 // ENC-REVIEWS-006 RATINGS ROUTES START
 export function registerRatingsRoutes(app: Pick<express.Express, 'get' | 'post'>, repository = {
-  getAll: dbGetRatingStats, getBusiness: dbGetBusinessRating, insert: dbInsertRating
-}) {
+  getAll: dbGetRatingStats, getBusiness: dbGetBusinessRating, insert: dbInsertRating, getComments: dbGetBusinessComments
+}, commentsEnabled: () => boolean = () => process.env.RATINGS_COMMENTS_APPROVED === 'true') {
+  const windows = new Map<string, {until:number; count:number}>();
+  const salt = crypto.randomBytes(32);
+  const allow = (key: string, max: number) => {
+    const now = Date.now();
+    if (windows.size >= 5000) for (const [k,v] of windows) if (v.until <= now) windows.delete(k);
+    const current = windows.get(key);
+    if (!current || current.until <= now) { if (windows.size >= 5000) return false; windows.set(key,{until:now+60000,count:1}); return true; }
+    return ++current.count <= max;
+  };
+  const ipKey = (req: Request) => crypto.createHmac('sha256',salt).update(req.ip || req.socket?.remoteAddress || 'unknown').digest('hex');
+  const limited = (res: Response) => {res.setHeader('Retry-After','60'); return res.status(429).json({success:false,message:'Demasiadas solicitudes. Intenta en un minuto.'});};
   const validRatingBusinessId = (value: unknown): value is string | number =>
     (typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value)) ||
     (typeof value === 'number' && Number.isSafeInteger(value) && value > 0);
@@ -2012,19 +2029,30 @@ export function registerRatingsRoutes(app: Pick<express.Express, 'get' | 'post'>
     } catch (error) { return ratingError(res, error); }
   });
 
+  app.get('/api/ratings/:businessId/comments', async (req: Request, res: Response) => {
+    res.setHeader('Cache-Control','no-store');
+    if (!allow('read:'+ipKey(req),120)) return limited(res);
+    if (!validRatingBusinessId(req.params.businessId) || (req.query.cursor !== undefined && (typeof req.query.cursor !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(req.query.cursor))) || (req.query.limit !== undefined && (typeof req.query.limit !== 'string' || !/^(?:[1-9]|1[0-9]|20)$/.test(req.query.limit)))) return res.status(400).json({success:false,message:'Paginación inválida.'});
+    if (!commentsEnabled()) return res.status(503).json({success:false,message:'Comentarios todavía no habilitados.'});
+    try { return res.json(await repository.getComments(String(req.params.businessId), String(req.query.cursor || ''), Number(req.query.limit || 10))); }
+    catch(error) { return ratingError(res,error); }
+  });
+  // Fail closed until credential management and an auditable moderation contract are fixed.
+  app.post('/api/ratings/:businessId/comments/:commentId/moderation', (_req: Request,res: Response) => res.status(403).json({success:false,message:'Moderación administrativa no habilitada.'}));
   app.post('/api/ratings', async (req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'no-store');
-    const { businessId, rating, visitorId, comment } = req.body || {};
-    if (!validRatingBusinessId(businessId) || typeof rating !== 'number' || !Number.isInteger(rating) || rating < 1 || rating > 5 ||
-        !validRatingVisitor(visitorId) || (comment !== undefined && (typeof comment !== 'string' || comment.length > 200))) {
-      return res.status(400).json({ success: false, message: 'Datos inválidos: calificación entera de 1 a 5 y comentario de hasta 200 caracteres.' });
-    }
-    // Store plain text only. Reject markup instead of attempting partial HTML sanitization.
-    if (typeof comment === 'string' && /[<>\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(comment)) {
-      return res.status(400).json({ success: false, message: 'El comentario debe ser texto sin HTML ni caracteres de control.' });
-    }
+    if (!allow('write-ip:'+ipKey(req),30)) return limited(res);
+    const body = req.body;
+    if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(k => !['businessId','rating','visitorId','comment'].includes(k))) return res.status(400).json({success:false,message:'Datos inválidos.'});
+    const { businessId, rating, visitorId, comment } = body;
+    if (!validRatingBusinessId(businessId) || typeof rating !== 'number' || !Number.isInteger(rating) || rating < 1 || rating > 5 || !validRatingVisitor(visitorId)) return res.status(400).json({success:false,message:'Identificadores o calificación inválidos.'});
+    if (!allow('visitor:'+ratingVisitorKey(visitorId),5) || !allow('business:'+String(businessId),60)) return limited(res);
+    const validated = validateBusinessComment(comment);
+    if (!validated.ok) return res.status(400).json({success:false,message:validated.message});
+    if (validated.text && commentsEnabled() && !allow('text:'+String(businessId)+':'+crypto.createHash('sha256').update(validated.text.toLowerCase()).digest('hex'),1)) return limited(res);
+    if (validated.text && !commentsEnabled()) return res.status(503).json({success:false,message:'Comentarios no habilitados. Puedes quitar el texto y confirmar solo las estrellas.'});
     try {
-      const stats = await repository.insert(String(businessId), ratingVisitorKey(visitorId), rating, (comment || '').trim());
+      const stats = await repository.insert(String(businessId), ratingVisitorKey(visitorId), rating, validated.text);
       return res.json({ success: true,
         message: `¡Muchas gracias! Tu calificación de ${rating} estrella${rating > 1 ? 's' : ''} ha sido registrada exitosamente.`,
         rating: stats.average, reviewCount: stats.count, stats });
