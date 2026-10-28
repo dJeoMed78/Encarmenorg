@@ -348,12 +348,14 @@ export async function run() {
   const commitData = await ghRequest(`/git/commits/${baseCommitSha}`);
   const baseTreeSha = commitData.tree.sha;
 
-  // Consultar el árbol remoto base para conocer los blobs existentes
-  const baseTreeData = await ghRequest(`/git/trees/${baseTreeSha}`);
+  // Consultar el árbol remoto base recursivamente para conocer los blobs existentes
+  const baseTreeData = await ghRequest(`/git/trees/${baseTreeSha}?recursive=1`);
   const remoteTreeMap = new Map();
   if (Array.isArray(baseTreeData.tree)) {
     for (const item of baseTreeData.tree) {
-      remoteTreeMap.set(item.path, item.sha);
+      if (item.type === 'blob') {
+        remoteTreeMap.set(item.path, item.sha);
+      }
     }
   }
 
