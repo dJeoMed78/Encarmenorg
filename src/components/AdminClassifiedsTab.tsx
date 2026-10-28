@@ -124,59 +124,60 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
   };
 
   const handleApprove = async (cand: ClassifiedAd) => {
+    if (approvingId !== null || isBatchApproving) return;
     setApprovingId(cand.id);
-    // Optimistic removal: remove immediately from radar candidates list so user sees instant reaction!
-    setRadarCandidates(prev => prev.filter(c => c.id !== cand.id));
-    setSelectedCandidateIds(prev => {
-      const next = new Set(prev);
-      next.delete(cand.id);
-      return next;
-    });
-
-    setNotification({
-      type: 'success',
-      text: `¡Anuncio "${cand.title}" verificado y publicado con éxito!`
-    });
-
+    setNotification(null);
     try {
       const res = await approveClassifiedCandidate(cand);
-      if (res.success) {
-        if (onRefresh) onRefresh();
-      } else {
-        // Keep it published locally in view
-        if (onRefresh) onRefresh();
+      if (!res.success || !res.classified) {
+        setNotification({ type: 'error', text: res.message || 'No se confirmó la publicación. El candidato permanece pendiente.' });
+        return;
       }
-    } catch (_err: any) {
-      if (onRefresh) onRefresh();
+      setRadarCandidates(prev => prev.filter(c => c.id !== cand.id));
+      setSelectedCandidateIds(prev => {
+        const next = new Set(prev);
+        next.delete(cand.id);
+        return next;
+      });
+      setNotification({ type: 'success', text: `Anuncio "${cand.title}" publicado correctamente.` });
+      onRefresh?.();
+    } catch (err: any) {
+      setNotification({ type: 'error', text: err?.message || 'Error de conexión. No se confirmó la publicación.' });
     } finally {
       setApprovingId(null);
-      setTimeout(() => setNotification(null), 4000);
     }
   };
 
   const handleBatchApprove = async () => {
+    if (isBatchApproving || approvingId !== null) return;
     const toApprove = radarCandidates.filter(c => selectedCandidateIds.has(c.id) && !c.alreadyPublished);
     if (toApprove.length === 0) return;
 
     setIsBatchApproving(true);
-    const approvedIds = new Set(toApprove.map(c => c.id));
-    // Optimistic removal from radar
-    setRadarCandidates(prev => prev.filter(c => !approvedIds.has(c.id)));
-    setSelectedCandidateIds(new Set());
-
-    setNotification({
-      type: 'success',
-      text: `¡${toApprove.length} anuncios verificados y publicados en Clasificados!`
-    });
-
+    setNotification(null);
     try {
-      await batchApproveClassifiedCandidates(toApprove);
-      if (onRefresh) onRefresh();
-    } catch (_err: any) {
-      if (onRefresh) onRefresh();
+      const res = await batchApproveClassifiedCandidates(toApprove);
+      if (!res.success || res.count !== toApprove.length) {
+        setNotification({
+          type: 'error',
+          text: res.message || 'No se confirmó la publicación completa del lote. Actualiza los clasificados antes de reintentar.'
+        });
+        onRefresh?.();
+        return;
+      }
+      const approvedIds = new Set(toApprove.map(c => c.id));
+      setRadarCandidates(prev => prev.filter(c => !approvedIds.has(c.id)));
+      setSelectedCandidateIds(prev => {
+        const next = new Set(prev);
+        approvedIds.forEach(id => next.delete(id));
+        return next;
+      });
+      setNotification({ type: 'success', text: `Se publicaron ${res.count} anuncios en Clasificados.` });
+      onRefresh?.();
+    } catch (err: any) {
+      setNotification({ type: 'error', text: err?.message || 'Error de conexión. No se confirmó la publicación del lote.' });
     } finally {
       setIsBatchApproving(false);
-      setTimeout(() => setNotification(null), 4000);
     }
   };
 
