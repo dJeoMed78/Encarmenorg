@@ -1,3 +1,4 @@
+import { loginAdminUser, verifyAdminSession } from "../utils/adminAuth";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -93,6 +94,55 @@ export function BusinessPublicDetail({
   const root = useRef<HTMLDivElement>(null),
     galleryButton = useRef<HTMLButtonElement>(null),
     adminButton = useRef<HTMLButtonElement>(null);
+  const [adminUser, setAdminUser] = useState(""),
+    [adminPassword, setAdminPassword] = useState(""),
+    [adminAuthenticated, setAdminAuthenticated] = useState(false),
+    [adminBusy, setAdminBusy] = useState(false),
+    [adminError, setAdminError] = useState("");
+  const adminBusyRef=useRef(false);
+  const adminRequest = useRef<AbortController | null>(null),
+    adminEpoch = useRef(0);
+  useEffect(() => {
+    if (!admin) {
+      adminEpoch.current++;
+      adminRequest.current?.abort();
+      setAdminUser("");
+      setAdminPassword("");
+      setAdminAuthenticated(false);
+      adminBusyRef.current=false;
+      setAdminBusy(false);
+      setAdminError("");
+    }
+  }, [admin]);
+  useEffect(
+    () => () => {
+      adminEpoch.current++;
+      adminRequest.current?.abort();
+    },
+    [],
+  );
+  const submitAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminBusyRef.current) return;
+    adminBusyRef.current=true;
+    const controller = new AbortController();
+    adminRequest.current = controller;
+    const version = ++adminEpoch.current;
+    setAdminBusy(true);
+    setAdminError("");
+    const result = await loginAdminUser(
+      adminUser,
+      adminPassword,
+      controller.signal,
+    );
+    if (version !== adminEpoch.current || controller.signal.aborted) return;
+    setAdminPassword("");
+    if (result.success && (await verifyAdminSession(controller.signal))) {
+      if (version === adminEpoch.current && !controller.signal.aborted)
+        setAdminAuthenticated(true);
+    } else setAdminError(result.error || "No se pudo verificar la sesión.");
+    if (version === adminEpoch.current) {adminBusyRef.current=false;setAdminBusy(false);}
+  };
   const overlay = gallery || admin;
   const hadOverlay = useRef(false);
   useEffect(() => {
@@ -464,8 +514,13 @@ export function BusinessPublicDetail({
           </aside>
         </div>
         <footer className="bpd-footer">
-          <button ref={adminButton} onClick={() => setAdmin(true)}>
-            <LockKeyhole size={14} /> Gestión del negocio
+          <button
+            ref={adminButton}
+            className="bpd-admin-entry"
+            aria-label="Acceso administrativo"
+            onClick={() => setAdmin(true)}
+          >
+            π
           </button>
           <span>Directorio de negocios · encarmen.org</span>
         </footer>
@@ -476,7 +531,13 @@ export function BusinessPublicDetail({
             data-bpd-dialog
             role="dialog"
             aria-modal="true"
-            aria-label={gallery ? "Galería del negocio" : "Gestión pendiente"}
+            aria-label={
+              gallery
+                ? "Galería del negocio"
+                : adminAuthenticated
+                  ? "Gestión del negocio"
+                  : "Acceso administrativo"
+            }
             className={`bpd-card ${gallery ? "bpd-gallery" : "bpd-admin"}`}
           >
             <button
@@ -518,22 +579,73 @@ export function BusinessPublicDetail({
             ) : (
               <>
                 <h2>
-                  <LockKeyhole /> Gestión del negocio
+                  <LockKeyhole />{" "}
+                  {adminAuthenticated
+                    ? "Gestión del negocio"
+                    : "Acceso administrativo"}
                 </h2>
-                <p>
-                  Acceso administrativo pendiente de una implementación segura.
-                  Estas acciones no están disponibles desde esta ficha.
-                </p>
-                {[
-                  "Editar datos del negocio",
-                  "Marcar como recomendado",
-                  "Marcar como TOP",
-                  "Eliminar del directorio",
-                ].map((t) => (
-                  <button key={t} disabled>
-                    {t}
-                  </button>
-                ))}
+                {!adminAuthenticated ? (
+                  <form className="bpd-admin-login" onSubmit={submitAdmin}>
+                    <label>
+                      Usuario
+                      <input
+                        required
+                        maxLength={100}
+                        autoComplete="username"
+                        value={adminUser}
+                        onChange={(e) => setAdminUser(e.target.value)}
+                        disabled={adminBusy}
+                      />
+                    </label>
+                    <label>
+                      Contraseña
+                      <input
+                        required
+                        type="password"
+                        maxLength={200}
+                        autoComplete="current-password"
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        disabled={adminBusy}
+                      />
+                    </label>
+                    <p>
+                      El acceso se valida en el servidor. Si no existe
+                      configuración segura, permanecerá bloqueado.
+                    </p>
+                    {adminError && <p role="alert">{adminError}</p>}
+                    <div className="bpd-pair">
+                      <button type="button" onClick={() => setAdmin(false)}>
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={
+                          adminBusy || !adminUser.trim() || !adminPassword
+                        }
+                      >
+                        {adminBusy ? "Verificando…" : "Iniciar sesión"}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <p role="status">
+                      Sesión verificada por el servidor. Las operaciones siguen
+                      bloqueadas hasta verificar sus contratos de persistencia.
+                    </p>
+                    {[
+                      "Editar datos del negocio",
+                      "Marcar como recomendado",
+                      "Marcar como TOP",
+                      "Eliminar del directorio",
+                    ].map((t) => (
+                      <button key={t} disabled>
+                        {t}
+                      </button>
+                    ))}
+                  </>
+                )}
               </>
             )}
           </section>

@@ -60,6 +60,9 @@ try {
 const __dirname = _dirnameStr || process.cwd();
 
 const app = express();
+// Administrative containment precedes legacy middleware, parsers and route handlers.
+const adminSecurity=registerAdminSecurity(app);
+
 const PORT = Number(process.env.PORT || process.env.DEFAULT_APP_PORT) || 3000;
 
 // Permissive CORS and iframe embedding headers for AI Studio and development
@@ -3115,14 +3118,7 @@ app.post('/api/submit-business', async (req: Request, res: Response) => {
 });
 
 // Server-side admin sessions for privileged business fields (not client-controlled flags).
-const privilegedAdminSessions = new Map<string, number>();
-const isVerifiedAdminSession = (req: Request): boolean => {
-  const token = req.get('X-Encarmen-Admin-Token') || '';
-  const expires = privilegedAdminSessions.get(token);
-  if (!token || !expires) return false;
-  if (expires <= Date.now()) { privilegedAdminSessions.delete(token); return false; }
-  return true;
-};
+const isVerifiedAdminSession = (req: Request): boolean => adminSecurity.isAuthorized(req, 'business:manage');
 // Admin update business
 app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: Response) => {
   try {
@@ -8081,44 +8077,61 @@ const normalizeAdminName = (name: string) => {
   return n;
 };
 
-app.post('/api/admin/login', (req: Request, res: Response) => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ success: false, error: 'Usuario y contraseña requeridos' });
-  }
+// ENC-ADMIN-AUTH-SECURITY-001 START
+export type AdminPrincipal = { username: string; permissions: string[] };
+/** No default credential provider. Existing public/legacy hashes are never trusted. */
+export function registerAdminSecurity(app: express.Express, options: {
+ authenticate?: (username:string,password:string)=>Promise<AdminPrincipal|null>;
+ writesReady?: ()=>boolean; now?: ()=>number; sessionMs?: number;
+} = {}) {
+ const now=options.now||Date.now;
+ const sessions=new Map<string,{principal:AdminPrincipal;expiresAt:number}>();
+ const attempts=new Map<string,{count:number;until:number}>();
+ const salt=crypto.randomBytes(32);
+ const digest=(value:string)=>crypto.createHmac('sha256',salt).update(value).digest('hex');
+ const fail=(res:Response,status:number,message:string)=>res.status(status).set('Cache-Control','no-store').json({success:false,error:message,message});
+ const read=(req:Request)=>{const token=req.get('X-Encarmen-Admin-Token')||'';if(!/^[0-9a-f]{64}$/.test(token))return null;const key=digest(token),session=sessions.get(key);if(!session)return null;if(session.expiresAt<=now()){sessions.delete(key);return null}return session;};
+ const sameOrigin=(req:Request)=>{const value=req.get('Origin');if(!value)return true;try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)&&url.host===req.get('host')}catch{return false}};
+ app.post('/api/admin/login',(req:Request,res:Response,next:express.NextFunction)=>{if(!req.is('application/json'))return fail(res,415,'Envía JSON.');next();},express.json({limit:'2kb',strict:true}),async(req:Request,res:Response)=>{
+  if(!sameOrigin(req))return fail(res,403,'Origen no permitido.');
+  const key=digest(req.ip||req.socket.remoteAddress||'unknown');const time=now();
+  for(const [k,v] of attempts)if(v.until<=time)attempts.delete(k);
+  if(attempts.size>=1000&&!attempts.has(key))return fail(res,429,'Demasiados intentos.');
+  const window=attempts.get(key)||{count:0,until:time+60000};attempts.set(key,window);
+  if(++window.count>5){res.setHeader('Retry-After','60');return fail(res,429,'Demasiados intentos.');}
+  if(!options.authenticate)return fail(res,503,'Acceso bloqueado: se requiere rotación y configuración segura de credenciales.');
+  const body=req.body;if(!body||Array.isArray(body)||Object.keys(body).some(k=>!['username','password'].includes(k))||typeof body.username!=='string'||typeof body.password!=='string'||body.username.length<1||body.username.length>100||body.password.length<1||body.password.length>200)return fail(res,400,'Datos de acceso inválidos.');
+  try{const principal=await options.authenticate(body.username,body.password);if(!principal)return fail(res,401,'Usuario o contraseña incorrectos.');
+   if(typeof principal.username!=='string'||!Array.isArray(principal.permissions)||principal.permissions.some(p=>typeof p!=='string'))return fail(res,503,'Proveedor de sesión no disponible.');
+   for(const [k,v]of sessions)if(v.expiresAt<=time)sessions.delete(k);if(sessions.size>=1000)return fail(res,503,'Sesiones no disponibles.');
+   const token=crypto.randomBytes(32).toString('hex'),expiresAt=time+Math.min(options.sessionMs||6*3600000,6*3600000);sessions.set(digest(token),{principal,expiresAt});
+   return res.set('Cache-Control','no-store').json({success:true,token});
+  }catch{return fail(res,503,'No se pudo verificar la identidad.');}
+ });
+ app.get('/api/admin/session',(req:Request,res:Response)=>{const session=read(req);if(!session)return fail(res,401,'Sesión ausente o vencida.');return res.set('Cache-Control','no-store').json({success:true,user:{username:session.principal.username,role:'Administrador'},permissions:session.principal.permissions,expiresAt:session.expiresAt});});
+ app.post('/api/admin/logout',(req:Request,res:Response)=>{if(!sameOrigin(req))return fail(res,403,'Origen no permitido.');const token=req.get('X-Encarmen-Admin-Token')||'';sessions.delete(digest(token));return res.set('Cache-Control','no-store').json({success:true});});
+ const permission=(req:Request):string|null=>{
+  const path=req.path.replace(/\/$/,'').toLowerCase();const method=req.method;
+  if(/^\/(?:api\/)?admin(?:\/|$)/.test(path))return 'admin:manage';
+  if(/^\/api\/mariadb(?:\/|$)/.test(path)||/^\/api\/(?:backup|download|sync|webhook)(?:[-/]|$)/.test(path))return 'admin:manage';
+  if(method==='POST'&&['/api/businesses/auto-search','/api/businesses/auto-search-ai','/api/businesses/parse-whatsapp-group'].includes(path))return null;
+  if(/^\/api\/businesses\/approve-(?:candidate|multiple-candidates)$/.test(path))return 'business:publish';
+  if(/^\/(?:api\/)?businesses\/[^/]+(?:\/(?:sync-wp|verify-edit-pin))?$/.test(path)&&!['GET','HEAD','OPTIONS'].includes(method))return method==='DELETE'?'business:delete':'business:manage';
+  if(/^\/(?:api\/)?classifieds(?:\/|$)/.test(path)&&!['GET','HEAD','OPTIONS'].includes(method)&&!path.endsWith('/radar-search'))return 'classified:manage';
+  if(/^\/api\/events(?:\/|$)/.test(path)&&!['GET','HEAD','OPTIONS'].includes(method)&&!path.endsWith('/radar-search'))return 'event:manage';
+  if(/^\/api\/reports(?:\/|$)/.test(path)&&method!=='POST')return 'admin:manage';
+  if(/^\/api\/(?:emergency)(?:\/|$)/.test(path)&&!['GET','HEAD','OPTIONS'].includes(method))return 'admin:manage';
+  return null;
+ };
+ app.use((req:Request,res:Response,next:express.NextFunction)=>{const required=permission(req);if(!required)return next();if(!sameOrigin(req))return fail(res,403,'Origen no permitido.');const session=read(req);if(!session)return fail(res,401,'Sesión ausente o vencida.');if(!session.principal.permissions.includes(required))return fail(res,403,'Permisos insuficientes.');
+  if(!['GET','HEAD','OPTIONS'].includes(req.method)&&(!options.writesReady?.()||req.path.toLowerCase().includes('change-password')))return fail(res,503,'Operación bloqueada hasta verificar credenciales y persistencia.');
+  res.setHeader('Cache-Control','no-store');return next();
+ });
+ app.use('/api/admin/login',(error:any,_req:Request,res:Response,_next:express.NextFunction)=>fail(res,error?.status===413?413:400,'Cuerpo de acceso inválido o demasiado grande.'));
+ return {isAuthorized:(req:Request,required='business:edit')=>Boolean(read(req)?.principal.permissions.includes(required))};
+}
+// ENC-ADMIN-AUTH-SECURITY-001 END
 
-  const user = adminAccounts.find(a => normalizeAdminName(a.username) === normalizeAdminName(username));
-  if (!user) {
-    return res.status(401).json({ success: false, error: 'Usuario no encontrado' });
-  }
-
-  const hash = hashPassword(password.trim());
-  if (hash === user.passwordHash) {
-    const token = crypto.randomBytes(32).toString('hex');
-    privilegedAdminSessions.set(token, Date.now() + 6 * 60 * 60 * 1000);
-    res.json({ success: true, message: 'Autenticación exitosa', username: user.username, token });
-  } else {
-    res.status(401).json({ success: false, error: 'Contraseña incorrecta' });
-  }
-});
-
-app.post('/api/admin/change-password', async (req: Request, res: Response) => {
-  const { username, newPassword } = req.body;
-  if (!username || !newPassword || newPassword.trim().length < 3) {
-    return res.status(400).json({ success: false, error: 'Datos inválidos' });
-  }
-
-  const userIdx = adminAccounts.findIndex(a => normalizeAdminName(a.username) === normalizeAdminName(username));
-  if (userIdx === -1) {
-    return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
-  }
-
-  adminAccounts[userIdx].passwordHash = hashPassword(newPassword.trim());
-
-  
-
-  res.json({ success: true, message: `Contraseña de ${username} actualizada con éxito` });
-});
 
 // Upload Logo / Image
 app.post('/api/upload-logo', async (req: Request, res: Response) => {
