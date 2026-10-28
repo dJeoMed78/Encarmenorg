@@ -255,7 +255,7 @@ async function createTablesIfNotExist() {
       \`ip\` VARCHAR(50) DEFAULT '',
       \`comment\` TEXT,
       \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
-      INDEX idx_biz_visitor (\`business_id\`, \`visitor_id\`)
+      UNIQUE KEY idx_biz_visitor (\`business_id\`, \`visitor_id\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
   ];
 
@@ -984,3 +984,68 @@ export async function dbSavePortalNotes(notes: { cambios_al_portal: string; fall
   }
 }
 
+
+
+// Ratings deliberately propagate database failures; no memory/JSON fallback.
+type RatingStats = { average: number; count: number; distribution: Record<number, number> };
+const emptyRatingStats = (): RatingStats => ({ average: 0, count: 0, distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } });
+function requireRatingsPool() {
+  if (!pool) throw new Error('RATINGS_DATABASE_UNAVAILABLE');
+  return pool;
+}
+async function ratingStatsOn(connection: any, businessId?: string): Promise<Record<string, RatingStats>> {
+  const [rows] = await connection.query(
+    'SELECT business_id, rating, COUNT(*) AS votes FROM business_ratings' +
+    (businessId === undefined ? '' : ' WHERE business_id = ?') + ' GROUP BY business_id, rating',
+    businessId === undefined ? [] : [businessId]);
+  const stats: Record<string, RatingStats> = Object.create(null);
+  for (const row of rows) {
+    const item = stats[String(row.business_id)] ||= emptyRatingStats();
+    const rating = Number(row.rating), votes = Number(row.votes);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw new Error('INVALID_STORED_RATING');
+    item.distribution[rating] += votes;
+    item.count += votes;
+    item.average += rating * votes;
+  }
+  for (const item of Object.values(stats)) item.average = Math.round(item.average / item.count * 10) / 10;
+  return stats;
+}
+export async function dbGetRatingStats(): Promise<Record<string, RatingStats>> {
+  return ratingStatsOn(requireRatingsPool());
+}
+export async function dbGetBusinessRating(businessId: string, visitorKey: string | null) {
+  const db = requireRatingsPool();
+  const [businesses]: any = await db.query('SELECT id FROM businesses WHERE id = ? LIMIT 1', [businessId]);
+  if (!businesses.length) throw Object.assign(new Error('Business not found'), { code: 'RATING_BUSINESS_NOT_FOUND' });
+  const stats = (await ratingStatsOn(db, businessId))[businessId] || emptyRatingStats();
+  const [votes]: any = visitorKey ? await db.query(
+    'SELECT rating FROM business_ratings WHERE business_id = ? AND visitor_id = ? LIMIT 1', [businessId, visitorKey]) : [[]];
+  return { ...stats, hasRated: votes.length > 0, userRating: votes.length ? Number(votes[0].rating) : null };
+}
+export async function dbInsertRating(businessId: string, visitorKey: string, rating: number, comment: string): Promise<RatingStats> {
+  const connection = await requireRatingsPool().getConnection();
+  try {
+    // Fail closed on old installations until the coordinator applies the reviewed unique index.
+    const [indexes]: any = await connection.query('SHOW INDEX FROM business_ratings');
+    const keys = new Map<string, any[]>();
+    for (const index of indexes) if (Number(index.Non_unique) === 0) {
+      const parts = keys.get(index.Key_name) || []; parts.push(index); keys.set(index.Key_name, parts);
+    }
+    if (![...keys.values()].some(parts => parts.length === 2 && parts.every(p => !p.Sub_part) &&
+        parts.sort((a, b) => a.Seq_in_index - b.Seq_in_index).map(p => p.Column_name).join(',') === 'business_id,visitor_id')) {
+      throw new Error('RATINGS_UNIQUE_INDEX_REQUIRED');
+    }
+    await connection.beginTransaction();
+    // Serialize votes for the same business, including aggregate calculation.
+    const [businesses]: any = await connection.query('SELECT id FROM businesses WHERE id = ? FOR UPDATE', [businessId]);
+    if (!businesses.length) throw Object.assign(new Error('Business not found'), { code: 'RATING_BUSINESS_NOT_FOUND' });
+    await connection.query('INSERT INTO business_ratings (id, business_id, rating, visitor_id, comment) VALUES (UUID(), ?, ?, ?, ?)',
+      [businessId, rating, visitorKey, comment]);
+    const stats = (await ratingStatsOn(connection, businessId))[businessId];
+    await connection.commit();
+    return stats;
+  } catch (error) {
+    try { await connection.rollback(); } catch (_) { /* Preserve original failure. */ }
+    throw error;
+  } finally { connection.release(); }
+}

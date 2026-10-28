@@ -1,0 +1,32 @@
+-- ENC-REVIEWS-001: PROPUESTA EXCLUSIVAMENTE. NO EJECUTADA.
+-- El coordinador debe aprobar y aplicar únicamente sobre una BD staging aislada.
+-- 1. Detener escrituras de ratings y respaldar business_ratings y ambos JSON fuera
+--    del repositorio, bajo acceso restringido. Guardar DDL y checksum de los respaldos.
+-- 2. Inventariar filas existentes de MariaDB. La clave visitor_id nueva es SHA-256
+--    hexadecimal del visitorId UTF-8 original. No mezclar claves crudas y hashes.
+--    Para datos antiguos, convertir una sola vez en tabla de trabajo; no volver
+--    a aplicar SHA-256 sobre hashes. El código NO realiza esa conversión.
+-- 3. JSON inspeccionados en base 6004ef637021ee0bea72f5c892a815696c1c8c13:
+--    ratings_db.json: ratings=[], 207 agregados; api/ratings_db.json: ratings=[],
+--    206 agregados. No importar stats: no prueban votos individuales legítimos.
+--    Revisar también los archivos del servidor autorizado al momento de migrar.
+-- 4. Si aparecen votos legítimos: validar businessId existente, rating entero 1..5,
+--    visitorId válido (1..100 ASCII alfanuméricos, '_' o '-'), fecha válida y
+--    comentario de hasta 200 caracteres sin HTML/control. Cuarentena de inválidos.
+--    Combinar fuentes y filas de BD en tabla de trabajo; deduplicar por
+--    (business_id, SHA256(visitorId)), conservar el primero por created_at y luego
+--    id/fuente como desempate determinista; no deduplicar por IP. No copiar IP.
+--    Preservar backup de descartados y un manifiesto privado reversible.
+-- 5. Verificar conteos y agregados recalculados, no heredados del catálogo.
+--    Confirmar ausencia de duplicados y consistencia de claves antes del DDL.
+--    El índice actual usa collation unicode_ci; las claves SHA256 minúsculas
+--    evitan ambigüedad de mayúsculas del visitorId original.
+-- DDL PROPUESTO (requiere los pasos anteriores; DDL MariaDB implica commit):
+-- ALTER TABLE business_ratings
+--   DROP INDEX idx_biz_visitor,
+--   ADD UNIQUE KEY idx_biz_visitor (business_id, visitor_id);
+-- 6. Probar primer voto, 409 concurrente, negocio inexistente, lectura sin votos,
+--    caída de BD y reinicio. Sin índice único exacto el POST responde 503.
+-- Rollback: detener escrituras, respaldar votos nuevos, restaurar tabla original
+-- y versión anterior del código, conciliar votos nuevos antes de reabrir.
+-- No basta DROP INDEX: se perdería la garantía de unicidad del código nuevo.

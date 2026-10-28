@@ -45,7 +45,10 @@ import {
   dbSaveUploadedFile,
   dbGetUploadedFile,
   dbSaveDismissedCandidate,
-  dbLoadDismissedCandidates
+  dbLoadDismissedCandidates,
+  dbGetRatingStats,
+  dbGetBusinessRating,
+  dbInsertRating
 } from './src/db/mariadb.ts';
 
 let _filenameStr = '';
@@ -1976,180 +1979,52 @@ async function refreshBusinessesFromDbIfNeeded() {
 // BASE DE DATOS Y GESTIÓN DE CALIFICACIONES (1 A 5 ESTRELLAS)
 // Garantiza que un visitante solo pueda calificar una vez por negocio
 // ==========================================
-interface BusinessRatingEntry {
-  id: string;
-  businessId: number | string;
-  rating: number; // 1 to 5
-  visitorId: string;
-  ip: string;
-  comment?: string;
-  createdAt: string;
-}
+// MariaDB is the only source of truth. Never seed votes from catalog averages.
+const validRatingBusinessId = (value: unknown): value is string | number =>
+  (typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value)) ||
+  (typeof value === 'number' && Number.isSafeInteger(value) && value > 0);
+const validRatingVisitor = (value: unknown): value is string =>
+  typeof value === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value);
+const ratingVisitorKey = (visitor: string) => crypto.createHash('sha256').update(visitor).digest('hex');
+const ratingError = (res: Response, error: any) => {
+  const status = error?.code === 'ER_DUP_ENTRY' ? 409 : error?.code === 'RATING_BUSINESS_NOT_FOUND' ? 404 : 503;
+  return res.status(status).json({ success: false, message: status === 409
+    ? 'Ya has calificado este negocio anteriormente. Solo se permite una calificación por visitante para garantizar transparencia.'
+    : status === 404 ? 'Negocio no encontrado.' : 'No fue posible consultar o guardar la calificación. Intenta más tarde.' });
+};
 
-interface RatingsDbStructure {
-  ratings: BusinessRatingEntry[];
-  stats: Record<string, {
-    average: number;
-    count: number;
-    distribution: Record<number, number>;
-  }>;
-}
+app.get('/api/ratings', async (_req: Request, res: Response) => {
+  try { return res.json({ stats: await dbGetRatingStats() }); }
+  catch (error) { return ratingError(res, error); }
+});
 
-const ratingsDbPath = path.resolve(__dirname, 'ratings_db.json');
-let ratingsDb: RatingsDbStructure = { ratings: [], stats: {} };
-
-try {
-  if (fs.existsSync(ratingsDbPath)) {
-    ratingsDb = JSON.parse(fs.readFileSync(ratingsDbPath, 'utf8'));
-    if (!ratingsDb.ratings) ratingsDb.ratings = [];
-    if (!ratingsDb.stats) ratingsDb.stats = {};
-  } else {
-    // Seed initial stats from existing businesses if present
-    for (const b of businessesCache) {
-      if (b.rating) {
-        ratingsDb.stats[String(b.id)] = {
-          average: Number(b.rating) || 5.0,
-          count: Number(b.reviewCount) || 1,
-          distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 }
-        };
-      }
-    }
-    fs.writeFileSync(ratingsDbPath, JSON.stringify(ratingsDb, null, 2), 'utf8');
+app.get('/api/ratings/:businessId', async (req: Request, res: Response) => {
+  const businessId = req.params.businessId;
+  const visitorId = req.query.visitorId;
+  if (!validRatingBusinessId(businessId) || (visitorId !== undefined && visitorId !== '' && !validRatingVisitor(visitorId))) {
+    return res.status(400).json({ success: false, message: 'Identificadores inválidos.' });
   }
-} catch (_) {}
-
-function saveRatingsToDisk() {
   try {
-    fs.writeFileSync(ratingsDbPath, JSON.stringify(ratingsDb, null, 2), 'utf8');
-  } catch (_) {}
-}
-
-// Endpoint: Obtener estadísticas de todas las calificaciones
-app.get('/api/ratings', (_req: Request, res: Response) => {
-  res.json({ stats: ratingsDb.stats });
+    return res.json(await dbGetBusinessRating(String(businessId), visitorId ? ratingVisitorKey(String(visitorId)) : null));
+  } catch (error) { return ratingError(res, error); }
 });
 
-// Endpoint: Obtener calificación y estado de un negocio para un visitante específico
-app.get('/api/ratings/:businessId', (req: Request, res: Response) => {
-  const bizId = String(req.params.businessId);
-  const visitorId = (req.query.visitorId as string) || '';
-  const clientIp = ((req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '').split(',')[0].trim();
-
-  const bizStats = ratingsDb.stats[bizId] || {
-    average: 5.0,
-    count: 0,
-    distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
-  };
-
-  let userRating: number | null = null;
-  let hasRated = false;
-
-  if (visitorId || clientIp) {
-    const existing = ratingsDb.ratings.find(r => 
-      String(r.businessId) === bizId && 
-      ((visitorId && r.visitorId === visitorId) || (clientIp && clientIp !== '127.0.0.1' && r.ip === clientIp))
-    );
-    if (existing) {
-      hasRated = true;
-      userRating = existing.rating;
-    }
-  }
-
-  res.json({
-    average: bizStats.average,
-    count: bizStats.count,
-    distribution: bizStats.distribution,
-    hasRated,
-    userRating
-  });
-});
-
-// Endpoint: Registrar calificación de 1 a 5 estrellas (Solo 1 vez por negocio por visitante)
-app.post('/api/ratings', (req: Request, res: Response) => {
+app.post('/api/ratings', async (req: Request, res: Response) => {
   const { businessId, rating, visitorId, comment } = req.body || {};
-  const numRating = parseInt(String(rating), 10);
-  const numBizId = String(businessId);
-  const clientIp = ((req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '').split(',')[0].trim();
-
-  if (!businessId || isNaN(numRating) || numRating < 1 || numRating > 5) {
-    return res.status(400).json({
-      success: false,
-      message: 'La calificación debe ser un número entero entre 1 y 5 estrellas.'
-    });
+  if (!validRatingBusinessId(businessId) || typeof rating !== 'number' || !Number.isInteger(rating) || rating < 1 || rating > 5 ||
+      !validRatingVisitor(visitorId) || (comment !== undefined && (typeof comment !== 'string' || comment.length > 200))) {
+    return res.status(400).json({ success: false, message: 'Datos inválidos: calificación entera de 1 a 5 y comentario de hasta 200 caracteres.' });
   }
-
-  if (!visitorId || typeof visitorId !== 'string') {
-    return res.status(400).json({
-      success: false,
-      message: 'Identificador de visitante no proporcionado.'
-    });
+  // Store plain text only. Reject markup instead of attempting partial HTML sanitization.
+  if (typeof comment === 'string' && /[<>\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(comment)) {
+    return res.status(400).json({ success: false, message: 'El comentario debe ser texto sin HTML ni caracteres de control.' });
   }
-
-  // Verificar si este visitante o IP ya calificó este negocio
-  const alreadyRated = ratingsDb.ratings.some(r =>
-    String(r.businessId) === numBizId &&
-    (r.visitorId === visitorId || (clientIp && clientIp !== '127.0.0.1' && r.ip === clientIp))
-  );
-
-  if (alreadyRated) {
-    return res.status(409).json({
-      success: false,
-      message: 'Ya has calificado este negocio anteriormente. Solo se permite una calificación por visitante para garantizar transparencia.'
-    });
-  }
-
-  // Registrar nueva calificación
-  const newEntry: BusinessRatingEntry = {
-    id: `rat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    businessId: numBizId,
-    rating: numRating,
-    visitorId,
-    ip: clientIp,
-    comment: typeof comment === 'string' ? comment.slice(0, 200) : '',
-    createdAt: new Date().toISOString()
-  };
-
-  ratingsDb.ratings.push(newEntry);
-
-  // Recalcular estadísticas del negocio
-  const allBizRatings = ratingsDb.ratings.filter(r => String(r.businessId) === numBizId);
-  const sum = allBizRatings.reduce((acc, r) => acc + r.rating, 0);
-  const avg = Math.round((sum / allBizRatings.length) * 10) / 10;
-  const dist: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  for (const r of allBizRatings) {
-    if (dist[r.rating] !== undefined) dist[r.rating]++;
-  }
-
-  ratingsDb.stats[numBizId] = {
-    average: avg,
-    count: allBizRatings.length,
-    distribution: dist
-  };
-
-  saveRatingsToDisk();
-
-  // Actualizar negocio en memoria y catálogo local
-  const biz = businessesCache.find(b => String(b.id) === numBizId);
-  if (biz) {
-    biz.rating = avg;
-    biz.reviewCount = allBizRatings.length;
-    try {
-      const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
-      fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
-    } catch (_) {}
-
-    if (isMariaDbActive()) {
-      dbSaveBusiness(biz).catch(() => {});
-    }
-  }
-
-  return res.json({
-    success: true,
-    message: `¡Muchas gracias! Tu calificación de ${numRating} estrella${numRating > 1 ? 's' : ''} ha sido registrada exitosamente.`,
-    rating: avg,
-    reviewCount: allBizRatings.length,
-    stats: ratingsDb.stats[numBizId]
-  });
+  try {
+    const stats = await dbInsertRating(String(businessId), ratingVisitorKey(visitorId), rating, (comment || '').trim());
+    return res.json({ success: true,
+      message: `¡Muchas gracias! Tu calificación de ${rating} estrella${rating > 1 ? 's' : ''} ha sido registrada exitosamente.`,
+      rating: stats.average, reviewCount: stats.count, stats });
+  } catch (error) { return ratingError(res, error); }
 });
 
 // Businesses List with search & filters
@@ -8641,4 +8516,5 @@ if (!process.env.VERCEL) {
 }
 
 export default app;
+
 
