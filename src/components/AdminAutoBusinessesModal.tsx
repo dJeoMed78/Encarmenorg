@@ -282,8 +282,8 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
       slug: c.slug || '',
       isRecommended: false,
       isTopBusiness: false,
-      rating: 5,
-      reviewCount: 1,
+      rating: 0,
+      reviewCount: 0,
       verified: true,
       featured: false
     };

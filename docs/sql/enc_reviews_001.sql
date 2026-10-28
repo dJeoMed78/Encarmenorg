@@ -1,0 +1,8 @@
+-- ENC-REVIEWS-001 — PROPUESTA HISTÓRICA SUSTITUIDA EN LA RAMA ENC-REVIEWS-006.
+-- NO EJECUTAR. No se ha aplicado ninguna migración en Hostinger.
+-- Usar docs/sql/enc_reviews_006.sql como propuesta única para revisión.
+-- Esa propuesta separa tabla inexistente y ALTER conservador de tabla existente.
+-- No ejecutar ambas alternativas. No importar stats JSON como votos individuales.
+-- Requiere verificar aislamiento/permisos, COUNT(*), integridad, procedencia de
+-- claves, respaldo restaurable, escritores pausados y autorización específica.
+-- DDL no se revierte con ROLLBACK. Sin UNIQUE real el nuevo backend falla con 503.
