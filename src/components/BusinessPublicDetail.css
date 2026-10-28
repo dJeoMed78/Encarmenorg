@@ -563,3 +563,33 @@
     height: 55dvh;
   }
 }
+@media (max-width: 700px) {
+  .bpd-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bpd-grid > * {
+    min-width: 0;
+  }
+  .bpd-toolbar {
+    flex-wrap: wrap;
+  }
+  .bpd-tools {
+    flex-wrap: wrap;
+  }
+  .bpd-reviews .flex {
+    min-width: 0;
+  }
+  .bpd-reviews button[aria-label^="Calificar"] {
+    padding: 5px;
+  }
+  .bpd-footer {
+    gap: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bpd-shell * {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}

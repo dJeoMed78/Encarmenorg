@@ -94,6 +94,7 @@ export function BusinessPublicDetail({
     galleryButton = useRef<HTMLButtonElement>(null),
     adminButton = useRef<HTMLButtonElement>(null);
   const overlay = gallery || admin;
+  const hadOverlay = useRef(false);
   useEffect(() => {
     if (!modal && !overlay) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -108,7 +109,8 @@ export function BusinessPublicDetail({
           'button:not(:disabled),a[href],input,[tabindex="0"]',
         ) || [],
       ).filter((el) => el.getClientRects().length > 0);
-    focusable()[0]?.focus();
+    if (!hadOverlay.current || overlay) focusable()[0]?.focus();
+    hadOverlay.current = overlay;
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -146,7 +148,9 @@ export function BusinessPublicDetail({
     return () => {
       document.body.style.overflow = overflow;
       document.removeEventListener("keydown", key, true);
-      previous?.focus();
+      if (overlay)
+        (gallery ? galleryButton.current : adminButton.current)?.focus();
+      else previous?.focus();
     };
   }, [modal, gallery, admin, onBack, photos.length]);
   const share = async () => {
