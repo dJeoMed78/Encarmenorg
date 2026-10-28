@@ -5,6 +5,7 @@ coverage/
 *.log
 .env*
 !.env.example
+!.env.staging.example
 *.tar.zst
 *.tar.gz
 public/cache/

@@ -13,16 +13,119 @@ let pool: mysql.Pool | null = null;
 let isConnected = false;
 let lastConnectionError: string | null = null;
 
+export const PRODUCTION_DB_NAME = 'u293982346_encarmenapp';
+export const PRODUCTION_DB_USER = 'u293982346_appuser';
+export const PRODUCTION_DB_HOST = 'srv1356.hstgr.io';
+
+export function isStagingEnvironment(): boolean {
+  const env = (process.env.APP_ENV || process.env.NODE_ENV || '').toLowerCase().trim();
+  const isStagingFlag = process.env.STAGING === 'true' || process.env.STAGING_SAFE_MODE === 'true';
+  const isStagingHost = (process.env.APP_URL || process.env.PUBLIC_URL || '').toLowerCase().includes('staging.encarmen.org');
+  return env === 'staging' || isStagingFlag || isStagingHost;
+}
+
+export function isWritePermitted(): boolean {
+  if (process.env.STAGING_READ_ONLY === 'true') {
+    return false;
+  }
+  if (isStagingEnvironment()) {
+    const rawDbName = (process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE || '').trim();
+    if (!rawDbName || rawDbName === PRODUCTION_DB_NAME) {
+      return false;
+    }
+    if (process.env.STAGING_DB_CONFIRMED !== 'true') {
+      return false;
+    }
+  }
+  return true;
+}
+
+function guardWrite(operationName: string): boolean {
+  if (!isWritePermitted()) {
+    console.warn(`[Staging Guard] Escritura bloqueada en '${operationName}': base de datos en modo seguro/lectura o sin confirmar aislamiento de Staging.`);
+    return false;
+  }
+  return true;
+}
+
+export interface StagingDbValidationResult {
+  valid: boolean;
+  isStaging: boolean;
+  error?: string;
+  config?: MariaDbConfig;
+}
+
+export function validateStagingDbConfiguration(): StagingDbValidationResult {
+  const isStaging = isStagingEnvironment();
+  if (!isStaging) {
+    const config = getMariaDbConfig();
+    return { valid: Boolean(config), isStaging: false, config: config || undefined };
+  }
+
+  // En Staging, no se admiten fallbacks implícitos a producción
+  const rawDbName = (process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE || '').trim();
+  const rawDbHost = (process.env.DB_HOST || process.env.MYSQL_HOST || process.env.MARIADB_HOST || '').trim();
+  const rawDbUser = (process.env.DB_USER || process.env.MYSQL_USER || process.env.MARIADB_USER || '').trim();
+  const isReadOnly = process.env.STAGING_READ_ONLY === 'true';
+  const isConfirmed = process.env.STAGING_DB_CONFIRMED === 'true';
+
+  if (!rawDbName) {
+    return {
+      valid: false,
+      isStaging: true,
+      error: 'En Staging se rechaza el fallback automático a producción. Debe definir DB_NAME explícitamente (ej. u293982346_encarmentest).'
+    };
+  }
+
+  if (rawDbName === PRODUCTION_DB_NAME) {
+    if (!isReadOnly) {
+      return {
+        valid: false,
+        isStaging: true,
+        error: `[PELIGRO DE PRODUCCIÓN]: Staging tiene configurada la base de datos de PRODUCCIÓN '${PRODUCTION_DB_NAME}' sin STAGING_READ_ONLY=true. Esto está estrictamente prohibido para evitar sobreescritura de producción.`
+      };
+    }
+    if (rawDbUser === PRODUCTION_DB_USER) {
+      return {
+        valid: false,
+        isStaging: true,
+        error: `[PELIGRO DE PRODUCCIÓN]: Staging no puede reutilizar el usuario con permisos de escritura de producción '${PRODUCTION_DB_USER}'. Debe utilizar un usuario dedicado con privilegios SELECT exclusivamente.`
+      };
+    }
+  }
+
+  if (!isReadOnly && !isConfirmed) {
+    return {
+      valid: false,
+      isStaging: true,
+      error: `Para habilitar escrituras en Staging (STAGING_READ_ONLY=false), debe confirmar explícitamente el aislamiento mediante STAGING_DB_CONFIRMED=true en una base de datos distinta a producción.`
+    };
+  }
+
+  const config = getMariaDbConfig();
+  return { valid: Boolean(config), isStaging: true, config: config || undefined };
+}
+
 export function getLastDbError(): string | null {
   return lastConnectionError;
 }
 
 export function getMariaDbConfig(): MariaDbConfig | null {
-  const host = process.env.DB_HOST || process.env.MYSQL_HOST || process.env.MARIADB_HOST || 'srv1356.hstgr.io';
-  const user = process.env.DB_USER || process.env.MYSQL_USER || process.env.MARIADB_USER || 'u293982346_appuser';
+  const isStaging = isStagingEnvironment();
+
+  // En Staging nunca se permite fallback implícito a la base de datos o usuario de producción
+  let host = process.env.DB_HOST || process.env.MYSQL_HOST || process.env.MARIADB_HOST;
+  let user = process.env.DB_USER || process.env.MYSQL_USER || process.env.MARIADB_USER;
+  let database = process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE;
   const password = process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || process.env.MARIADB_PASSWORD;
-  const database = process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE || 'u293982346_encarmenapp';
   const port = Number(process.env.DB_PORT || process.env.MYSQL_PORT || 3306);
+
+  if (!isStaging) {
+    // Entorno de producción estándar (permite defaults informados si faltan en env)
+    host = host || PRODUCTION_DB_HOST;
+    user = user || PRODUCTION_DB_USER;
+    database = database || PRODUCTION_DB_NAME;
+  }
 
   if (host && user && database && password) {
     return { host, user, password, database, port };
@@ -31,6 +134,16 @@ export function getMariaDbConfig(): MariaDbConfig | null {
 }
 
 export async function initMariaDb(): Promise<boolean> {
+  const isStaging = isStagingEnvironment();
+  if (isStaging) {
+    const validation = validateStagingDbConfiguration();
+    if (!validation.valid) {
+      lastConnectionError = validation.error || 'Configuración inválida de Staging';
+      console.error(`[Staging Guard] Conexión MariaDB bloqueada: ${lastConnectionError}`);
+      return false;
+    }
+  }
+
   const config = getMariaDbConfig();
   if (!config) {
     return false;
@@ -64,11 +177,15 @@ export async function initMariaDb(): Promise<boolean> {
       lastConnectionError = null;
       console.log(`[MariaDB/Hostinger] Conectado exitosamente a ${config.database} en ${candidateHost}`);
 
-      // Staging shares production data in read-only mode: never run schema initialization.
-      if (process.env.STAGING_READ_ONLY !== 'true') {
+      // Staging nunca ejecuta DDL destructivo sobre producción ni en modo read-only
+      const canRunDdl = !isStaging
+        ? process.env.STAGING_READ_ONLY !== 'true'
+        : (process.env.STAGING_ALLOW_SCHEMA_INIT === 'true' && config.database !== PRODUCTION_DB_NAME);
+
+      if (canRunDdl) {
         await createTablesIfNotExist();
       } else {
-        console.log('[Staging] MariaDB schema initialization disabled (read-only).');
+        console.log('[Staging Guard] Inicialización de esquema DDL deshabilitada (modo seguro/read-only).');
       }
 
       return true;
@@ -264,6 +381,7 @@ async function createTablesIfNotExist() {
 
 // Uploaded files persistence in MariaDB
 export async function dbSaveUploadedFile(filename: string, mimeType: string, buffer: Buffer): Promise<boolean> {
+  if (!guardWrite('dbSaveUploadedFile')) return false;
   if (!pool) return false;
   try {
     const q = `
@@ -366,6 +484,7 @@ export async function dbGetBusinessesSignature(): Promise<{ lastUpdate: string |
 }
 
 export async function dbSaveBusiness(biz: any): Promise<boolean> {
+  if (!guardWrite('dbSaveBusiness')) return false;
   if (!pool) return false;
   try {
     const id = String(biz.id);
@@ -431,6 +550,7 @@ export async function dbSaveBusiness(biz: any): Promise<boolean> {
 
 // Dismissed candidate persistence in MariaDB
 export async function dbSaveDismissedCandidate(id: string, name: string, phone: string = ''): Promise<boolean> {
+  if (!guardWrite('dbSaveDismissedCandidate')) return false;
   if (!pool) return false;
   try {
     const q = `
@@ -458,6 +578,7 @@ export async function dbLoadDismissedCandidates(): Promise<Array<{ id: string; n
 }
 
 export async function dbDeleteBusiness(id: string | number): Promise<boolean> {
+  if (!guardWrite('dbDeleteBusiness')) return false;
   if (!pool) return false;
   try {
     await pool.query('DELETE FROM businesses WHERE id = ?', [String(id)]);
@@ -480,6 +601,7 @@ export async function dbLoadAllReports(): Promise<any[]> {
 }
 
 export async function dbSaveReport(report: any): Promise<boolean> {
+  if (!guardWrite('dbSaveReport')) return false;
   if (!pool) return false;
   try {
     const query = `
@@ -504,6 +626,7 @@ export async function dbSaveReport(report: any): Promise<boolean> {
 }
 
 export async function dbDeleteReport(id: string): Promise<boolean> {
+  if (!guardWrite('dbDeleteReport')) return false;
   if (!pool) return false;
   try {
     await pool.query('DELETE FROM reports WHERE id = ?', [id]);
@@ -543,6 +666,7 @@ export async function dbLoadAllEvents(): Promise<any[]> {
 }
 
 export async function dbSaveEvent(event: any): Promise<boolean> {
+  if (!guardWrite('dbSaveEvent')) return false;
   if (!pool) return false;
   try {
     const id = String(event.id);
@@ -579,6 +703,7 @@ export async function dbSaveEvent(event: any): Promise<boolean> {
 }
 
 export async function dbDeleteEvent(id: string): Promise<boolean> {
+  if (!guardWrite('dbDeleteEvent')) return false;
   if (!pool) return false;
   try {
     await pool.query('DELETE FROM events WHERE id = ?', [String(id)]);
@@ -618,6 +743,7 @@ export async function dbLoadAllPromotions(): Promise<any[]> {
 }
 
 export async function dbSavePromotion(promo: any): Promise<boolean> {
+  if (!guardWrite('dbSavePromotion')) return false;
   if (!pool) return false;
   try {
     const id = String(promo.id);
@@ -654,6 +780,7 @@ export async function dbSavePromotion(promo: any): Promise<boolean> {
 }
 
 export async function dbDeletePromotion(id: string): Promise<boolean> {
+  if (!guardWrite('dbDeletePromotion')) return false;
   if (!pool) return false;
   try {
     await pool.query('DELETE FROM promotions WHERE id = ?', [String(id)]);
@@ -691,6 +818,7 @@ export async function dbLoadAllCoupons(): Promise<any[]> {
 }
 
 export async function dbSaveCoupon(coupon: any): Promise<boolean> {
+  if (!guardWrite('dbSaveCoupon')) return false;
   if (!pool) return false;
   try {
     const id = String(coupon.id);
@@ -719,6 +847,7 @@ export async function dbSaveCoupon(coupon: any): Promise<boolean> {
 }
 
 export async function dbUpdateCouponStatus(idOrCode: string, status: string): Promise<boolean> {
+  if (!guardWrite('dbUpdateCouponStatus')) return false;
   if (!pool) return false;
   try {
     await pool.query('UPDATE claimed_coupons SET status = ? WHERE id = ? OR code = ?', [status, idOrCode, idOrCode]);
@@ -730,6 +859,7 @@ export async function dbUpdateCouponStatus(idOrCode: string, status: string): Pr
 }
 
 export async function dbDeleteCoupon(idOrCode: string): Promise<boolean> {
+  if (!guardWrite('dbDeleteCoupon')) return false;
   if (!pool) return false;
   try {
     await pool.query('DELETE FROM claimed_coupons WHERE id = ? OR code = ?', [idOrCode, idOrCode]);
@@ -772,6 +902,7 @@ export async function dbLoadAllClassifieds(): Promise<any[]> {
 }
 
 export async function dbSaveClassified(ad: any): Promise<boolean> {
+  if (!guardWrite('dbSaveClassified')) return false;
   if (!pool) return false;
   try {
     const id = String(ad.id);
@@ -816,6 +947,7 @@ export async function dbSaveClassified(ad: any): Promise<boolean> {
 }
 
 export async function dbDeleteClassified(id: string): Promise<boolean> {
+  if (!guardWrite('dbDeleteClassified')) return false;
   if (!pool) return false;
   try {
     await pool.query('DELETE FROM classifieds WHERE id = ?', [String(id)]);
@@ -856,6 +988,7 @@ export async function dbLoadAllEmergencyServices(): Promise<any[]> {
 }
 
 export async function dbSaveEmergencyService(item: any): Promise<boolean> {
+  if (!guardWrite('dbSaveEmergencyService')) return false;
   if (!pool) return false;
   try {
     const id = String(item.id);
@@ -895,6 +1028,7 @@ export async function dbSaveEmergencyService(item: any): Promise<boolean> {
 }
 
 export async function dbDeleteEmergencyService(id: string): Promise<boolean> {
+  if (!guardWrite('dbDeleteEmergencyService')) return false;
   if (!pool) return false;
   try {
     await pool.query('DELETE FROM emergency_services WHERE id = ?', [String(id)]);
@@ -924,6 +1058,7 @@ export async function dbLoadPortalConfig(): Promise<any | null> {
 }
 
 export async function dbSavePortalConfig(config: any): Promise<boolean> {
+  if (!guardWrite('dbSavePortalConfig')) return false;
   if (!pool) return false;
   try {
     const val = JSON.stringify(config);
@@ -959,6 +1094,7 @@ export async function dbLoadPortalNotes(): Promise<{ cambios_al_portal: string; 
 }
 
 export async function dbSavePortalNotes(notes: { cambios_al_portal: string; fallas_del_portal: string }): Promise<boolean> {
+  if (!guardWrite('dbSavePortalNotes')) return false;
   if (!pool) return false;
   try {
     const query = `
@@ -1115,5 +1251,8 @@ function ratingsRepository() {
 }
 export async function dbGetRatingStats() { return ratingsRepository().getAll(); }
 export async function dbGetBusinessRating(id: string, visitorKey: string | null) { return ratingsRepository().getBusiness(id, visitorKey); }
-export async function dbInsertRating(id: string, visitorKey: string, rating: number, comment: string) { return ratingsRepository().insert(id, visitorKey, rating, comment); }
+export async function dbInsertRating(id: string, visitorKey: string, rating: number, comment: string) {
+  if (!isWritePermitted()) throw ratingsError('RATINGS_DATABASE_READ_ONLY');
+  return ratingsRepository().insert(id, visitorKey, rating, comment);
+}
 // ENC-REVIEWS-006 RATINGS REPOSITORY END
