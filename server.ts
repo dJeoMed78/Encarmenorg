@@ -7,7 +7,6 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { ZipArchive } from 'archiver';
 import { GoogleGenAI } from '@google/genai';
 import sharp from 'sharp';
 import {
@@ -61,6 +60,53 @@ const __dirname = _dirnameStr || process.cwd();
 
 const app = express();
 const PORT = Number(process.env.PORT || process.env.DEFAULT_APP_PORT) || 3000;
+
+// ENC-BACKUP-SECURITY-002 CONTAINMENT START
+// Containment only: no backup creation, filesystem access or authentication changes.
+export function backupDownloadContainment(req: Request, res: Response, next: NextFunction) {
+  let requestPath = req.path;
+  // Decode nested encodings conservatively before Express static performs its own decoding.
+  for (let attempt = 0; attempt < 4 && requestPath.includes('%'); attempt++) {
+    try {
+      const decoded = decodeURIComponent(requestPath);
+      if (decoded === requestPath) break;
+      requestPath = decoded;
+    } catch {
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(403).json({ success: false, error: 'DOWNLOAD_DISABLED', message: 'Descarga no disponible.' });
+    }
+  }
+  const normalized = requestPath.replace(/\\/g, '/').toLowerCase();
+  const segments = normalized.split('/').filter(Boolean).map(segment => segment.trim());
+  const legacyPaths = new Set([
+    '/api/admin/download-source-zip',
+    '/api/download-backup',
+    '/api/download-hostinger-zip',
+    '/api/download-hostinger-sql'
+  ]);
+  const privateNames = new Set([
+    'admin_overrides.json', 'edit_pins.json', 'pins_db.json',
+    'portal_config.json', 'coupons_db.json', 'events_db.json',
+    'promotions_db.json', 'classifieds_db.json', 'ratings_db.json',
+    'auto_candidates_dismissed.json', 'analytics_v2.json',
+    'server.ts', 'server.js', 'server.bundle.js',
+    '.npmrc', '.pypirc', '.git-credentials', 'id_rsa', 'id_ed25519',
+    'credentials.json', 'secrets.json', 'service-account.json'
+  ]);
+  const canonical = '/' + segments.join('/');
+  const blocked = normalized.includes('\0') || normalized.includes('%') ||
+    segments.some(segment => segment === '..' || segment === '.git' || segment === '.aws' || segment === '.ssh' ||
+      segment.startsWith('.env') || privateNames.has(segment) ||
+      /\.(?:zip|sql|dump|bak|backup|tar|tgz|gz|7z|rar|sqlite3?|db|pem|key|p12|pfx|log)(?:[.;]|$)/i.test(segment)) ||
+    canonical === '/api/backup' || canonical.startsWith('/api/backup/') ||
+    legacyPaths.has(canonical);
+  if (!blocked) return next();
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(403).json({ success: false, error: 'DOWNLOAD_DISABLED', message: 'Descarga no disponible.' });
+}
+app.use(backupDownloadContainment);
+// ENC-BACKUP-SECURITY-002 CONTAINMENT END
+
 
 // Permissive CORS and iframe embedding headers for AI Studio and development
 app.use((req: Request, res: Response, next) => {
@@ -376,56 +422,8 @@ app.get('/media/*', (req: Request, res: Response) => {
 });
 
 // Direct download routes for all-in-one Hostinger master ZIP
-app.get([
-  '/api/backup/sitio-completo-hostinger.zip',
-  '/sitio-completo-hostinger.zip',
-  '/empresasencarmen-hostinger-completo.zip',
-  '/descargar-sitio-completo.zip',
-  '/api/download-hostinger-zip',
-  '/todo-en-uno-hostinger.zip',
-  '/sitio-completo.zip'
-], (req: Request, res: Response) => {
-  const masterZipPath = path.resolve(__dirname, 'public/sitio-completo-hostinger.zip');
-  if (fs.existsSync(masterZipPath)) {
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', 'attachment; filename="sitio-completo-hostinger.zip"');
-    return res.download(masterZipPath, 'sitio-completo-hostinger.zip');
-  }
-  return res.status(404).json({ error: 'Archivo de sitio completo aún no generado' });
-});
+// ENC-BACKUP-SECURITY-002: historical download/generation handler removed; denied by containment.
 
-// Direct download routes for full image backup ZIP and SQL script (Supporting all direct URL variants)
-app.get([
-  '/api/backup/images-zip',
-  '/api/backup/respaldo_imagenes_encarmen_completo.zip',
-  '/respaldo_imagenes_encarmen_completo.zip',
-  '/public/respaldo_imagenes_encarmen_completo.zip',
-  '/imagenes.zip',
-  '/backup-imagenes.zip'
-], (req: Request, res: Response) => {
-  const zipPath = path.resolve(__dirname, 'public/respaldo_imagenes_encarmen_completo.zip');
-  if (fs.existsSync(zipPath)) {
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', 'attachment; filename="respaldo_imagenes_encarmen_completo.zip"');
-    return res.download(zipPath, 'respaldo_imagenes_encarmen_completo.zip');
-  }
-  return res.status(404).json({ error: 'Archivo de respaldo no encontrado en disco' });
-});
-
-app.get([
-  '/api/backup/migrate-sql',
-  '/api/backup/mariadb_migrate_images.sql',
-  '/mariadb_migrate_images.sql',
-  '/public/mariadb_migrate_images.sql'
-], (req: Request, res: Response) => {
-  const sqlPath = path.resolve(__dirname, 'public/mariadb_migrate_images.sql');
-  if (fs.existsSync(sqlPath)) {
-    res.setHeader('Content-Type', 'application/sql');
-    res.setHeader('Content-Disposition', 'attachment; filename="mariadb_migrate_images.sql"');
-    return res.download(sqlPath, 'mariadb_migrate_images.sql');
-  }
-  return res.status(404).json({ error: 'Archivo SQL no encontrado' });
-});
 
 // ==========================================
 // SERVICIO DE OPTIMIZACIÓN Y COMPRESIÓN DE IMÁGENES (Sharp + WebP Caching)
@@ -1666,14 +1664,8 @@ app.post('/api/mariadb/sync-catalog', async (_req: Request, res: Response) => {
 });
 
 // Download SQL dump for Hostinger phpMyAdmin
-app.get('/api/download-hostinger-sql', (_req: Request, res: Response) => {
-  const sqlFile = path.resolve(__dirname, 'public/hostinger_mariadb_setup.sql');
-  if (fs.existsSync(sqlFile)) {
-    res.download(sqlFile, 'hostinger_mariadb_setup.sql');
-  } else {
-    res.status(404).json({ success: false, message: 'Script SQL no encontrado' });
-  }
-});
+// ENC-BACKUP-SECURITY-002: historical download/generation handler removed; denied by containment.
+
 
 
 // =========================================================================
@@ -1869,74 +1861,8 @@ app.post(['/api/admin/maintenance', '/admin/maintenance'], async (req: Request, 
 });
 
 // Download complete project ZIP backup for Hostinger deployment & Admin Download
-app.get([
-  '/api/admin/download-source-zip',
-  '/api/download-backup',
-  '/codigo-fuente-empresasencarmen.zip',
-  '/codigo-fuente-completo.zip',
-  '/sitio-completo.zip',
-  '/proyecto-completo.zip',
-  '/api/backup/sitio-completo.zip',
-  '/api/backup/codigo-fuente.zip'
-], (req: Request, res: Response) => {
-  try {
-    let version = '061026-0915';
-    try {
-      const versionFile = path.resolve(__dirname, 'src/constants/version.ts');
-      if (fs.existsSync(versionFile)) {
-        const match = fs.readFileSync(versionFile, 'utf8').match(/APP_VERSION = '([^']+)'/);
-        if (match) version = match[1].replace(/[:/]/g, '-');
-      }
-    } catch (_) {}
+// ENC-BACKUP-SECURITY-002: historical download/generation handler removed; denied by containment.
 
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="codigo-fuente-empresasencarmen-${version}.zip"`);
-
-    if (req.method === 'HEAD') {
-      return res.status(200).end();
-    }
-
-    // Fast static delivery if already pre-built
-    const staticZipPath = path.resolve(__dirname, `public/codigo-fuente-empresasencarmen-${version}.zip`);
-    const defaultZipPath = path.resolve(__dirname, 'public/codigo-fuente-empresasencarmen.zip');
-    if (fs.existsSync(staticZipPath)) {
-      return res.sendFile(staticZipPath);
-    }
-    if (fs.existsSync(defaultZipPath)) {
-      return res.sendFile(defaultZipPath);
-    }
-
-    const archive = new ZipArchive({ zlib: { level: 9 } });
-
-    archive.on('error', (err: any) => {
-      console.error('[Backup ZIP] Error:', err);
-      if (!res.headersSent) res.status(500).send('Error generando archivo ZIP');
-    });
-
-    archive.pipe(res);
-
-    archive.glob('**/*', {
-      cwd: __dirname,
-      ignore: [
-        'node_modules/**',
-        '.git/**',
-        'dist/**',
-        '*.zip',
-        '**/*.zip',
-        'public/*.zip',
-        'public/wp-content/**',
-        'public/uploads/**',
-        '.cache/**'
-      ],
-      dot: true
-    });
-
-    archive.finalize();
-  } catch (err: any) {
-    console.error('Error generating backup zip:', err);
-    res.status(500).send('Error generating backup');
-  }
-});
 
 let lastDbPollTime = 0;
 const DB_POLL_INTERVAL_MS = 20000; // 20 seconds
@@ -8523,4 +8449,5 @@ if (!process.env.VERCEL) {
 }
 
 export default app;
+
 

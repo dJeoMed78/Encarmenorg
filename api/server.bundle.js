@@ -6,12 +6,12 @@ import fs from "fs";
 import crypto from "crypto";
 import { execSync } from "child_process";
 import { fileURLToPath } from "url";
-import { ZipArchive } from "archiver";
 import { GoogleGenAI } from "@google/genai";
 import sharp from "sharp";
 
 // src/db/mariadb.ts
 import mysql from "mysql2/promise";
+import { createHash, randomUUID } from "node:crypto";
 var pool = null;
 var isConnected = false;
 var lastConnectionError = null;
@@ -58,7 +58,11 @@ async function initMariaDb() {
       isConnected = true;
       lastConnectionError = null;
       console.log(`[MariaDB/Hostinger] Conectado exitosamente a ${config.database} en ${candidateHost}`);
-      await createTablesIfNotExist();
+      if (process.env.STAGING_READ_ONLY !== "true") {
+        await createTablesIfNotExist();
+      } else {
+        console.log("[Staging] MariaDB schema initialization disabled (read-only).");
+      }
       return true;
     } catch (err) {
       lastConnectionError = err.message || String(err);
@@ -218,17 +222,8 @@ async function createTablesIfNotExist() {
       \`name\` VARCHAR(255) NOT NULL,
       \`phone\` VARCHAR(50) DEFAULT '',
       \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
-    `CREATE TABLE IF NOT EXISTS \`business_ratings\` (
-      \`id\` VARCHAR(64) PRIMARY KEY,
-      \`business_id\` VARCHAR(64) NOT NULL,
-      \`rating\` TINYINT NOT NULL,
-      \`visitor_id\` VARCHAR(100) NOT NULL,
-      \`ip\` VARCHAR(50) DEFAULT '',
-      \`comment\` TEXT,
-      \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
-      INDEX idx_biz_visitor (\`business_id\`, \`visitor_id\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
+    // Ratings schema is deliberately prepared separately: never migrate it at startup.
   ];
   for (const q of queries) {
     try {
@@ -925,6 +920,179 @@ async function dbSavePortalNotes(notes) {
     return false;
   }
 }
+var emptyRatingStats = () => ({ average: 0, count: 0, distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } });
+var ratingsError = (code) => Object.assign(new Error(code), { code });
+function createRatingsRepository(db) {
+  async function verifySchema(connection) {
+    const [tables] = await connection.query("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'business_ratings'");
+    if (tables.length !== 1 || tables[0].ENGINE !== "InnoDB") throw ratingsError("RATINGS_SCHEMA_REQUIRED");
+    const [columns] = await connection.query("SHOW FULL COLUMNS FROM business_ratings");
+    for (const field of ["id", "business_id", "visitor_id", "rating"]) {
+      const column = columns.find((c) => c.Field === field);
+      if (!column || column.Null !== "NO") throw ratingsError("RATINGS_SCHEMA_REQUIRED");
+      const type = String(column.Type).toLowerCase();
+      if (field === "rating" ? !/^tinyint(?:\(\d+\))?(?: unsigned)?$/.test(type) : !/^(?:var)?char\(\d+\)$/.test(type) || Number(type.match(/\d+/)?.[0]) < 64) throw ratingsError("RATINGS_SCHEMA_REQUIRED");
+    }
+    const [indexes] = await connection.query("SHOW INDEX FROM business_ratings");
+    const keys = /* @__PURE__ */ new Map();
+    for (const part of indexes) if (Number(part.Non_unique) === 0) {
+      const parts = keys.get(part.Key_name) || [];
+      parts.push(part);
+      keys.set(part.Key_name, parts);
+    }
+    const primary = keys.get("PRIMARY");
+    if (!primary || primary.length !== 1 || primary[0].Column_name !== "id" || primary[0].Sub_part != null) throw ratingsError("RATINGS_SCHEMA_REQUIRED");
+    if (![...keys.values()].some((parts) => parts.length === 2 && parts.every((p) => p.Sub_part == null) && parts.sort((a, b) => a.Seq_in_index - b.Seq_in_index).map((p) => p.Column_name).join(",") === "business_id,visitor_id")) {
+      throw ratingsError("RATINGS_UNIQUE_INDEX_REQUIRED");
+    }
+    const [invalid] = await connection.query(`SELECT COUNT(*) AS invalid_count FROM business_ratings r
+      LEFT JOIN businesses b ON r.business_id = b.id
+      WHERE b.id IS NULL OR BINARY r.business_id <> BINARY b.id
+        OR r.business_id = '' OR r.visitor_id IS NULL
+        OR BINARY r.visitor_id NOT REGEXP '^[0-9a-f]{64}$'
+        OR r.rating IS NULL OR r.rating NOT BETWEEN 1 AND 5
+        OR (r.comment IS NOT NULL AND CHAR_LENGTH(r.comment) > 200)`);
+    if (Number(invalid[0]?.invalid_count) !== 0) throw ratingsError("RATINGS_DATA_REVIEW_REQUIRED");
+  }
+  async function canonicalId(connection, requestedId) {
+    const [rows] = await connection.query("SELECT id FROM businesses WHERE id = ? LIMIT 1", [requestedId]);
+    if (rows.length !== 1) throw ratingsError("RATING_BUSINESS_NOT_FOUND");
+    const id = String(rows[0].id);
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) throw ratingsError("RATINGS_BUSINESS_ID_UNSUPPORTED");
+    return id;
+  }
+  async function statsOn(connection, businessId) {
+    const [rows] = await connection.query(
+      "SELECT business_id, rating, COUNT(*) AS votes FROM business_ratings" + (businessId === void 0 ? "" : " WHERE business_id = ?") + " GROUP BY business_id, rating",
+      businessId === void 0 ? [] : [businessId]
+    );
+    const stats = /* @__PURE__ */ Object.create(null);
+    for (const row of rows) {
+      const rating = Number(row.rating), votes = Number(row.votes);
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5 || !Number.isSafeInteger(votes) || votes < 1) throw ratingsError("RATINGS_INVALID_AGGREGATE");
+      const item = stats[String(row.business_id)] ||= emptyRatingStats();
+      item.count += votes;
+      item.average += rating * votes;
+      item.distribution[rating] += votes;
+    }
+    for (const item of Object.values(stats)) item.average = Math.round(item.average / item.count * 10) / 10;
+    return stats;
+  }
+  return {
+    async getAll() {
+      const connection = await db.getConnection();
+      try {
+        await verifySchema(connection);
+        return await statsOn(connection);
+      } finally {
+        connection.release();
+      }
+    },
+    async getBusiness(requestedId, visitorKey) {
+      const connection = await db.getConnection();
+      let transaction = false, reusable = true;
+      try {
+        await verifySchema(connection);
+        reusable = false;
+        await connection.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+        await connection.beginTransaction();
+        transaction = true;
+        reusable = true;
+        const id = await canonicalId(connection, requestedId);
+        const stats = (await statsOn(connection, id))[id] || emptyRatingStats();
+        const [votes] = visitorKey ? await connection.query(
+          "SELECT rating FROM business_ratings WHERE business_id = ? AND visitor_id = ? LIMIT 1",
+          [id, visitorKey]
+        ) : [[]];
+        await connection.commit();
+        transaction = false;
+        return { ...stats, hasRated: votes.length > 0, userRating: votes.length ? Number(votes[0].rating) : null };
+      } catch (error) {
+        if (transaction) {
+          try {
+            await connection.rollback();
+          } catch {
+            reusable = false;
+          }
+        }
+        throw error;
+      } finally {
+        if (reusable) connection.release();
+        else connection.destroy();
+      }
+    },
+    async insert(requestedId, visitorKey, rating, comment) {
+      if (!/^[0-9a-f]{64}$/.test(visitorKey) || !Number.isInteger(rating) || rating < 1 || rating > 5 || comment.length > 200 || /[<>\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(comment)) throw ratingsError("RATINGS_INVALID_INPUT");
+      const connection = await db.getConnection();
+      let lock = null, transaction = false, reusable = true;
+      try {
+        await verifySchema(connection);
+        const id = await canonicalId(connection, requestedId);
+        const [context] = await connection.query("SELECT DATABASE() AS db_name");
+        if (!context[0]?.db_name) throw ratingsError("RATINGS_DATABASE_UNAVAILABLE");
+        const name = "enc-ratings:" + createHash("sha256").update(String(context[0].db_name) + "\0" + id).digest("hex").slice(0, 48);
+        reusable = false;
+        const [acquired] = await connection.query("SELECT GET_LOCK(?, 5) AS acquired", [name]);
+        if (acquired[0]?.acquired === 0) {
+          reusable = true;
+          throw ratingsError("RATINGS_BUSY");
+        }
+        if (Number(acquired[0]?.acquired) !== 1) throw ratingsError("RATINGS_BUSY");
+        lock = name;
+        reusable = true;
+        reusable = false;
+        await connection.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+        await connection.beginTransaction();
+        transaction = true;
+        reusable = true;
+        if (await canonicalId(connection, requestedId) !== id) throw ratingsError("RATINGS_BUSINESS_CHANGED");
+        await connection.query(
+          "INSERT INTO business_ratings (id, business_id, rating, visitor_id, comment) VALUES (?, ?, ?, ?, ?)",
+          [randomUUID(), id, rating, visitorKey, comment.trim()]
+        );
+        const stats = (await statsOn(connection, id))[id];
+        if (!stats) throw ratingsError("RATINGS_INVALID_AGGREGATE");
+        await connection.commit();
+        transaction = false;
+        return stats;
+      } catch (error) {
+        if (transaction) {
+          try {
+            await connection.rollback();
+          } catch {
+            reusable = false;
+          }
+        }
+        throw error;
+      } finally {
+        if (lock) {
+          try {
+            const [released] = await connection.query("SELECT RELEASE_LOCK(?) AS released", [lock]);
+            if (Number(released[0]?.released) !== 1) reusable = false;
+          } catch {
+            reusable = false;
+          }
+        }
+        if (reusable) connection.release();
+        else connection.destroy();
+      }
+    }
+  };
+}
+function ratingsRepository() {
+  if (!pool) throw ratingsError("RATINGS_DATABASE_UNAVAILABLE");
+  if (process.env.RATINGS_SCHEMA_APPROVED !== "true") throw ratingsError("RATINGS_SCHEMA_APPROVAL_REQUIRED");
+  return createRatingsRepository(pool);
+}
+async function dbGetRatingStats() {
+  return ratingsRepository().getAll();
+}
+async function dbGetBusinessRating(id, visitorKey) {
+  return ratingsRepository().getBusiness(id, visitorKey);
+}
+async function dbInsertRating(id, visitorKey, rating, comment) {
+  return ratingsRepository().insert(id, visitorKey, rating, comment);
+}
 
 // server.ts
 dotenv.config({ override: true });
@@ -940,6 +1108,57 @@ try {
 var __dirname = _dirnameStr || process.cwd();
 var app = express();
 var PORT = Number(process.env.PORT || process.env.DEFAULT_APP_PORT) || 3e3;
+function backupDownloadContainment(req, res, next) {
+  let requestPath = req.path;
+  for (let attempt = 0; attempt < 4 && requestPath.includes("%"); attempt++) {
+    try {
+      const decoded = decodeURIComponent(requestPath);
+      if (decoded === requestPath) break;
+      requestPath = decoded;
+    } catch {
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(403).json({ success: false, error: "DOWNLOAD_DISABLED", message: "Descarga no disponible." });
+    }
+  }
+  const normalized = requestPath.replace(/\\/g, "/").toLowerCase();
+  const segments = normalized.split("/").filter(Boolean).map((segment) => segment.trim());
+  const legacyPaths = /* @__PURE__ */ new Set([
+    "/api/admin/download-source-zip",
+    "/api/download-backup",
+    "/api/download-hostinger-zip",
+    "/api/download-hostinger-sql"
+  ]);
+  const privateNames = /* @__PURE__ */ new Set([
+    "admin_overrides.json",
+    "edit_pins.json",
+    "pins_db.json",
+    "portal_config.json",
+    "coupons_db.json",
+    "events_db.json",
+    "promotions_db.json",
+    "classifieds_db.json",
+    "ratings_db.json",
+    "auto_candidates_dismissed.json",
+    "analytics_v2.json",
+    "server.ts",
+    "server.js",
+    "server.bundle.js",
+    ".npmrc",
+    ".pypirc",
+    ".git-credentials",
+    "id_rsa",
+    "id_ed25519",
+    "credentials.json",
+    "secrets.json",
+    "service-account.json"
+  ]);
+  const canonical = "/" + segments.join("/");
+  const blocked = normalized.includes("\0") || normalized.includes("%") || segments.some((segment) => segment === ".." || segment === ".git" || segment === ".aws" || segment === ".ssh" || segment.startsWith(".env") || privateNames.has(segment) || /\.(?:zip|sql|dump|bak|backup|tar|tgz|gz|7z|rar|sqlite3?|db|pem|key|p12|pfx|log)(?:[.;]|$)/i.test(segment)) || canonical === "/api/backup" || canonical.startsWith("/api/backup/") || legacyPaths.has(canonical);
+  if (!blocked) return next();
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(403).json({ success: false, error: "DOWNLOAD_DISABLED", message: "Descarga no disponible." });
+}
+app.use(backupDownloadContainment);
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -950,6 +1169,18 @@ app.use((req, res, next) => {
   }
   next();
 });
+if (process.env.STAGING_READ_ONLY === "true") {
+  app.use((req, res, next) => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) {
+      return res.status(403).json({
+        success: false,
+        error: "STAGING_READ_ONLY",
+        message: "Entorno de pruebas en modo solo lectura. No se guardaron cambios."
+      });
+    }
+    next();
+  });
+}
 app.use((req, res, next) => {
   if (req.path === "/api/health" || req.path === "/api/version") {
     return next();
@@ -1167,53 +1398,6 @@ app.get("/media/*", (req, res) => {
   }
   return res.redirect(301, `/wp-content/uploads/${encodeURIComponent(decodedSubpath)}`);
 });
-app.get([
-  "/api/backup/sitio-completo-hostinger.zip",
-  "/sitio-completo-hostinger.zip",
-  "/empresasencarmen-hostinger-completo.zip",
-  "/descargar-sitio-completo.zip",
-  "/api/download-hostinger-zip",
-  "/todo-en-uno-hostinger.zip",
-  "/sitio-completo.zip"
-], (req, res) => {
-  const masterZipPath = path.resolve(__dirname, "public/sitio-completo-hostinger.zip");
-  if (fs.existsSync(masterZipPath)) {
-    res.setHeader("Content-Type", "application/zip");
-    res.setHeader("Content-Disposition", 'attachment; filename="sitio-completo-hostinger.zip"');
-    return res.download(masterZipPath, "sitio-completo-hostinger.zip");
-  }
-  return res.status(404).json({ error: "Archivo de sitio completo a\xFAn no generado" });
-});
-app.get([
-  "/api/backup/images-zip",
-  "/api/backup/respaldo_imagenes_encarmen_completo.zip",
-  "/respaldo_imagenes_encarmen_completo.zip",
-  "/public/respaldo_imagenes_encarmen_completo.zip",
-  "/imagenes.zip",
-  "/backup-imagenes.zip"
-], (req, res) => {
-  const zipPath = path.resolve(__dirname, "public/respaldo_imagenes_encarmen_completo.zip");
-  if (fs.existsSync(zipPath)) {
-    res.setHeader("Content-Type", "application/zip");
-    res.setHeader("Content-Disposition", 'attachment; filename="respaldo_imagenes_encarmen_completo.zip"');
-    return res.download(zipPath, "respaldo_imagenes_encarmen_completo.zip");
-  }
-  return res.status(404).json({ error: "Archivo de respaldo no encontrado en disco" });
-});
-app.get([
-  "/api/backup/migrate-sql",
-  "/api/backup/mariadb_migrate_images.sql",
-  "/mariadb_migrate_images.sql",
-  "/public/mariadb_migrate_images.sql"
-], (req, res) => {
-  const sqlPath = path.resolve(__dirname, "public/mariadb_migrate_images.sql");
-  if (fs.existsSync(sqlPath)) {
-    res.setHeader("Content-Type", "application/sql");
-    res.setHeader("Content-Disposition", 'attachment; filename="mariadb_migrate_images.sql"');
-    return res.download(sqlPath, "mariadb_migrate_images.sql");
-  }
-  return res.status(404).json({ error: "Archivo SQL no encontrado" });
-});
 var imgCacheDir = path.resolve(__dirname, "public/cache/img");
 try {
   if (!fs.existsSync(imgCacheDir)) {
@@ -1225,12 +1409,15 @@ app.get("/api/version", (_req, res) => {
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
   res.setHeader("CDN-Cache-Control", "no-store");
   res.setHeader("Cloudflare-CDN-Cache-Control", "no-store");
-  let ver = "latest";
+  let ver = "unavailable";
   try {
-    const vFile = fs.readFileSync(path.resolve(__dirname, "src/constants/version.ts"), "utf8");
-    const m = vFile.match(/APP_VERSION\s*=\s*'([^']+)'/);
-    if (m) ver = m[1];
-  } catch {
+    const indexFile = path.resolve(__dirname, "dist/index.html");
+    const html = fs.readFileSync(indexFile, "utf8");
+    const assets = [...html.matchAll(/(?:src|href)="([^"]*\/assets\/[^"]+\.(?:js|css))"/g)].map((match) => match[1]).sort();
+    const stat = fs.statSync(indexFile);
+    ver = crypto.createHash("sha256").update(html).update(assets.join("|")).digest("hex").slice(0, 16) + "-" + Math.round(stat.mtimeMs);
+  } catch (error) {
+    console.warn("[Version] No se pudo identificar el frontend compilado:", error);
   }
   res.json({ success: true, version: ver, timestamp: Date.now() });
 });
@@ -2083,14 +2270,6 @@ app.post("/api/mariadb/sync-catalog", async (_req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
-app.get("/api/download-hostinger-sql", (_req, res) => {
-  const sqlFile = path.resolve(__dirname, "public/hostinger_mariadb_setup.sql");
-  if (fs.existsSync(sqlFile)) {
-    res.download(sqlFile, "hostinger_mariadb_setup.sql");
-  } else {
-    res.status(404).json({ success: false, message: "Script SQL no encontrado" });
-  }
-});
 app.get("/api/portal-config", (_req, res) => {
   res.json({
     success: true,
@@ -2243,66 +2422,6 @@ app.post(["/api/admin/maintenance", "/admin/maintenance"], async (req, res) => {
     return res.status(500).json({ success: false, message: "Error al cambiar modo mantenimiento: " + err.message });
   }
 });
-app.get([
-  "/api/admin/download-source-zip",
-  "/api/download-backup",
-  "/codigo-fuente-empresasencarmen.zip",
-  "/codigo-fuente-completo.zip",
-  "/sitio-completo.zip",
-  "/proyecto-completo.zip",
-  "/api/backup/sitio-completo.zip",
-  "/api/backup/codigo-fuente.zip"
-], (req, res) => {
-  try {
-    let version = "061026-0915";
-    try {
-      const versionFile = path.resolve(__dirname, "src/constants/version.ts");
-      if (fs.existsSync(versionFile)) {
-        const match = fs.readFileSync(versionFile, "utf8").match(/APP_VERSION = '([^']+)'/);
-        if (match) version = match[1].replace(/[:/]/g, "-");
-      }
-    } catch (_) {
-    }
-    res.setHeader("Content-Type", "application/zip");
-    res.setHeader("Content-Disposition", `attachment; filename="codigo-fuente-empresasencarmen-${version}.zip"`);
-    if (req.method === "HEAD") {
-      return res.status(200).end();
-    }
-    const staticZipPath = path.resolve(__dirname, `public/codigo-fuente-empresasencarmen-${version}.zip`);
-    const defaultZipPath = path.resolve(__dirname, "public/codigo-fuente-empresasencarmen.zip");
-    if (fs.existsSync(staticZipPath)) {
-      return res.sendFile(staticZipPath);
-    }
-    if (fs.existsSync(defaultZipPath)) {
-      return res.sendFile(defaultZipPath);
-    }
-    const archive = new ZipArchive({ zlib: { level: 9 } });
-    archive.on("error", (err) => {
-      console.error("[Backup ZIP] Error:", err);
-      if (!res.headersSent) res.status(500).send("Error generando archivo ZIP");
-    });
-    archive.pipe(res);
-    archive.glob("**/*", {
-      cwd: __dirname,
-      ignore: [
-        "node_modules/**",
-        ".git/**",
-        "dist/**",
-        "*.zip",
-        "**/*.zip",
-        "public/*.zip",
-        "public/wp-content/**",
-        "public/uploads/**",
-        ".cache/**"
-      ],
-      dot: true
-    });
-    archive.finalize();
-  } catch (err) {
-    console.error("Error generating backup zip:", err);
-    res.status(500).send("Error generating backup");
-  }
-});
 var lastDbPollTime = 0;
 var DB_POLL_INTERVAL_MS = 2e4;
 var cachedDbSignature = null;
@@ -2325,135 +2444,63 @@ async function refreshBusinessesFromDbIfNeeded() {
   } catch (err) {
   }
 }
-var ratingsDbPath = path.resolve(__dirname, "ratings_db.json");
-var ratingsDb = { ratings: [], stats: {} };
-try {
-  if (fs.existsSync(ratingsDbPath)) {
-    ratingsDb = JSON.parse(fs.readFileSync(ratingsDbPath, "utf8"));
-    if (!ratingsDb.ratings) ratingsDb.ratings = [];
-    if (!ratingsDb.stats) ratingsDb.stats = {};
-  } else {
-    for (const b of businessesCache) {
-      if (b.rating) {
-        ratingsDb.stats[String(b.id)] = {
-          average: Number(b.rating) || 5,
-          count: Number(b.reviewCount) || 1,
-          distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 }
-        };
-      }
-    }
-    fs.writeFileSync(ratingsDbPath, JSON.stringify(ratingsDb, null, 2), "utf8");
-  }
-} catch (_) {
-}
-function saveRatingsToDisk() {
-  try {
-    fs.writeFileSync(ratingsDbPath, JSON.stringify(ratingsDb, null, 2), "utf8");
-  } catch (_) {
-  }
-}
-app.get("/api/ratings", (_req, res) => {
-  res.json({ stats: ratingsDb.stats });
-});
-app.get("/api/ratings/:businessId", (req, res) => {
-  const bizId = String(req.params.businessId);
-  const visitorId = req.query.visitorId || "";
-  const clientIp = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
-  const bizStats = ratingsDb.stats[bizId] || {
-    average: 5,
-    count: 0,
-    distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+function registerRatingsRoutes(app2, repository = {
+  getAll: dbGetRatingStats,
+  getBusiness: dbGetBusinessRating,
+  insert: dbInsertRating
+}) {
+  const validRatingBusinessId = (value) => typeof value === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(value) || typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+  const validRatingVisitor = (value) => typeof value === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(value);
+  const ratingVisitorKey = (visitor) => crypto.createHash("sha256").update(visitor).digest("hex");
+  const ratingError = (res, error) => {
+    const status = error?.code === "ER_DUP_ENTRY" ? 409 : error?.code === "RATING_BUSINESS_NOT_FOUND" ? 404 : 503;
+    return res.status(status).json({ success: false, message: status === 409 ? "Ya existe una calificaci\xF3n para este identificador de visitante en el negocio." : status === 404 ? "Negocio no encontrado." : "No fue posible consultar o guardar la calificaci\xF3n. Intenta m\xE1s tarde." });
   };
-  let userRating = null;
-  let hasRated = false;
-  if (visitorId || clientIp) {
-    const existing = ratingsDb.ratings.find(
-      (r) => String(r.businessId) === bizId && (visitorId && r.visitorId === visitorId || clientIp && clientIp !== "127.0.0.1" && r.ip === clientIp)
-    );
-    if (existing) {
-      hasRated = true;
-      userRating = existing.rating;
-    }
-  }
-  res.json({
-    average: bizStats.average,
-    count: bizStats.count,
-    distribution: bizStats.distribution,
-    hasRated,
-    userRating
-  });
-});
-app.post("/api/ratings", (req, res) => {
-  const { businessId, rating, visitorId, comment } = req.body || {};
-  const numRating = parseInt(String(rating), 10);
-  const numBizId = String(businessId);
-  const clientIp = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
-  if (!businessId || isNaN(numRating) || numRating < 1 || numRating > 5) {
-    return res.status(400).json({
-      success: false,
-      message: "La calificaci\xF3n debe ser un n\xFAmero entero entre 1 y 5 estrellas."
-    });
-  }
-  if (!visitorId || typeof visitorId !== "string") {
-    return res.status(400).json({
-      success: false,
-      message: "Identificador de visitante no proporcionado."
-    });
-  }
-  const alreadyRated = ratingsDb.ratings.some(
-    (r) => String(r.businessId) === numBizId && (r.visitorId === visitorId || clientIp && clientIp !== "127.0.0.1" && r.ip === clientIp)
-  );
-  if (alreadyRated) {
-    return res.status(409).json({
-      success: false,
-      message: "Ya has calificado este negocio anteriormente. Solo se permite una calificaci\xF3n por visitante para garantizar transparencia."
-    });
-  }
-  const newEntry = {
-    id: `rat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    businessId: numBizId,
-    rating: numRating,
-    visitorId,
-    ip: clientIp,
-    comment: typeof comment === "string" ? comment.slice(0, 200) : "",
-    createdAt: (/* @__PURE__ */ new Date()).toISOString()
-  };
-  ratingsDb.ratings.push(newEntry);
-  const allBizRatings = ratingsDb.ratings.filter((r) => String(r.businessId) === numBizId);
-  const sum = allBizRatings.reduce((acc, r) => acc + r.rating, 0);
-  const avg = Math.round(sum / allBizRatings.length * 10) / 10;
-  const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  for (const r of allBizRatings) {
-    if (dist[r.rating] !== void 0) dist[r.rating]++;
-  }
-  ratingsDb.stats[numBizId] = {
-    average: avg,
-    count: allBizRatings.length,
-    distribution: dist
-  };
-  saveRatingsToDisk();
-  const biz = businessesCache.find((b) => String(b.id) === numBizId);
-  if (biz) {
-    biz.rating = avg;
-    biz.reviewCount = allBizRatings.length;
+  app2.get("/api/ratings", async (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
     try {
-      const bizPath = path.resolve(__dirname, "src/data/businesses_seed.json");
-      fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), "utf8");
-    } catch (_) {
+      return res.json({ stats: await repository.getAll() });
+    } catch (error) {
+      return ratingError(res, error);
     }
-    if (isMariaDbActive()) {
-      dbSaveBusiness(biz).catch(() => {
-      });
-    }
-  }
-  return res.json({
-    success: true,
-    message: `\xA1Muchas gracias! Tu calificaci\xF3n de ${numRating} estrella${numRating > 1 ? "s" : ""} ha sido registrada exitosamente.`,
-    rating: avg,
-    reviewCount: allBizRatings.length,
-    stats: ratingsDb.stats[numBizId]
   });
-});
+  app2.get("/api/ratings/:businessId", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const businessId = req.params.businessId;
+    const visitorId = req.query.visitorId;
+    if (!validRatingBusinessId(businessId) || visitorId !== void 0 && visitorId !== "" && !validRatingVisitor(visitorId)) {
+      return res.status(400).json({ success: false, message: "Identificadores inv\xE1lidos." });
+    }
+    try {
+      return res.json(await repository.getBusiness(String(businessId), visitorId ? ratingVisitorKey(String(visitorId)) : null));
+    } catch (error) {
+      return ratingError(res, error);
+    }
+  });
+  app2.post("/api/ratings", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const { businessId, rating, visitorId, comment } = req.body || {};
+    if (!validRatingBusinessId(businessId) || typeof rating !== "number" || !Number.isInteger(rating) || rating < 1 || rating > 5 || !validRatingVisitor(visitorId) || comment !== void 0 && (typeof comment !== "string" || comment.length > 200)) {
+      return res.status(400).json({ success: false, message: "Datos inv\xE1lidos: calificaci\xF3n entera de 1 a 5 y comentario de hasta 200 caracteres." });
+    }
+    if (typeof comment === "string" && /[<>\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(comment)) {
+      return res.status(400).json({ success: false, message: "El comentario debe ser texto sin HTML ni caracteres de control." });
+    }
+    try {
+      const stats = await repository.insert(String(businessId), ratingVisitorKey(visitorId), rating, (comment || "").trim());
+      return res.json({
+        success: true,
+        message: `\xA1Muchas gracias! Tu calificaci\xF3n de ${rating} estrella${rating > 1 ? "s" : ""} ha sido registrada exitosamente.`,
+        rating: stats.average,
+        reviewCount: stats.count,
+        stats
+      });
+    } catch (error) {
+      return ratingError(res, error);
+    }
+  });
+}
+registerRatingsRoutes(app);
 app.get("/api/businesses", async (req, res) => {
   await refreshBusinessesFromDbIfNeeded();
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
@@ -2629,8 +2676,8 @@ function parseWooCommerceProduct(p) {
     gallery,
     categories,
     categorySlugs,
-    rating: 5,
-    reviewCount: 1,
+    rating: 0,
+    reviewCount: 0,
     permalink: p.permalink || `https://empresasencarmen.com/empresa/${p.slug}/`,
     isTopBusiness: false,
     isRecommended,
@@ -3207,6 +3254,14 @@ app.post("/api/submit-business", async (req, res) => {
     if (!data.name || !data.name.trim()) {
       return res.status(400).json({ success: false, message: "El nombre de la empresa es obligatorio" });
     }
+    const phone = typeof data.phone === "string" ? data.phone.trim() : "";
+    const whatsapp = typeof data.whatsapp === "string" ? data.whatsapp.trim() : "";
+    if (!phone && !whatsapp) {
+      return res.status(400).json({
+        success: false,
+        message: "Debes proporcionar al menos un medio de contacto: tel\xE9fono o WhatsApp."
+      });
+    }
     const allowDuplicate = Boolean(data.allowDuplicate);
     if (!allowDuplicate) {
       const dup = findDuplicateBusiness(data.name, data.phone);
@@ -3245,27 +3300,27 @@ app.post("/api/submit-business", async (req, res) => {
       gallery: Array.isArray(data.gallery) ? data.gallery : [],
       categories: Array.isArray(data.categories) ? data.categories : data.category ? [data.category] : ["Comercios y Servicios"],
       categorySlugs: Array.isArray(data.categorySlugs) ? data.categorySlugs : [slug],
-      rating: 5,
-      reviewCount: 1,
+      rating: 0,
+      reviewCount: 0,
       permalink: `https://empresasencarmen.com/empresa/${slug}/`,
       isTopBusiness: false,
       isRecommended: false,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
+    if (!isMariaDbActive()) {
+      return res.status(503).json({ success: false, message: "MariaDB no est\xE1 disponible. No se registr\xF3 la empresa." });
+    }
+    const saved = await dbSaveBusiness(newBiz);
+    if (!saved) {
+      return res.status(503).json({ success: false, message: "No fue posible guardar la empresa en MariaDB." });
+    }
     businessesCache.unshift(newBiz);
+    cachedDbSignature = null;
     try {
       const bizPath = path.resolve(__dirname, "src/data/businesses_seed.json");
       fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), "utf8");
     } catch (e) {
       console.warn("[Storage] Error actualizando businesses_seed.json:", e);
-    }
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveBusiness(newBiz);
-        console.log(`[MariaDB] Empresa "${newBiz.name}" guardada en Hostinger MariaDB.`);
-      } catch (mErr) {
-        console.warn("[MariaDB] Error guardando empresa:", mErr.message);
-      }
     }
     let publishedToWordPress = false;
     let wpPermalink = null;
@@ -3317,6 +3372,17 @@ app.post("/api/submit-business", async (req, res) => {
     return res.status(500).json({ success: false, message: "Error interno al registrar la empresa" });
   }
 });
+var privilegedAdminSessions = /* @__PURE__ */ new Map();
+var isVerifiedAdminSession = (req) => {
+  const token = req.get("X-Encarmen-Admin-Token") || "";
+  const expires = privilegedAdminSessions.get(token);
+  if (!token || !expires) return false;
+  if (expires <= Date.now()) {
+    privilegedAdminSessions.delete(token);
+    return false;
+  }
+  return true;
+};
 app.patch(["/api/businesses/:id", "/businesses/:id"], async (req, res) => {
   try {
     await refreshBusinessesFromDbIfNeeded();
@@ -3329,6 +3395,10 @@ app.patch(["/api/businesses/:id", "/businesses/:id"], async (req, res) => {
       return res.status(404).json({ success: false, message: "Empresa no encontrada" });
     }
     const oldBiz = businessesCache[idx];
+    const privilegedFields = ["slug", "isTopBusiness", "isRecommended", "previousSlugs", "previousNames"];
+    if (!isVerifiedAdminSession(req) && privilegedFields.some((key) => Object.prototype.hasOwnProperty.call(req.body || {}, key) && JSON.stringify(req.body[key]) !== JSON.stringify(oldBiz[key]))) {
+      return res.status(403).json({ success: false, message: "Solo un administrador autenticado puede modificar enlaces y distintivos." });
+    }
     const prevSlugs = new Set(Array.isArray(oldBiz.previousSlugs) ? oldBiz.previousSlugs : []);
     const prevNames = new Set(Array.isArray(oldBiz.previousNames) ? oldBiz.previousNames : []);
     const newSlug = req.body.slug ? String(req.body.slug).toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9-_]/g, "") : oldBiz.slug;
@@ -3345,6 +3415,11 @@ app.patch(["/api/businesses/:id", "/businesses/:id"], async (req, res) => {
       req.body.previousNames.forEach((n) => prevNames.add(n));
     }
     const finalCategories = Array.isArray(req.body.categories) && req.body.categories.length > 0 ? req.body.categories : req.body.category ? [req.body.category] : oldBiz.categories;
+    if (newSlug && businessesCache.some(
+      (b, i) => i !== idx && (String(b.slug || "").toLowerCase() === newSlug || Array.isArray(b.previousSlugs) && b.previousSlugs.some((previous) => previous.toLowerCase() === newSlug))
+    )) {
+      return res.status(409).json({ success: false, message: "El enlace personalizado ya pertenece a otra empresa o es una direcci\xF3n hist\xF3rica reservada." });
+    }
     const updated = {
       ...oldBiz,
       ...req.body,
@@ -3357,20 +3432,19 @@ app.patch(["/api/businesses/:id", "/businesses/:id"], async (req, res) => {
       isLocallyEdited: true,
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
+    if (!isMariaDbActive()) {
+      return res.status(503).json({ success: false, message: "MariaDB no est\xE1 disponible. Los cambios no se guardaron." });
+    }
+    const persisted = await dbSaveBusiness(updated);
+    if (!persisted) {
+      return res.status(503).json({ success: false, message: "No fue posible guardar los cambios en MariaDB." });
+    }
     businessesCache[idx] = updated;
+    cachedDbSignature = null;
     try {
       const bizPath = path.resolve(__dirname, "src/data/businesses_seed.json");
       fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), "utf8");
     } catch (_) {
-    }
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveBusiness(updated);
-        cachedDbSignature = null;
-      } catch (_) {
-      }
-    } else {
-      cachedDbSignature = null;
     }
     const authHeader = getWpAuthHeader();
     if (authHeader) {
@@ -7375,8 +7449,8 @@ app.post("/api/businesses/approve-candidate", async (req, res) => {
       instagram: candidate.instagram || "",
       categories: cats,
       categorySlugs: generateCategorySlugs(cats),
-      rating: 5,
-      reviewCount: 1,
+      rating: 0,
+      reviewCount: 0,
       permalink: `/empresa/${slug}/`,
       isTopBusiness: Boolean(candidate.isTopBusiness),
       isRecommended: Boolean(candidate.isRecommended),
@@ -7495,8 +7569,8 @@ app.post("/api/businesses/approve-multiple-candidates", async (req, res) => {
         instagram: cand.instagram || "",
         categories: cats,
         categorySlugs: generateCategorySlugs(cats),
-        rating: 5,
-        reviewCount: 1,
+        rating: 0,
+        reviewCount: 0,
         permalink: `/empresa/${slug}/`,
         isTopBusiness: Boolean(cand.isTopBusiness),
         isRecommended: Boolean(cand.isRecommended),
@@ -7582,7 +7656,9 @@ app.post("/api/admin/login", (req, res) => {
   }
   const hash = hashPassword(password.trim());
   if (hash === user.passwordHash) {
-    res.json({ success: true, message: "Autenticaci\xF3n exitosa", username: user.username });
+    const token = crypto.randomBytes(32).toString("hex");
+    privilegedAdminSessions.set(token, Date.now() + 6 * 60 * 60 * 1e3);
+    res.json({ success: true, message: "Autenticaci\xF3n exitosa", username: user.username, token });
   } else {
     res.status(401).json({ success: false, error: "Contrase\xF1a incorrecta" });
   }
@@ -7973,5 +8049,7 @@ if (!process.env.VERCEL) {
 }
 var server_default = app;
 export {
-  server_default as default
+  backupDownloadContainment,
+  server_default as default,
+  registerRatingsRoutes
 };

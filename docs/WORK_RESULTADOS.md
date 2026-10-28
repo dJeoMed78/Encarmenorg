@@ -276,3 +276,61 @@ Enlace registrado en la documentación publicada en GitHub; sin añadir archivos
 Sin bloqueo real para esta corrección. Validación limitada a Chromium local y datos sintéticos; Safari/iOS y revisión del propietario siguen pendientes.
 No se ejecutaron SQL, migraciones, despliegues, fusiones ni conexiones a bases de datos. No se modificaron producción, Staging, main, ia-desarrollo ni otras ramas.
 Dictamen: APTO PARA REVISIÓN FINAL DE LA CORRECCIÓN DEL LOGOTIPO. Esperando coordinación; sin integración ni despliegue.
+
+
+## ENC-STAGING-SECURITY-RELEASE-001 — entrega ejecutable de contención
+Fecha UTC: 2026-10-28T17:40:55.848Z.
+Estado: PROBADO_POR_WORK LOCALMENTE. Pendiente Coordinación. NO integrado/desplegado.
+Rama: work/ENC-STAGING-SECURITY-RELEASE-001. Base ia-desarrollo cad1222618c94f4eb3dabb589b6e58836191dcb7.
+Checkpoint inicial 39c358139d39c2a44b4bcfe5b65adc5f6067223f. Instrucciones blob c4ef37ba0f690f60cd9fb5189190afd2be9a8faa.
+Origen selectivo: e8541290e082b8cfebe24086b782f3e0ff5d5045. server.ts y scripts/create_release_zip.js son idénticos byte a byte a esa entrega. No se arrastraron sus documentos ni otros cambios.
+
+### Implementación y alcance
+- Conservada íntegramente contención: 25 rutas históricas, GET/HEAD y demás métodos, estáticos ZIP/SQL y nombres privados conocidos; 403 genérico/no-store antes de handlers/static. Generación pública HTTP retirada; CLI deshabilitado sin tocar respaldos.
+- server.js y api/server.bundle.js regenerados desde server.ts mediante esbuild; idénticos, 358016 bytes cada uno. Incluyen guard, STAGING_READ_ONLY y RATINGS_SCHEMA_APPROVED; no se ejecutan durante pruebas. Sin cambios manuales de arranque/configuración/BD/autenticación.
+- Prueba heredada adaptada dentro del archivo autorizado: TypeScript 7 CLI no expone las APIs antiguas usadas por el harness; se usa esbuild para analizar/transpilar. Puede seleccionar guard fuente, server.js o api/server.bundle.js. Solo evalúa la función autónoma del guard, nunca el módulo completo ni sus imports/timers.
+- Archivos: server.ts, server.js, api/server.bundle.js, scripts/create_release_zip.js, tests/backup-security-002.test.cjs, docs/WORK_RESULTADOS.md y docs/work-progress/ENC-STAGING-SECURITY-RELEASE-001.md. Sin package.json, lockfile, frontend fuente, dist ni infraestructura modificados en la entrega.
+
+### Preparación y comandos reales
+Copia aislada: /workspace/scratch/562312432969/staging-security-release-001. Dependencias en /tmp/enc-release-tools, enlazadas solo en scratch. npm install --ignore-scripts --no-audit --no-fund en manifiesto temporal con las dependencias del proyecto y sin scripts; no se ejecutaron hooks ni npm run build/prebuild.
+Entorno de compilación/prueba vacío salvo PATH; sin .env ni credenciales de hosting/BD.
+Node 24.22.1, TypeScript 7.0.2, Vite 8.3.5, esbuild 0.28.2, Express 4.22.3 (dependencias resueltas dentro de rangos del manifiesto). Node 22 del workflow/hosting reportado no fue validado como runtime activo.
+Comandos desde copia aislada, con PATH de Node y herramientas temporales:
+- tsc --noEmit: EXIT 0 (comprobación semántica de los fuentes TS/TSX y entradas API/scripts preparadas).
+- vite build --outDir /tmp/enc-release-frontend --emptyOutDir: EXIT 0; 1722 módulos. JS 1359.79 kB/gzip 295.57; CSS 247.18 kB/gzip 30.60. Advertencia chunk >500kB; no se cambia frontend fuera de alcance. Salida temporal, no se publica dist.
+- esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=server.js: EXIT 0. Luego cp server.js api/server.bundle.js.
+- Recompilación a /tmp/enc-release-rebuild.js: EXIT 0 y comparación binaria idéntica al ejecutable entregado.
+- node --check server.js y node --check tests/backup-security-002.test.cjs: EXIT 0.
+- node --test tests/backup-security-002.test.cjs: 9/9 PASS, EXIT 0.
+- ENC_BACKUP_EXECUTABLE=server.js node --test tests/backup-security-002.test.cjs: 9/9 PASS, EXIT 0.
+- ENC_BACKUP_EXECUTABLE=api/server.bundle.js node --test tests/backup-security-002.test.cjs: 9/9 PASS, EXIT 0.
+Total 27 tests aprobados y 927 solicitudes HTTP reales exclusivamente localhost: por modo, 175 solicitudes de 25 rutas x7 métodos, 75 variantes, 20 estáticos privados, 20 encodings/extensiones, 18 recursos públicos GET/HEAD y 1 recurso inexistente.
+Recursos legítimos de fixture: JS/CSS/manifest/SVG/imagen/well-known/HTML/health; 200 y HEAD vacío. No es regresión integral de los endpoints de negocio del portal ni una prueba de integración MariaDB/Hostinger.
+Denegaciones genéricas 403/no-store, sin secretos/rutas; no se alcanza downstream; archivos de fixture preservados por snapshots SHA256. CLI solo en fixture, exit1 sin crear/mover/sobrescribir/borrar backups. Guard instalado antes de middleware en fuente y ambos ejecutables; ausencia de generadores/handlers históricos.
+
+### Errores encontrados y resueltos
+- Primeros comandos con entorno vacío fallaron exit127 por PATH sin Node; se incluyó el directorio del runtime y se repitieron con éxito.
+- Harness heredado falló antes de ejecutar casos por API TypeScript 5 no disponible en TypeScript 7; corregido únicamente en tests autorizado y tres modos aprobados.
+- Instalación temporal: advertencia npm http-proxy y deprecación node-domexception, no bloqueantes.
+- Lectura interna de varios archivos en una sola respuesta excedió el límite de salida; se recuperaron por separado y se verificó identidad. No afectó código ni pruebas.
+
+### Hashes SHA256
+server.ts: 588de3b7b2e6d760d36c9b3b0809d80b5e005cf5348714281c1879d6b3e9c362
+scripts/create_release_zip.js: f5e07700ad79b040a0547d38db510ab6cbce0b826019e3eb94c6c934ba90ba0f
+server.js = api/server.bundle.js: 01b6cab6b6560b7b1f00fb26b4c58b7f42b612791c3788ed1a1eacd71e39137e
+tests/backup-security-002.test.cjs: 887c89073ff89713602a050b724c8df6564b075bedbf3bb172a3f5f74a3ecf74
+
+### Integración y condiciones previas de Staging
+Repositorio: package.json start=node server.js; app.js/index.js importan server.js; build:server=Vite + esbuild + copia a api/server.bundle.js. Procedimiento de generación identificado y ejecutado directamente sin hooks. Configuración EFECTIVA de Hostinger NO consultada.
+Necesarios según repositorio: entrypoint real (app.js/index.js o npm start), server.js, package.json/lock y dependencias runtime, dist del frontend, recursos públicos legítimos y configuración privada administrada fuera de Git. api/server.bundle.js corresponde a adaptadores API que lo importan; no asumir que Hostinger los usa.
+1. Coordinación revisa diff y reproduce comandos/versiones. Confirmar HEAD de destino si cambió; no merge automático.
+2. Autorizar por separado integración y despliegue; confirmar en hPanel qué entrypoint, rama, SHA, Node y comandos usa la aplicación de Staging. Esta tarea no autoriza acceso a Hostinger.
+3. Acreditar aislamiento efectivo BD/usuarios/directorios antes de arrancar: el servidor conserva inicialización y tareas automáticas preexistentes. Ni build ni guard hacen inocuo el arranque. No se ejecutó servidor completo por ese riesgo.
+4. Desplegar con frontend válido y dependencias; si hosting recompila, verificar que recompila este SHA y no sustituye el guard por un bundle antiguo. Vite temporal prueba compilación, no entrega nuevos dist en esta rama.
+5. Operador autorizado debe bloquear ZIP/SQL/secretos en servidor estático/CDN que pueda evitar Express, incluyendo GET/HEAD, aliases, codificaciones y cachés existentes. Preservar los backups; cualquier traslado/purga/cambio requiere autorización separada.
+6. Tras despliegue autorizado, verificar versión/hash y las 25 rutas/alternativas desde hosting, sin descargar contenido privado; controlar redirecciones y ausencia de filtraciones. No declarar Staging protegido antes de evidencia efectiva.
+7. Comprobar regresión funcional pública en entorno realmente aislado. Esta entrega no corrige autenticación, startup, permisos cruzados ni symlinks/archivos sensibles renombrados como recursos benignos.
+
+### Reversión
+Conservar SHA previo desplegado y respaldos privados existentes mediante operador autorizado. Ante fallo, detener avance y cerrar descargas en el borde antes de volver a un ejecutable antiguo: un rollback directo podría reabrir la exposición. Revertir únicamente commits de esta rama con revisión; mantener server.ts/server.js/api/server.bundle.js coherentes. No restaurar BD ni borrar/mover respaldos: esta tarea no cambió datos. Rollback operativo requiere autorización específica.
+Dictamen: entrega ejecutable apta para revisión de integración; no autorización de despliegue ni certificación de Staging protegido.
