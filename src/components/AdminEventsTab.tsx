@@ -169,13 +169,9 @@ export const AdminEventsTab: React.FC = () => {
         });
       }
     } catch (err: any) {
-      const errStr = String(err?.message || err || '');
-      const isSyntaxOrPattern = errStr.includes('pattern') || errStr.includes('The string did not match');
       setMessage({
-        text: isSyntaxOrPattern
-          ? 'Radar completado: Se sincronizó la cartelera con el radar local de respaldo (Modo de protección de red activo).'
-          : (err.message || 'Error de conexión con el Radar de Google/Gemini.'),
-        type: isSyntaxOrPattern ? 'success' : 'error'
+        text: err?.message || 'Error de conexión con el Radar de Google/Gemini. No se confirmó la sincronización.',
+        type: 'error'
       });
     } finally {
       setIsScanningRadar(false);
@@ -218,13 +214,9 @@ export const AdminEventsTab: React.FC = () => {
         }
       }
     } catch (err: any) {
-      const errStr = String(err?.message || err || '');
-      const isSyntaxOrPattern = errStr.includes('pattern') || errStr.includes('The string did not match');
       setAiSearchMessage({
-        text: isSyntaxOrPattern
-          ? 'Aviso: Se cargaron los eventos del radar local de Ciudad del Carmen (Protección de proxy activa).'
-          : (err.message || 'Error al ejecutar la búsqueda de eventos con IA.'),
-        type: isSyntaxOrPattern ? 'warning' : 'error'
+        text: err?.message || 'Error al ejecutar la búsqueda de eventos con IA. No se confirmaron resultados.',
+        type: 'error'
       });
     } finally {
       setAiSearchLoading(false);
@@ -249,7 +241,7 @@ export const AdminEventsTab: React.FC = () => {
     setIsPublishingCandidates(true);
     try {
       const res = await publishAIRadarCandidates(toPublish);
-      if (res.success) {
+      if (res.success && res.count === toPublish.length) {
         setMessage({
           text: `¡Éxito! Se publicaron ${res.count} eventos en la cartelera.`,
           type: 'success'
@@ -257,9 +249,15 @@ export const AdminEventsTab: React.FC = () => {
         setIsAiSearchModalOpen(false);
         loadData();
         loadRadarStatus();
+      } else {
+        setAiSearchMessage({
+          text: res.message || 'No se confirmó la publicación completa. Revisa la cartelera antes de reintentar.',
+          type: 'error'
+        });
+        loadData();
       }
     } catch (err: any) {
-      setMessage({ text: err.message || 'Error al publicar eventos.', type: 'error' });
+      setAiSearchMessage({ text: err?.message || 'Error al publicar eventos.', type: 'error' });
     } finally {
       setIsPublishingCandidates(false);
     }
