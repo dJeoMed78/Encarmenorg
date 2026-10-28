@@ -10,3 +10,14 @@
 - Plan: seis tarjetas compactas Glass; preservar datos sin edición; validaciones/estados reales y controles accesibles; opciones avanzadas plegables. Mantener quinto pago histórico en opciones avanzadas sin modificar constantes compartidas.
 - Pruebas aún no ejecutadas. Se prepara Chromium temporal para pruebas locales aisladas; sin conexiones a API/BD real.
 - Siguiente hito: implementación y pruebas de consumidor. Sin SQL, despliegue, merge ni cambios a main/ia-desarrollo.
+
+## Hito: implementación y pruebas reales de navegador — 2026-10-28T03:29:14.743Z
+- Estado EN_PROGRESO. Commit anterior: cac638abb32569d57933a260bde7fa89e53ac48b.
+- Rehecho EditBusinessModal dentro de su contrato de props: seis tarjetas Glass, ambiente azul/rosa, campos blancos, chips azules, horas/días, footer fuera del área desplazable, avanzados plegables y controles accesibles.
+- Guardado por delta: datos no editados no se normalizan ni se reemplazan con defaults. Horario libre/alias y métodos desconocidos preservados. Quinto pago histórico en avanzados; no se cambian constantes compartidas.
+- Contacto estricto, descripción 500 con conservación de legado no editado, permisos admin preservados, uploads con errores verdaderos (se detecta data URI de fallback del helper sin tocar api.ts), tamaños/límite de galería, protección ante respuestas de otra sesión/negocio.
+- 36 comprobaciones iniciales Chromium reales PASAN con callbacks y upload simulados; se amplían controles de categorías/ciudad/tamaño/galería para cierre. Ninguna conexión real a API/BD.
+- Capturas reales locales: 1440x1050, 834x1112, 390x844 y 320x700; sin desborde horizontal, footer visible y backdrop-filter efectivo. Falta comparación con imagen aprobada y Safari/iOS real.
+- Tipado enfocado del editor/dependencias PASA. Build Vite completo PASA. tsc global falla por TS2339 preexistente de AdminEventsTab.tsx:1499, archivo reservado a coordinación: NO se modifica.
+- Errores de preparación/prueba: descarga de Chromium de Playwright inválida; se usó binario temporal de paquete, sin cambiar dependencias del proyecto. Primera prueba detectó nombre accesible ambiguo en textarea (corregido); otra detectó carrera en reset del harness (corregida con cierre renderizado). No se presentan esos intentos como pruebas aprobadas.
+- Siguiente hito: terminar batería ampliada, conservar evidencias, verificar diff de tres archivos y registrar resultados. Sin merge/rebase automático, despliegue ni SQL.
