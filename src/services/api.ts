@@ -1186,24 +1186,58 @@ export interface BusinessRatingStats {
   userRating?: number | null;
 }
 
+export class RatingApiError extends Error {
+  constructor(message: string, public status: number = 0) {
+    super(message);
+    this.name = 'RatingApiError';
+  }
+}
+
+// Reject malformed responses rather than turning missing data into invented votes.
+export function parseRatingStats(value: unknown): BusinessRatingStats {
+  const data = value as BusinessRatingStats | null;
+  if (!data || typeof data.average !== 'number' || !Number.isFinite(data.average) ||
+      !Number.isSafeInteger(data.count) || data.count < 0 ||
+      (data.count === 0 ? data.average !== 0 : data.average < 1 || data.average > 5)) {
+    throw new RatingApiError('Respuesta de calificaciones inválida.');
+  }
+  return { average: data.average, count: data.count, distribution: data.distribution };
+}
+
+async function ratingResponse(res: Response): Promise<any> {
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new RatingApiError(
+      typeof data?.message === 'string' ? data.message : `No fue posible consultar o guardar la calificación (HTTP ${res.status}).`,
+      res.status
+    );
+  }
+  if (!data || typeof data !== 'object') throw new RatingApiError('Respuesta de calificaciones inválida.');
+  return data;
+}
+
+export async function fetchAllBusinessRatings(): Promise<Record<string, BusinessRatingStats>> {
+  const data = await ratingResponse(await fetch(`${API_BASE}/ratings`, { cache: 'no-store' }));
+  if (!data.stats || typeof data.stats !== 'object' || Array.isArray(data.stats)) {
+    throw new RatingApiError('Respuesta de calificaciones inválida.');
+  }
+  const stats: Record<string, BusinessRatingStats> = Object.create(null);
+  for (const [id, value] of Object.entries(data.stats)) stats[id] = parseRatingStats(value);
+  return stats;
+}
+
 export async function fetchBusinessRating(
   businessId: number | string,
   visitorId?: string
 ): Promise<BusinessRatingStats> {
-  try {
-    const q = visitorId ? `?visitorId=${encodeURIComponent(visitorId)}` : '';
-    const res = await fetch(`${API_BASE}/ratings/${businessId}${q}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (_) {
-    return {
-      average: 5.0,
-      count: 0,
-      distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
-      hasRated: false,
-      userRating: null
-    };
+  const q = visitorId ? `?visitorId=${encodeURIComponent(visitorId)}` : '';
+  const data = await ratingResponse(await fetch(`${API_BASE}/ratings/${encodeURIComponent(String(businessId))}${q}`, { cache: 'no-store' }));
+  const stats = parseRatingStats(data);
+  if (typeof data.hasRated !== 'boolean' ||
+      (data.hasRated ? !Number.isInteger(data.userRating) || data.userRating < 1 || data.userRating > 5 : data.userRating !== null)) {
+    throw new RatingApiError('Respuesta de voto personal inválida.');
   }
+  return { ...stats, hasRated: data.hasRated, userRating: data.userRating };
 }
 
 export async function submitBusinessRating(params: {
@@ -1211,22 +1245,19 @@ export async function submitBusinessRating(params: {
   rating: number;
   visitorId: string;
   comment?: string;
-}): Promise<{ success: boolean; message: string; rating?: number; reviewCount?: number; stats?: any }> {
-  try {
-    const res = await fetch(`${API_BASE}/ratings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params)
-    });
-    const data = await res.json();
-    return data;
-  } catch (err: any) {
-    return {
-      success: false,
-      message: err.message || 'Error de conexión al enviar la calificación'
-    };
+}): Promise<{ success: boolean; message: string; rating: number; reviewCount: number; stats: BusinessRatingStats }> {
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(String(params.businessId)) ||
+      !Number.isInteger(params.rating) || params.rating < 1 || params.rating > 5 ||
+      !/^[A-Za-z0-9_-]{1,100}$/.test(params.visitorId)) {
+    throw new RatingApiError('Datos de calificación inválidos.', 400);
   }
+  const data = await ratingResponse(await fetch(`${API_BASE}/ratings`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params)
+  }));
+  if (data.success !== true) throw new RatingApiError('El servidor no confirmó la calificación.');
+  const stats = parseRatingStats(data.stats);
+  if (stats.count < 1 || data.rating !== stats.average || data.reviewCount !== stats.count) {
+    throw new RatingApiError('El servidor devolvió agregados de calificación inconsistentes.');
+  }
+  return { success: true, message: 'Calificación guardada.', rating: stats.average, reviewCount: stats.count, stats };
 }
-
-
-

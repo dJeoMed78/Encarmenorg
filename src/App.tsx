@@ -16,9 +16,9 @@ import { MessageSquare, RefreshCw, Lock, X, Globe, ChevronDown } from 'lucide-re
 import seedBusinesses from './data/businesses_seed.json';
 import seedPromotions from './data/promotions_seed.json';
 import seedEvents from './data/events_carmen.json';
-import seedRatings from '../ratings_db.json';
 import ALL_COLONIAS_CARMEN from './data/colonias_carmen.json';
-import { getRealBusinessRating } from './utils/realRatings';
+import { RATINGS_UPDATED } from './utils/realRatings';
+import { BusinessRatingStats, fetchAllBusinessRatings } from './services/api';
 import { EventsPage } from './components/EventsPage';
 import { ClassifiedsView } from './components/ClassifiedsView';
 import { RegisterBusinessView } from './components/RegisterBusinessView';
@@ -272,11 +272,26 @@ export default function App() {
   const [adminError, setAdminError] = useState('');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => isSessionAdminAuthenticated());
 
-  const [ratingsTick, setRatingsTick] = useState(0);
+  const [ratingStats, setRatingStats] = useState<Record<string, BusinessRatingStats>>({});
+  const [ratingsStatus, setRatingsStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   useEffect(() => {
-    const onRatingUpdate = () => setRatingsTick((t) => t + 1);
-    window.addEventListener('real-ratings-updated', onRatingUpdate);
-    return () => window.removeEventListener('real-ratings-updated', onRatingUpdate);
+    let alive = true;
+    let request = 0;
+    const load = async () => {
+      const order = ++request;
+      setRatingsStatus('loading');
+      try {
+        const stats = await fetchAllBusinessRatings();
+        if (alive && order === request) { setRatingStats(stats); setRatingsStatus('ready'); }
+      } catch {
+        if (alive && order === request) { setRatingStats({}); setRatingsStatus('error'); }
+      }
+    };
+    const reload = () => { void load(); };
+    reload();
+    window.addEventListener(RATINGS_UPDATED, reload);
+    window.addEventListener('focus', reload);
+    return () => { alive = false; window.removeEventListener(RATINGS_UPDATED, reload); window.removeEventListener('focus', reload); };
   }, []);
 
   const [businessesList, setBusinessesList] = useState<Business[]>(() => (seedBusinesses as unknown as Business[]) || []);
@@ -390,16 +405,13 @@ export default function App() {
     return raw
       .filter((b): b is Business => Boolean(b && typeof b === 'object' && b.id !== undefined && !deletedBusinessIds.includes(Number(b.id))))
       .map((b) => {
-        let realStat = { average: 0, count: 0, scores: [] as number[] };
-        try {
-          realStat = getRealBusinessRating(b.id);
-        } catch (_) {}
+        const realStat = ratingsStatus === 'ready' ? ratingStats[String(b.id)] : undefined;
         const override = businessOverrides[String(b.id)] || {};
         return {
           ...b,
-          rating: (realStat && realStat.count > 0) ? realStat.average : (b.rating || 0),
-          reviewCount: (realStat && realStat.count > 0) ? realStat.count : (b.reviewCount || 0),
           ...override,
+          rating: realStat?.average ?? 0,
+          reviewCount: realStat?.count ?? 0,
         };
       })
       .sort((a, b) => {
@@ -419,7 +431,7 @@ export default function App() {
         if (timeB !== timeA) return timeB - timeA;
         return (Number(b?.id) || 0) - (Number(a?.id) || 0);
       });
-  }, [businessesList, businessOverrides, deletedBusinessIds, ratingsTick]);
+  }, [businessesList, businessOverrides, deletedBusinessIds, ratingStats, ratingsStatus]);
 
   const categoriasList = useMemo(() => {
     const set = new Set<string>();
@@ -786,6 +798,11 @@ export default function App() {
         <div className="absolute top-[48%] -right-32 w-[600px] h-[600px] bg-amber-200/45 rounded-full blur-[130px]" />
         <div className="absolute bottom-[10%] left-[20%] w-[550px] h-[550px] bg-teal-100/50 rounded-full blur-[120px]" />
       </div>
+
+      {ratingsStatus !== 'ready' && <p role={ratingsStatus === 'error' ? 'alert' : 'status'} className="relative z-30 p-2 text-center text-xs">
+        {ratingsStatus === 'loading' ? 'Consultando calificaciones…' : 'No fue posible consultar las calificaciones. Los promedios no están disponibles.'}
+        {ratingsStatus === 'error' && <button type="button" className="ml-2 underline" onClick={() => window.dispatchEvent(new Event(RATINGS_UPDATED))}>Reintentar</button>}
+      </p>}
 
       {/* 1. SECCIÓN SUPERIOR UNIFICADA CON LA FOTOGRAFÍA DEL ATARDECER Y CRISTAL TRANSLÚCIDO */}
       <div className="relative w-full overflow-visible select-none z-20">
