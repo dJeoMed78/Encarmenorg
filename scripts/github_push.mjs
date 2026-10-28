@@ -188,25 +188,36 @@ export async function ghRequest(endpoint, method = 'GET', body = null, token = p
  */
 export function getLocalModifiedFiles() {
   try {
-    const statusOutput = execSync('git status --porcelain', { encoding: 'utf8' });
-    const lines = statusOutput.split('\n').filter(Boolean);
-    const files = [];
+    const trackedModified = execSync('git diff --name-only HEAD', { encoding: 'utf8' })
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
 
-    for (const line of lines) {
-      const filePath = line.slice(3).trim();
-      // Filtrar carpetas transitorias de AI Studio y directorios locales volátiles
-      if (
-        filePath.startsWith('.aistudio') ||
-        filePath.startsWith('dist/') ||
-        filePath.startsWith('public/assets/aistudio/') ||
-        filePath === 'classifieds_db.json' ||
-        filePath === 'events_db.json'
-      ) {
-        continue;
-      }
-      files.push(filePath);
-    }
-    return files;
+    const staged = execSync('git diff --cached --name-only', { encoding: 'utf8' })
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const untracked = execSync('git ls-files --others --exclude-standard', { encoding: 'utf8' })
+      .split('\n')
+      .map((s) => s.trim())
+      .filter((filePath) => {
+        if (!filePath) return false;
+        if (
+          filePath.startsWith('.aistudio') ||
+          filePath.startsWith('dist/') ||
+          filePath.startsWith('public/assets/aistudio/') ||
+          filePath.startsWith('public/uploads/') ||
+          filePath.startsWith('uploads/') ||
+          filePath === 'classifieds_db.json' ||
+          filePath === 'events_db.json'
+        ) {
+          return false;
+        }
+        return true;
+      });
+
+    return Array.from(new Set([...trackedModified, ...staged, ...untracked]));
   } catch (_) {
     return [];
   }
