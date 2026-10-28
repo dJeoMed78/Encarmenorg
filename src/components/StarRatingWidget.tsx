@@ -249,6 +249,18 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
               }
               aria-describedby={`comment-help-${businessId}`}
             />
+            {comment && (
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => {
+                  setComment("");
+                  setDraftError("");
+                }}
+              >
+                Quitar comentario
+              </button>
+            )}
             <p id={`comment-help-${businessId}`}>
               {comment.length}/200 · Texto puro en español. Se publica
               automáticamente si pasa los filtros; no incluyas datos personales.
