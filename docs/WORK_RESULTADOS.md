@@ -243,3 +243,48 @@ Recomendación/dictamen:
 - Coordinar comparación con referencia original, conciliación documental y pruebas posteriores autorizadas.
 - Revisión del coordinador: PENDIENTE, reservada al coordinador.
 - Integración/Staging: NO REALIZADOS por esta tarea.
+
+## ENC-GLASS-EDITOR-001 — auditoría comparativa sin rediseño (2026-10-28T12:56:25.086Z)
+Estado AUDITORÍA COMPLETADA / PRUEBAS LOCALES EJECUTADAS / 7 HALLAZGOS. Sin nuevo código funcional; NO INTEGRADO/NO DESPLEGADO.
+Rama work/enc-glass-editor-001. HEAD de código revisado d49ec7004874a0004bf2cf8f03a67bd8b7a89de0, checkpoint de esta revisión b9ecd08e3ddf7a9077df49b37b7106695f01a4d0. ia-desarrollo vigente cad1222618c94f4eb3dabb589b6e58836191dcb7.
+PR#3 abierto/no integrado al revisar; rama Work divergía con3 commits propios y10 detrás. No se aplicó PR#3, no se sustituyó el editor aprobado.
+Fuentes: Work src/components/EditBusinessModal.tsx d80a5a83871f129b7c033343be859c5410830cc9; ia00eeb741068d731988cf13b6ee49edd12182016b. Se mantienen sin modificación.
+Leídas instrucciones de tarea672c823b4e6f3c2547289cdd72e3f60ecb09f832 y ENC-UI-GLASS-001 (especificación de ficha pública, no sustituto de imagen original de editor). Prevalece orden actual de auditar/no rediseñar. La referencia original específica de editor no estaba disponible; no se afirma coincidencia pixel a pixel.
+
+### Pruebas y método
+- Copia aislada con consumidores actuales de ia y SOLO la implementación Work de editor sustituida para comprobar contrato, no merge ni checkout íntegro de la rama histórica.
+- tsc --noEmit -p editor-audit-001/tsconfig.json: PASS.
+- Vite directo en esa copia: PASS,1722 módulos, advertencia chunk>500kb.
+- Chromium153/Playwright, node /tmp/enc-editor-audit-validation/test-audit.cjs: auditoría de26 criterios,19 cumplidos y7 hallazgos; adicionalmente control técnico de cero errores JS/solicitudes externas aprobado. EXIT0 del script indica auditoría completada, NO ausencia de regresiones.
+- Por variante: ia6 criterios cumplidos/7 hallazgos; Work13 cumplidos/0 hallazgos EN LOS CASOS EXAMINADOS. No prueba exhaustividad ni seguridad backend.
+- Datos sintéticos, upload503 interceptado y callbacks onSave en memoria con respuesta error/pendiente. Sin servidor completo, BD, SQL, migración o publicación real.
+- SHA256 harness:9c5971d1f69b51d44faa780dacb58dab0ae10a23f62819b4ba545bea2cc471e3.
+- Ambos renderizan en1440x1050 y390x844 sin desborde observado; clic exterior no cierra; error y pendiente de onSave no cierran ni muestran guardado confirmado. Horario sin editar se conserva en ambos.
+
+### Siete hallazgos comprobados sobre ia actual
+1. Horario de fixture “Lun, Mié, Vie09:15-17:30” precarga controles08:00/18:00. El texto no editado sí se preservó; riesgo de sobrescritura si se cambia el control semanal. La expresión de extracción aparece doble escapada.
+2. WhatsApp vacío se rellena con9381234567 del teléfono de fixture. No se demostró que ese teléfono tenga WhatsApp.
+3. Pago heredado “Pago corporativo al cierre de mes” se envía como “Efectivo, Transferencia Bancaria (SPEI)” sin editar.
+4. Modalidad “Servicio únicamente mediante cita” se envía como “Atención en el Local de la empresa” sin editar.
+5. Sin teléfono ni WhatsApp se invoca onSave1 vez; frontend no bloquea ese caso.
+6. Doble clic rápido durante pendiente invoca onSave2 veces. No demuestra dos filas ni persistencia duplicada en BD; son dos callbacks.
+7. Upload503 sustituye preview por dataURI local. Es observación de fallback del helper, NO prueba de subida remota ni de escritura ficticia en BD. Debe comunicarse como borrador o rechazarse según contrato; verificar persistencia antes de tratarlo como carga remota.
+Work supera estos mismos13 criterios: horas09:15/17:30, WA vacío, campos heredados preservados,0 callbacks sin contacto,1 callback en doble envío y preview previo conservado ante upload503.
+
+### Compatibilidad y diferencias visuales
+Props onSave/onClose/business y consumidores actuales compilaron. Work usa payload de campos sucios, guardas de guardado/upload y protección de sesión; son mejoras funcionales candidatas a portado selectivo.
+Las capturas muestran diferencias materiales de ancho, espaciado, tipografía y ubicación (dirección/CP vs colonia/ciudad), aunque ambas son Glass. Mejor comportamiento en estos casos NO autoriza reemplazar el diseño que el propietario aprobó.
+No se incorporó la nueva sección logo de la rama Logo/Maps. Coordinación deberá conciliar preservación de campos, payload de logo y diseño aprobado de forma explícita; copiar un archivo entero puede perder cambios de otra tarea.
+Autenticación real/persistencia continúan siendo dependencias; un isAdmin de cliente no sustituye guard servidor. El editor por sí solo no prueba operaciones autorizadas ni MariaDB.
+
+### Evidencia y cambios publicados
+Paquete común: https://chatgpt.com/library?file_id=libfile_1d6fb1057d78819184c5920af2051d53&account_id=personal
+Carpeta Editor-auditoria:4 PNG (ia y Work en escritorio/móvil), todos sintéticos, Work rotulado NO APLICADA. Capturas desktop revisadas visualmente.
+Solo se modifican docs/WORK_RESULTADOS.md y docs/work-progress/ENC-GLASS-EDITOR-001.md en esta revisión. Código de editor intacto. Sin refactor/diseño/cambios API/servidor/App/auth/DB/dependencias.
+El entorno local quedó no disponible durante una renovación posterior de capturas de otra tarea. Estos26 criterios ya habían terminado y sus resultados/capturas estaban guardados; no se inventan nuevas ejecuciones.
+
+### Recomendación y dictamen
+NO APTO para sustitución automática mediante PR#3 ni despliegue basado solo en esta auditoría.
+APTO para revisión de hallazgos/contrato de editor. Preservar diseño aprobado; acordar cuál fuente visual conservar y portar únicamente lógica necesaria con pruebas, sin sobreescribir otros módulos.
+Priorizar preservación de pago/modalidad/WA, parser de horarios y exclusión inmediata de doble envío; revisar semántica de uploaddataURI. Persistencia real y pruebas autorizadas de sesión/BD quedan pendientes. No se aplicó ninguna corrección de UI bajo una orden de solo revisión.
+Rollback de esta revisión: revertir únicamente commits documentales; no hay código/datos nuevos que revertir. Esperando coordinación, sin PR/merge/despliegue/SQL.
