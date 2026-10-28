@@ -47,7 +47,7 @@
 7. Coordinador compara rama contra `ia-desarrollo`; si aprueba, organiza integración y validación de Staging. Autorizaciones históricas no sustituyen aprobación de integración. Producción no es opción.
 
 ## 5. Tareas asignadas
-**Tarea asignada:** `ENC-REVIEWS-001`. Instrucciones completas en `docs/work-tasks/ENC-REVIEWS-001.md` de esta rama. Solo ejecutar cuando el usuario transmita expresamente este ID. No asumir que existen otras tareas autorizadas.
+**Tareas documentadas:** `ENC-REVIEWS-001` (implementación entregada) y `ENC-REVIEWS-002` (auditoría de solo lectura). Consultar `docs/work-tasks/ENC-REVIEWS-001.md` y `docs/work-tasks/ENC-REVIEWS-002.md`. Solo ejecutar una tarea cuando el usuario transmita expresamente su ID. No asumir que existen otras tareas autorizadas.
 
 ## 6. Antecedentes
 Prueba `ENC-SETUP-001`: rama `work/verificacion-acceso-001`, commit `d48a3367805b21e1e49cb1aac05fe835dbe5748f`, exclusivamente archivo `docs/WORK_PRUEBA_ACCESO.md`; verificada por el coordinador mediante comparación GitHub con base `6004ef637021ee0bea72f5c892a815696c1c8c13`. No integra código de aplicación.
@@ -56,3 +56,17 @@ Prueba `ENC-SETUP-001`: rama `work/verificacion-acceso-001`, commit `d48a3367805
 
 ## 7. Validación ENC-SETUP-002
 Work confirmó lectura completa y detectó cinco riesgos, abordados en esta revisión: prioridad de alcance documental, efectos secundarios de scripts, commit de resultados, disponibilidad de resultados entre ramas y autorización de Staging. No modificó archivos durante su revisión.
+
+## 8. Puntos de control de tareas largas (vigente para nuevas tareas)
+
+**Propósito:** permitir al coordinador observar avances verificables mediante GitHub, sin acceso a la conversación privada de Work y sin depender de informes manuales constantes.
+
+1. La tarea específica debe autorizar explícitamente los archivos de seguimiento y las escrituras. **Este protocolo no amplía por sí solo el alcance de ninguna tarea**, especialmente las de solo lectura como `ENC-REVIEWS-002`.
+2. En tareas de implementación que duren más de una etapa, y **solo cuando la tarea lo autorice**, publicar puntos de control en la rama propia en `docs/work-progress/<ID>.md`. Crear la ruta exclusivamente si está autorizada. No escribir en ramas compartidas, `ia-desarrollo` o `main`.
+3. Registrar al iniciar, después de cada hito comprobable y al bloquearse: fecha/hora UTC, ID, rama, SHA base y commit actual, estado, acciones terminadas, archivos modificados, pruebas ejecutadas y sus resultados reales, siguiente paso, riesgos y bloqueos. No incluir datos sensibles.
+4. Los commits de avance deben ser coherentes y seguros: no publicar código incompleto como si estuviera aprobado; identificar claramente `WIP` y qué falta. No forzar pushes. No se exige un commit por minuto ni avances artificiales; publicar al terminar hitos sustanciales.
+5. Antes de editar un archivo de seguimiento, comprobar que está autorizado para esa tarea. Si la tarea es **solo lectura**, reportar avances y resultados en la conversación de Work, sin crear commits ni archivos.
+6. Al finalizar, actualizar `docs/WORK_RESULTADOS.md` únicamente si la tarea lo permite, y vincular commits/puntos de control. La revisión del coordinador sigue siendo obligatoria; los avances no equivalen a aprobación, integración o despliegue.
+7. Work no puede enviar mensajes directamente a otra conversación de ChatGPT ni activar la revisión del coordinador por sí solo. La supervisión mediante GitHub es periódica y limitada a información publicada. Si una decisión bloquea la tarea, detenerse y reportar al usuario.
+
+**Seguridad:** este protocolo nunca autoriza SQL real, despliegues, acceso a producción ni modificaciones fuera del alcance asignado.
