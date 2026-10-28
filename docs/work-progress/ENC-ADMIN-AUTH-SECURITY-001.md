@@ -1,0 +1,6 @@
+# ENC-ADMIN-AUTH-SECURITY-001
+## Inicio 2026-10-28T11:39:27.400Z
+Estado EN_PROGRESO. Base cad1222618c94f4eb3dabb589b6e58836191dcb7, rama work/enc-admin-auth-security-001. Instrucción 4adf2bdc83bd2908b67b9c10bc829147f822670e.
+Confirmado: panel Glass actual tiene cuatro acciones disabled; no prueba edición anónima desde esa pantalla. Riesgos separados: fallback de hashes en cliente, indicador local sin verificar, cambio de contraseña y rutas administrativas mutables sin autorización fiable. Contratos de edición/eliminación con DB best-effort tampoco garantizan persistencia.
+Decisión: π accesible abre formulario real; no panel antes de respuesta login + validación sesión servidor. Retirar fallback/flags locales y cerrar rutas administrativas identificadas por defecto. Credenciales heredadas/gestión comprometida requieren rotación/configuración fuera de autorización; login de aplicación permanecerá 503, sin crear credenciales ni habilitar acciones. Factoría de sesión/autorización inyectable para pruebas locales sintéticas; runtime sin proveedor seguro no autentica. No se afirmará solución completa ni persistencia real.
+Archivos: BusinessPublicDetail.tsx/CSS solo acceso π, utils/adminAuth.ts, server.ts solo seguridad administrativa, WORK_RESULTADOS y este progreso. Sin API/App/editor/DB/dependencias. Pruebas aisladas, nunca ejecutar servidor completo ni SQL.
