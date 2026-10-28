@@ -47,8 +47,7 @@
 7. Coordinador compara rama contra `ia-desarrollo`; si aprueba, organiza integración y validación de Staging. Autorizaciones históricas no sustituyen aprobación de integración. Producción no es opción.
 
 ## 5. Tareas asignadas
-**Ninguna tarea de programación está autorizada por este archivo inicial.**
-La primera asignación se añadirá en una revisión posterior por el coordinador. Work debe esperar a que se publique y se le indique un ID concreto.
+**Tarea asignada:** `ENC-REVIEWS-001`. Instrucciones completas en `docs/work-tasks/ENC-REVIEWS-001.md` de esta rama. Solo ejecutar cuando el usuario transmita expresamente este ID. No asumir que existen otras tareas autorizadas.
 
 ## 6. Antecedentes
 Prueba `ENC-SETUP-001`: rama `work/verificacion-acceso-001`, commit `d48a3367805b21e1e49cb1aac05fe835dbe5748f`, exclusivamente archivo `docs/WORK_PRUEBA_ACCESO.md`; verificada por el coordinador mediante comparación GitHub con base `6004ef637021ee0bea72f5c892a815696c1c8c13`. No integra código de aplicación.
