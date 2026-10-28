@@ -210,3 +210,10 @@ https://chatgpt.com/library?file_id=libfile_2bcafafc336c81919b5b5d39ac891ae3&acc
 Archivos modificados: server.ts, src/db/mariadb.ts, src/services/api.ts, src/utils/realRatings.ts, src/components/StarRatingWidget.tsx; nuevos src/components/BusinessComments.tsx, BusinessCommentsPolicy.tsx, BusinessComments.css; WORK_RESULTADOS y progreso de esta tarea.
 Sin App, editor, Radar, auth global ni dependencias. No PR/merge/despliegue/SQL. Rollback propuesto: revertir commits de esta rama en una integración futura; gate default off conserva no publicación de texto. No rollback de datos porque no se escribió BD.
 Dictamen: APTO PARA REVISIÓN DEL CÓDIGO PREPARADO; NO APTO PARA ACTIVAR COMENTARIOS PÚBLICOS NI MODERACIÓN. Se concluye el trabajo seguro posible y continúa Radar sin nueva espera.
+
+### Verificación adicional de cierre — 2026-10-28T11:21:02.702Z
+- Compilación aislada del backend completo con esbuild --bundle --platform=node --format=esm --packages=external --outfile=/tmp/enc-comments-validation/server.bundle.mjs: PASS. Solo compilación, jamás ejecución de servidor ni conexión/consulta.
+- Rutas/política harness SHA256 bd33b1a54ec10bfc204731d2ae2e95c2017007ecc2b2f5d5c1f02897d91e4657; navegador 90646a3aca5011100b407ce41db880db1ff07997e3cad8a841185b4914bacaec.
+- Los ocho archivos de código publicados fueron leídos de vuelta y coinciden exactamente con la copia probada.
+- Cambio concurrente verificado: PR #4 ya fue integrado por coordinación en cad1222618c94f4eb3dabb589b6e58836191dcb7 después de la base de esta tarea. Work no integró ni rebasó Comentarios. Se mantiene la dependencia de adaptar el aviso estático de Glass en integración revisada; código de logo intacto.
+- Entrega final sigue siendo PARCIAL PREPARADA, gate default off y moderación bloqueada. No activar ni declarar módulo completo.
