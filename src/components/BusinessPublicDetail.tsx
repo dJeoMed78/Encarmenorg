@@ -50,6 +50,87 @@ function phone(value?: string) {
   if (/^52\d{10}$/.test(n)) return n;
   if (/^521\d{10}$/.test(n)) return `52${n.slice(3)}`;
 }
+// Only known Google Maps origins can become links/frames; no address/name geocoding.
+export function businessMapPresentation(b: {
+  mapsUrl?: unknown;
+  latitude?: unknown;
+  longitude?: unknown;
+}) {
+  const coordinate = (v: unknown, max: number) => {
+    if (
+      typeof v !== "number" &&
+      (typeof v !== "string" ||
+        !v.trim() ||
+        !/^[-+]?\d+(?:\.\d+)?$/.test(v.trim()))
+    )
+      return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) && Math.abs(n) <= max ? n : undefined;
+  };
+  const lat = coordinate(b.latitude, 90),
+    lon = coordinate(b.longitude, 180);
+  const coordinateLink =
+    lat !== undefined && lon !== undefined
+      ? `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`
+      : undefined;
+  let link: string | undefined, embed: string | undefined;
+  if (typeof b.mapsUrl === "string" && b.mapsUrl.length <= 7000)
+    try {
+      const u = new URL(b.mapsUrl);
+      const google = [
+        "www.google.com",
+        "google.com",
+        "maps.google.com",
+      ].includes(u.hostname);
+      if (
+        u.protocol === "https:" &&
+        !u.username &&
+        !u.password &&
+        !u.port &&
+        !u.searchParams.has("key")
+      ) {
+        if (
+          google &&
+          (u.pathname === "/maps" ||
+            u.pathname.startsWith("/maps/") ||
+            (u.hostname === "maps.google.com" && u.pathname === "/"))
+        )
+          link = u.href;
+        else if (u.hostname === "maps.app.goo.gl" && u.pathname.length > 1)
+          link = u.href;
+        const pb = u.searchParams.get("pb");
+        if (
+          google &&
+          u.pathname === "/maps/embed" &&
+          pb &&
+          pb.startsWith("!") &&
+          pb.length <= 6000 &&
+          !/[<>`"\p{Cc}\p{Cf}]/u.test(pb)
+        ) {
+          const canonical = new URL("https://www.google.com/maps/embed");
+          canonical.searchParams.set("pb", pb);
+          embed = canonical.href;
+        }
+      }
+    } catch {
+      /* Invalid registered map is not a frame. */
+    }
+  return { link: coordinateLink || link, embed };
+}
+function companyLogo(value: unknown) {
+  if (typeof value !== "string" || !value || value.length > 2048)
+    return undefined;
+  try {
+    const u = new URL(value, window.location.origin);
+    return ["https:", "http:"].includes(u.protocol) &&
+      !u.username &&
+      !u.password
+      ? u.href
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 function Photo({ src, alt }: { src?: string; alt: string }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
@@ -93,6 +174,41 @@ export function BusinessPublicDetail({
   const root = useRef<HTMLDivElement>(null),
     galleryButton = useRef<HTMLButtonElement>(null),
     adminButton = useRef<HTMLButtonElement>(null);
+  const [logoFailed, setLogoFailed] = useState(false),
+    [mapConsent, setMapConsent] = useState(false),
+    [mapFailed, setMapFailed] = useState(false),
+    [mapWide, setMapWide] = useState(false);
+  const mapBox = useRef<HTMLDivElement>(null);
+  const mapPresentation = businessMapPresentation(b),
+    registeredLogo = companyLogo(b.logo_url);
+  useEffect(() => setLogoFailed(false), [b.id, b.logo_url]);
+  useEffect(() => {
+    setMapConsent(false);
+    setMapFailed(false);
+  }, [b.id, b.mapsUrl, b.latitude, b.longitude]);
+  useEffect(() => {
+    const node = mapBox.current;
+    if (!node) return;
+    const update = () => setMapWide(node.clientWidth >= 200);
+    update();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [b.id]);
+  useEffect(() => {
+    const blocked = (event: SecurityPolicyViolationEvent) => {
+      if (
+        mapConsent &&
+        ["frame-src", "child-src"].includes(event.effectiveDirective) &&
+        event.blockedURI.startsWith("https://www.google.com")
+      )
+        setMapFailed(true);
+    };
+    document.addEventListener("securitypolicyviolation", blocked);
+    return () =>
+      document.removeEventListener("securitypolicyviolation", blocked);
+  }, [mapConsent]);
   const overlay = gallery || admin;
   const hadOverlay = useRef(false);
   useEffect(() => {
@@ -171,18 +287,7 @@ export function BusinessPublicDetail({
   };
   const tel = phone(b.phone),
     wa = phone(b.whatsapp);
-  const coords =
-    b.latitude != null &&
-    b.longitude != null &&
-    Number.isFinite(Number(b.latitude)) &&
-    Number.isFinite(Number(b.longitude)) &&
-    Math.abs(Number(b.latitude)) <= 90 &&
-    Math.abs(Number(b.longitude)) <= 180;
-  const map =
-    safeUrl(b.mapsUrl) ||
-    (coords
-      ? `https://www.google.com/maps/search/?api=1&query=${b.latitude},${b.longitude}`
-      : undefined);
+  const map = mapPresentation.link;
   const payments = Array.isArray(b.paymentMethods)
     ? b.paymentMethods.filter(Boolean).join(" · ")
     : b.payment;
@@ -399,10 +504,11 @@ export function BusinessPublicDetail({
             </section>
           </main>
           <div className="bpd-card bpd-identity">
-            {extra.logo_url ? (
-              <Photo
-                src={safeUrl(extra.logo_url)}
+            {registeredLogo && !logoFailed ? (
+              <img
+                src={registeredLogo}
                 alt={`Logotipo de ${b.name}`}
+                onError={() => setLogoFailed(true)}
               />
             ) : (
               <>
@@ -418,13 +524,44 @@ export function BusinessPublicDetail({
               <h2>
                 <MapPin /> Ubicación
               </h2>
-              <div className="bpd-map">
-                <MapPin size={30} />
-                <span>
-                  {map
-                    ? "Consultar ubicación registrada"
-                    : "Mapa no registrado"}
-                </span>
+              <div ref={mapBox} className="bpd-map-container">
+                {mapPresentation.embed && mapWide && !mapFailed ? (
+                  mapConsent ? (
+                    <>
+                      <iframe
+                        className="bpd-map-embed"
+                        src={mapPresentation.embed}
+                        title={`Mapa de ${b.name}`}
+                        loading="lazy"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        allowFullScreen
+                        onError={() => setMapFailed(true)}
+                      />
+                      <small>
+                        Si el mapa no se visualiza, utiliza el enlace externo.
+                      </small>
+                    </>
+                  ) : (
+                    <div className="bpd-map">
+                      <MapPin size={30} />
+                      <button type="button" onClick={() => setMapConsent(true)}>
+                        Cargar mapa de Google
+                      </button>
+                      <small>Al cargarlo, conectarás con Google Maps.</small>
+                    </div>
+                  )
+                ) : (
+                  <div className="bpd-map">
+                    <MapPin size={30} />
+                    <span>
+                      {mapFailed
+                        ? "No se pudo cargar el mapa aquí."
+                        : map
+                          ? "Vista incrustada no disponible. Abre la ubicación en Google Maps."
+                          : "Ubicación de mapa no registrada."}
+                    </span>
+                  </div>
+                )}
               </div>
               <p>
                 {b.address ||

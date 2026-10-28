@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
   Building2,
@@ -109,6 +109,11 @@ class ModalErrorBoundary extends React.Component<
   }
 }
 
+function safeCompanyLogo(value:unknown):string|undefined{if(value==='')return '';if(typeof value!=='string'||!value||value.length>2048||(!value.startsWith('/')&&!/^https?:\/\//i.test(value)))return;try{const u=new URL(value,window.location.origin);if(['http:','https:'].includes(u.protocol)&&!u.username&&!u.password)return value;}catch{}}
+async function serverAllowsCompanyLogo(signal?:AbortSignal):Promise<boolean>{
+  const controller=new AbortController(),abort=()=>controller.abort();if(signal?.aborted)controller.abort();signal?.addEventListener('abort',abort,{once:true});const timer=setTimeout(abort,5000);
+  try{const token=sessionStorage.getItem('encarmen_admin_session_token')||'';if(!/^[0-9a-f]{64}$/.test(token))return false;const response=await fetch('/api/admin/session',{cache:'no-store',headers:{'X-Encarmen-Admin-Token':token},signal:controller.signal});const data=await response.json();return response.ok&&data.success===true&&Number.isFinite(data.expiresAt)&&data.expiresAt>Date.now()&&Array.isArray(data.permissions)&&data.permissions.includes('business:manage');}catch{return false;}finally{clearTimeout(timer);signal?.removeEventListener('abort',abort);}
+}
 interface EditBusinessModalProps {
   business: Business | null;
   isOpen: boolean;
@@ -142,6 +147,10 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isUploadingGallery, setIsUploadingGallery] = useState(false);
 
+  const [logoAllowed,setLogoAllowed]=useState(false),[logoDirty,setLogoDirty]=useState(false),[logoUploading,setLogoUploading]=useState(false),[logoPreviewFailed,setLogoPreviewFailed]=useState(false);
+  const logoEpoch=useRef(0),logoBusy=useRef(false),logoDraftId=useRef<number|null>(null);
+  useEffect(()=>{const version=++logoEpoch.current,controller=new AbortController();setLogoAllowed(false);setLogoDirty(false);logoDraftId.current=null;setLogoUploading(false);logoBusy.current=false;if(isOpen&&business)void serverAllowsCompanyLogo(controller.signal).then(ok=>{if(version===logoEpoch.current&&!controller.signal.aborted)setLogoAllowed(ok)});return()=>{logoEpoch.current++;controller.abort();};},[isOpen,business?.id]);
+  useEffect(()=>setLogoPreviewFailed(false),[formData.logo_url]);
   // Lista plana y exhaustiva de todas las categorías y subcategorías disponibles en el sistema (Falla 13)
   const allAvailableCategories = useMemo(() => {
     const list: { name: string; id?: number | string }[] = [];
@@ -258,6 +267,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           instagram: ensureString(business.instagram),
           website: ensureString(business.website),
           image: ensureString(business.image),
+          logo_url: logoDraftId.current===business.id&&(logoDirty||logoBusy.current)?formData.logo_url:ensureString(business.logo_url),
           gallery: safeGallery,
           slug: ensureString(business.slug),
           previousSlugs: safePrevSlugs,
@@ -282,6 +292,21 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   }, [business, isOpen]);
 
   if (!isOpen || !business) return null;
+
+  const handleCompanyLogoUpload = async(e:React.ChangeEvent<HTMLInputElement>)=>{
+    const file=e.target.files?.[0];e.target.value='';if(!file||logoBusy.current)return;
+    if(!logoAllowed){setErrorMsg('El logotipo requiere sesión administrativa verificada.');return;}
+    if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024){setErrorMsg('Usa logotipo JPEG, PNG o WebP de hasta 5 MB.');return;}
+    logoBusy.current=true;logoDraftId.current=business.id;setLogoUploading(true);const version=logoEpoch.current;setErrorMsg(null);
+    try{if(!await serverAllowsCompanyLogo())throw new Error('La sesión no permite cambiar el logotipo.');
+      const data=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('No se pudo leer el logotipo.'));reader.readAsDataURL(file);});
+      if(version!==logoEpoch.current)return;
+      const response=await uploadBusinessLogo(data,file.name);const url=safeCompanyLogo(response.url);
+      if(!response.success||!url)throw new Error('El servidor no confirmó una URL de logotipo. No se guardó la imagen.');
+      if(version!==logoEpoch.current)return;setFormData(prev=>({...prev,logo_url:url}));setLogoDirty(true);
+    }catch(error){if(version===logoEpoch.current)setErrorMsg(error instanceof Error?error.message:'No se pudo cargar el logotipo.');}
+    finally{if(version===logoEpoch.current){logoBusy.current=false;setLogoUploading(false);}}
+  };
 
   const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -373,6 +398,11 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
     setIsSaving(true);
     setErrorMsg(null);
     try {
+      if(logoBusy.current)throw new Error('Espera a que termine la carga del logotipo.');
+      if(logoDirty&&!await serverAllowsCompanyLogo()){setLogoAllowed(false);throw new Error('La sesión venció o no permite guardar el logotipo.');}
+      const logo=safeCompanyLogo(formData.logo_url);
+      if(logoDirty&&logo===undefined)throw new Error('El logotipo debe tener una URL válida confirmada por el servidor.');
+      const {logo_url:_unchangedLogo,...businessFields}=formData;
       const cleanName = formatBusinessName(formData.name.trim());
       const cleanAddress = formatAddressText(formData.address || '');
       const cleanPhone = cleanPhoneNumber(formData.phone);
@@ -388,7 +418,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         .replace(/[^a-z0-9-_]/g, '');
 
       const res = await onSave(business.id, {
-        ...formData,
+        ...businessFields,
+        ...(logoDirty?{logo_url:logo}:{}),
         schedule: weeklyEdited ? ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].filter((_,i)=>weeklyDays[i]).join(', ') + ' ' + openingTime + ' - ' + closingTime : formData.schedule,
         ...(isAdmin ? { slug: cleanSlug || undefined, isTopBusiness: formData.isTopBusiness, isRecommended: formData.isRecommended } : { slug: business.slug, isTopBusiness: business.isTopBusiness, isRecommended: business.isRecommended }),
         name: cleanName,
@@ -963,9 +994,17 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           {/* Image Upload / URL */}
           <section className="encarmen-photo-glass rounded-[18px] border border-white/75 bg-white/25 backdrop-blur-xl p-3 shadow-[inset_0_1px_0_rgba(255,255,255,.85),0_8px_22px_rgba(80,112,155,.10)]">
           <div className="encarmen-section-heading"><span className="encarmen-section-icon encarmen-blue"><Upload size={19}/></span><span><strong>Fotografías de tu Negocio</strong><small>Personaliza tu imagen y galería</small></span></div>
+          <div className="space-y-2 py-3 border-b border-white/70" aria-label="Logotipo independiente">
+            <strong className="text-xs text-stone-700">Logotipo de la empresa</strong>
+            <p role="status" className="text-[11px] text-stone-600">{!logoAllowed?'Edición no disponible: requiere una sesión verificada por el servidor.':logoUploading?'Cargando logotipo…':logoDirty?'Logotipo en borrador. Guarda cambios para conservarlo.':'El logotipo es independiente de la portada y la galería.'}</p>
+            <div className="flex items-center gap-3"><div className="w-16 h-16 border border-white/80 rounded-xl bg-white/60 overflow-hidden flex items-center justify-center">{safeCompanyLogo(formData.logo_url)&&!logoPreviewFailed?<img src={safeCompanyLogo(formData.logo_url)} alt="Logotipo de la empresa" className="w-full h-full object-contain" onError={()=>setLogoPreviewFailed(true)}/>:<Building2 aria-label="Sin vista previa de logotipo" className="w-7 h-7 text-stone-400"/>}</div>
+              <div className="space-y-2"><label className="inline-flex gap-2 items-center px-3 py-2 rounded-xl bg-white/50 border border-white/80 text-xs font-bold"><Upload size={14}/>{formData.logo_url?'Cambiar logotipo':'Subir logotipo'}<input aria-label="Archivo de logotipo" type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={!logoAllowed||logoUploading||isSaving} onChange={handleCompanyLogoUpload}/></label>
+              <button type="button" className="block px-3 py-2 rounded-xl bg-white/50 border border-white/80 text-rose-700 text-xs disabled:opacity-50" disabled={!logoAllowed||logoUploading||isSaving||!formData.logo_url} onClick={()=>{logoDraftId.current=business.id;setFormData(prev=>({...prev,logo_url:''}));setLogoDirty(true);}}>Quitar logotipo</button></div>
+            </div>
+          </div>
           <div className="space-y-1 pt-1">
             <label className="text-xs font-bold text-stone-700 flex items-center justify-between">
-              <span>Fotografía / Logotipo</span>
+              <span>Fotografía de portada</span>
               {isUploadingPhoto && <span className="text-[10px] text-amber-600 animate-pulse">Subiendo...</span>}
             </label>
             <div className="flex items-center gap-3">
@@ -987,7 +1026,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                     type="button"
                     onClick={() => setFormData(prev => ({ ...prev, image: '' }))}
                     disabled={isUploadingPhoto}
-                    aria-label="Quitar fotografía o logotipo"
+                    aria-label="Quitar fotografía de portada"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/45 border border-rose-200/80 hover:bg-rose-50/80 text-rose-700 text-xs font-bold cursor-pointer backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,.8)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
@@ -1075,3 +1114,4 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
     </div>
   );
 };
+
