@@ -79,3 +79,5 @@
   outline: 3px solid #1c78f0;
   outline-offset: 2px;
 }
+/* Compatibility with the approved Glass shell: this module owns its availability message. */
+.bpd-reviews:has(.business-comments) > .bpd-comments { display: none; }
