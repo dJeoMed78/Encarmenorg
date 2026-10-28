@@ -1,5 +1,5 @@
-import React from 'react';
-import { Star } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Star, CheckCircle, Award, Sparkles, Loader2 } from 'lucide-react';
 import { useBusinessRatings } from '../utils/realRatings';
 
 interface StarRatingWidgetProps {
@@ -11,37 +11,174 @@ interface StarRatingWidgetProps {
   compact?: boolean;
 }
 
-export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({ businessId, businessName, onRatingUpdated, compact = false }) => {
-  // Ignore historical catalog aggregates, including initialRating/initialReviewCount.
-  const { summary, loading, available, submitting, error, saved, rate, retry } = useBusinessRatings(businessId);
-  const [hover, setHover] = React.useState(0);
-  React.useEffect(() => { setHover(0); }, [businessId]);
+const RATING_LABELS: Record<number, string> = {
+  1: 'Malo',
+  2: 'Regular',
+  3: 'Bueno',
+  4: 'Muy Bueno',
+  5: 'Excelente'
+};
+
+export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
+  businessId,
+  businessName,
+  onRatingUpdated,
+  compact = false
+}) => {
+  // Catalog initialRating/initialReviewCount are intentionally not authoritative.
+  const { summary: stats, loading, available, submitting: isSubmitting, error: errorMessage, saved, rate, retry } = useBusinessRatings(businessId);
+  const hasRated = stats.hasRated === true;
+  const userRating = stats.userRating;
+  const [hoverRating, setHoverRating] = useState(0);
+  useEffect(() => { setHoverRating(0); }, [businessId]);
+  const successMessage = saved ? 'Gracias. El servidor confirmó tu calificación.' : null;
+  const summaryLabel = loading ? 'Consultando calificaciones…' : !available ? 'Calificaciones no disponibles' :
+    stats.count === 0 ? 'Sin calificaciones' : stats.average.toFixed(1);
+
   const handleRate = async (star: number) => {
     const result = await rate(star);
     if (result) onRatingUpdated?.(result.average, result.count);
   };
-  const label = loading ? 'Consultando calificaciones…' : !available ? 'Calificaciones no disponibles' :
-    summary.count === 0 ? 'Sin calificaciones' : `${summary.average.toFixed(1)} / 5 · ${summary.count} votos`;
-  if (compact) return <div className="text-xs" role="status">{label}{error && <button type="button" onClick={retry}> Reintentar</button>}</div>;
-  return (
-    <section className="p-4 rounded-2xl bg-white/70 border border-white space-y-3" aria-label={`Calificaciones de ${businessName}`}>
-      <h4 className="text-sm font-bold">Calificación de la Comunidad</h4>
-      <p className="text-xs text-stone-600" role="status">{label}</p>
-      {!loading && summary.hasRated && <p className="text-xs">Voto registrado para este identificador de visitante: {summary.userRating} estrellas.</p>}
-      <div className="flex gap-1" onMouseLeave={() => setHover(0)}>
-        {[1, 2, 3, 4, 5].map(star => (
-          <button key={star} type="button" disabled={loading || submitting || summary.hasRated === true || Boolean(error)}
-            onClick={() => { void handleRate(star); }} onMouseEnter={() => setHover(star)}
-            onFocus={() => setHover(star)} onBlur={() => setHover(0)}
-            aria-label={`Calificar con ${star} estrellas`} className="p-1 disabled:opacity-40">
-            <Star className={`w-6 h-6 ${star <= (hover || summary.userRating || 0) ? 'fill-amber-400 text-amber-500' : 'text-stone-400'}`} />
-          </button>
-        ))}
+
+  // Compact variant (e.g. for small headers or cards)
+  if (compact) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs" role="status">
+        <div className="flex items-center text-amber-500">
+          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+          <span className="ml-1 font-bold text-stone-800">
+            {summaryLabel}
+          </span>
+        </div>
+        {errorMessage && <button type="button" onClick={retry}>Reintentar consulta</button>}
+        <span className="text-stone-400 font-normal">
+          {available && !loading ? `(${stats.count})` : ''}
+        </span>
       </div>
-      {submitting && <p role="status" className="text-xs">Guardando calificación…</p>}
-      {saved && <p role="status" className="text-xs text-emerald-700">Gracias. El servidor confirmó tu calificación.</p>}
-      {error && <div role="alert" className="text-xs text-rose-700">{error} <button type="button" disabled={submitting || loading} onClick={retry} className="underline">Reintentar consulta</button></div>}
+    );
+  }
+
+  return (
+    <div
+      className="p-4 sm:p-5 rounded-2xl space-y-4 shadow-xs"
+      style={{
+        background: 'rgba(255, 255, 255, 0.55)',
+        backdropFilter: 'blur(25px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(25px) saturate(180%)',
+        border: '1.5px solid rgba(255, 255, 255, 0.85)',
+      }}
+    >
+      {/* Header with Average & Count */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-200/50 pb-3">
+        <div>
+          <h4 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
+            <Award className="w-4 h-4 text-amber-600" />
+            <span>Calificación de la Comunidad</span>
+          </h4>
+          <p className="text-xs text-stone-500">
+            Calificaciones registradas para este negocio
+          </p>
+        </div>
+
+        <div
+          className="flex items-center gap-2 self-start sm:self-auto px-3 py-1.5 rounded-xl shadow-xs"
+          style={{
+            background: 'rgba(255, 255, 255, 0.80)',
+            border: '1px solid rgba(255, 255, 255, 0.95)',
+          }}
+        >
+          <Star className="w-5 h-5 fill-amber-400 text-amber-500" />
+          <div className="flex items-baseline gap-1">
+            <span className="text-lg font-black text-stone-900">
+              {summaryLabel}
+            </span>
+            {available && !loading && stats.count > 0 && <span className="text-xs text-stone-500 font-medium">/ 5</span>}
+          </div>
+          <span className="text-[11px] text-stone-400 ml-1 border-l border-stone-200 pl-2">
+            {available && !loading ? (stats.count === 1 ? '1 voto' : `${stats.count} votos`) : ''}
+          </span>
+        </div>
+      </div>
+
+      {/* Interactive Rating Area */}
+      <div className="space-y-2">
+        {hasRated ? (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200/70 text-emerald-900 text-xs font-semibold">
+            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            <div>
+              <span>Ya calificaste este negocio con </span>
+              <strong className="text-emerald-700 font-bold">
+                {userRating} estrella{Number(userRating) === 1 ? '' : 's'}
+              </strong>
+              <span>. Voto registrado para este identificador de visitante.</span>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-stone-700">
+                ¿Conoces este negocio? Selecciona tu calificación:
+              </span>
+              {(hoverRating > 0 || isSubmitting) && (
+                <span className="text-xs font-bold text-amber-700 flex items-center gap-1 animate-pulse">
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Guardando...</span>
+                    </>
+                  ) : (
+                    <span>{RATING_LABELS[hoverRating] || ''}</span>
+                  )}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              {[1, 2, 3, 4, 5].map(star => {
+                const isLit = hoverRating ? star <= hoverRating : false;
+                return (
+                  <button
+                    key={star}
+                    aria-label={`Calificar con ${star} estrellas`}
+                    type="button"
+                    disabled={isSubmitting || loading || Boolean(errorMessage)}
+                    onMouseEnter={() => setHoverRating(star)}
+                    onMouseLeave={() => setHoverRating(0)}
+                    onClick={() => handleRate(star)}
+                    className="p-1 rounded-lg hover:scale-110 active:scale-95 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400 group"
+                    title={`Calificar con ${star} estrella${star > 1 ? 's' : ''} (${RATING_LABELS[star]})`}
+                  >
+                    <Star
+                      className={`w-7 h-7 sm:w-8 sm:h-8 transition-colors ${
+                        isLit
+                          ? 'fill-amber-400 text-amber-500 drop-shadow-xs'
+                          : 'fill-stone-100 text-stone-300 group-hover:text-amber-400'
+                      }`}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Success message */}
+        {successMessage && (
+          <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-100/60 p-2 rounded-lg">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>{successMessage}</span>
+          </div>
+        )}
+
+        {/* Error message */}
+        {errorMessage && (
+          <div role="alert" className="text-xs font-medium text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
+            {errorMessage}
+            <button type="button" disabled={isSubmitting || loading} onClick={retry} className="ml-2 underline">Reintentar consulta</button>
+          </div>
+        )}
+      </div>
       <p className="text-[11px] text-stone-500">El identificador de este navegador ayuda a detectar duplicados; no verifica la identidad de una persona.</p>
-    </section>
+    </div>
   );
 };
