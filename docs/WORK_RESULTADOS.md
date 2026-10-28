@@ -276,3 +276,41 @@ Enlace registrado en la documentación publicada en GitHub; sin añadir archivos
 Sin bloqueo real para esta corrección. Validación limitada a Chromium local y datos sintéticos; Safari/iOS y revisión del propietario siguen pendientes.
 No se ejecutaron SQL, migraciones, despliegues, fusiones ni conexiones a bases de datos. No se modificaron producción, Staging, main, ia-desarrollo ni otras ramas.
 Dictamen: APTO PARA REVISIÓN FINAL DE LA CORRECCIÓN DEL LOGOTIPO. Esperando coordinación; sin integración ni despliegue.
+
+
+## ENC-BACKUP-SECURITY-002 — contención de descargas públicas
+Fecha: 2026-10-28T17:28:41.709Z.
+Estado: PROBADO_POR_WORK en pruebas locales aisladas; pendiente revisión de Coordinación. NO integrado ni desplegado.
+Rama: work/ENC-BACKUP-SECURITY-002. Base: cad1222618c94f4eb3dabb589b6e58836191dcb7.
+Checkpoint inicial: 9b5a6faa6b9b99ceea588723342167db315a71d9. Instrucciones blob c4ef37ba0f690f60cd9fb5189190afd2be9a8faa.
+
+### Implementación
+- server.ts: guard exportado backupDownloadContainment antes de cualquier middleware/ruta/static. Deniega los 25 aliases históricos, namespace /api/backup, ZIP/SQL y extensiones de respaldo/secretos, nombres privados conocidos, codificación anidada/rutas inválidas; aplica a todos los métodos. Respuesta genérica 403, Cache-Control no-store, sin rutas/secretos. Se retiran handlers de descarga/generación y el import ZipArchive. No se cambia autenticación, BD ni funciones normales.
+- scripts/create_release_zip.js: desactivado con exit code 1 y mensaje genérico. Sin imports, acceso a archivos ni generación/copia de aliases. No borra/mueve/sobrescribe respaldos.
+- tests/backup-security-002.test.cjs: indispensable para reproducir regresiones HTTP reales con Express aislado y probar CLI en fixture. Extrae/transpila únicamente el guard marcado; NUNCA importa server.ts ni sus dependencias operativas. Sin BD, timers de aplicación ni conexiones externas.
+
+### Pruebas ejecutadas
+Dependencias temporales fuera del proyecto: Express 4.21.2 y TypeScript 5.9.3; npm install --ignore-scripts --no-audit --no-fund. Advertencia npm existente de config http-proxy, instalación exitosa. Sin cambios a package.json/lockfile del repositorio.
+Comando: NODE_PATH=/tmp/enc-backup-tools/node_modules node --test tests/backup-security-002.test.cjs
+Resultado: EXIT 0, 8/8 tests PASS, 0 fallos.
+- 175 solicitudes: 25 rutas x GET HEAD POST PUT PATCH DELETE OPTIONS; todas 403 antes de downstream.
+- 75 variantes de mayúsculas, slash final y query.
+- 20 solicitudes GET/HEAD de estáticos ZIP/SQL y archivos privados.
+- 20 rutas codificadas/traversal/extensiones alternativas.
+- 18 solicitudes GET/HEAD de JS/CSS/manifest/SVG/imagen/well-known/HTML/health: 200; recurso inexistente: 404.
+Total: 309 solicitudes HTTP reales exclusivamente a 127.0.0.1, no al portal.
+- Cada denegación valida respuesta genérica/no-store, cuerpo vacío en HEAD y ausencia de datos de fixture/rutas.
+- AST: server.ts sin errores sintácticos; guard anterior a middleware, cero registros históricos, cero ZipArchive/archive.glob/res.download restantes.
+- CLI ejecutado solo con cwd de fixture sintético: exit 1, no alias nuevos y snapshot SHA256 de todos los archivos intacto. HTTP tampoco crea ni modifica archivos de fixture.
+- Revisión de diff: fuera del guard y retirada de handlers/import, código funcional preservado.
+No se ejecutó tsc semántico global, build del proyecto ni servidor completo; no se presentan estas pruebas como integración de MariaDB/Hostinger ni regresión integral del portal.
+
+### Alcance y límites
+Únicos archivos cambiados: server.ts, scripts/create_release_zip.js, tests/backup-security-002.test.cjs, docs/WORK_RESULTADOS.md, docs/work-progress/ENC-BACKUP-SECURITY-002.md.
+No PR/merge/deploy, Hostinger, SQL, secretos, ni respaldos reales. Main/ia-desarrollo no modificados.
+Express no controla el servicio directo de Hostinger/CDN: rutas externas siguen siendo riesgo operativo PENDIENTE. No se tocaron archivos existentes en hosting. El guard por ruta/extensión no certifica contenido de archivos renombrados como recursos benignos ni symlinks del hosting.
+server.js y api/server.bundle.js NO regenerados por estar fuera del alcance; el runtime versionado antiguo no incorpora esta contención. Una integración posterior requiere build autorizado/verificación del ejecutable, no arrancar el bundle antiguo.
+No se implementa sistema de respaldo privado ni autenticación nueva. La descarga legítima de respaldos queda intencionalmente indisponible en este código.
+
+### Reversión y siguientes pasos
+Coordinación revisa diff y pruebas; autorizar por separado build/contención externa/despliegue. No revertir reabriendo descargas inseguras. Respaldos permanecen intactos; no hay migración de datos que revertir. Para retirar la contención debe existir reemplazo privado validado y autorización específica. Nunca restaurar aliases públicos como solución de recuperación.
