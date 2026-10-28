@@ -45,3 +45,27 @@ Tarea preautorizada para fases 1 y 2 consecutivas, **solo si** pasa la verificac
 3. **Si algo falla** (componente incierto, archivo compartido en conflicto, dependencia de backend/BD, falta de permisos, riesgo de pérdida de funcionalidad, o cambio que exceda alcance): **no ejecutar implementación**; informar bloqueo y alternativa segura. Ausencia de imagen exacta en repo NO impide crear primera versión basada en especificación textual, pero impide afirmar fidelidad exacta; conservar referencia de propietario para validación posterior.
 4. Usar datos reales; si comentarios no existen, mostrar estado vacío honesto, no crear testimonios ni promedios falsos. Mantener la calificación ya integrada. Si se requiere refactor de estrellas/backend, parar y pedir autorización.
 5. Realizar pruebas locales y documentar resultados verificables; publicar commits y reporte en rama de Work. No crear PR, merge ni despliegue sin autorización posterior. No modificar `main` ni `ia-desarrollo`.
+
+## Dictamen de coordinación tras auditoría de Work — autorización concreta de implementación
+Auditoría recibida y revisada: identificó dos vistas activas (`BusinessDetailModal.tsx` y `DirectBusinessView.tsx`), propuso presentación compartida y detectó riesgos administrativos. **Se AUTORIZA continuar inmediatamente con la implementación visual**, sin nueva auditoría ni aprobación intermedia, bajo estas condiciones:
+
+**Archivos autorizados para escritura (lista cerrada):**
+- `src/components/BusinessPublicDetail.tsx` (nuevo)
+- `src/components/BusinessPublicDetail.css` (nuevo)
+- `src/components/BusinessDetailModal.tsx`
+- `src/components/DirectBusinessView.tsx`
+- `src/App.tsx` (solo montaje/adaptadores de la ficha pública, sin cambiar lógica administrativa ni persistencia)
+- `src/components/DigitalCardModal.tsx` (solo retirar fallback ficticio y ajustar URL/portapapeles si es indispensable; si supone riesgo, dejarlo intacto e informar)
+- `docs/WORK_RESULTADOS.md` y `docs/work-progress/ENC-GLASS-BUSINESS-DETAIL-001.md` (documentación)
+
+**Bloqueantes de seguridad conocidos y separación de alcance:**
+- No modificar `src/utils/adminAuth.ts`, `src/services/api.ts`, `server.ts`, `EditBusinessModal.tsx`, widgets de estrellas, Radar ni BD. No intentar corregir autenticación, eliminación ni TOP/Recomendada en esta tarea.
+- No mostrar como operativas las acciones administrativas inseguras; mantener controles deshabilitados o claramente pendientes donde corresponda. Preservar navegación y accesos existentes sin añadir bypass ni nuevos privilegios. Si no es posible mantener la seguridad sin alterar esos archivos, detener solo el subapartado administrativo, informar y continuar el diseño público seguro.
+- No presentar comentarios inexistentes ni opiniones ficticias. Estado vacío claro, estrellas reales reutilizadas.
+- No usar información ficticia para pagos, horarios, mapas, contacto o imágenes. Sin mapas basados solo en nombres ambiguos.
+- Mantener callbacks, contratos, SEO y rutas históricas. Probar ambos puntos de entrada.
+- El mockup adjunto por el propietario en conversación es referencia principal. No afirmar equivalencia píxel a píxel si no se puede comparar.
+
+**Condición de detención:** si la implementación del diseño público requiere modificar código fuera de lista, hay colisión real de commits, o se detecta un riesgo nuevo que impida continuar con seguridad, reportar antes de efectuar ese cambio; implementar las partes seguras independientes si es posible. Sin merge, PR, despliegue, SQL ni producción.
+
+**Entrega:** commits en `work/enc-glass-business-detail-001`, capturas de desktop/tablet/mobile, TypeScript y build, reporte en un único bloque `text`. La coordinación revisará antes de integrar.
