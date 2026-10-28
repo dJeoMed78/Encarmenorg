@@ -398,22 +398,22 @@ export function BusinessPublicDetail({
               </div>
             </section>
           </main>
+          <div className="bpd-card bpd-identity">
+            {extra.logo_url ? (
+              <Photo
+                src={safeUrl(extra.logo_url)}
+                alt={`Logotipo de ${b.name}`}
+              />
+            ) : (
+              <>
+                <span className="bpd-monogram" aria-hidden="true">
+                  {b.name.slice(0, 1)}
+                </span>
+                <strong>{b.name}</strong>
+              </>
+            )}
+          </div>
           <aside className="bpd-facts">
-            <div className="bpd-card bpd-identity">
-              {extra.logo_url ? (
-                <Photo
-                  src={safeUrl(extra.logo_url)}
-                  alt={`Logotipo de ${b.name}`}
-                />
-              ) : (
-                <>
-                  <span className="bpd-monogram" aria-hidden="true">
-                    {b.name.slice(0, 1)}
-                  </span>
-                  <strong>{b.name}</strong>
-                </>
-              )}
-            </div>
             <section className="bpd-card">
               <h2>
                 <MapPin /> Ubicación

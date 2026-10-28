@@ -71,3 +71,47 @@ No se afirma coincidencia pixel a pixel con la imagen aprobada: se reproduce su 
 - Código sin nuevas dependencias. Revisar diff contra base fija; ia-desarrollo seguía en 1455e568a93629dcd7ae3f58df61d03c76a64f4d al cierre de verificación. No se rebasó ni fusionó ninguna rama compartida.
 - No hay bloqueo para revisión del diseño público. La funcionalidad administrativa pendiente no se implementó ni se simuló.
 Dictamen: APTO PARA REVISIÓN DE COORDINACIÓN DEL DISEÑO PÚBLICO; NO autorización de integración, despliegue, administración o ejecución SQL. Esperando revisión.
+
+## Corrección aprobada: ubicación del logotipo — 2026-10-28
+Estado: IMPLEMENTADA / 12 comprobaciones enfocadas aprobadas / PENDIENTE REVISIÓN.
+Autorización: instrucción directa del propietario; único cambio visual solicitado, sin nueva auditoría.
+Rama: work/enc-glass-business-detail-001.
+Base de esta corrección: 5cf6213e0974e0b534d65b252a67eb9f344071f7.
+
+### Cambio
+- Se mueve el bloque existente bpd-identity fuera de bpd-facts para darle posición independiente en la cuadrícula. Hay un solo bloque y se conservan logo, texto alternativo y fallback de identidad.
+- Escritorio >1100px: misma zona superior derecha; altura de 175px y separación vertical de 12px respecto a ubicación.
+- Tablet 701–1100px: primera fila derecha, junto al inicio de la galería, antes del contenido central.
+- Móvil <=700px: inmediatamente después de la cabecera con nombre y antes de galería/contactos y demás secciones; altura existente de 150px.
+- Ajuste de selectores nth-child de los iconos informativos para conservar sus colores al retirar el logo del contenedor anterior.
+- Sin cambios de handlers, contratos, backend, editor, calificaciones ni administración. Verificación estática: al retirar el bloque de identidad y normalizar espacios, el TSX restante es idéntico a la base; el propio bloque también es idéntico.
+- Archivos de código modificados: únicamente src/components/BusinessPublicDetail.tsx y src/components/BusinessPublicDetail.css. Documentación: este registro y docs/work-progress/ENC-GLASS-BUSINESS-DETAIL-001.md.
+
+### Pruebas
+Copia aislada: /workspace/scratch/e1cd9bd12722/business-detail-001.
+Se reconstruyeron las dependencias temporales fuera del repositorio porque /tmp de la sesión previa ya no existía. Sin modificar package.json ni lockfile.
+- TypeScript 7.0.2: /tmp/enc-reviews-tools/node_modules/.bin/tsc --noEmit -p tsconfig.json desde la copia: EXIT 0. Un intento inicial utilizó ruta relativa duplicada; se corrigió y ejecutó correctamente.
+- Vite 8.3.5: /tmp/enc-reviews-tools/node_modules/.bin/vite build --outDir /tmp/enc-logo-validation/vite-dist --emptyOutDir: EXIT 0, 1722 módulos. Advertencia existente: chunk JS >500kB; no se amplió el alcance para optimización.
+- Chromium 153.0.8010.0 / Playwright: node /tmp/enc-logo-validation/test-logo.cjs: EXIT 0; 12 comprobaciones aprobadas.
+- Ambas entradas: modal y DirectBusinessView. Escritorio 1440x1050, tablet 834x1112, móvil 390x844 y pantalla estrecha 320x700.
+- Aserciones geométricas: único bloque de logo, alineación superior derecha en escritorio/tablet; en móvil, heading.bottom <= logo.top y logo.bottom <= galería.top; logotipo visible en el primer viewport; sin desborde horizontal.
+- Identidad alternativa sin logo comprobada en ambas entradas móviles.
+- Favoritos y apertura/cierre de galería conservados; widget de estrellas y mensaje honesto de comentarios presentes.
+- Cero errores JavaScript y cero solicitudes externas. Solo GET de ratings interceptado con respuesta sintética; no se enviaron calificaciones ni se iniciaron backend/BD.
+- Revisión visual de capturas de tablet y móvil.
+- El binario Chromium temporal funcionó tras extracción; el helper automático notificó fallo chown de fuentes, sin impedir la ejecución real de las pruebas. No es un error del producto.
+- Harness SHA256: 97a10a32f7761f29e97559e23e515f39b53ca909507ebcb273e8c958689885d4.
+
+### Capturas corregidas
+Paquete: ENC-GLASS-BUSINESS-DETAIL-001-correccion-logo-capturas.zip
+https://chatgpt.com/library?file_id=libfile_88c5cb58cfd8819190823148c91163d7&account_id=personal
+Diez PNG únicos, datos sintéticos y marca “PRUEBA LOCAL · DATOS SINTÉTICOS · SIN BD”:
+modal-desktop-logo.png, modal-tablet-logo.png, modal-mobile-logo.png, modal-narrow-logo.png,
+direct-desktop-logo.png, direct-tablet-logo.png, direct-mobile-logo.png, direct-narrow-logo.png,
+modal-mobile-sin-logo.png y direct-mobile-sin-logo.png.
+Enlace registrado en la documentación publicada en GitHub; sin añadir archivos binarios fuera de la lista autorizada.
+
+### Riesgos, pendientes y dictamen
+Sin bloqueo real para esta corrección. Validación limitada a Chromium local y datos sintéticos; Safari/iOS y revisión del propietario siguen pendientes.
+No se ejecutaron SQL, migraciones, despliegues, fusiones ni conexiones a bases de datos. No se modificaron producción, Staging, main, ia-desarrollo ni otras ramas.
+Dictamen: APTO PARA REVISIÓN FINAL DE LA CORRECCIÓN DEL LOGOTIPO. Esperando coordinación; sin integración ni despliegue.
