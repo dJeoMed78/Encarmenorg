@@ -12,6 +12,8 @@
     "start": "node server.js",
     "preview": "vite preview",
     "clean": "rm -rf dist",
+    "package:demo": "node scripts/package_static_demo.mjs",
+    "test:packager": "node scripts/test_package_static_demo.mjs",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

@@ -12,5 +12,7 @@ codigo-fuente-empresasencarmen*.zip
 backup.zip
 public/imagenes-parte-*.zip
 public/codigo-fuente-empresasencarmen-*.zip
+dist/
+dist-demo/
 public/backup.zip
 public/codigo-fuente-empresasencarmen.zip
