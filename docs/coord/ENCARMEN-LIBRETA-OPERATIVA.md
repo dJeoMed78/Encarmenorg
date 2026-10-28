@@ -45,3 +45,10 @@
 
 ## 5. Criterio de evidencia
 Distinguir siempre: **configuración declarada**, **estructura SQL verificada**, **código publicado**, **pruebas simuladas**, **conexión real**, **integrado** y **desplegado**. No afirmar equivalencias. No almacenar contraseñas, tokens ni capturas con secretos.
+
+## 6. Pendiente funcional — comentarios de la comunidad (ENC-COMMENTS, ID de implementación por asignar)
+- **Estado: PENDIENTE / NO IMPLEMENTADO NI PROBADO.** El diseño visual de ficha empresarial muestra comentarios u opiniones, pero el propietario confirmó que no existe el sistema funcional correspondiente en el código. No presentar la maqueta como funcionalidad entregada.
+- **Separación:** sistema de calificaciones por estrellas ≠ sistema de comentarios. El flujo básico de estrellas se validó en Staging con un voto de 4 y lectura SQL; comentarios requieren análisis, arquitectura, tarea, implementación y pruebas independientes.
+- **Alcance propuesto, sujeto a aprobación:** comentarios textuales asociados a negocios reales; persistencia en MariaDB; validación, antispam, moderación administrativa, manejo de errores, permisos y presentación responsive en ficha Glass. Evaluar fotografías de comentarios, reportes y políticas de publicación antes de autorizar alcance.
+- **Seguridad:** no crear tablas ni migrar datos ni modificar Staging o producción sin autorización específica; definir controles de privacidad y abuso.
+- **Coordinación:** evitar colisiones con Work en editor Glass y con módulos de calificaciones/Radar. Priorizar tras estabilizar lo ya integrado, salvo autorización de paralelismo en archivos aislados.
