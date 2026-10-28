@@ -19,6 +19,7 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
   onOpenClientPage
 }) => {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [logoImg, setLogoImg] = useState<string | null>(null);
 
@@ -31,33 +32,33 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
   if (!isOpen || !business) return null;
 
   // Dirección web completa sin recortar
-  const fullWebUrl = `https://encarmen.org/${business.slug || business.id}`;
+  const fullWebUrl = getBusinessPublicUrl(business);
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=8&data=${encodeURIComponent(fullWebUrl)}`;
   const categoryName = getBusinessPrimaryCategory(business);
-  const phoneDisplay = formatPhoneNumber(business.phone || business.whatsapp) || '938 389 5009';
+  const phoneDisplay = formatPhoneNumber(business.phone || business.whatsapp) || 'Teléfono no registrado';
   const addressDisplay = business.address
     ? formatAddressText(business.address)
     : business.colonia
     ? `Col. ${formatAddressText(business.colonia)}, Ciudad del Carmen`
-    : 'Ciudad del Carmen, Campeche';
+    : 'Ubicación no registrada';
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(fullWebUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2200);
+  const handleCopyLink = async () => {
+    setCopied(false);
+    setCopyError('');
+    try {
+      await navigator.clipboard.writeText(fullWebUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    } catch { setCopyError('No se pudo copiar el enlace. Copia la dirección visible.'); }
   };
 
   const handleShare = async () => {
-    const title = `${business.name} | encarmen.org`;
-    const text = `Consulta la tarjeta de presentación de ${business.name} en encarmen.org:\n${fullWebUrl}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title, text, url: fullWebUrl });
-      } catch {
-        handleCopyLink();
-      }
-    } else {
-      handleCopyLink();
+    setCopyError('');
+    if (!navigator.share) { await handleCopyLink(); return; }
+    try { await navigator.share({ title: business.name, url: fullWebUrl }); }
+    catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError'))
+        setCopyError('No se pudo compartir. Puedes copiar el enlace.');
     }
   };
 
@@ -273,6 +274,7 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
                 </div>
                 <p className="text-xs sm:text-sm font-mono font-bold text-stone-900 break-all select-all">
                   {fullWebUrl}
+                  {copyError && <span role="alert">{copyError}</span>}
                 </p>
               </div>
             </div>
@@ -345,3 +347,4 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
     </div>
   );
 };
+
