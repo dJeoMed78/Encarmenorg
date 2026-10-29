@@ -635,7 +635,11 @@ export async function createPublicClassified(ad: Partial<import('../types').Clas
     const res = await fetch(API_BASE + '/public/classifieds', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(ad)
+      body: JSON.stringify({
+        title: ad.title, description: ad.description, category: ad.category, price: ad.price,
+        contactPhone: ad.phone || ad.whatsapp, contactWhatsapp: ad.whatsapp || '',
+        idempotencyKey: (ad as any).idempotencyKey || undefined
+      })
     });
     if (res.status === 404) {
       return {
