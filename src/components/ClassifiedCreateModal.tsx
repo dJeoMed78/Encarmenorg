@@ -209,6 +209,11 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
       return;
     }
 
+    if (images.some(image => image.startsWith('data:'))) {
+      setErrorMsg('La carga de fotos no cuenta todavía con almacenamiento seguro. Retira las fotos antes de publicar.');
+      return;
+    }
+
     const contactMethods: ('whatsapp' | 'phone' | 'email')[] = [];
     if (contactWhatsapp && (whatsapp || phone)) contactMethods.push('whatsapp');
     if (contactPhone && phone) contactMethods.push('phone');
@@ -586,18 +591,20 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
             {/* Subir fotos */}
             <div>
               <label className="block font-bold text-stone-700 text-xs mb-1">
-                Fotografías (máximo 6 fotos de hasta 5MB cada una)
+                Fotografías (temporalmente deshabilitadas: almacenamiento seguro pendiente)
               </label>
 
               {/* Upload controls */}
               <div className="mb-3">
                 <label className="min-h-[44px] flex items-center justify-center gap-2 px-4 py-3 bg-stone-100 hover:bg-stone-200 border border-stone-300 rounded-xl cursor-pointer text-stone-700 font-bold text-xs transition-colors w-full">
                   <Upload className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Subir fotos desde tu dispositivo</span>
+                  <span>La carga de fotografías aún no está disponible</span>
                   <input
                     type="file"
                     accept="image/*"
                     multiple
+                    disabled
+                    aria-disabled="true"
                     onChange={handleFileUpload}
                     className="hidden"
                   />
