@@ -1,0 +1,62 @@
+{
+  "task": "ENC-INTEGRATION-VALIDATION-001",
+  "mode": "MariaDB native bootstrap, not mysql2/HTTP persistence",
+  "checks": [
+    {
+      "name": "crear esquema propio e InnoDB",
+      "pass": true,
+      "exit": 0
+    },
+    {
+      "name": "error deliberado tras INSERT no devuelve éxito",
+      "pass": true,
+      "exit": 1
+    },
+    {
+      "name": "confirmar INSERT persistido después de error y reinicio de proceso",
+      "pass": true,
+      "exit": 0
+    },
+    {
+      "name": "duplicado idempotente rechazado por índice único",
+      "pass": true,
+      "exit": 1
+    },
+    {
+      "name": "no duplicación después de error",
+      "pass": true,
+      "exit": 0
+    },
+    {
+      "name": "UPDATE parcial y precio NULL con contactos conservados",
+      "pass": true,
+      "exit": 0
+    },
+    {
+      "name": "ROLLBACK conserva datos",
+      "pass": true,
+      "exit": 0
+    },
+    {
+      "name": "filtros JSON de colonia y subcategoría",
+      "pass": true,
+      "exit": 0
+    },
+    {
+      "name": "retiro lógico y expiración del feed",
+      "pass": true,
+      "exit": 0
+    },
+    {
+      "name": "marca de aislamiento real",
+      "pass": true,
+      "exit": 0
+    }
+  ],
+  "pass": 10,
+  "datadirCreatedByThisScript": true,
+  "network": false,
+  "concurrencyTested": false,
+  "ownerAuthenticationOverProtocolTested": false,
+  "productionAccessed": false
+}

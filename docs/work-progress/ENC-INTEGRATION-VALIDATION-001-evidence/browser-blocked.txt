@@ -1,0 +1,4 @@
+Chromium 150.0.7871.100, Playwright, executable real extraído de paquetes Debian.
+Resultado: FAIL/BLOQUEADO antes de crear página. Sin capturas ni pruebas visuales.
+[pid=20][err] [20:20:1029/215939.085380:FATAL:chrome/browser/process_singleton_posix.cc:297] Check failed: . socket() failed: Operation not permitted (1)
+No se eludió la restricción del entorno.

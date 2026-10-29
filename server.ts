@@ -268,9 +268,9 @@ app.use((req: Request, res: Response, next) => {
   next();
 });
 
-app.use('/api/public/business-registrations', publicRegistrationBodyLimit);
 // Local router body limits precede the broad legacy parser; Stage mutations remain closed.
 registerPublicClassifieds(app);
+app.use('/api/public/business-registrations', publicRegistrationBodyLimit);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 

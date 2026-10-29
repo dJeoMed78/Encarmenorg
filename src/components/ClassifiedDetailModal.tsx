@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
   Flag,
@@ -37,7 +37,7 @@ interface ClassifiedDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onEdit?: (ad: ClassifiedAd) => void;
-  onDelete?: (adId: string) => void;
+  onDelete?: (adId: string) => Promise<void>;
   isAdmin?: boolean;
 }
 
@@ -52,6 +52,9 @@ export const ClassifiedDetailModal: React.FC<ClassifiedDetailModalProps> = ({
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [copiedLink, setCopiedLink] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteBusy = useRef(false);
+  const [deleteError,setDeleteError] = useState('');
+  const [deleting,setDeleting] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState<"owner_lost_access" | "sold" | "spam_inappropriate" | "wrong_info">("owner_lost_access");
   const [reportRequesterName, setReportRequesterName] = useState("");
@@ -88,6 +91,7 @@ export const ClassifiedDetailModal: React.FC<ClassifiedDetailModalProps> = ({
   useEffect(() => {
     setActiveImageIndex(0);
     setConfirmDelete(false);
+    setDeleteError('');
     setShowReportModal(false);
   }, [ad?.id]);
 
@@ -240,12 +244,17 @@ export const ClassifiedDetailModal: React.FC<ClassifiedDetailModalProps> = ({
                     <span className="hidden sm:inline">Eliminar</span>
                   </button>
                 )}
+                {deleteError && <span role="alert" className="text-xs text-rose-700 max-w-40">{deleteError}</span>}
                 {confirmDelete && (
                   <div className="flex items-center gap-1 bg-rose-100 border border-rose-300 p-1 rounded-xl">
                     <button
-                      onClick={() => {
-                        if (onDelete) onDelete(ad.id);
-                        onClose();
+                      disabled={deleting}
+                      onClick={async () => {
+                        if (deleteBusy.current || !onDelete) return;
+                        deleteBusy.current=true;setDeleting(true);setDeleteError('');
+                        try { await onDelete(ad.id);onClose(); }
+                        catch(error) { setDeleteError(error instanceof Error ? error.message : 'No se confirmó el retiro.'); }
+                        finally { deleteBusy.current=false;setDeleting(false); }
                       }}
                       className="px-2.5 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-black hover:bg-rose-700 cursor-pointer min-h-[36px]"
                     >

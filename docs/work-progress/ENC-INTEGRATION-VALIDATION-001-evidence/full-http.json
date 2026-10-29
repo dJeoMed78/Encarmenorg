@@ -1,0 +1,18 @@
+{
+  "task": "ENC-INTEGRATION-VALIDATION-001",
+  "fullServer": true,
+  "checks": [
+    "full-server scrypt login and limited session",
+    "60 alternative-method radar mutations rejected across anonymous/forged/limited/owner identities",
+    "read/search methods do not enter mutating handlers",
+    "logout revokes while writes are disabled",
+    "backup containment precedes admin authentication",
+    "synthetic catalogs unchanged by attacks/startup"
+  ],
+  "pass": 6,
+  "fail": 0,
+  "database": "not configured; expected read-only denials",
+  "outboundNetwork": "blocked",
+  "bind": "127.0.0.1",
+  "productionAccessed": false
+}

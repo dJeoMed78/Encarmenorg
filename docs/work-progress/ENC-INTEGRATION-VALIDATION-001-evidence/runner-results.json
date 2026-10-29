@@ -1,0 +1,31 @@
+{
+  "output": "/workspace/scratch/e1cd9bd12722/iv-lab/final-run",
+  "results": [
+    {
+      "name": "typescript",
+      "exit": 0,
+      "pass": true
+    },
+    {
+      "name": "suites",
+      "exit": 0,
+      "pass": true
+    },
+    {
+      "name": "frontend",
+      "exit": 0,
+      "pass": true
+    },
+    {
+      "name": "backend",
+      "exit": 0,
+      "pass": true
+    },
+    {
+      "name": "full-http",
+      "exit": 0,
+      "pass": true
+    }
+  ],
+  "realDatabase": false
+}

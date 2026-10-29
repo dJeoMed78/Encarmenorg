@@ -59,3 +59,16 @@ test('cliente real → router HTTP real: pérdida de respuesta, reintento, edici
   let limited=false;for(let i=0;i<65;i++){const res=await native(base+'/api/public/classifieds',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(res.status===429){limited=true;break;}}assert.equal(limited,true);
  }finally{globalThis.fetch=native;globalThis.localStorage=previous;await new Promise(resolve=>server.close(resolve));}
 });
+test('concurrencia de servicio: clave única evita doble alta y diferencia conflicto; TTL de siete días',async()=>{
+ const pool=new FakePool({now:new Date()}),service=createClassifiedsService({pool}),proof='d'.repeat(64);
+ const attempts=await Promise.all(Array.from({length:8},()=>service.create(input,proof)));
+ assert.equal(pool.rows.size,1);assert.equal(attempts.filter(r=>!r.duplicate).length,1);assert.ok(attempts.every(r=>r.ownerAccess));
+ await assert.rejects(service.create({...input,title:'Contenido distinto sintético'},proof),e=>e.status===409);
+ const row=[...pool.rows.values()][0];assert.ok(Math.abs(new Date(row.expires_at).getTime()-Date.now()-7*86400000)<3000);
+ row.expires_at=new Date(pool.now.getTime()-1000);await assert.rejects(service.update(row.id,proof,{title:'No renovar expirado'}),e=>[409,410].includes(e.status));assert.equal((await service.getActive()).total,0);
+});
+test('filtros usan parámetros SQL antes del límite, sin interpolar términos de búsqueda',async()=>{
+ const pool=new FakePool();const calls=[];const query=pool.query.bind(pool);pool.query=async(sql,params)=>{calls.push({sql,params});return query(sql,params);};
+ await createClassifiedsService({pool}).getActive({q:"' OR 1=1 --",subcategory:'bazar-electronica',colonia:'Ciudad del Carmen Centro',category:'compra-venta'});
+ const select=calls.find(c=>c.sql.startsWith('SELECT *'));assert.ok(select.sql.includes('LIMIT 200'));assert.ok(select.sql.indexOf('category = ?')<select.sql.indexOf('LIMIT 200'));assert.ok(select.params.includes("%' OR 1=1 --%"));assert.ok(!select.sql.includes("' OR 1=1 --"));
+});

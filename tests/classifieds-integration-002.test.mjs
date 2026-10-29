@@ -289,7 +289,7 @@ test('ENC-CLASSIFIEDS-INTEGRATION-002: ClassifiedDetailModal enlaces interactivo
 
   // Acciones de edición y eliminación
   assert.ok(content.includes('onEdit?: (ad: ClassifiedAd) => void'));
-  assert.ok(content.includes('onDelete?: (adId: string) => void'));
+  assert.ok(content.includes('onDelete?: (adId: string) => Promise<void>'));
 });
 
 // =========================================================================
