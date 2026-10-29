@@ -4,12 +4,14 @@ on:
     branches: [coord/encarmen-work-control-001]
     paths: [.github/workflows/encarmen-staging-version-inspection.yml]
   workflow_dispatch:
-permissions: {contents: read}
+permissions:
+  contents: read
 jobs:
   inspect:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env: {SSH_PASSWORD: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}}
+    env:
+      SSH_PASSWORD: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
     steps:
       - name: Inspect readonly
         shell: bash
