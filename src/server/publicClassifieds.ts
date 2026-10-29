@@ -173,9 +173,18 @@ export function createClassifiedsService(deps: ClassifiedsDeps = {}) {
       if (norm.idempotencyKey) {
         const existing = await readbackByKey(pool, norm.idempotencyKey);
         if (existing) {
-          if (existing.title !== norm.title || existing.contact_phone !== norm.contactPhone) {
+          const samePayload =
+            existing.title === norm.title &&
+            existing.description === norm.description &&
+            existing.category === norm.category &&
+            existing.contact_phone === norm.contactPhone &&
+            (existing.contact_whatsapp || '') === norm.contactWhatsapp &&
+            (existing.image_url || '') === norm.imageUrl &&
+            (existing.price == null ? null : Number(existing.price)) === norm.price;
+          if (!samePayload) {
             fail('IDEMPOTENCY_CONFLICT', 409, 'La clave de idempotencia ya pertenece a otro anuncio.');
           }
+          // A replay can confirm the record but cannot recover a lost owner token.
           return { duplicate: true, classified: toPublic(existing), ownerToken: '' };
         }
       }
@@ -215,7 +224,7 @@ export function createClassifiedsService(deps: ClassifiedsDeps = {}) {
       const next = validateClassifiedPatch(patch);
       await assertIsolation(pool);
       const row = await authorizeOwner(pool, id, token);
-      if (row.status === 'expired') fail('CLASSIFIED_EXPIRED', 409, 'El anuncio expiró.');
+      if (row.status === 'expired' || new Date(row.expires_at).getTime() <= now().getTime()) fail('CLASSIFIED_EXPIRED', 409, 'El anuncio expiró.');
       if (!Object.keys(next).length) fail('VALIDATION_FAILED', 400, 'Nada que actualizar.');
       try {
         await pool.query(
