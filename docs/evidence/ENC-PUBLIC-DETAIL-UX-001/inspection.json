@@ -1,0 +1,22 @@
+{
+  "rects": {
+    "headingTop": -544.5,
+    "identityTop": -328.34375,
+    "mediaTop": -196.34375,
+    "descTop": 333.390625,
+    "factsTop": 478.5625,
+    "reviewsTop": 1002.3125
+  },
+  "descLinks": [
+    {
+      "href": "https://empresasencarmen.com/wp-content/uploads/2024/07/yuss-video.mp4",
+      "text": "Ver video",
+      "target": "_blank",
+      "rel": "noopener noreferrer nofollow ugc"
+    }
+  ],
+  "waBtn": "https://wa.me/529383895009",
+  "callBtn": "tel:+529383895009",
+  "scrollWidth": 390,
+  "clientWidth": 390
+}
