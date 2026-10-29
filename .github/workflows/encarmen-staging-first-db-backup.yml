@@ -46,9 +46,9 @@ jobs:
           set -euo pipefail
           export SSHPASS="$SSH_PASSWORD"
           sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 "$HOME/encarmen-staging-backups/bin/run_hostinger_backup.py"'
-      - name: Verificar inventario privado sin descargar SQL
+      - name: Verificar archivo privado comprimido sin descargar SQL
         shell: bash
         run: |
           set -euo pipefail
           export SSHPASS="$SSH_PASSWORD"
-          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'sh -c '\''D="$HOME/encarmen-staging-backups/database"; printf "DB_BACKUP_COUNT="; find "$D" -maxdepth 1 -type f -name "*.sql.gz" | wc -l; ls -ld "$D" | awk "{print \\$1}"'\'''
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'D="$HOME/encarmen-staging-backups/database"; test -d "$D" || exit 1; test "$(stat -c %a "$D")" = 700 || exit 1; count=0; for f in "$D"/*.sql.gz; do test -f "$f" || continue; gzip -t "$f" || exit 1; test -f "${f%.sql.gz}.json" || exit 1; count=$((count+1)); done; printf "DB_BACKUP_COUNT=%s\\n" "$count"; test "$count" -ge 1 && test "$count" -le 3'
