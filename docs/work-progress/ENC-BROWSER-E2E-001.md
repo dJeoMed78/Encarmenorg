@@ -13,3 +13,9 @@ Primera configuración local corregida: directorio de trabajo de Vite y sintaxis
 
 Reproducción: `npm ci --ignore-scripts`, `npm ci --ignore-scripts --prefix tests/browser`, `cd tests/browser`, `npx playwright install --with-deps chromium`, `npm test`.
 Opcional: `ENC_CHROMIUM_PATH` selecciona un Chromium instalado. El servidor escucha solamente en 127.0.0.1:4173.
+
+## Hito 2 — CI en ejecución
+
+Runs 40952254173 y 40952426710: checkout, npm y Chromium completos; suites en ejecución al registrar este punto. Se amplió a 29 escenarios por cinco resoluciones. La ejecución diagnóstica corta tras seis fallos para localizar errores de arnés; no equivale a una matriz final completa. Se conservan originales los assets locales del producto.
+
+Chromium 150.0.7871.100 local no pudo crear socket Unix por restricción del entorno. Cero escenarios de interfaz aprobados localmente; se utiliza CI para ejecución real. Build Vite local pasó (1726 módulos); fuentes locales utilizadas contrastadas con blobs del SHA base.

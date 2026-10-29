@@ -9,7 +9,7 @@ export const test=base.extend({lab:async({page},use,testInfo)=>{
   const req=route.request(),u=new URL(req.url());
   if(u.origin!=='http://127.0.0.1:4173'){state.external.push(u.origin);return route.abort('blockedbyclient');}
   if(!u.pathname.startsWith('/api/')){
-   if(/\.(png|jpg|jpeg|webp|svg)$/i.test(u.pathname))return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#cbd5e1"/><text x="40" y="180" font-size="28">Imagen sintética E2E</text></svg>'});
+   if(u.pathname==='/e2e-fixture.svg')return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#cbd5e1"/><text x="40" y="180" font-size="28">Imagen sintética E2E</text></svg>'});
    return route.continue();
   }
   state.requests.push({method:req.method(),path:u.pathname,body:req.postData(),key:req.headers()['idempotency-key']});

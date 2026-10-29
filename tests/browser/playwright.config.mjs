@@ -1,6 +1,6 @@
 import {defineConfig} from '@playwright/test';
 export default defineConfig({
- testDir:'.',testMatch:'*.spec.mjs',timeout:20000,expect:{timeout:5000},fullyParallel:false,workers:2,retries:0,
+ testDir:'.',testMatch:'*.spec.mjs',timeout:20000,expect:{timeout:5000},fullyParallel:false,workers:5,retries:0,maxFailures:6,
  reporter:[['list'],['html',{outputFolder:'report',open:'never'}],['json',{outputFile:'results.json'}]],
  outputDir:'artifacts',use:{baseURL:'http://127.0.0.1:4173',trace:'on',screenshot:'on',video:'off',
  launchOptions:{...(process.env.ENC_CHROMIUM_PATH?{executablePath:process.env.ENC_CHROMIUM_PATH}:{}),args:['--no-sandbox']}},
