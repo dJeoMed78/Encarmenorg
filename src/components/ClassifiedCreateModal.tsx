@@ -68,6 +68,7 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [submissionKey, setSubmissionKey] = useState(() => crypto.randomUUID().replace(/-/g, ''));
 
   // Lock body scroll and handle Escape key
   useEffect(() => {
@@ -204,8 +205,8 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
       setErrorMsg('Indica el nombre de la persona o negocio de contacto.');
       return;
     }
-    if (!phone.trim() && !whatsapp.trim() && !email.trim()) {
-      setErrorMsg('Debes proporcionar al menos un medio de contacto (WhatsApp, teléfono o correo).');
+    if (!phone.trim() && !whatsapp.trim()) {
+      setErrorMsg('Por ahora se requiere teléfono o WhatsApp de 10 dígitos para publicar. El correo como único contacto aún no está disponible.');
       return;
     }
 
@@ -218,13 +219,6 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
     if (contactWhatsapp && (whatsapp || phone)) contactMethods.push('whatsapp');
     if (contactPhone && phone) contactMethods.push('phone');
     if (contactEmail && email) contactMethods.push('email');
-
-    // Retrieve or generate persistent userToken
-    let userToken = localStorage.getItem('classified_user_token');
-    if (!userToken) {
-      userToken = `usr-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      localStorage.setItem('classified_user_token', userToken);
-    }
 
     const payload: Partial<ClassifiedAd> = {
       title: title.trim(),
@@ -246,7 +240,7 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
       whatsapp: cleanPhoneNumber(whatsapp) || cleanPhoneNumber(phone),
       email: email.trim(),
       contactMethods,
-      userToken,
+      ...( { idempotencyKey: submissionKey } as any ),
       status: 'active'
     };
 
@@ -255,14 +249,8 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
       const res = await onSubmitAd(payload);
       if (res && res.success) {
         setSuccessMsg(res.message || '¡Anuncio guardado exitosamente en el servidor!');
-        // Save token to owner tokens list
-        try {
-          const myTokens: string[] = JSON.parse(localStorage.getItem('my_classified_tokens') || '[]');
-          if (!myTokens.includes(userToken)) {
-            myTokens.push(userToken);
-            localStorage.setItem('my_classified_tokens', JSON.stringify(myTokens));
-          }
-        } catch {}
+        // El servidor emite el token de titular; el cliente API lo conserva solo si es válido.
+        setSubmissionKey(crypto.randomUUID().replace(/-/g, ''));
 
         setTimeout(() => {
           onClose();
