@@ -46,6 +46,6 @@ jobs:
       - name: Suite backend clasificados y H01
         run: npx tsx --test tests/public-classifieds.test.mjs tests/enc-consolidation-h01-regression.test.mjs
       - name: Pruebas de regresion empresarial
-        run: node --test tests/business-description-links.test.mjs tests/public-registration.test.mjs tests/public-registration-server-patch.test.mjs
+        run: npx tsx --test tests/business-description-links.test.mjs tests/public-registration.test.mjs tests/public-registration-server-patch.test.mjs
       - name: Vite build sin alterar versiones ni archivos fuente
         run: npx vite build
