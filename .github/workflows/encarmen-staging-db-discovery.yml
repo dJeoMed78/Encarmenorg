@@ -1,0 +1,68 @@
+name: ENCARMEN - Identificar DB de Staging sin secretos
+on:
+  push:
+    branches: [coord/encarmen-work-control-001]
+    paths: [.github/workflows/encarmen-staging-db-discovery.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SSH_PASSWORD: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Preparar SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PASSWORD"
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          [[ "$fp" == 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]] || exit 1
+      - name: Verificacion no destructiva de archivos de configuracion
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SSHPASS="$SSH_PASSWORD"
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'sh -s' <<'REMOTE'
+          set -eu
+          STAGING_ROOT="$HOME/domains/staging.encarmen.org"
+          test -d "$STAGING_ROOT"
+          python3 - "$STAGING_ROOT" <<'PY'
+          import os, pathlib,sys
+          root=pathlib.Path(sys.argv[1])
+          candidates=[]
+          for p,dirs,files in os.walk(root,followlinks=False):
+              relative=pathlib.Path(p).relative_to(root)
+              if len(relative.parts)>=5:
+                  dirs[:]=[]; continue
+              dirs[:]=[d for d in dirs if d not in {'node_modules','.git','dist','build','.cache'} and not (pathlib.Path(p)/d).is_symlink()]
+              for name in files:
+                  if name in {'.env','.env.staging','.env.production','.env.local','database.php','config.php'}:
+                      path=pathlib.Path(p)/name
+                      if not path.is_symlink():candidates.append(path)
+          print('STAGING_CONFIG_CANDIDATES=',len(candidates))
+          for path in candidates[:12]:
+              print('CONFIG_RELATIVE_PATH=',path.relative_to(root))
+              try:
+                  vals={}
+                  for line in path.read_text(errors='replace').splitlines():
+                      line=line.strip()
+                      if line.startswith('export '):line=line[7:]
+                      if not line or line.startswith('#') or '=' not in line:continue
+                      k,v=line.split('=',1)
+                      vals[k.strip()]=v.strip().strip('"').strip("'")
+                  db=next((vals.get(k) for k in ['DB_NAME','MYSQL_DATABASE','MARIADB_DATABASE'] if vals.get(k)),None)
+                  user=next((vals.get(k) for k in ['DB_USER','MYSQL_USER','MARIADB_USER'] if vals.get(k)),None)
+                  host=next((vals.get(k) for k in ['DB_HOST','MYSQL_HOST','MARIADB_HOST'] if vals.get(k)),None)
+                  pw=next((vals.get(k) for k in ['DB_PASSWORD','MYSQL_PASSWORD','MARIADB_PASSWORD'] if vals.get(k)),None)
+                  print('DB_IDENTITY=', 'STAGING' if db=='u293982346_encarmentest' else 'PRODUCTION_BLOCKED' if db=='u293982346_encarmenapp' else 'UNSPECIFIED_OR_OTHER')
+                  print('DB_USER_PRESENT=',bool(user),'DB_HOST_PRESENT=',bool(host),'DB_PASSWORD_PRESENT=',bool(pw))
+              except (OSError,UnicodeError):
+                  print('CONFIG_READABLE=no')
+          PY
+          REMOTE
