@@ -52,10 +52,10 @@ function adminPermission(requestPath, method) {
   if (/^\/(?:api\/)?admin(?:\/|$)/.test(path2)) return "admin:manage";
   if (/^\/api\/(?:mariadb|database-status)(?:\/|$)/.test(path2) || /^\/api\/(?:sync|webhook)(?:[-/]|$)/.test(path2)) return "admin:manage";
   if (/^\/api\/businesses\/approve-(?:candidate|multiple-candidates)$/.test(path2)) return "business:publish";
-  if (/^\/api\/businesses\/(?:auto-search|auto-search-ai|parse-whatsapp-group)$/.test(path2)) return null;
+  if (method.toUpperCase() === "POST" && /^\/api\/businesses\/(?:auto-search|auto-search-ai|parse-whatsapp-group)$/.test(path2)) return null;
   if (/^\/(?:api\/)?businesses\/[^/]+(?:\/(?:sync-wp|verify-edit-pin))?$/.test(path2) && mutable) return method.toUpperCase() === "DELETE" ? "business:delete" : "business:manage";
-  if (/^\/(?:api\/)?classifieds(?:\/|$)/.test(path2) && mutable && !path2.endsWith("/radar-search")) return "classified:manage";
-  if (/^\/api\/events(?:\/|$)/.test(path2) && mutable && !path2.endsWith("/radar-search")) return "event:manage";
+  if (/^\/(?:api\/)?classifieds(?:\/|$)/.test(path2) && mutable && !(method.toUpperCase() === "POST" && path2 === "/api/classifieds/radar-search")) return "classified:manage";
+  if (/^\/api\/events(?:\/|$)/.test(path2) && mutable && !(method.toUpperCase() === "POST" && path2 === "/api/events/radar-search")) return "event:manage";
   if (/^\/api\/reports(?:\/|$)/.test(path2) && method.toUpperCase() !== "POST") return "admin:manage";
   if (/^\/api\/emergency(?:\/|$)/.test(path2) && mutable) return "admin:manage";
   return null;
@@ -2172,12 +2172,12 @@ app.use((req, res, next) => {
     if (req.method === "POST" && ["/api/admin/login", "/api/admin/logout"].includes(req.path)) return next();
     const businessMutation = req.method === "POST" && (req.path === "/api/submit-business" || req.path === "/api/public/business-registrations") || req.method === "PATCH" && /^\/(?:api\/)?businesses\/[^/]+$/.test(req.path);
     if (businessMutation && isBusinessWritePermitted()) return next();
-    if (req.path === "/api/ratings/get" || req.path === "/api/events/radar-search") return next();
+    if (req.method.toUpperCase() === "POST" && (req.path === "/api/ratings/get" || req.path === "/api/events/radar-search")) return next();
     return res.status(403).json({ success: false, error: "STAGING_READ_ONLY", message: "Solo el carril autorizado de registro y edici\xF3n puede escribir negocios. Las dem\xE1s operaciones permanecen bloqueadas." });
   }
   if (!isWritePermitted()) {
     if (!["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) {
-      if (req.path === "/api/events/radar-search" || req.path === "/api/ratings/get") {
+      if (req.method.toUpperCase() === "POST" && (req.path === "/api/events/radar-search" || req.path === "/api/ratings/get")) {
         return next();
       }
       return res.status(403).json({
@@ -4419,11 +4419,7 @@ app.get("/api/events", async (_req, res) => {
     } catch (_) {
     }
   }
-  try {
-    await pruneExpiredEvents();
-  } catch (_) {
-  }
-  const eventsWithImages = eventsCache.map((e) => ({
+  const eventsWithImages = eventsCache.filter((evt) => !isEventPast(evt.date, evt.time)).map((e) => ({
     ...e,
     image: e.image && typeof e.image === "string" && e.image.trim() ? e.image.trim() : getEventRepresentativeImageServer(e)
   }));
@@ -4465,6 +4461,9 @@ app.post("/api/events", async (req, res) => {
 app.put("/api/events/:id", async (req, res) => {
   try {
     const id = req.params.id;
+    if (["radar-search", "reset", "publish-candidates", "radar-scan", "radar-status"].includes(String(id).toLowerCase())) {
+      return res.status(405).json({ success: false, error: "RESERVED_RESOURCE_ID", message: "Identificador reservado para una operaci\xF3n del servicio." });
+    }
     const idx = eventsCache.findIndex((e) => e.id === id);
     if (idx === -1) {
       return res.status(404).json({ success: false, message: "Evento no encontrado" });
@@ -4492,6 +4491,9 @@ app.put("/api/events/:id", async (req, res) => {
 app.delete("/api/events/:id", async (req, res) => {
   try {
     const id = req.params.id;
+    if (["radar-search", "reset", "publish-candidates", "radar-scan", "radar-status"].includes(String(id).toLowerCase())) {
+      return res.status(405).json({ success: false, error: "RESERVED_RESOURCE_ID", message: "Identificador reservado para una operaci\xF3n del servicio." });
+    }
     eventsCache = eventsCache.filter((e) => e.id !== id);
     fs.writeFileSync(path.resolve(__dirname, "events_db.json"), JSON.stringify(eventsCache, null, 2), "utf8");
     if (isMariaDbActive()) {
@@ -4775,7 +4777,6 @@ setInterval(() => {
 }, 60 * 60 * 1e3);
 app.get("/api/classifieds", (req, res) => {
   try {
-    pruneExpiredClassifieds();
     if (classifiedsCache.length === 0) {
       try {
         const cPath = path.resolve(__dirname, "classifieds_db.json");
@@ -4785,7 +4786,7 @@ app.get("/api/classifieds", (req, res) => {
       } catch (_) {
       }
     }
-    let list = [...classifiedsCache];
+    let list = classifiedsCache.map((ad) => ad.status !== "trash" && Date.now() - new Date(ad.createdAt || Date.now()).getTime() > 7 * 24 * 60 * 60 * 1e3 ? { ...ad, status: "trash" } : ad);
     const { category, subcategory, q, colonia, status, priceType, allStatus } = req.query;
     if (!allStatus) {
       list = list.filter((item) => (item.status || "active") === "active");
@@ -4848,6 +4849,9 @@ app.post("/api/classifieds", async (req, res) => {
 app.patch("/api/classifieds/:id", async (req, res) => {
   try {
     const id = req.params.id;
+    if (["radar-search", "reset", "publish-candidates", "radar-scan", "radar-status"].includes(String(id).toLowerCase())) {
+      return res.status(405).json({ success: false, error: "RESERVED_RESOURCE_ID", message: "Identificador reservado para una operaci\xF3n del servicio." });
+    }
     const idx = classifiedsCache.findIndex((c) => c.id === id);
     if (idx === -1) {
       return res.status(404).json({ success: false, message: "Aviso clasificado no encontrado" });
@@ -4881,6 +4885,9 @@ app.patch("/api/classifieds/:id", async (req, res) => {
 app.delete("/api/classifieds/:id", async (req, res) => {
   try {
     const id = req.params.id;
+    if (["radar-search", "reset", "publish-candidates", "radar-scan", "radar-status"].includes(String(id).toLowerCase())) {
+      return res.status(405).json({ success: false, error: "RESERVED_RESOURCE_ID", message: "Identificador reservado para una operaci\xF3n del servicio." });
+    }
     classifiedsCache = classifiedsCache.filter((c) => c.id !== id);
     try {
       fs.writeFileSync(path.resolve(__dirname, "classifieds_db.json"), JSON.stringify(classifiedsCache, null, 2), "utf8");
@@ -5936,10 +5943,6 @@ function getGeminiClient() {
 }
 app.post("/api/events/radar-search", async (req, res) => {
   try {
-    try {
-      await pruneExpiredEvents();
-    } catch (_) {
-    }
     const userQuery = (req.body?.query || "").toLowerCase().trim();
     const useAi = Boolean(req.body?.useAi);
     console.log(`[B\xFAsqueda Radar de Eventos] Consulta recibida: "${userQuery}", useAi: ${useAi}`);
@@ -6058,7 +6061,7 @@ Devuelve \xDANICAMENTE un array JSON v\xE1lido sin texto adicional ni markdown e
         message: "GEMINI_API_KEY no detectada en el servidor. Se cargaron los eventos del radar local aut\xF3nomo ($0 costo)."
       };
     }
-    let publishedCandidates = eventsCache.map((raw2) => {
+    let publishedCandidates = eventsCache.filter((evt) => !isEventPast(evt.date, evt.time)).map((raw2) => {
       const candidateImg = raw2.image && typeof raw2.image === "string" && raw2.image.trim() ? raw2.image.trim() : getEventRepresentativeImageServer(raw2);
       return {
         id: raw2.id,
