@@ -50,7 +50,7 @@ export const test=base.extend({lab:async({page},use,testInfo)=>{
    '/api/newest-businesses':{success:true,businesses:[]},'/api/check-duplicate':{isDuplicate:false},'/api/analytics/track':{success:true}
   };
   if(Object.hasOwn(known,u.pathname))return json(known[u.pathname]);
-  if(u.pathname.startsWith('/api/ratings/'))return json({success:true,stats:{count:0,average:0},reviews:[]});
+  if(u.pathname.startsWith('/api/ratings/'))return json({success:true,count:0,average:0,hasRated:false,userRating:null,reviews:[]});
   state.unknown.push(u.pathname);return json({success:false,message:'API no modelada por el arnés'},503);
  });
  await use(state);

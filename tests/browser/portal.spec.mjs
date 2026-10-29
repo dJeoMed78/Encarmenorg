@@ -56,3 +56,12 @@ test('objetivo táctil principal y formulario con scroll',async({page,lab})=>{aw
 test('clasificados: HTTP 200 incompleto no confirma publicación',async({page,lab})=>{lab.postMode='unconfirmed';await home(page);await openAdForm(page);const d=await fillAd(page);await d.getByRole('button',{name:'Publicar Anuncio Ahora'}).click();await expect(d.getByText('El servidor no confirmó la publicación del anuncio.')).toBeVisible();});
 test('registro: falta lectura posterior impide éxito',async({page,lab})=>{lab.postMode='unconfirmed';await home(page);await fillBusiness(page);await page.getByRole('button',{name:'Registrar y Publicar Negocio en Carmen'}).click();await expect(page.getByText(/No se pudo consultar la publicación|La ficha o el directorio no confirman/)).toBeVisible();await expect(page.getByRole('heading',{name:'¡Tu negocio ya está publicado en el directorio!'})).toHaveCount(0);});
 test('registro: reintento tras 502 conserva idempotencia',async({page,lab})=>{lab.postMode='nonjson';await home(page);await fillBusiness(page);const submit=page.getByRole('button',{name:'Registrar y Publicar Negocio en Carmen'});await submit.click();await expect(page.getByText(/Error HTTP 502/)).toBeVisible();lab.postMode='ok';await submit.click();await expect(page.getByRole('heading',{name:'¡Tu negocio ya está publicado en el directorio!'})).toBeVisible();const posts=lab.requests.filter(r=>r.path==='/api/public/business-registrations');expect(posts).toHaveLength(2);expect(posts[0].key).toBeTruthy();expect(posts[1].key).toBe(posts[0].key);});
+
+test('encabezado: acciones principales sin recorte lateral',async({page,lab})=>{
+ await home(page);await page.screenshot({path:test.info().outputPath('encabezado.png')});
+ for(const name of [/Subir Mi Negocio/,/Números de Emergencia 911|Núm. Emergencia/]){
+  const button=page.getByRole('button',{name}).first();const box=await button.boundingBox();
+  expect(box,`Botón ${name}`).not.toBeNull();expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x+box.width,`Acción ${name} recortada por el borde derecho`).toBeLessThanOrEqual(page.viewportSize().width+1);
+ }
+});

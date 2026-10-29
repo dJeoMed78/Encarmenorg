@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {gzipSync} from 'node:zlib';
 import sharp from 'sharp';
+import {execFileSync} from 'node:child_process';
 const root=new URL('./',import.meta.url).pathname;
 const result=JSON.parse(await fs.readFile(path.join(root,'results.json'),'utf8'));
 const compact={stats:result.stats,errors:result.errors,suites:result.suites};
@@ -12,7 +13,7 @@ emit('results.json.gz',gzipSync(JSON.stringify(compact)));
 const dirs=(await fs.readdir(path.join(root,'artifacts'),{withFileTypes:true})).filter(x=>x.isDirectory());
 const chosen=[];
 for(const viewport of ['320x568','360x800','390x844','768x1024','1440x900']){
- for(const kind of ['inicio-directorio','ficha-real','geometría','rechazo-403']){
+ for(const kind of ['inicio-directorio','ficha-real','geometría','rechazo-403','encabezado']){
   const d=dirs.find(x=>x.name.includes(viewport)&&x.name.includes(kind));if(!d)continue;
   const names=await fs.readdir(path.join(root,'artifacts',d.name));
   const png=names.find(x=>x==='inicio.png')||names.find(x=>x==='ficha.png')||names.find(x=>x.endsWith('.png'));
@@ -21,5 +22,15 @@ for(const viewport of ['320x568','360x800','390x844','768x1024','1440x900']){
  }
 }
 const fail=dirs.find(x=>x.name.includes('rechazo-403'))||dirs[0];
-if(fail){const p=path.join(root,'artifacts',fail.name,'trace.zip');try{const b=await fs.readFile(p);if(b.length<3000000)emit('representative-trace.zip',b);}catch{}}
-console.log('ENC_BROWSER_VERSION '+(await import('playwright-core')).chromium.executablePath());
+if(fail){const p=path.join(root,'artifacts',fail.name,'trace.zip');try{
+ const reduced=execFileSync('python3',['-c',`import zipfile,sys,io,json
+src=zipfile.ZipFile(sys.argv[1]);buf=io.BytesIO();omitted=[]
+with zipfile.ZipFile(buf,'w',zipfile.ZIP_DEFLATED) as out:
+ for item in src.infolist():
+  if item.filename.endswith(('.trace','.network','.stacks')) or item.file_size<150000:out.writestr(item.filename,src.read(item))
+  else:omitted.append({'name':item.filename,'bytes':item.file_size})
+ out.writestr('e2e-reduced-manifest.json',json.dumps({'purpose':'Bounded log fallback; original large resources omitted','omitted':omitted}))
+sys.stdout.buffer.write(buf.getvalue())`,p],{maxBuffer:8000000});
+ if(reduced.length<6000000)emit('representative-trace-reduced.zip',reduced);
+}catch(error){console.log('ENC_TRACE_EXPORT_ERROR '+error.message);}}
+console.log('ENC_BROWSER_EXECUTABLE '+(await import('playwright-core')).chromium.executablePath());
