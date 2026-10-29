@@ -114,6 +114,23 @@ test('duplicado: misma clave con datos distintos se rechaza', async () => {
   await rejects(s.create({ ...VALID, title: 'Otro título distinto' }), 'IDEMPOTENCY_CONFLICT');
 });
 
+test('idempotencia: misma clave pero distinta descripción o precio no es replay', async () => {
+  const pool = new FakePool();
+  const s = service(pool);
+  await s.create(VALID);
+  await rejects(s.create({ ...VALID, description: 'Otro artículo y descripción diferente' }), 'IDEMPOTENCY_CONFLICT');
+  await rejects(s.create({ ...VALID, price: 1800 }), 'IDEMPOTENCY_CONFLICT');
+  assert.equal(pool.rows.size, 1);
+});
+
+test('anuncio vencido no puede editarse o reactivarse por titular', async () => {
+  const pool = new FakePool();
+  const s = service(pool);
+  const { classified, ownerToken } = await s.create(VALID);
+  pool.rows.get(classified.id).expires_at = new Date(NOW.getTime() - 1000);
+  await rejects(s.update(classified.id, ownerToken, { status: 'active' }), 'CLASSIFIED_EXPIRED');
+});
+
 test('fallo SQL en INSERT: error confirmado, sin mutación de caché', async () => {
   const pool = new FakePool();
   pool.failInsert = true;
