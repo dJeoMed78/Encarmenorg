@@ -1,0 +1,87 @@
+✔ server.ts completo contiene el parche aplicado e idempotente (7.650673ms)
+✔ contrato público valida modalidades/pagos/CP y rechaza imágenes, privilegios y teléfonos contaminados (4.167259ms)
+✔ cliente público → HTTP real → almacén/verificador reales con SQL simulado → listado/ficha y recarga (2897.316197ms)
+✔ confirmación incierta conserva UUID, reintento no duplica; aislamiento y rutas inseguras bloqueados (99.821864ms)
+✔ el parche aplica los cinco cambios exactos, es idempotente y no toca nada más (1.588955ms)
+✔ si una ancla falta o está duplicada, aborta sin devolver un archivo parcial (0.968467ms)
+✔ guardián de Staging parcheado: permite exclusivamente el POST público previsto (y lo anterior sigue igual) (7.473363ms)
+✔ Validación estricta de contactos independientes: Teléfono y WhatsApp (2.722422ms)
+✔ RegisterBusinessView: Campos independientes de teléfono y WhatsApp en interfaz (1.305454ms)
+✔ RegisterBusinessView: Publicación inmediata confirmada en MariaDB sin aprobación administrativa (0.341322ms)
+✔ RegisterBusinessView: Manejo de errores reales y reintento con Idempotency-Key (0.15305ms)
+✔ RegisterBusinessView: Exclusión de datos personales del propietario para compatibilidad con Staging (1.543253ms)
+✔ App.tsx: Integración de RegisterBusinessView sin navegación prematura (5.80726ms)
+✔ validación: acepta datos mínimos, teléfono y WhatsApp independientes, sin campos administrativos (10.196047ms)
+✔ validación: rechaza campos desconocidos o privilegiados, honeypot, marcado, contactos y URL inválidos (1.841801ms)
+✔ flujo completo: INSERT mediante el almacén, lectura independiente, publicado y visible, ID en la respuesta (2.927109ms)
+✔ sin etapa de revisión: ni tabla de solicitudes, ni estados, ni permisos administrativos, ni SQL propio de escritura (1.17499ms)
+✔ idempotencia: misma clave repite sin duplicar; otros datos con la misma clave dan 409 sin tocar la fila (1.709351ms)
+✔ duplicados: nombre (sin acentos/mayúsculas) o cualquier contacto; nunca sobrescribe empresas existentes (2.315633ms)
+✔ reintento idempotente funciona con cupo global agotado y no consume nuevos cupos por IP (1.68884ms)
+✔ errores reales de MariaDB: nada se guarda, nada se publica y nunca hay éxito simulado (10.164687ms)
+✔ sin visibilidad confirmada no se anuncia publicación exitosa (2.053495ms)
+✔ compuertas: sin escritura habilitada no se consulta ni se escribe; tope global por hora y por día (1.21857ms)
+✔ ruta pública: una sola ruta anónima; 201 con ID solo tras confirmar; la empresa aparece de inmediato en el directorio (2.152073ms)
+✔ ruta pública: errores HTTP reales, abuso limitado, sin filtrar detalles internos y sin escrituras en rechazos (14.483608ms)
+✔ límite de cuerpo: exige Content-Length y rechaza envíos grandes antes del analizador JSON global (1.511915ms)
+✔ montaje: solo en Staging, una ruta POST, interruptor PUBLIC_REGISTRATION_ENABLED y lecturas SQL de solo consulta (3.1018ms)
+✔ aislamiento probado: base, permisos, esquemas y marca coinciden con Staging (8.852075ms)
+✔ el resultado nunca contiene grants, hash, host, usuario ni contraseña (2.942064ms)
+✔ configuración incompleta, ambigua o de otro entorno bloquea antes de consultar la base (1.589131ms)
+✔ la identidad efectiva de la base debe ser Staging (no basta el nombre configurado) (0.278229ms)
+✔ permisos: cuenta limitada pasa; permisos globales, ajenos, comodín o de producción bloquean (0.865497ms)
+✔ privilegios amplios sobre Staging avisan; con STAGING_REQUIRE_MINIMAL_GRANTS=true bloquean (7.044124ms)
+✔ visibilidad de esquemas: producción u otros esquemas de la cuenta bloquean (0.496758ms)
+✔ marca de entorno dentro de la base: falta, producción, ambigua o de otra base bloquean (3.362044ms)
+✔ cualquier error de consulta falla cerrado, sin filtrar el mensaje original (0.83301ms)
+✔ parseGrant interpreta formatos de MariaDB y rechaza lo desconocido (2.994863ms)
+[MariaDB] Error cargando businesses: simulated database outage
+[MariaDB] Error guardando empresa: simulated database outage
+[MariaDB] Catálogo no disponible; no se importaron semillas ni se escribieron negocios.
+[MariaDB] 0 empresas cargadas desde la fuente autorizada; sin importación automática.
+[MariaDB] 1 empresas cargadas desde la fuente autorizada; sin importación automática.
+✔ MX contacts: independent fields, international and legacy prefix; invalid values absent (3.972ms)
+✔ MariaDB serialization uses columns rather than stale raw_data; empty never resurrected (6.198501ms)
+✔ upsert preserves omitted/null/empty/whitespace contacts, supports independent replacement and explicit removal (34.579053ms)
+✔ contact deletion intent rejects invalid, unauthenticated and conflicting requests (0.883336ms)
+✔ startup/restart does not seed businesses after failed or legitimately empty reads (10.956166ms)
+[Business contacts] Authorized explicit removal { businessId: '1081', fields: [ 'phone' ] }
+[MariaDB] Error cargando businesses: simulated database outage
+✔ real Express GET/PATCH handlers with mocked DB: fresh reads despite unchanged signature; failures and authorization (214.777897ms)
+✔ real rendered cards, Glass contact links and admin filters/pagination use synthetic data only (1152.175496ms)
+✔ API client refuses seed fallback and false success on an HTTP failure (50.200372ms)
+✔ App shows source error without seed contacts, retries and refreshes an open business from fresh API data (515.441422ms)
+✔ sin verificador inyectado, un proceso que no es Staging no puede crear ni editar (2.364095ms)
+✔ con configuración de Staging pero sin permisos/marca verificables, el almacén sigue bloqueado (0.703306ms)
+[MariaDB] Error cargando businesses: simulated database outage
+[MariaDB] Error guardando empresa: simulated database outage
+[MariaDB] Catálogo no disponible; no se importaron semillas ni se escribieron negocios.
+[MariaDB] 0 empresas cargadas desde la fuente autorizada; sin importación automática.
+[MariaDB] 1 empresas cargadas desde la fuente autorizada; sin importación automática.
+✔ MX contacts: independent fields, international and legacy prefix; invalid values absent (12.812794ms)
+✔ MariaDB serialization uses columns rather than stale raw_data; empty never resurrected (11.314789ms)
+✔ upsert preserves omitted/null/empty/whitespace contacts, supports independent replacement and explicit removal (24.712332ms)
+✔ contact deletion intent rejects invalid, unauthenticated and conflicting requests (4.661222ms)
+✔ startup/restart does not seed businesses after failed or legitimately empty reads (26.774223ms)
+[Business contacts] Authorized explicit removal { businessId: '1081', fields: [ 'phone' ] }
+[MariaDB] Error cargando businesses: simulated database outage
+✔ real Express GET/PATCH handlers with mocked DB: fresh reads despite unchanged signature; failures and authorization (238.506818ms)
+✔ real rendered cards, Glass contact links and admin filters/pagination use synthetic data only (1424.278567ms)
+✔ API client refuses seed fallback and false success on an HTTP failure (59.951632ms)
+✔ App shows source error without seed contacts, retries and refreshes an open business from fresh API data (548.769532ms)
+✔ SW explicit configuration, selected database and production account guards fail closed (28.372077ms)
+✔ SW secure staging credentials and login throttling do not accept embedded/short/client-only credentials (190.421833ms)
+✔ SW INSERT/replay/conflict/duplicates and parallel registrations never upsert an existing business (6.854652ms)
+✔ SW transactional update preserves fresh SQL contacts, metadata and unrelated fields; missing business never inserts (5.784117ms)
+✔ SW rollback and lost commit acknowledgement never report success or duplicate a retried registration (2.18008ms)
+✔ SW real HTTP guard/login/routes enforce authorization and controlled scope with mocked MariaDB (263.808059ms)
+✔ SW browser service has no local success fallback and authentication requires a server token (55.414285ms)
+✔ SW registration form retains request key after error, blocks duplicate clicks and keeps WhatsApp independent (301.090883ms)
+ℹ tests 65
+ℹ suites 0
+ℹ pass 65
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 11307.730758

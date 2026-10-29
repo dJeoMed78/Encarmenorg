@@ -1,0 +1,23 @@
+{
+  "task": "ENC-PUBLIC-REGISTRATION-INTEGRATION-001",
+  "base": "1572a1dd9cbe31c1870a026ac947d3bfcfc877c5",
+  "interfaceSource": "8435e7f94b0cee3d7f0623b966ed5cf3578a6283",
+  "functionalCommit": "1298256e88c021fe7e4d855933c8a421e90a1191",
+  "branch": "work/enc-public-registration-integration-001",
+  "node": "24.22.1",
+  "commands": [
+    {"command":"node --import tsx --test tests/public-registration*.test.mjs tests/staging-write-001.test.mjs tests/staging-isolation-proof.test.mjs tests/staging-store-default-strict.test.mjs","exitCode":0,"pass":65,"fail":0,"skipped":0,"note":"Includes shared imported baseline cases; not 65 unique cases."},
+    {"command":"node_modules/.bin/tsc --noEmit","exitCode":0},
+    {"command":"node_modules/.bin/vite build --outDir /tmp/enc-public-registration-frontend","exitCode":0,"modules":1724},
+    {"command":"node_modules/.bin/esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=/tmp/enc-public-registration-server-check.mjs","exitCode":0}
+  ],
+  "publicRegistrationIntegratedInCode":true,
+  "realMariaDBPersistenceTested":false,
+  "database":"simulated connections only",
+  "http":"loopback Express, actual server guard/mount/list/detail snippets; full server never started",
+  "realDatabasesAccessed":false,
+  "environmentChangedOnHostinger":false,
+  "deployed":false,
+  "merged":false,
+  "publicUploadsEnabled":false
+}
