@@ -1,0 +1,43 @@
+name: ENCARMEN - Comprobacion posterior Staging sin cambios
+on:
+  push:
+    branches: [coord/encarmen-work-control-001]
+    paths: [.github/workflows/encarmen-staging-postdeploy-readonly.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SSH_PASSWORD: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Verificar identidad de release en HTTP
+        run: |
+          set -euo pipefail
+          expected=7e7818166beecb9e3905aa8af83ec61f7d993737
+          [ "$(curl -fsSL --max-time 15 https://staging.encarmen.org/encarmen-release.txt)" = "$expected" ]
+          echo STAGING_HTTP_RELEASE_OK
+          prod=$(curl -sSL -o /dev/null -w '%{http_code}' --max-time 15 https://encarmen.org)
+          echo "PRODUCTION_HTTP_STATUS=$prod"
+          test "$prod" = 200
+      - name: Verificar carpeta y rollback en servidor
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PASSWORD"
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          export SSHPASS="$SSH_PASSWORD"
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'sh -s' <<'REMOTE'
+          set -eu
+          root="$HOME/domains/staging.encarmen.org/hbuilds"
+          test "$(readlink "$root/current")" = "versions/enc-coord-7e7818166bee"
+          test -f "$root/versions/01a18545-6254-7060-bb07-7b73bf4df65f/nodejs/server.js"
+          snap="$HOME/encarmen-staging-backups/files/2026-10-29/predeploy-enc-coord-7e7818166bee.tar.gz"
+          test -f "$snap"
+          gzip -t "$snap"
+          test "$(stat -c %a "$HOME/encarmen-staging-backups")" = 700
+          printf 'STAGING_ACTIVE_RELEASE=7e7818166bee\nROLLBACK_OLD_RELEASE_PRESENT=yes\nSELECTIVE_BACKUP_VALID=yes\n'
+          REMOTE
