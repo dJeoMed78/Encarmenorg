@@ -1,0 +1,54 @@
+name: ENCARMEN - Primera copia privada MariaDB Staging
+on:
+  push:
+    branches: [coord/encarmen-work-control-001]
+    paths: [.github/workflows/encarmen-staging-first-db-backup.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: enc-staging-backup
+  cancel-in-progress: false
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      SSH_PASSWORD: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: SSH seguro verificado
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PASSWORD"
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          [[ "$fp" == 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]] || { echo 'Huella SSH incorrecta'; exit 1; }
+      - name: Instalar scripts en carpeta privada (no sitio web)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SSHPASS="$SSH_PASSWORD"
+          SSH_ARGS=(-T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no)
+          HOST=u293982346@45.137.159.114
+          sshpass -e ssh "${SSH_ARGS[@]}" "$HOST" 'test -d "$HOME/encarmen-staging-backups" && test ! -L "$HOME/encarmen-staging-backups" && mkdir -p -m 700 "$HOME/encarmen-staging-backups/bin" && chmod 700 "$HOME/encarmen-staging-backups/bin"'
+          for f in backup_staging_db.py run_hostinger_backup.py; do
+            sshpass -e ssh "${SSH_ARGS[@]}" "$HOST" "umask 077; cat > \"\$HOME/encarmen-staging-backups/bin/$f\" && chmod 600 \"\$HOME/encarmen-staging-backups/bin/$f\"" < "ops/staging-backups/$f"
+          done
+      - name: Ejecutar backup con validacion SQL y retencion en servidor
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SSHPASS="$SSH_PASSWORD"
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 "$HOME/encarmen-staging-backups/bin/run_hostinger_backup.py"'
+      - name: Verificar inventario privado sin descargar SQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SSHPASS="$SSH_PASSWORD"
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'sh -c '\''D="$HOME/encarmen-staging-backups/database"; printf "DB_BACKUP_COUNT="; find "$D" -maxdepth 1 -type f -name "*.sql.gz" | wc -l; ls -ld "$D" | awk "{print \\$1}"'\'''
