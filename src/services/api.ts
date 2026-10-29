@@ -585,7 +585,7 @@ export async function fetchClassifieds(params: {
   status?: string;
   priceType?: string;
   allStatus?: boolean;
-} = {}): Promise<{ total: number; classifieds: import('../types').ClassifiedAd[] }> {
+} = {}): Promise<{ total: number; classifieds: import('../types').ClassifiedAd[]; error?: string }> {
   try {
     const query = new URLSearchParams();
     if (params.category && params.category !== 'all') query.set('category', params.category);
@@ -597,10 +597,10 @@ export async function fetchClassifieds(params: {
     if (params.allStatus) query.set('allStatus', 'true');
 
     const res = await fetch(API_BASE + '/classifieds?' + query.toString());
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) return { total: 0, classifieds: [], error: `HTTP ${res.status}` };
     return await res.json();
-  } catch (err) {
-    return { total: 0, classifieds: [] };
+  } catch (err: any) {
+    return { total: 0, classifieds: [], error: err?.message || 'Error de conexión con el servidor' };
   }
 }
 

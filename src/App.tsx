@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
 import { Hero, PromoItem, EventItem } from './components/Hero';
 import { BusinessCard } from './components/BusinessCard';
@@ -26,7 +26,15 @@ import { ClassifiedCreateModal } from './components/ClassifiedCreateModal';
 import { ClassifiedDetailModal } from './components/ClassifiedDetailModal';
 import { Promotion, ClassifiedAd, Business } from './types';
 import { isSessionAdminAuthenticated, hashPassword, FALLBACK_ADMIN_HASHES } from './utils/adminAuth';
-import { adminDeleteBusiness, adminUpdateBusiness, getAdminPromotions } from './services/api';
+import {
+  adminDeleteBusiness,
+  adminUpdateBusiness,
+  getAdminPromotions,
+  fetchClassifieds,
+  createClassified,
+  updateClassified,
+  deleteClassified
+} from './services/api';
 import { sortEventsChronologically, parseEventStartDate, isEventExpired, filterActiveUpcomingEvents } from './services/eventsService';
 import { getSavedPortalLinks } from './components/AdminLinksAndAdsManager';
 function getBusinessSlugFromUrl(): string | null {
@@ -213,51 +221,80 @@ export default function App() {
     return sortEventsChronologically(filterActiveUpcomingEvents(raw));
   }, []);
 
-  // Anuncios Clasificados y Bolsa de Trabajo (Moderación estricta: solo aprobados por el administrador)
-  const [classifiedsList, setClassifiedsList] = useState<ClassifiedAd[]>(() => {
-    try {
-      const saved = localStorage.getItem('encarmen_approved_classifieds_v1');
-      if (!saved) return [];
-      const parsed = JSON.parse(saved);
-      return Array.isArray(parsed)
-        ? parsed.filter((ad: any) => ad && ad.approvedByAdmin === true)
-        : [];
-    } catch {
-      return [];
-    }
-  });
+  // Anuncios Clasificados y Bolsa de Trabajo
+  const [classifiedsList, setClassifiedsList] = useState<ClassifiedAd[]>([]);
+  const [classifiedsLoading, setClassifiedsLoading] = useState(false);
+  const [classifiedsError, setClassifiedsError] = useState<string | null>(null);
   const [isCreateClassifiedOpen, setIsCreateClassifiedOpen] = useState(false);
   const [selectedClassified, setSelectedClassified] = useState<ClassifiedAd | null>(null);
+  const [editingClassified, setEditingClassified] = useState<ClassifiedAd | null>(null);
 
-  const handleCreateClassified = async (adData: Partial<ClassifiedAd>) => {
-    const newAd: ClassifiedAd = {
-      id: `ad-${Date.now()}`,
-      title: adData.title || '',
-      category: adData.category || 'compra-venta',
-      subcategory: adData.subcategory || '',
-      description: adData.description || '',
-      price: adData.price || 0,
-      priceType: adData.priceType || 'fixed',
-      currency: 'MXN',
-      phone: adData.phone || '',
-      whatsapp: adData.whatsapp || adData.phone || '',
-      colonia: adData.colonia || 'Centro',
-      location: adData.location || 'Ciudad del Carmen, Campeche',
-      contactName: adData.contactName || 'Anunciante',
-      image: adData.image || '',
-      source: 'Publicación Ciudadana',
-      createdAt: new Date().toISOString(),
-      status: 'active'
-    };
-    setClassifiedsList((prev) => {
-      const updated = [newAd, ...prev];
-      try {
-        localStorage.setItem('encarmen_approved_classifieds_v1', JSON.stringify(updated));
-      } catch (_) {}
-      return updated;
-    });
-    return { success: true, message: 'Anuncio publicado con éxito en la bolsa de trabajo y clasificados.' };
+  const loadClassifieds = useCallback(async () => {
+    setClassifiedsLoading(true);
+    setClassifiedsError(null);
+    try {
+      const res = await fetchClassifieds();
+      if (res.error) {
+        setClassifiedsError(res.error);
+      } else if (Array.isArray(res.classifieds)) {
+        setClassifiedsList(res.classifieds);
+      }
+    } catch (err: any) {
+      setClassifiedsError(err?.message || 'Error de conexión con el servidor.');
+    } finally {
+      setClassifiedsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadClassifieds();
+  }, [loadClassifieds]);
+
+  const handleCreateClassified = async (adData: Partial<ClassifiedAd>): Promise<{ success: boolean; message: string }> => {
+    try {
+      if (editingClassified) {
+        const res = await updateClassified(editingClassified.id, adData);
+        if (res && res.success && res.classified) {
+          setClassifiedsList((prev) =>
+            prev.map((item) => (item.id === editingClassified.id ? res.classified! : item))
+          );
+          setEditingClassified(null);
+          return { success: true, message: res.message || 'Anuncio actualizado con éxito en el servidor.' };
+        } else {
+          return { success: false, message: res?.message || 'No se pudo actualizar el anuncio en el servidor.' };
+        }
+      } else {
+        const res = await createClassified(adData);
+        if (res && res.success && res.classified) {
+          setClassifiedsList((prev) => [res.classified!, ...prev]);
+          return { success: true, message: res.message || 'Anuncio publicado con éxito en el servidor.' };
+        } else {
+          return { success: false, message: res?.message || 'No se pudo guardar el anuncio en el servidor.' };
+        }
+      }
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Error de conexión con el servidor. No se pudo guardar.' };
+    }
   };
+
+  const handleDeleteClassified = async (adId: string) => {
+    try {
+      const res = await deleteClassified(adId);
+      if (res && res.success) {
+        setClassifiedsList((prev) => prev.filter((item) => item.id !== adId));
+        if (selectedClassified?.id === adId) {
+          setSelectedClassified(null);
+        }
+      }
+    } catch (err) {
+      console.error('Error al eliminar clasificado:', err);
+    }
+  };
+
+  const coloniasListForClassifieds = useMemo(() => {
+    const raw = Array.isArray(ALL_COLONIAS_CARMEN) ? ALL_COLONIAS_CARMEN : [];
+    return raw.map((c: string) => ({ name: c, count: 0 }));
+  }, []);
 
   // Overrides dinámicos de administración (TOP, Recomendadas, Eliminadas, Ediciones)
   const [businessOverrides, setBusinessOverrides] = useState<Record<string, Partial<Business>>>({});
@@ -869,8 +906,14 @@ export default function App() {
         <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 relative z-10">
           <ClassifiedsView
             classifieds={classifiedsList}
-            coloniasList={[]}
-            onOpenCreateModal={() => setIsCreateClassifiedOpen(true)}
+            coloniasList={coloniasListForClassifieds}
+            loading={classifiedsLoading}
+            error={classifiedsError}
+            onRetry={loadClassifieds}
+            onOpenCreateModal={() => {
+              setEditingClassified(null);
+              setIsCreateClassifiedOpen(true);
+            }}
             onOpenDetailModal={(ad) => setSelectedClassified(ad)}
           />
         </div>
@@ -1326,9 +1369,13 @@ export default function App() {
       {/* MODAL CREAR ANUNCIO CLASIFICADO */}
       <ClassifiedCreateModal
         isOpen={isCreateClassifiedOpen}
-        onClose={() => setIsCreateClassifiedOpen(false)}
+        onClose={() => {
+          setIsCreateClassifiedOpen(false);
+          setEditingClassified(null);
+        }}
         onSubmitAd={handleCreateClassified}
-        coloniasList={[]}
+        coloniasList={coloniasListForClassifieds}
+        editingAd={editingClassified}
       />
 
       {/* MODAL DETALLE DE ANUNCIO CLASIFICADO */}
@@ -1336,6 +1383,11 @@ export default function App() {
         ad={selectedClassified}
         isOpen={!!selectedClassified}
         onClose={() => setSelectedClassified(null)}
+        onEdit={(ad) => {
+          setEditingClassified(ad);
+          setIsCreateClassifiedOpen(true);
+        }}
+        onDelete={handleDeleteClassified}
         isAdmin={isAdminLoggedIn}
       />
 
