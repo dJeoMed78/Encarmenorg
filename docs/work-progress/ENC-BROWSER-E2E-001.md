@@ -25,3 +25,26 @@ Chromium 150.0.7871.100 local no pudo crear socket Unix por restricción del ent
 Run 40952254173 completó 115 ejecuciones: 80 PASS, 35 FAIL. Los fallos identificados allí corresponden a selectores del arnés: detalle de anuncio es una tarjeta y no botón, mensaje de error empresarial distinto y colonia se llama Ciudad del Carmen Centro (no Centro). Corregidos sin cambiar producto. Run 40953157539: 19 PASS, 6 FAIL por timeout, 4 interrumpidos, 116 sin ejecutar; no es matriz final. Se cambió Vite dev por build+preview y se redujo concurrencia a dos workers.
 
 GitHub rechaza upload-artifact por cuota de almacenamiento de cuenta. No se borran artefactos. Se conserva paso de carga con fallo visible no bloqueante y exportación acotada de resultados/capturas/traza por logs. Matriz final sin parada temprana: 32 escenarios x 5 viewports = 160 ejecuciones previstas. Resultados todavía pendientes.
+
+## Matriz completa comprobada — 2026-10-29
+
+SHA ejecutado: `667eb842978ed84f95bbaa36672362e6d3fa41a1`.
+Run: https://github.com/dJeoMed78/Encarmenorg/actions/runs/40954639196
+Chromium Headless Shell 141.0.7390.37, Playwright 1.56.1, Node 22.23.4.
+165 ejecutadas: **164 PASS, 1 FAIL, 0 omitidas, 0 flaky**. Duración 268.5 s.
+
+| Viewport | PASS | FAIL |
+|---|---:|---:|
+|320x568|32|1|
+|360x800|33|0|
+|390x844|33|0|
+|768x1024|33|0|
+|1440x900|33|0|
+
+Defecto reproducido: el botón SOS/emergencias del encabezado llega a x=352.796875 en viewport de 320 px (tolerancia de prueba: 321). Captura real y aserción fallida. Afecta `src/components/Navbar.tsx:248-277`. El overflow del documento puede estar oculto por CSS; por eso la prueba verifica el botón mismo. No se corrige producto por restricción explícita de alcance. Recomendación: permitir contracción/reflujo del logo/grupo de acciones en 320px manteniendo accesibles alta y emergencias; repetir la aserción y revisión visual.
+
+Los 32 escenarios restantes pasan en todas las resoluciones: registro con lecturas posteriores de API simulada, errores 403/500/no JSON/conexión, ausencia de éxitos falsos, búsqueda, clasificación, formularios, ficha/contactos, historial, respuesta atrasada al abandonar ruta, scroll, teclado y geometría medida.
+
+Se recuperaron por logs 25 JPEG representativos, JSON comprimido, contexto del fallo y traza reducida. La traza omite recursos grandes y contiene manifiesto de omisiones; no sustituye todos los ZIP originales. upload-artifact sigue rechazado por cuota. Sin borrados ni cambios de facturación.
+
+Cierre de infraestructura en `0b05f9a14ffb58270fb9f7356d839aa2fc55a407`: situar el botón de envío dentro del viewport antes del segundo clic real y exportar también vistas de clasificados/formulario (no solo inicio). Se repite toda la matriz antes del cierre final; sus resultados siguen pendientes en este punto.
