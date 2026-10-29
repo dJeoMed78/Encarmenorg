@@ -147,3 +147,15 @@ El propietario designa este archivo como **memoria documental canónica de la Co
 **Forma de registro:** agregar fecha, contexto, decisión o acción, quién autorizó, rama/SHA, evidencia verificable, vigencia, riesgos y pendientes. Distinguir declaraciones, verificaciones y operaciones reales. Preservar el historial mediante commits auditables, evitar sobrescribir decisiones anteriores sin dejar trazabilidad y actualizar en la rama de coordinación; no escribir en main, ia-desarrollo ni desplegar por esta sola autorización.
 
 **Uso al reiniciar una conversación:** consultar primero este archivo, el contexto maestro y la bitácora reciente en GitHub, comprobar el HEAD actual y contrastar los hechos cambiantes antes de actuar. La documentación ofrece continuidad entre sesiones, no garantiza lectura automática ni seguimiento continuo. Si crece demasiado, mantener aquí el índice y las reglas críticas, con enlaces a registros especializados de coordinación.
+
+
+## Autonomía de actualización de memoria — ratificación del propietario (2026-10-29)
+
+El propietario instruye expresamente a la Coordinación Principal, vigente como «Jefa 3», a **no esperar solicitudes individuales de guardado**. La coordinación debe, por iniciativa propia, seleccionar y registrar oportunamente en este documento los hechos duraderos o importantes para la continuidad de ENCARMEN: decisiones, cambios de prioridad, asignación de colaboradores (incluido PERP / Perplexity), autorizaciones y restricciones, tareas y hallazgos con su estado real, referencias de ramas y commits, riesgos, bloqueos y próximos pasos.
+
+- La documentación rutinaria y no sensible en esta **rama exclusiva de coordinación** queda autorizada de forma permanente, con commits trazables y verificación posterior; no precisa confirmación caso por caso.
+- No documentar conversación trivial ni duplicar informes extensos: incluir síntesis y enlaces a evidencias; conservar las decisiones históricas y señalar cuándo se sustituyen.
+- Nunca interpretar esta autorización documental como permiso de modificar código funcional, ramas protegidas, bases de datos, Hostinger, Staging o producción, ni de ampliar el alcance de tareas de trabajadores.
+- No guardar secretos, credenciales, datos personales confidenciales ni copias completas de conversaciones que pudieran contenerlos.
+- Después de cada actualización, informar del SHA solo cuando GitHub haya confirmado el commit. Si la publicación falla, decir expresamente que quedó pendiente; no confundir memoria de ChatGPT con archivo persistido.
+- Esta pauta persiste durante futuras sucesiones de coordinación (Jefa 4 y posteriores). GitHub es la fuente canónica; al abrir una nueva conversación se debe recuperar y verificar el archivo, no presuponer sincronización en tiempo real.
