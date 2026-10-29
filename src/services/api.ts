@@ -618,6 +618,9 @@ export async function createPublicClassified(ad: Partial<import('../types').Clas
   classified?: import('../types').ClassifiedAd;
   status?: number;
 }> {
+  if ((ad.images || []).length > 0 || (typeof ad.image === 'string' && ad.image.trim())) {
+    return { success: false, message: 'La carga pública de fotografías aún no dispone de almacenamiento seguro habilitado.', status: 422 };
+  }
   try {
     const res = await fetch(API_BASE + '/public/classifieds', {
       method: 'POST',
@@ -641,8 +644,8 @@ export async function createPublicClassified(ad: Partial<import('../types').Clas
     }
     const data = await res.json();
     return {
-      success: data.success ?? true,
-      message: data.message || 'Anuncio publicado exitosamente en el servidor.',
+      success: data?.success === true && typeof data.classified?.id === 'string' && data.classified.id.length > 0,
+      message: data?.success === true && typeof data.classified?.id === 'string' && data.classified.id.length > 0 ? (data.message || 'Anuncio recibido por el servidor; persistencia pendiente de verificación independiente.') : 'El servidor no confirmó la publicación del anuncio.',
       classified: data.classified,
       status: res.status
     };
@@ -689,8 +692,8 @@ export async function updatePublicClassified(
     }
     const data = await res.json();
     return {
-      success: data.success ?? true,
-      message: data.message || 'Anuncio actualizado con éxito.',
+      success: data?.success === true && typeof data.classified?.id === 'string' && data.classified.id === id,
+      message: data?.success === true && typeof data.classified?.id === 'string' && data.classified.id === id ? (data.message || 'Actualización confirmada por el servidor.') : 'El servidor no confirmó la actualización del anuncio.',
       classified: data.classified,
       status: res.status
     };
@@ -731,8 +734,8 @@ export async function deletePublicClassified(id: string): Promise<{
     }
     const data = await res.json();
     return {
-      success: data.success ?? true,
-      message: data.message || 'Anuncio retirado exitosamente.',
+      success: data?.success === true,
+      message: data?.success === true ? (data.message || 'Baja confirmada por el servidor.') : 'El servidor no confirmó la baja del anuncio.',
       status: res.status
     };
   } catch (err: any) {
