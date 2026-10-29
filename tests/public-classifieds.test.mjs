@@ -80,6 +80,9 @@ test('validación cerrada rechaza campos inválidos', async () => {
   }
   const norm = validateClassifiedInput(VALID);
   assert.equal(norm.contactPhone, '9381112233');
+  assert.equal(validateClassifiedInput({ ...VALID, category: 'mascotas' }).category, 'mascotas');
+  assert.equal(validateClassifiedInput({ ...VALID, category: 'eventos' }).category, 'eventos');
+  await rejects(service(new FakePool()).create({ ...VALID, imageUrl: '/uploads/photo.jpg' }), 'VALIDATION_FAILED');
 });
 
 test('POST válido persiste, confirma con lectura posterior y devuelve contrato', async () => {
@@ -88,6 +91,8 @@ test('POST válido persiste, confirma con lectura posterior y devuelve contrato'
   assert.equal(result.duplicate, false);
   assert.equal(result.classified.status, 'active');
   assert.equal(result.classified.contactPhone, '9381112233');
+  assert.equal(result.classified.phone, '9381112233');
+  assert.equal(result.classified.whatsapp, '9382223344');
   assert.ok(result.ownerToken);
   assert.equal(pool.rows.size, 1);
 });
