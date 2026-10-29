@@ -2,6 +2,7 @@ name: ENC-BROWSER-E2E-001
 on:
   push:
     branches: [work/enc-browser-e2e-001]
+    paths: [tests/browser/**, .github/workflows/enc-browser-e2e-001.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,6 +27,7 @@ jobs:
         if: always()
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: enc-browser-e2e-${{ github.sha }}
           path: |

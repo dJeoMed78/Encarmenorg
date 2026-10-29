@@ -19,3 +19,9 @@ Opcional: `ENC_CHROMIUM_PATH` selecciona un Chromium instalado. El servidor escu
 Runs 40952254173 y 40952426710: checkout, npm y Chromium completos; suites en ejecución al registrar este punto. Se amplió a 29 escenarios por cinco resoluciones. La ejecución diagnóstica corta tras seis fallos para localizar errores de arnés; no equivale a una matriz final completa. Se conservan originales los assets locales del producto.
 
 Chromium 150.0.7871.100 local no pudo crear socket Unix por restricción del entorno. Cero escenarios de interfaz aprobados localmente; se utiliza CI para ejecución real. Build Vite local pasó (1726 módulos); fuentes locales utilizadas contrastadas con blobs del SHA base.
+
+## Diagnóstico y correcciones de arnés
+
+Run 40952254173 completó 115 ejecuciones: 80 PASS, 35 FAIL. Los fallos identificados allí corresponden a selectores del arnés: detalle de anuncio es una tarjeta y no botón, mensaje de error empresarial distinto y colonia se llama Ciudad del Carmen Centro (no Centro). Corregidos sin cambiar producto. Run 40953157539: 19 PASS, 6 FAIL por timeout, 4 interrumpidos, 116 sin ejecutar; no es matriz final. Se cambió Vite dev por build+preview y se redujo concurrencia a dos workers.
+
+GitHub rechaza upload-artifact por cuota de almacenamiento de cuenta. No se borran artefactos. Se conserva paso de carga con fallo visible no bloqueante y exportación acotada de resultados/capturas/traza por logs. Matriz final sin parada temprana: 32 escenarios x 5 viewports = 160 ejecuciones previstas. Resultados todavía pendientes.
