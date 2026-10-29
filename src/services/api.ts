@@ -264,13 +264,17 @@ export async function submitBusinessRegistration(data: import('../types').Busine
   let maybeWritten = false;
   try {
     const payload = Object.fromEntries(PUBLIC_REGISTRATION_FIELDS.filter(field=>Object.hasOwn(data,field)).map(field=>[field,data[field]]));
+    const serialized = JSON.stringify(payload);
     maybeWritten = true; // Una desconexión puede ocurrir después de que el servidor confirme COMMIT.
     const response = await fetch(`${API_BASE}/public/business-registrations`, {
-      method:'POST', headers:{'Content-Type':'application/json','Idempotency-Key':requestId}, body:JSON.stringify(payload)
+      method:'POST', headers:{'Content-Type':'application/json','Idempotency-Key':requestId}, body:serialized
     });
-    maybeWritten = response.ok;
-    const result = await response.json().catch(()=>({}));
-    if (!response.ok) return {success:false,message:result.message||`Error HTTP ${response.status}`,error:result.error,writeMayHaveSucceeded:result.writeMayHaveSucceeded===true};
+    // Only an explicit contractual 4xx rejection can establish non-publication.
+    const result = await response.json().catch(()=>null);
+    const rejection = response.status >= 400 && response.status < 500 && response.status !== 408 && result?.success === false;
+    maybeWritten = !rejection || result?.writeMayHaveSucceeded === true;
+    if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Respuesta no verificable. Reintenta con la misma clave.');
+    if (!response.ok) return {success:false,message:maybeWritten ? 'No se pudo confirmar si el registro quedó publicado. Reintenta con la misma clave; no inicies otro registro.' : (result.message||`Error HTTP ${response.status}`),error:result.error,writeMayHaveSucceeded:maybeWritten};
     const business = result.business;
     if (result.success!==true || result.directoryVisible!==true || !Number.isSafeInteger(Number(business?.id)) || Number(business.id)<=0 || business.status!=='published') throw new Error('No se confirmó una empresa publicada. Reintenta con la misma clave.');
     const [detailResponse,listResponse] = await Promise.all([
@@ -295,41 +299,17 @@ export async function sendClassifiedReport(data: {
   requesterContact?: string;
   reason: "owner_lost_access" | "sold" | "spam_inappropriate" | "wrong_info";
   comment?: string;
-}): Promise<{ success: boolean; message: string; report?: import("../types").BusinessReport }> {
+}): Promise<{ success: boolean; message: string; deliveryState?: "confirmed" | "rejected" | "uncertain"; report?: import("../types").BusinessReport }> {
   try {
     const res = await adminFetch(`${API_BASE}/reports`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "classified",
-        ...data
-      })
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'classified', ...data })
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (err: any) {
-    try {
-      const stored = localStorage.getItem("business_reports") || "[]";
-      const parsed = JSON.parse(stored);
-      const newRep: import("../types").BusinessReport = {
-        id: `rep-${Date.now()}`,
-        type: "classified",
-        classifiedId: data.classifiedId,
-        classifiedTitle: data.classifiedTitle,
-        businessName: data.classifiedTitle,
-        requesterName: data.requesterName,
-        requesterContact: data.requesterContact,
-        reason: data.reason,
-        comment: data.comment,
-        date: new Date().toISOString(),
-        status: "pending"
-      };
-      parsed.unshift(newRep);
-      localStorage.setItem("business_reports", JSON.stringify(parsed));
-      return { success: true, message: "Solicitud enviada al administrador", report: newRep };
-    } catch {
-      return { success: false, message: "No se pudo enviar la solicitud" };
-    }
+    if (!res.ok) return { success: false, deliveryState: res.status >= 500 || res.status === 408 ? 'uncertain' : 'rejected', message: `No se confirmó el envío del reporte (HTTP ${res.status}).` };
+    const body = await res.json();
+    return body?.success === true ? {...body,deliveryState:'confirmed'} : { success: false, deliveryState:'uncertain', message: 'El servidor no confirmó la recepción del reporte.' };
+  } catch {
+    return { success: false, deliveryState:'uncertain', message: 'No se pudo confirmar el envío del reporte al servidor. El texto sigue en el formulario.' };
   }
 }
 
@@ -341,35 +321,17 @@ export async function sendBusinessReport(data: {
   reason: string;
   details?: string;
   comment?: string;
-}): Promise<{ success: boolean; message: string; report?: import('../types').BusinessReport }> {
+}): Promise<{ success: boolean; message: string; deliveryState?: "confirmed" | "rejected" | "uncertain"; report?: import('../types').BusinessReport }> {
   try {
     const res = await adminFetch(`${API_BASE}/reports`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (err: any) {
-    // Fallback local storage
-    try {
-      const stored = localStorage.getItem('business_reports') || '[]';
-      const parsed = JSON.parse(stored);
-      const newRep: import('../types').BusinessReport = {
-        id: `rep-${Date.now()}`,
-        businessId: data.businessId,
-        businessName: data.businessName,
-        reason: data.reason,
-        details: data.details || data.comment,
-        createdAt: new Date().toISOString(),
-        status: 'pending'
-      };
-      parsed.unshift(newRep);
-      localStorage.setItem('business_reports', JSON.stringify(parsed));
-      return { success: true, message: 'Reporte guardado', report: newRep };
-    } catch {
-      return { success: false, message: 'No se pudo guardar el reporte' };
-    }
+    if (!res.ok) return { success: false, deliveryState: res.status >= 500 || res.status === 408 ? 'uncertain' : 'rejected', message: `No se confirmó el envío del reporte (HTTP ${res.status}).` };
+    const body = await res.json();
+    return body?.success === true ? {...body,deliveryState:'confirmed'} : { success: false, deliveryState:'uncertain', message: 'El servidor no confirmó la recepción del reporte.' };
+  } catch {
+    return { success: false, deliveryState:'uncertain', message: 'No se pudo confirmar el envío del reporte al servidor. El texto sigue en el formulario.' };
   }
 }
 

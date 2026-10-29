@@ -189,7 +189,7 @@ test('SW registration form retains request key after error, blocks duplicate cli
   const form=container.querySelector('form');await act(async()=>form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));assert.equal(attempts.length,0);assert.match(container.textContent,/Posible negocio duplicado/);
   duplicate=false;await act(async()=>[...container.querySelectorAll('button')].find(b=>b.textContent.trim()==='Revisar datos del negocio').click());
   await act(async()=>{form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));});
-  assert.equal(attempts.length,1);assert.equal(attempts[0].body.whatsapp,'');assert.match(container.textContent,/Fallo sintético/);assert.ok(container.querySelector('form'));
+  assert.equal(attempts.length,1);assert.equal(attempts[0].body.whatsapp,'');assert.match(container.textContent,/No se pudo confirmar si el registro quedó publicado/);assert.ok(container.querySelector('form'));
   fail=false;await act(async()=>form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
   assert.equal(attempts.length,2);assert.equal(attempts[0].key,attempts[1].key);assert.equal(container.querySelector('form'),null);assert.match(container.textContent,/Nueva Empresa Sintética/i);
  }finally{await act(async()=>root.unmount());globalThis.fetch=originalFetch;for(const k in saved){if(saved[k])Object.defineProperty(globalThis,k,saved[k]);else delete globalThis[k];}dom.window.close();delete globalThis.IS_REACT_ACT_ENVIRONMENT;}

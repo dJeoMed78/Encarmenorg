@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
 import { Hero, PromoItem, EventItem } from './components/Hero';
 import { BusinessCard } from './components/BusinessCard';
@@ -38,15 +38,7 @@ function getBusinessSlugFromUrl(): string | null {
     return slugFromQuery.toLowerCase().trim();
   }
 
-  // Check if window.__INITIAL_BUSINESS_SLUG__ was injected by server
-  const injectedSlug = (window as any).__INITIAL_BUSINESS_SLUG__;
-  if (injectedSlug && typeof injectedSlug === 'string' && injectedSlug.trim()) {
-    const cleanInjected = injectedSlug.toLowerCase().trim();
-    if (!['negocios', 'promociones', 'eventos', 'clasificados', 'registro', 'contacto', 'admin', 'index.html'].includes(cleanInjected)) {
-      return cleanInjected;
-    }
-  }
-
+  // The current URL wins over any initial server hint after client navigation.
   if (!path) return null;
 
   // Clean prefix like empresa/ or negocio/ or producto/
@@ -307,6 +299,12 @@ export default function App() {
   const [businessesReload, setBusinessesReload] = useState(0);
   const businessRequestVersion = useRef(0);
   const businessRequestController = useRef<AbortController | null>(null);
+  const invalidateBusinessRequests = useCallback(() => {
+    businessRequestVersion.current += 1;
+    businessRequestController.current?.abort();
+    setBusinessesStatus('ready');
+  }, []);
+
 
   useEffect(() => {
     let alive = true;
@@ -341,19 +339,30 @@ export default function App() {
     if (['promociones', 'eventos', 'clasificados', 'registro'].includes(cleanPath)) setActiveTab(cleanPath);
   }, []);
 
-  // Listen to browser Back/Forward (popstate)
+  // Browser Back/Forward shares the version/abort guard with business-list refresh.
+  // A late navigation response must never replace a newer confirmed business.
   useEffect(() => {
+    let navigationController: AbortController | null = null;
     const handlePopState = () => {
+      businessRequestController.current?.abort();
+      navigationController?.abort();
+      const controller = new AbortController();
+      navigationController = controller;
+      businessRequestController.current = controller;
+      const version = ++businessRequestVersion.current;
       const slug = getBusinessSlugFromUrl();
+      // If navigation interrupted the initial catalog, request a fresh one.
+      if (businessesList.length === 0) setBusinessesReload(previous => previous + 1);
       if (slug) {
         const match = findBusinessInList(businessesList, slug);
         if (match) {
           setLandingBusiness(match);
         } else {
-          fetch(`/api/businesses/${encodeURIComponent(slug)}`)
-            .then((r) => (r.ok ? r.json() : null))
-            .then((resData) => {
-              if (resData && resData.business) {
+          fetch(`/api/businesses/${encodeURIComponent(slug)}`, { cache: 'no-store', signal: controller.signal })
+            .then(r => r.ok ? r.json() : null)
+            .then(resData => {
+              if (!controller.signal.aborted && version === businessRequestVersion.current &&
+                  getBusinessSlugFromUrl() === slug && resData?.business) {
                 setLandingBusiness(resData.business);
               }
             })
@@ -362,16 +371,15 @@ export default function App() {
       } else {
         setLandingBusiness(null);
         const cleanPath = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
-        if (['promociones', 'eventos', 'clasificados', 'registro', 'negocios'].includes(cleanPath)) {
-          setActiveTab(cleanPath);
-        } else {
-          setActiveTab('negocios');
-        }
+        setActiveTab(['promociones', 'eventos', 'clasificados', 'registro', 'negocios'].includes(cleanPath) ? cleanPath : 'negocios');
       }
     };
 
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    return () => {
+      navigationController?.abort();
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, [businessesList]);
 
   // Synchronize document title with active landing page
@@ -384,6 +392,7 @@ export default function App() {
   }, [landingBusiness]);
 
   const openBusinessLanding = (b: Business) => {
+    invalidateBusinessRequests();
     setSelectedBusiness(null);
     setDigitalCardBusiness(null);
     setLandingBusiness(b);
@@ -620,6 +629,7 @@ export default function App() {
   };
 
   const handleDeleteBusiness = async (b: Business) => {
+    invalidateBusinessRequests();
     try {
       await adminDeleteBusiness(Number(b.id));
     } catch (_) {}
@@ -635,13 +645,11 @@ export default function App() {
 
   const handleSaveBusiness = async (id: number, updatedData: Partial<Business>) => {
     try {
-      // 1. Enviar cambios al servidor (persiste en MariaDB, businessesCache y businesses_seed.json)
+      // Submit to the server; only confirmed results update local views.
       const res = await adminUpdateBusiness(id, updatedData);
       if (!res.success) return { success: false, message: res.message || 'No se pudieron guardar los cambios en el servidor.' };
       // A pending older catalog response must not overwrite a confirmed save.
-      businessRequestVersion.current += 1;
-      businessRequestController.current?.abort();
-      setBusinessesStatus('ready');
+      invalidateBusinessRequests();
       const serverUpdated = res.business;
       const finalData: Partial<Business> = serverUpdated ? { ...updatedData, ...serverUpdated } : updatedData;
 
@@ -658,14 +666,13 @@ export default function App() {
 
       // 4. Actualizar negocio modal si está abierto
       if (selectedBusiness && Number(selectedBusiness.id) === id) {
-        setSelectedBusiness((prev) => (prev ? { ...prev, ...finalData } : null));
+        setSelectedBusiness((prev) => (prev && Number(prev.id) === id ? { ...prev, ...finalData } : prev));
       }
 
       // 5. Actualizar landingBusiness si estamos en su página, y actualizar la URL en la barra de direcciones
       if (landingBusiness && Number(landingBusiness.id) === id) {
-        const nextLanding = { ...landingBusiness, ...finalData };
-        setLandingBusiness(nextLanding);
-        if (finalData.slug && typeof window !== 'undefined') {
+        setLandingBusiness(prev => prev && Number(prev.id) === id ? { ...prev, ...finalData } : prev);
+        if (finalData.slug && typeof window !== 'undefined' && [landingBusiness.slug, String(landingBusiness.id)].includes(getBusinessSlugFromUrl() || '')) {
           const newUrl = `/${finalData.slug}`;
           if (window.location.pathname !== newUrl) {
             window.history.replaceState({}, '', newUrl);
@@ -716,17 +723,20 @@ export default function App() {
         <DirectBusinessView
           business={landingBusiness as any}
           onBack={() => {
+            invalidateBusinessRequests();
             setLandingBusiness(null);
             if (window.location.pathname !== '/') window.history.pushState({}, '', '/');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           onBackToDirectory={() => {
+            invalidateBusinessRequests();
             setLandingBusiness(null);
             if (window.location.pathname !== '/') window.history.pushState({}, '', '/');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           onSearchFromPage={(query) => {
             setSearchQuery(query);
+            invalidateBusinessRequests();
             setLandingBusiness(null);
             if (window.location.pathname !== '/') window.history.pushState({}, '', '/');
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -872,6 +882,7 @@ export default function App() {
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             onBusinessAdded={(newBiz) => {
+              invalidateBusinessRequests();
               setBusinessesList((prev) => [newBiz, ...prev.filter((b) => String(b.id) !== String(newBiz.id))]);
               setBusinessOverrides((prev) => ({ ...prev, [newBiz.id]: newBiz }));
             }}
@@ -1156,7 +1167,7 @@ export default function App() {
                   <BusinessCard
                     key={b.id}
                     business={b}
-                    onClick={() => setSelectedBusiness(b)}
+                    onClick={() => { invalidateBusinessRequests(); setSelectedBusiness(b); }}
                     hasActivePromo={
                       activePromoBusinessIds.has(String(b.id)) ||
                       (b.slug ? activePromoBusinessIds.has(b.slug.toLowerCase()) : false)
@@ -1242,7 +1253,7 @@ export default function App() {
       <BusinessDetailModal
         business={selectedBusiness as any}
         isOpen={!!selectedBusiness}
-        onClose={() => setSelectedBusiness(null)}
+        onClose={() => { invalidateBusinessRequests(); setSelectedBusiness(null); }}
         onToggleFavorite={toggleFavorite as any}
         isFavorite={selectedBusiness ? favorites.includes(Number(selectedBusiness.id)) : false}
         activePromotion={
@@ -1348,6 +1359,7 @@ export default function App() {
         coloniasList={[]}
         onSelectBusiness={(b) => {
           setIsAdminModalOpen(false);
+          invalidateBusinessRequests();
           setSelectedBusiness(b);
         }}
         onEditBusiness={(b) => {
