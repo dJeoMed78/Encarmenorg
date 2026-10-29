@@ -32,6 +32,13 @@ export interface ClassifiedPatch { status?: unknown; title?: unknown; descriptio
 export interface ClassifiedsDeps { pool?: any; now?: () => Date; }
 
 export function validateClassifiedInput(body: ClassifiedInput) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) fail('VALIDATION_FAILED', 400, 'Datos de anuncio inválidos.');
+  const allowed = new Set(['title','description','category','price','contactPhone','contactWhatsapp','imageUrl','idempotencyKey']);
+  if (Object.keys(body).some(key => !allowed.has(key))) fail('VALIDATION_FAILED', 400, 'El anuncio contiene campos no permitidos.');
+  for (const key of ['title','description','category','contactPhone','contactWhatsapp','imageUrl','idempotencyKey'] as const) {
+    const value = body[key];
+    if (value !== undefined && value !== null && typeof value !== 'string') fail('VALIDATION_FAILED', 400, 'Tipo de campo inválido.');
+  }
   const title = String(body.title ?? '').trim();
   const description = String(body.description ?? '').trim();
   const category = String(body.category ?? '').trim();
@@ -57,6 +64,12 @@ export function validateClassifiedInput(body: ClassifiedInput) {
 }
 
 export function validateClassifiedPatch(patch: ClassifiedPatch) {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) fail('VALIDATION_FAILED', 400, 'Actualización inválida.');
+  const allowed = new Set(['status','title','description','price']);
+  if (Object.keys(patch).some(key => !allowed.has(key))) fail('VALIDATION_FAILED', 400, 'Actualización contiene campos no permitidos.');
+  for (const key of ['status','title','description'] as const) {
+    if (patch[key] !== undefined && typeof patch[key] !== 'string') fail('VALIDATION_FAILED', 400, 'Tipo de campo inválido.');
+  }
   const next: { status?: string; title?: string; description?: string; price?: number | null } = {};
   if (patch.status !== undefined) {
     const status = String(patch.status);
@@ -81,27 +94,9 @@ export function validateClassifiedPatch(patch: ClassifiedPatch) {
   return next;
 }
 
-const DDL = `CREATE TABLE IF NOT EXISTS ${CLASSIFIEDS_TABLE} (
-  id VARCHAR(64) NOT NULL PRIMARY KEY,
-  idempotency_key VARCHAR(64) NULL UNIQUE,
-  title VARCHAR(120) NOT NULL,
-  description TEXT NOT NULL,
-  category VARCHAR(32) NOT NULL,
-  price DECIMAL(12,2) NULL,
-  contact_phone VARCHAR(16) NOT NULL,
-  contact_whatsapp VARCHAR(16) DEFAULT '',
-  image_url VARCHAR(500) DEFAULT '',
-  status ENUM('active','sold','expired','retired') DEFAULT 'active',
-  owner_token_hash CHAR(64) NOT NULL,
-  expires_at DATETIME NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_status_expires (status, expires_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
-
 export function createClassifiedsService(deps: ClassifiedsDeps = {}) {
   const now = deps.now ?? (() => new Date());
-  const getDb = () => deps.pool ?? getPool();
+  const getDb = () => deps.pool !== undefined ? deps.pool : getPool();
 
   async function assertIsolation(pool: any): Promise<string> {
     let db = '';
@@ -123,10 +118,6 @@ export function createClassifiedsService(deps: ClassifiedsDeps = {}) {
     const [grants] = await pool.query('SHOW GRANTS FOR CURRENT_USER()');
     if (!/INSERT|ALL PRIVILEGES/i.test(JSON.stringify(grants))) fail('ISOLATION_PRIVILEGES_REFUSED', 503, 'Privilegios insuficientes.');
     return db;
-  }
-
-  async function ensureSchema(pool: any) {
-    await pool.query(DDL);
   }
 
   const readback = async (pool: any, id: string) => {
@@ -160,9 +151,7 @@ export function createClassifiedsService(deps: ClassifiedsDeps = {}) {
       const pool = getDb();
       if (!pool) fail('PERSISTENCE_UNAVAILABLE', 503, 'Persistencia de clasificados no disponible.');
       await assertIsolation(pool);
-      await ensureSchema(pool);
       try {
-        await pool.query(`UPDATE ${CLASSIFIEDS_TABLE} SET status = 'expired' WHERE status = 'active' AND expires_at <= NOW()`);
         const [rows] = await pool.query(`SELECT * FROM ${CLASSIFIEDS_TABLE} WHERE status = 'active' AND expires_at > NOW() ORDER BY created_at DESC, id DESC LIMIT 200`);
         const classifieds = (rows ?? []).map(toPublic);
         return { classifieds, total: classifieds.length };
@@ -177,7 +166,6 @@ export function createClassifiedsService(deps: ClassifiedsDeps = {}) {
       if (!pool) fail('PERSISTENCE_UNAVAILABLE', 503, 'Persistencia de clasificados no disponible.');
       const norm = validateClassifiedInput(input);
       await assertIsolation(pool);
-      await ensureSchema(pool);
       const id = norm.idempotencyKey
         ? 'cls_' + sha256(norm.idempotencyKey).slice(0, 24)
         : 'cls_' + sha256(`${norm.title}|${norm.contactPhone}|${now().toISOString()}`).slice(0, 24);
@@ -216,7 +204,6 @@ export function createClassifiedsService(deps: ClassifiedsDeps = {}) {
       if (!pool) fail('PERSISTENCE_UNAVAILABLE', 503, 'Persistencia de clasificados no disponible.');
       const next = validateClassifiedPatch(patch);
       await assertIsolation(pool);
-      await ensureSchema(pool);
       const row = await authorizeOwner(pool, id, token);
       if (row.status === 'expired') fail('CLASSIFIED_EXPIRED', 409, 'El anuncio expiró.');
       if (!Object.keys(next).length) fail('VALIDATION_FAILED', 400, 'Nada que actualizar.');
@@ -232,7 +219,11 @@ export function createClassifiedsService(deps: ClassifiedsDeps = {}) {
         fail('PERSISTENCE_FAILED', 503, 'No se pudo actualizar el clasificado.');
       }
       const after = await readback(pool, id);
-      const confirmed = after && (!next.title || after.title === next.title) && (!next.status || after.status === next.status);
+      const confirmed = after &&
+        (next.title === undefined || after.title === next.title) &&
+        (next.description === undefined || after.description === next.description) &&
+        (next.status === undefined || after.status === next.status) &&
+        (next.price === undefined || (next.price === null ? after.price === null : Number(after.price) === next.price));
       if (!confirmed) fail('CLASSIFIEDS_WRITE_UNCONFIRMED', 503, 'La actualización no pudo confirmarse.', true);
       return { classified: toPublic(after) };
     },
@@ -270,7 +261,7 @@ export function registerPublicClassifieds(app: Express, deps: ClassifiedsDeps = 
         success: true,
         message: result.duplicate ? 'Clasificado ya registrado (idempotente).' : 'Clasificado publicado.',
         classified: result.classified,
-        ...(result.duplicate ? { duplicate: true } : {}),
+        ...(result.duplicate ? { duplicate: true } : { ownerToken: result.ownerToken }),
       });
     } catch (e) { sendError(res, e); }
   });
