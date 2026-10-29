@@ -4,6 +4,7 @@ import {registerStagingBusinessRoutes} from './src/server/stagingBusinessRoutes'
 import {mountPublicRegistration,publicRegistrationBodyLimit} from './src/server/publicRegistrationWiring.ts';
 import {verifyStagingAdmin,createLoginLimiter,stagingBusinessConfiguration} from './src/server/stagingBusinessSecurity';
 import { prepareContactPatch, contactsMatchReadback, ContactPatchError, contactDigits, contactCounts, matchesContactFilter, CONTACT_FILTERS, type ContactFilter } from './src/utils/businessContacts';
+import { registerPublicClassifieds } from './src/server/publicClassifieds';
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 import express from 'express';
@@ -152,13 +153,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.method === 'POST' && ['/api/admin/login','/api/admin/logout'].includes(req.path)) return next();
     const businessMutation = (req.method === 'POST' && (req.path === '/api/submit-business' || req.path === '/api/public/business-registrations')) || (req.method === 'PATCH' && /^\/(?:api\/)?businesses\/[^/]+$/.test(req.path));
     if (businessMutation && isBusinessWritePermitted()) return next();
-    if (req.path === '/api/ratings/get' || req.path === '/api/events/radar-search') return next();
+    if (req.method.toUpperCase() === 'POST' && (req.path === '/api/ratings/get' || req.path === '/api/events/radar-search')) return next();
     return res.status(403).json({success:false,error:'STAGING_READ_ONLY',message:'Solo el carril autorizado de registro y edición puede escribir negocios. Las demás operaciones permanecen bloqueadas.'});
   }
   if (!isWritePermitted()) {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
       // Excepción para búsquedas o consultas enviadas por POST que no modifican datos
-      if (req.path === '/api/events/radar-search' || req.path === '/api/ratings/get') {
+      if (req.method.toUpperCase() === 'POST' && (req.path === '/api/events/radar-search' || req.path === '/api/ratings/get')) {
         return next();
       }
       return res.status(403).json({
@@ -270,6 +271,8 @@ app.use((req: Request, res: Response, next) => {
 app.use('/api/public/business-registrations', publicRegistrationBodyLimit);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// ENC-CLASSIFIEDS integration: read path enabled, write paths remain guarded by Staging and DB isolation.
+registerPublicClassifieds(app);
 
 // Serve media assets directly with long-term caching (bypasses any Cloudflare /wp- blocks)
 app.use('/media', express.static(path.resolve(__dirname, 'public/wp-content/uploads'), {
