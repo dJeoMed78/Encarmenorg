@@ -1,0 +1,51 @@
+name: ENCARMEN Coordinacion - Validacion aislada
+
+on:
+  push:
+    branches:
+      - 'coord/encarmen-classifieds-integration-001'
+    paths:
+      - 'server.ts'
+      - 'src/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/encarmen-coordination-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: encarmen-coord-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: TypeScript, suites y compilacion (sin despliegue)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CI: 'true'
+      STAGING_READ_ONLY: 'true'
+      ENC_ADMIN_MUTATIONS_ENABLED: 'false'
+    steps:
+      - name: Checkout rama exacta
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Dependencias segun lockfile
+        run: npm ci --ignore-scripts
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Suite backend clasificados y H01
+        run: npx tsx --test tests/public-classifieds.test.mjs tests/enc-consolidation-h01-regression.test.mjs
+      - name: Pruebas de regresion empresarial
+        run: node --test tests/business-description-links.test.mjs tests/public-registration.test.mjs tests/public-registration-server-patch.test.mjs
+      - name: Vite build sin alterar versiones ni archivos fuente
+        run: npx vite build
