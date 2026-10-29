@@ -21,9 +21,12 @@ CREATE TABLE enc_classifieds_isolation(marker_value VARCHAR(80) PRIMARY KEY) ENG
 
 CREATE USER 'enc_lab'@'%' IDENTIFIED BY 'enc_lab_ci';
 CREATE USER 'enc_ro'@'%' IDENTIFIED BY 'enc_ro_ci';
+CREATE USER 'enc_nomarker'@'%' IDENTIFIED BY 'enc_nomarker_ci';
+CREATE USER 'enc_prod_fixture'@'%' IDENTIFIED BY 'enc_prod_fixture_ci';
 GRANT SELECT, INSERT, UPDATE ON enc_classifieds_lab.public_classifieds TO 'enc_lab'@'%';
 GRANT SELECT ON enc_classifieds_lab.enc_classifieds_isolation TO 'enc_lab'@'%';
-GRANT SELECT ON enc_classifieds_lab_nomarker.enc_classifieds_isolation TO 'enc_lab'@'%';
+GRANT SELECT ON enc_classifieds_lab_nomarker.enc_classifieds_isolation TO 'enc_nomarker'@'%';
+GRANT SELECT ON u293982346_encarmenapp.* TO 'enc_prod_fixture'@'%';
 GRANT SELECT ON enc_classifieds_lab.public_classifieds TO 'enc_ro'@'%';
 GRANT SELECT ON enc_classifieds_lab.enc_classifieds_isolation TO 'enc_ro'@'%';
 -- Q: DB con nombre de produccion es solo una DB vacia dentro del contenedor efimero.
