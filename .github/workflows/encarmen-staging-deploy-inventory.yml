@@ -1,0 +1,43 @@
+name: ENCARMEN - Inventario deployment Staging (solo lectura)
+on:
+  push:
+    branches: [coord/encarmen-work-control-001]
+    paths: [.github/workflows/encarmen-staging-deploy-inventory.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SSH_PASSWORD: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: SSH seguro
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PASSWORD"
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+      - name: Inspeccionar rutas y despliegues (sin leer secretos)
+        run: |
+          set -euo pipefail
+          export SSHPASS="$SSH_PASSWORD"
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'sh -s' <<'REMOTE'
+          set -eu
+          staging="$HOME/domains/staging.encarmen.org"
+          prod="$HOME/domains/encarmen.org"
+          for folder in "$staging" "$staging/hbuilds" "$staging/hbuilds/config" "$staging/hbuilds/last-source" "$staging/public_html" "$prod/public_html" "$prod/public_html/staging"; do
+             echo "DIRECTORY_BEGIN=$folder"
+             if [ -d "$folder" ]; then ls -ld "$folder"; ls -la "$folder" | head -24; else echo MISSING; fi
+          done
+          echo "NODE_PATH=$(command -v node || true)"
+          echo "NPM_PATH=$(command -v npm || true)"
+          echo "GIT_PATH=$(command -v git || true)"
+          echo "PROCESSES:"
+          ps -u "$(id -un)" -o pid,comm,args 2>/dev/null | grep -E 'node|npm|pm2' | cut -c1-180 | head -16 || true
+          echo "STAGING_JSON_FILES:"
+          find "$staging" -maxdepth 4 -type f \( -name package.json -o -name passenger_wsgi.py -o -name .htaccess -o -name server.js \) -print 2>/dev/null | head -35
+          REMOTE
