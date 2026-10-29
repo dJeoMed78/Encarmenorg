@@ -140,7 +140,7 @@ export function createClassifiedsService(deps: ClassifiedsDeps = {}) {
   });
 
   async function authorizeOwner(pool: any, id: string, token: unknown) {
-    if (!token || typeof token !== 'string') fail('OWNER_AUTHORIZATION_REQUIRED', 403, 'Se requiere el token del titular del anuncio.');
+    if (typeof token !== 'string' || token.length === 0) return fail('OWNER_AUTHORIZATION_REQUIRED', 403, 'Se requiere el token del titular del anuncio.');
     const row = await readback(pool, id);
     if (!row) fail('CLASSIFIED_NOT_FOUND', 404, 'Clasificado no encontrado.');
     if (row.owner_token_hash !== sha256(token)) fail('OWNER_AUTHORIZATION_INVALID', 403, 'Token de titular inválido.');
@@ -158,7 +158,7 @@ export function createClassifiedsService(deps: ClassifiedsDeps = {}) {
         return { classifieds, total: classifieds.length };
       } catch (e) {
         if (e instanceof ClassifiedsError) throw e;
-        fail('CLASSIFIEDS_READ_FAILED', 503, 'No se pudo leer el catálogo de clasificados.');
+        return fail('CLASSIFIEDS_READ_FAILED', 503, 'No se pudo leer el catálogo de clasificados.');
       }
     },
 
