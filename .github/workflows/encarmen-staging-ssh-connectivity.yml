@@ -1,0 +1,37 @@
+name: ENCARMEN - Diagnostico SSH Hostinger (solo conectividad)
+on:
+  push:
+    branches:
+      - coord/encarmen-work-control-001
+    paths:
+      - .github/workflows/encarmen-staging-ssh-connectivity.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    name: Probar puerto SSH sin credenciales ni despliegue
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Comprobar DNS/IP y socket TCP
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import socket, time
+          host='45.137.159.114'; port=65002
+          for i in range(1,4):
+              start=time.monotonic()
+              try:
+                  with socket.create_connection((host,port),timeout=7) as s:
+                      s.settimeout(5)
+                      banner=s.recv(256).decode('ascii','replace').strip()
+                      print(f'TCP_OK attempt={i} host={host} port={port} banner={banner[:100]!r} elapsed={time.monotonic()-start:.2f}s')
+                      if not banner.startswith('SSH-'):
+                          raise SystemExit('TCP alcanzable pero no se recibio saludo SSH')
+                      raise SystemExit(0)
+              except (OSError,TimeoutError) as e:
+                  print(f'TCP_ERROR attempt={i} type={type(e).__name__} message={e}')
+              time.sleep(2)
+          raise SystemExit('No se pudo conectar a SSH desde GitHub Actions')
+          PY
