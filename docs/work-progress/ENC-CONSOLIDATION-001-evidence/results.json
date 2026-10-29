@@ -1,0 +1,168 @@
+{
+  "task": "ENC-CONSOLIDATION-001",
+  "base": "184874835d9d588e679b201b790643dfd923aff8",
+  "branch": "work/enc-consolidation-001",
+  "implementation": "4a2ad4cd56dba7929e975b7d99476f264ff8db9e",
+  "references": {
+    "W1": "184874835d9d588e679b201b790643dfd923aff8",
+    "W2": "22ce2a30741bf9145acbb2b939d1d6a936c1843f",
+    "PERP": "84819002a20857fee3e5f668189a615ef9a43618",
+    "GAS": "174cb16fff855a16b8bbe5ac083f88140c31924f"
+  },
+  "node": "24.22.1",
+  "sourceTests": {
+    "pass": 132,
+    "fail": 0,
+    "skipped": 0,
+    "exitCode": 0,
+    "note": "Shared cases imported by multiple suites; not unique-case count."
+  },
+  "compiledTests": {
+    "pass": 27,
+    "fail": 0,
+    "skipped": 0,
+    "exitCode": 0,
+    "mode": "Extracted modules/handlers, full server never executed"
+  },
+  "typeScriptExit": 0,
+  "frontendExit": 0,
+  "frontendModules": 1726,
+  "backendExit": 0,
+  "nodeCheckBothExit": 0,
+  "realMariaDBTested": false,
+  "adminPublicCompatibleLocally": true,
+  "realBrowserVisualTested": false,
+  "embeddedMapsPositiveTested": false,
+  "publicUploadsEnabled": false,
+  "realEnvironmentChanged": false,
+  "deployed": false,
+  "merged": false,
+  "verifiedRemoteBlobs": 25,
+  "hashes": [
+    {
+      "path": "server.ts",
+      "sha": "1d5d7c4ec0d2ab5eecd3f97d92d820b9e55c6eac",
+      "sha256": "b3420f9ce8d7489e1e6d34cc2a98412c2641b26034e06308d1b68366c3d39a39"
+    },
+    {
+      "path": "src/App.tsx",
+      "sha": "7bd6a33cdf30a285b0093d65e9e01625806a06fc",
+      "sha256": "45a1dc3a8c508db32d655ddf0254e9d2e1c1067ea225b5bf97349a9bf51f5d56"
+    },
+    {
+      "path": "src/components/WordPressSyncModal.tsx",
+      "sha": "3d33050203ce6ecb9dea3bbf7bf1a9386062b913",
+      "sha256": "082ba147522d80b0507208988a572d2a7748d5829d86acde06167432272e0b08"
+    },
+    {
+      "path": "src/components/BusinessPublicDetail.tsx",
+      "sha": "b8b4fe3815c3225961b86151bb385882156d37b8",
+      "sha256": "4d8356926314bbf875bcfe18df97392648e5615135f32f680973b60599c06ddf"
+    },
+    {
+      "path": "src/components/BusinessPublicDetail.css",
+      "sha": "8bd41f4c9d934d10dfebc3e525c679ff0a70e0b4",
+      "sha256": "d708bff2fa6e7dc52244a395b8239ffac6d6717ebc45e7545f37bb6449fd0502"
+    },
+    {
+      "path": "src/components/BusinessDescription.tsx",
+      "sha": "08453d7ab7749bf770db7766685953e7806fc8f4",
+      "sha256": "b127e400455c33be1c6d269de416f4a029a3ca4a3324ccbf91325c9429e419af"
+    },
+    {
+      "path": "src/utils/adminAuth.ts",
+      "sha": "326d3b738f55d2925712bb1b686f9ae8ce5e0ba0",
+      "sha256": "75558f564ce6208881767b53248660100c88f480c31e74efa3c6dbc7fbd65a63"
+    },
+    {
+      "path": "src/utils/descriptionLinks.ts",
+      "sha": "dce55fcd657f6d2b2c141bb2148799bb931fa6a3",
+      "sha256": "af555df7805b0888de88f18923316f3e5f06d6b863941ae430ba185c55c69282"
+    },
+    {
+      "path": "src/server/adminSecurity.ts",
+      "sha": "5c9808391668f8c73ba238cd9a88f8abbffdc73f",
+      "sha256": "f2911c8b8bc20aeb5dc8d21856677cce52a6f9de68f890bee0cf18d98bd6678b"
+    },
+    {
+      "path": "src/server/consolidatedWritePolicy.ts",
+      "sha": "fbb063279c8469afae621456afcbb585e0f36b3e",
+      "sha256": "32464bfc1bcb092b60c54d5bfa3d996bf77c83693f816579244dcda80b5b51ee"
+    },
+    {
+      "path": "src/server/stagingBusinessRoutes.ts",
+      "sha": "c8f53057d8a50a22fe1ff4c09348366d299a0a3f",
+      "sha256": "44d33d073556644de06243fa878420206c8a2b3a5edaa270acf7dd03b6231723"
+    },
+    {
+      "path": "src/services/api.ts",
+      "sha": "c6b55326d54d192b95bd80e1d10103da0284d948",
+      "sha256": "004cf864d19720ebdd669838ee109a6e7498ea5ada30f9397767ab461516b4f7"
+    },
+    {
+      "path": "tests/contacts-r2.test.mjs",
+      "sha": "e3cede63b49aa06ee2681afdfed9417c54e5eeae",
+      "sha256": "3eb83efc7e8e3274f0d5accd97d821864fb8e75e6dae3c6c27a59767da20fa08"
+    },
+    {
+      "path": "tests/staging-write-001.test.mjs",
+      "sha": "cd1905d7f561cc20baa2c4a6e6f11501816604bd",
+      "sha256": "947ef9a261d60b7d526c16567639ec3b8a4de49e5fa9d7848116f7efc6e37693"
+    },
+    {
+      "path": "tests/public-registration-integration.test.mjs",
+      "sha": "3c9dbe912c31e81a4a846d4f2ad60549be141e1d",
+      "sha256": "20b2bfbfcc422d5a965c3bddd5b56a2445a3f9c7759671465acf279897251cb6"
+    },
+    {
+      "path": "tests/security-containment-003.test.mjs",
+      "sha": "bf2c2b1155ca7c959f4421765ccb7390d4003173",
+      "sha256": "b95de538b0cb15f8b09b0b923a199ec75b9109fdc1231b9b6ad8fca3f27ede96"
+    },
+    {
+      "path": "tests/consolidation-001.test.mjs",
+      "sha": "c5a5d0e6fa48a3c848ac69da2f283b0990ccf40c",
+      "sha256": "0988bd8a78c42ac06bbf4cddc94e686173eb4e553138525dee571b44d8e473f0"
+    },
+    {
+      "path": "tests/business-description-links.test.mjs",
+      "sha": "e5a35f14f2e41dd72bf49745ca24ede7a7496819",
+      "sha256": "eeccbe57b41d3848ec1fc946eede2c2112061072ffc6c9e969db2d8c000a9121"
+    },
+    {
+      "path": "tests/business-ui-fix-001.integration.test.mjs",
+      "sha": "d50cc49447ce5e925faea12e2112d79e003ad7d5",
+      "sha256": "1aec258467ea5c6e7f43b2abd0ffede60d9d32b0a1ffb1222664a736cafe7dbc"
+    },
+    {
+      "path": "tests/public-detail-ux-001.test.mjs",
+      "sha": "85eb5a57c1e64f970e058b3f5228719a561ca22c",
+      "sha256": "5c59b612aa25e65fff273a8d505b9f3b78dc62b6a631d65da57f769e16d1df28"
+    },
+    {
+      "path": "server.js",
+      "sha": "3400aa8cd68e33b4cdad079316c1b3a2f12396e5",
+      "sha256": "af1dac8d3a4d0b65ecedda77647af2f36d43c8cc72288c3a5b137886928ec235"
+    },
+    {
+      "path": "api/server.bundle.js",
+      "sha": "3400aa8cd68e33b4cdad079316c1b3a2f12396e5",
+      "sha256": "af1dac8d3a4d0b65ecedda77647af2f36d43c8cc72288c3a5b137886928ec235"
+    },
+    {
+      "path": "dist/index.html",
+      "sha": "2d764f6bc75e232967391ee9db534a750c6577c9",
+      "sha256": "ad72cbe3f381291d70345a1cfca08a3e422c77429536d7c25e0de2c0462db052"
+    },
+    {
+      "path": "dist/assets/index-Ccl-Kv-t.js",
+      "sha": "a4487393c182fc22596ab3c707ef43ab4ab02466",
+      "sha256": "a9d8f09c93dff9e75337e2671b3a263705bde43a4320a0e7f287e2680b54ef34"
+    },
+    {
+      "path": "dist/assets/index-r4diVo28.css",
+      "sha": "d185e0cf89c021c0051aa8d2cd8b17fa5d7e1754",
+      "sha256": "28a35581dcb6c2847022b12442789eddf37c1dadadf3a1d6fa5d02645178e95e"
+    }
+  ]
+}

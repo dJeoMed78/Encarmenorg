@@ -1,0 +1,19 @@
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 1726 modules transformed.
+
+(!) outDir /tmp/enc-consolidation-frontend is not inside project root and will not be emptied.
+Use --emptyOutDir to override.
+
+rendering chunks...
+computing gzip size...
+../../../../tmp/enc-consolidation-frontend/index.html                    14.52 kB │ gzip:   4.48 kB
+../../../../tmp/enc-consolidation-frontend/assets/index-r4diVo28.css    250.34 kB │ gzip:  31.15 kB
+../../../../tmp/enc-consolidation-frontend/assets/index-Ccl-Kv-t.js   1,036.44 kB │ gzip: 252.96 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.40s
