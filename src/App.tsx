@@ -629,18 +629,23 @@ export default function App() {
   };
 
   const handleDeleteBusiness = async (b: Business) => {
-    invalidateBusinessRequests();
+    // Never hide a business locally unless the server confirms its deletion.
+    // A rejected or uncertain DELETE must leave the directory unchanged.
     try {
-      await adminDeleteBusiness(Number(b.id));
-    } catch (_) {}
-    setDeletedBusinessIds((prev) => [...prev, Number(b.id)]);
+      const result = await adminDeleteBusiness(Number(b.id));
+      if (result.success !== true) {
+        console.warn('Business deletion was not confirmed:', result.message);
+        return;
+      }
+    } catch (error) {
+      console.error('Business deletion could not be confirmed:', error);
+      return;
+    }
+    invalidateBusinessRequests();
+    setDeletedBusinessIds((prev) => prev.includes(Number(b.id)) ? prev : [...prev, Number(b.id)]);
     setBusinessesList((prev) => prev.filter((item) => String(item.id) !== String(b.id)));
-    if (selectedBusiness && String(selectedBusiness.id) === String(b.id)) {
-      setSelectedBusiness(null);
-    }
-    if (landingBusiness && String(landingBusiness.id) === String(b.id)) {
-      setLandingBusiness(null);
-    }
+    setSelectedBusiness((prev) => prev && String(prev.id) === String(b.id) ? null : prev);
+    setLandingBusiness((prev) => prev && String(prev.id) === String(b.id) ? null : prev);
   };
 
   const handleSaveBusiness = async (id: number, updatedData: Partial<Business>) => {
