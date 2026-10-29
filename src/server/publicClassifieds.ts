@@ -190,7 +190,16 @@ export function createClassifiedsService(deps: ClassifiedsDeps = {}) {
         );
       } catch (e: any) {
         if (String(e?.code ?? '').includes('ER_DUP')) fail('IDEMPOTENCY_CONFLICT', 409, 'Anuncio duplicado.');
-        fail('PERSISTENCE_FAILED', 503, 'No se pudo guardar el clasificado.');
+        // Un fallo de transporte no garantiza que INSERT se haya revertido.
+        // Intentar leer sin afirmar éxito; si no hay certeza, conservar la clave idempotente.
+        try {
+          const possible = await readback(pool, id);
+          if (possible) fail('CLASSIFIEDS_WRITE_UNCONFIRMED', 503, 'La escritura pudo haberse completado; no se puede confirmar el resultado.', true);
+        } catch (readError) {
+          if (readError instanceof ClassifiedsError) throw readError;
+          fail('CLASSIFIEDS_WRITE_UNCONFIRMED', 503, 'La escritura pudo haberse completado y la lectura falló.', true);
+        }
+        fail('CLASSIFIEDS_WRITE_UNCONFIRMED', 503, 'No se confirmó si el servidor guardó el anuncio.', true);
       }
       let row: any = null;
       try { row = await readback(pool, id); } catch { row = null; }
@@ -219,7 +228,10 @@ export function createClassifiedsService(deps: ClassifiedsDeps = {}) {
       } catch {
         fail('PERSISTENCE_FAILED', 503, 'No se pudo actualizar el clasificado.');
       }
-      const after = await readback(pool, id);
+      let after: any = null;
+      try { after = await readback(pool, id); } catch {
+        fail('CLASSIFIEDS_WRITE_UNCONFIRMED', 503, 'No se pudo confirmar la actualización después de escribir.', true);
+      }
       const confirmed = after &&
         (next.title === undefined || after.title === next.title) &&
         (next.description === undefined || after.description === next.description) &&
