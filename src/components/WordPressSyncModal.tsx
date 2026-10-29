@@ -1,3 +1,4 @@
+import {adminFetch} from '../utils/adminAuth';
 import { contactDigits } from '../utils/businessContacts';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -60,6 +61,7 @@ import {
 } from 'lucide-react';
 import {
   isSessionAdminAuthenticated,
+  verifyAdminSession,
   saveAdminAuth,
   clearAdminAuth,
   getAdminSessionTimeRemaining,
@@ -160,6 +162,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => isSessionAdminAuthenticated());
   const [adminAccounts, setAdminAccounts] = useState<AdminAccountInfo[]>(DEFAULT_ADMIN_ACCOUNTS);
+  const [adminUsernameInput,setAdminUsernameInput]=useState('');
   const [selectedAdminUser, setSelectedAdminUser] = useState<AdminAccountInfo | null>(null);
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
@@ -209,11 +212,17 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
         setActiveTab(initialTab);
       }
       setIsAuthenticated(isSessionAdminAuthenticated());
-      fetchAdminAccounts().then(accs => {
-        if (accs && accs.length > 0) setAdminAccounts(accs);
+      void verifyAdminSession().then(valid=>{
+        setIsAuthenticated(valid);
+        if(valid)void fetchAdminAccounts().then(accs=>{if(accs.length)setAdminAccounts(accs);});
       });
     }
   }, [isOpen, initialTab]);
+  useEffect(()=>{
+    const refresh=()=>setIsAuthenticated(isSessionAdminAuthenticated());
+    window.addEventListener('admin-auth-changed',refresh);
+    return ()=>window.removeEventListener('admin-auth-changed',refresh);
+  },[]);
 
   const fullColoniasList = useMemo(() => {
     const set = new Set<string>();
@@ -270,7 +279,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
   const loadDbStatus = async () => {
     try {
-      const res = await fetch('/api/database-status');
+      const res = await adminFetch('/api/database-status');
       const data = await res.json();
       if (data.success) {
         setDbStatus(data);
@@ -288,7 +297,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
   const loadAiStatus = async () => {
     try {
-      const res = await fetch('/api/ai/status');
+      const res = await adminFetch('/api/ai/status');
       const data = await res.json();
       setAiStatus(data);
     } catch (_) {}
@@ -298,7 +307,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     setIsTestingDb(true);
     setDbTestMessage(null);
     try {
-      const res = await fetch('/api/mariadb/reconnect', { method: 'POST' });
+      const res = await adminFetch('/api/mariadb/reconnect', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         setDbTestMessage('¡Conexión exitosa y activa a Hostinger MariaDB!');
@@ -317,7 +326,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     setIsSyncingDbCatalog(true);
     setDbTestMessage(null);
     try {
-      const res = await fetch('/api/mariadb/sync-catalog', { method: 'POST' });
+      const res = await adminFetch('/api/mariadb/sync-catalog', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         setDbTestMessage(data.message || '¡Catálogo de empresas sincronizado con éxito en Hostinger MariaDB!');
@@ -341,7 +350,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     setAiError(null);
     setAiSuccessMsg(null);
     try {
-      const res = await fetch('/api/ai/parse-business', {
+      const res = await adminFetch('/api/ai/parse-business', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: aiInputText })
@@ -668,7 +677,8 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
   const handleAdminLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAdminUser) return;
+    const username=adminUsernameInput.trim() || selectedAdminUser?.username;
+    if (!username) {setAdminLoginError('Ingresa el usuario configurado en el servidor.');return;}
     if (!adminPasswordInput.trim()) {
       setAdminLoginError('Ingresa la contraseña');
       return;
@@ -677,7 +687,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     try {
       setIsLoggingIn(true);
       setAdminLoginError(null);
-      const res = await loginAdminUser(selectedAdminUser.username, adminPasswordInput);
+      const res = await loginAdminUser(username, adminPasswordInput);
       if (res.success) {
         setIsAuthenticated(true);
         setAdminPasswordInput('');
@@ -883,6 +893,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 }}
                 className="space-y-2.5"
               >
+                <input type="text" autoComplete="username" aria-label="Usuario administrativo" placeholder="Usuario configurado" value={adminUsernameInput} onChange={e=>setAdminUsernameInput(e.target.value)} className="block w-full max-w-xs mx-auto py-2.5 px-4 rounded-full bg-white/85 border border-stone-300 text-sm" />
                 <div className="relative flex items-center max-w-xs mx-auto">
                   <input
                     type={showAdminPassword ? 'text' : 'password'}

@@ -33,7 +33,7 @@ export function validateBusinessInput(body:unknown,creating=false){
  if(patch.category&&!patch.categories)patch.categories=[patch.category];
  return patch;
 }
-export function registerStagingBusinessRoutes(app:Express,deps:{isStaging:()=>boolean;canWrite:()=>boolean;isAdmin:(req:Request)=>boolean;readAll:()=>Promise<any[]>;store:{create:(draft:any,key:string)=>Promise<any>;update:(id:string|number,patch:any)=>Promise<any>};saved:(b:any)=>void;categorySlugs?:(categories:string[])=>string[]}){
+export function registerStagingBusinessRoutes(app:Express,deps:{isStaging:()=>boolean;canWrite:()=>boolean;isAdmin:(req:Request)=>boolean;canPublish?:(req:Request)=>boolean;readAll:()=>Promise<any[]>;store:{create:(draft:any,key:string)=>Promise<any>;update:(id:string|number,patch:any)=>Promise<any>};saved:(b:any)=>void;categorySlugs?:(categories:string[])=>string[]}){
  const failure=(res:Response,error:unknown)=>{
   if(error instanceof ContactPatchError)return res.status(error.status).json({success:false,message:error.message});
   if(error instanceof BusinessWriteError)return res.status(error.status).json({success:false,error:error.code,message:error.message,writeMayHaveSucceeded:error.writeMayHaveSucceeded});
@@ -46,6 +46,6 @@ export function registerStagingBusinessRoutes(app:Express,deps:{isStaging:()=>bo
  });
  app.patch(['/api/businesses/:id','/businesses/:id'],async(req:Request,res:Response,next:NextFunction)=>{
   if(!deps.isStaging())return next();
-  try{authorize(req);const patch=validateBusinessInput(req.body);if(patch.categories&&deps.categorySlugs)patch.categorySlugs=deps.categorySlugs(patch.categories);const id=String(req.params.id).toLowerCase();const list=await deps.readAll();const current=list.find(b=>String(b.id)===id||b.slug?.toLowerCase()===id||b.previousSlugs?.includes(id));if(!current)throw new BusinessWriteError(404,'BUSINESS_NOT_FOUND','Empresa no encontrada.');const result=await deps.store.update(current.id,patch);deps.saved(result.business);return res.json({success:true,business:result.business,message:'Edición confirmada en MariaDB de Staging.'});}catch(error){return failure(res,error);}
+  try{authorize(req);const patch=validateBusinessInput(req.body);if(['isTopBusiness','isRecommended'].some(key=>Object.hasOwn(patch,key))&&!deps.canPublish?.(req))throw new BusinessWriteError(403,'PUBLISH_PERMISSION_REQUIRED','Se requiere permiso de publicación para modificar distintivos.');if(patch.categories&&deps.categorySlugs)patch.categorySlugs=deps.categorySlugs(patch.categories);const id=String(req.params.id).toLowerCase();const list=await deps.readAll();const current=list.find(b=>String(b.id)===id||b.slug?.toLowerCase()===id||b.previousSlugs?.includes(id));if(!current)throw new BusinessWriteError(404,'BUSINESS_NOT_FOUND','Empresa no encontrada.');const result=await deps.store.update(current.id,patch);deps.saved(result.business);return res.json({success:true,business:result.business,message:'Edición confirmada en MariaDB de Staging.'});}catch(error){return failure(res,error);}
  });
 }

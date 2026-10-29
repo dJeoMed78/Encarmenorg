@@ -100,10 +100,12 @@ async function routeHarness(repo) {
  const app=express(); app.use(express.json());
  const refresh=source.slice(source.indexOf('let lastDbPollTime = 0;'),source.indexOf('// ==========================================\n// BASE DE DATOS Y GESTIÓN DE CALIFICACIONES'));
  const get=source.slice(source.indexOf("app.get('/api/businesses',"),source.indexOf('// Endpoint to purge cache on demand'));
- const patch=source.slice(source.indexOf('const privilegedAdminSessions = new Map'),source.indexOf('// Force sync a single business'));
+ const patch=source.slice(source.indexOf('const isVerifiedAdminSession ='),source.indexOf('// Force sync a single business'));
  const containment=source.slice(source.indexOf('// WordPress is retired.'),source.indexOf('// Download SQL dump'));
  const state={active:true,cache:[]};
- const module=execute(`${refresh}\n${get}\n${patch}\n${containment}\nexport function session(token:string, expires:number){privilegedAdminSessions.set(token,expires);}`,{
+ const _testSessions=new Map();
+ const module=execute(`${refresh}\n${get}\n${patch}\n${containment}\nexport function session(token:string, expires:number){_testSessions.set(token,expires);}`,{
+  _testSessions,adminSecurity:{isAuthorized:req=>{const until=_testSessions.get(req.get('X-Encarmen-Admin-Token'));return Boolean(until && until>Date.now());}},
   app, ...contacts, ...repo,
   isMariaDbActive:()=>state.active,
   dbGetBusinessesSignature:async()=>({lastUpdate:'unchanged',total:repo.state.rows.length}),
@@ -210,6 +212,7 @@ test('API client refuses seed fallback and false success on an HTTP failure',asy
  try {
   await assert.rejects(api.fetchBusinesses({}),/503/);
   assert.equal((await api.adminUpdateBusiness(1081,{name:'Cambio sintético'})).success,false);
+  assert.equal((await api.adminDeleteBusiness(1081)).success,false);
  } finally {globalThis.fetch=savedFetch;if(savedSession===undefined)delete globalThis.sessionStorage;else globalThis.sessionStorage=savedSession;}
 });
 

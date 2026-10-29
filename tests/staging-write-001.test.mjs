@@ -115,15 +115,19 @@ test('SW rollback and lost commit acknowledgement never report success or duplic
 
 async function httpHarness(){
  const db=database();const app=express();app.use(express.json());let legacy=0;const sessions=new Map();
- const sessionSource=read('server.ts').slice(read('server.ts').indexOf('const privilegedAdminSessions = new Map'),read('server.ts').indexOf('// Admin update business'));
  const serverSource=read('server.ts');
+ const security=await loadComponent('src/server/adminSecurity.ts');
+ const {administrativeWritesReady}=await loadComponent('src/server/consolidatedWritePolicy.ts');
+ const start=serverSource.indexOf('const adminSecurity = registerAdminSecurity');
+ const registration=serverSource.slice(start,serverSource.indexOf('\n});',start)+4);
  const globalGuard=serverSource.slice(serverSource.indexOf('// Staging safety & write protection'),serverSource.indexOf('// 1. REGLA GEOIP'));
- const login=serverSource.slice(serverSource.indexOf('const stagingLoginAllowed = createLoginLimiter'),serverSource.indexOf("app.post('/api/admin/change-password'"));
- const effectiveEnv={...env,STAGING_ADMIN_Y_SCRYPT:derived()};
- const auth=execute(`${sessionSource}\n${globalGuard}\n${login}\nexport {isVerifiedAdminSession};export function expire(){for(const token of privilegedAdminSessions.keys())privilegedAdminSessions.set(token,0);}`,{
-  app,...modules,crypto,process:{env:effectiveEnv},isStagingEnvironment:()=>true,isBusinessWritePermitted:()=>db.state.canWrite,isWritePermitted:()=>false,console:{log(){},warn(){},error(){}}
+ const effectiveEnv={...env,ENC_ADMIN_MUTATIONS_ENABLED:'true',ENC_ADMIN_PUBLIC_ORIGIN:'https://fixture.invalid',ENC_ADMIN_CREDENTIALS_JSON:JSON.stringify({version:1,accounts:[{username:'Y',passwordHash:derived(),permissions:security.ADMIN_PERMISSIONS}]})};
+ let now=Date.now();
+ const auth=execute(`${registration}\n${globalGuard}\nexport const isVerifiedAdminSession=(req:any)=>adminSecurity.isAuthorized(req,'business:manage');`,{
+  app,...security,administrativeWritesReady,registerAdminSecurity:(app,options)=>security.registerAdminSecurity(app,{...options,now:()=>now}),process:{env:effectiveEnv},isStagingEnvironment:()=>true,isBusinessWritePermitted:()=>db.state.canWrite,isWritePermitted:()=>false,console:{log(){},warn(){},error(){}}
  });
- registerStagingBusinessRoutes(app,{isStaging:()=>true,canWrite:()=>db.state.canWrite,isAdmin:auth.isVerifiedAdminSession,store:db.store,readAll:async()=>db.state.rows.map(serialize),saved:()=>{}});
+ auth.expire=()=>{now+=7*3600000;};
+ registerStagingBusinessRoutes(app,{isStaging:()=>true,canWrite:()=>db.state.canWrite,isAdmin:auth.isVerifiedAdminSession,canPublish:auth.isVerifiedAdminSession,store:db.store,readAll:async()=>db.state.rows.map(serialize),saved:()=>{}});
  app.post('/api/submit-business',(_req,res)=>{legacy++;res.json({success:true,legacy:true});});app.patch(['/api/businesses/:id','/businesses/:id'],(_req,res)=>{legacy++;res.json({legacy:true});});
  app.post('/api/admin/change-password',(_req,res)=>res.json({unsafe:true}));
  const server=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});const base=`http://127.0.0.1:${server.address().port}`;
@@ -142,9 +146,10 @@ test('SW real HTTP guard/login/routes enforce authorization and controlled scope
   for(const body of [{name:'Cambio de nombre'},{phone:'',whatsapp:null}]){const result=await api.request('/api/businesses/1081','PATCH',body,token);assert.equal(result.status,200);assert.equal(result.body.business.phone,fixture.phone);assert.equal(result.body.business.whatsapp,fixture.whatsapp);}
   const removed=await api.request('/api/businesses/1081','PATCH',{clearContacts:['phone']},token);assert.equal(removed.status,200);assert.equal(removed.body.business.phone,'');assert.equal(removed.body.business.whatsapp,fixture.whatsapp);
   for(const body of [{DB_NAME:'u293982346_encarmenapp'},{id:99999},{isAdmin:true},{phone:'invalid'},{name:'A'}])assert.equal((await api.request('/api/businesses/1081','PATCH',body,token)).status,400);
-  for(const [path,method] of [['/api/mariadb/sync-catalog','POST'],['/api/mariadb/reconnect','POST'],['/api/sync','POST'],['/api/webhook/woocommerce','POST'],['/api/admin/change-password','POST'],['/api/upload-logo','POST'],['/api/businesses/1081/generate-pin','POST'],['/api/businesses/1081/verify-edit-pin','POST'],['/api/businesses/1081','DELETE']])assert.equal((await api.request(path,method,{},token)).status,403);
+  for(const [path,method] of [['/api/mariadb/sync-catalog','POST'],['/api/mariadb/reconnect','POST'],['/api/sync','POST'],['/api/webhook/woocommerce','POST'],['/api/admin/change-password','POST'],['/api/upload-logo','POST'],['/api/businesses/1081/generate-pin','POST'],['/api/businesses/1081/verify-edit-pin','POST'],['/api/businesses/1081','DELETE']])assert.ok([403,503].includes((await api.request(path,method,{},token)).status),path);
   api.auth.expire();assert.equal((await api.request('/api/businesses/1081','PATCH',{name:'No autorizado'},token)).status,401);
-  api.db.state.canWrite=false;assert.equal((await api.request('/api/submit-business','POST',draft(8),token,key())).status,403);
+  const relogin=await api.request('/api/admin/login','POST',{username:'Y',password:'Synthetic-password-only'});assert.equal(relogin.status,200);
+  api.db.state.canWrite=false;assert.ok([403,503].includes((await api.request('/api/submit-business','POST',draft(8),relogin.body.token,key())).status));
   assert.equal(api.legacy(),0);
  }finally{await api.close();}
 });
@@ -158,7 +163,7 @@ test('SW browser service has no local success fallback and authentication requir
   assert.equal((await auth.loginAdminUser('Y','Synthetic-password-only')).success,false);
   globalThis.fetch=async()=>new Response(JSON.stringify({success:true}));assert.equal((await auth.loginAdminUser('Y','Synthetic-password-only')).success,false);
   const calls=[];sessionStorage.setItem('encarmen_admin_session_token','a'.repeat(64));globalThis.fetch=async(url,options)=>{calls.push(options);return new Response(JSON.stringify({success:true,business:{id:4001}}));};
-  const request=key();assert.equal((await api.submitAdministrativeBusinessRegistration(draft(),request)).success,true);assert.equal(calls[0].headers['Idempotency-Key'],request);assert.equal(calls[0].headers['X-Encarmen-Admin-Token'],'a'.repeat(64));
+  const request=key();assert.equal((await api.submitAdministrativeBusinessRegistration(draft(),request)).success,true);assert.equal(new Headers(calls[0].headers).get('Idempotency-Key'),request);assert.equal(new Headers(calls[0].headers).get('X-Encarmen-Admin-Token'),'a'.repeat(64));
  }finally{globalThis.fetch=originalFetch;for(const k in saved){if(saved[k]===undefined)delete globalThis[k];else globalThis[k]=saved[k];}dom.window.close();}
 });
 

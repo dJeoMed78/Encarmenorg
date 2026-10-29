@@ -24,7 +24,7 @@ import { RegisterBusinessView } from './components/RegisterBusinessView';
 import { ClassifiedCreateModal } from './components/ClassifiedCreateModal';
 import { ClassifiedDetailModal } from './components/ClassifiedDetailModal';
 import { Promotion, ClassifiedAd, Business } from './types';
-import { isSessionAdminAuthenticated } from './utils/adminAuth';
+import { isSessionAdminAuthenticated, verifyAdminSession } from './utils/adminAuth';
 import { adminDeleteBusiness, adminUpdateBusiness, getAdminPromotions } from './services/api';
 import { sortEventsChronologically, parseEventStartDate, isEventExpired, filterActiveUpcomingEvents } from './services/eventsService';
 import { getSavedPortalLinks } from './components/AdminLinksAndAdsManager';
@@ -269,6 +269,16 @@ export default function App() {
 
   // Autenticación de Administración
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => isSessionAdminAuthenticated());
+  useEffect(() => {
+    let alive=true;
+    const reflect=()=>{if(alive)setIsAdminLoggedIn(isSessionAdminAuthenticated());};
+    const refresh=async()=>{await verifyAdminSession();reflect();};
+    void refresh();
+    window.addEventListener('admin-auth-changed',reflect);
+    window.addEventListener('focus',refresh);
+    const timer=setInterval(refresh,25000);
+    return ()=>{alive=false;clearInterval(timer);window.removeEventListener('admin-auth-changed',reflect);window.removeEventListener('focus',refresh);};
+  },[]);
 
   const [ratingStats, setRatingStats] = useState<Record<string, BusinessRatingStats>>({});
   const [ratingsStatus, setRatingsStatus] = useState<'loading' | 'ready' | 'error'>('loading');
