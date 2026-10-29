@@ -378,19 +378,28 @@ export default function App() {
     if (['promociones', 'eventos', 'clasificados', 'registro'].includes(cleanPath)) setActiveTab(cleanPath);
   }, []);
 
-  // Listen to browser Back/Forward (popstate)
+  // Browser Back/Forward shares the version/abort guard with business-list refresh.
+  // A late navigation response must never replace a newer confirmed business.
   useEffect(() => {
+    let navigationController: AbortController | null = null;
     const handlePopState = () => {
+      businessRequestController.current?.abort();
+      navigationController?.abort();
+      const controller = new AbortController();
+      navigationController = controller;
+      businessRequestController.current = controller;
+      const version = ++businessRequestVersion.current;
       const slug = getBusinessSlugFromUrl();
       if (slug) {
         const match = findBusinessInList(businessesList, slug);
         if (match) {
           setLandingBusiness(match);
         } else {
-          fetch(`/api/businesses/${encodeURIComponent(slug)}`)
-            .then((r) => (r.ok ? r.json() : null))
-            .then((resData) => {
-              if (resData && resData.business) {
+          fetch(`/api/businesses/${encodeURIComponent(slug)}`, { cache: 'no-store', signal: controller.signal })
+            .then(r => r.ok ? r.json() : null)
+            .then(resData => {
+              if (!controller.signal.aborted && version === businessRequestVersion.current &&
+                  getBusinessSlugFromUrl() === slug && resData?.business) {
                 setLandingBusiness(resData.business);
               }
             })
@@ -399,16 +408,15 @@ export default function App() {
       } else {
         setLandingBusiness(null);
         const cleanPath = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
-        if (['promociones', 'eventos', 'clasificados', 'registro', 'negocios'].includes(cleanPath)) {
-          setActiveTab(cleanPath);
-        } else {
-          setActiveTab('negocios');
-        }
+        setActiveTab(['promociones', 'eventos', 'clasificados', 'registro', 'negocios'].includes(cleanPath) ? cleanPath : 'negocios');
       }
     };
 
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    return () => {
+      navigationController?.abort();
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, [businessesList]);
 
   // Synchronize document title with active landing page
