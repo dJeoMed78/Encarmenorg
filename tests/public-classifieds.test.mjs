@@ -142,7 +142,12 @@ test('fallo de lectura tras UPDATE responde incertidumbre, no falso éxito', asy
   const pool = new FakePool();
   const s = service(pool);
   const { classified, ownerToken } = await s.create(VALID);
-  pool.failReadback = true;
+  const originalQuery = pool.query.bind(pool);
+  pool.query = async (sql, params) => {
+    const result = await originalQuery(sql, params);
+    if (/UPDATE public_classifieds/.test(sql) && /COALESCE/.test(sql)) pool.failReadback = true;
+    return result;
+  };
   await rejects(s.update(classified.id, ownerToken, { title: 'Título actualizado' }), 'CLASSIFIEDS_WRITE_UNCONFIRMED', e => e.uncertain === true);
 });
 
@@ -158,6 +163,7 @@ test('GET devuelve solo activos vigentes y expira los vencidos', async () => {
   const created = await s.create(VALID);
   pool.rows.get(created.classified.id).expires_at = new Date(NOW.getTime() - 1000);
   const expired = await s.create({ ...VALID, idempotencyKey: 'idem-expirado1', title: 'Anuncio expirado' });
+  pool.rows.get(expired.classified.id).expires_at = new Date(NOW.getTime() - 1000);
   const active = await s.create({ ...VALID, idempotencyKey: 'idem-activo001', title: 'Anuncio vigente' });
   const { classifieds, total } = await s.getActive();
   assert.equal(total, 1);
