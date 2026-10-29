@@ -1,0 +1,7 @@
+# ENC-CONSOLIDATION-001
+
+Estado: EN_PROGRESO. Rama work/enc-consolidation-001. Base 184874835d9d588e679b201b790643dfd923aff8.
+
+Referencias revisadas: seguridad 22ce2a30741bf9145acbb2b939d1d6a936c1843f; integridad 84819002a20857fee3e5f668189a615ef9a43618; ficha 174cb16fff855a16b8bbe5ac083f88140c31924f. Se leyeron contexto e instrucciones de coordinación y los informes de origen; no se fusionan ramas completas ni se ejecuta el parche/sembrador PERP.
+
+Checkpoint inicial: el registro W1 ya ofrece lectura estricta, arranque sin siembra y contactos preservados. Faltan retirar autenticación/PIN/Git legados, reconciliar la autorización por operación con el canal restringido de Staging, corregir baja heredada y sondeo de caché, e incorporar la presentación GAS sin degradar la validación telefónica. Implementación local en curso. TypeScript inicial pasa; la primera batería detectó incompatibilidades en arneses de sesiones retiradas y contratos de rutas. Todavía no se declara batería final satisfactoria. Sin servidores completos, bases reales, Hostinger, integración o despliegue.
