@@ -76,3 +76,8 @@ No se corrigió ni duplicó código funcional del Trabajador1.
 
 ## Reversión
 No integrar la rama. Si se integra posteriormente bajo autorización, revertir solo los commits de arnés/documentación. No hay migración ni cambio de datos remotos que revertir.
+
+## Publicación verificada
+Commit de pruebas y resultados: e3e65000f25f4d62d536ec976947652e98579c4d.
+https://github.com/dJeoMed78/Encarmenorg/commit/e3e65000f25f4d62d536ec976947652e98579c4d
+Comparación con base: ahead_by=1, behind_by=0; exactamente9 archivos de tests/fixtures/evidencia/documentación. Lectura remota9/9 idéntica a los contenidos publicados. Sin archivos src/, manifests, ejecutables ni ramas del Trabajador1 modificados. Este cierre es exclusivamente documental y no cambia el arnés probado.
