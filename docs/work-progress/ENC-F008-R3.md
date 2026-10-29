@@ -31,7 +31,7 @@ El código rechaza configuración de Staging sin readonly literal true ni confir
 
 ### Decisiones sobre R2, incluidas eliminaciones de server.ts
 
-- CONSERVADO: prioridad de columnasSQL, strict reads/503, actualización independiente de firma, ausencia de fallback de contactos, semántica de upsert y six filtros/paginación. Cuentan como implementación heredada y ahora sometida a nueva ejecución, no programación repetida.
+- CONSERVADO: prioridad de columnasSQL, strict reads/503, actualización independiente de firma, ausencia de fallback de contactos, semántica de upsert y seis filtros/paginación. Cuentan como implementación heredada y ahora sometida a nueva ejecución, no programación repetida.
 - CONSERVADO: retiro de importadorWooCommerce y arranque automático, autoimportación businesses desde semillas y sync-catalog. La comparación R2/base muestra401 líneas eliminadas/72 añadidas en server.ts. La gran mayoría de esas eliminaciones está en el importador y los dos flujos de importación anteriores; estaban dentro del riesgo de pérdida y retirada documental de WordPress. No se reintroducen ni se activan otras sincronizaciones.
 - NO REESCRITO: EditorR1, estilosGlass, Logotipo/Maps, Radar, Comentarios y calificaciones. R3 no aplica un rediseño ni incorpora ramas distintas.
 - LÍMITE: lecturas de tabla completa por petición priorizan exactitud con205 registros; se mantiene el riesgo de coste cuando crezca el catálogo. No se certifica todo el servidor ni toda la autenticación heredada.
@@ -106,3 +106,12 @@ Package scripts revisados: build/prebuild actualizan versión y build:server esc
 - Para retorno previo a integración, mantener la rama aislada. Si se autorizara integrar después, revertir únicamente commitsR3 mediante nuevos commits; se recupera R2 y sus defectos nuevos documentados. No force, SQL ni restauración de datos. Revertir R2 además reintroduce riesgo de semillas/sincronización y exige decisión separada.
 
 DictamenWork: implementación permitida finalizada y probada aisladamente; candidata PARA REVISIÓN independiente, NO aprobación propia. No integración, despliegue, migraciones, restauración, cambios de infraestructura ni producción. Validación operativa pendiente según guía.
+
+
+## Verificación remota y cierre documental
+
+- Código y pruebas publicados: https://github.com/dJeoMed78/Encarmenorg/commit/734bfbd4affe5712ab30d68f0a289a27c24b377c
+- 14/14 archivos del hito releídos desde GitHub y coincidentes con la copia probada; comparación contraR2: ahead_by=2/behind_by=0 antes de este cierre. Delta R3 de server.ts:7 líneas añadidas/4 eliminadas; las401 eliminaciones discutidas pertenecen al historialR2, no son nuevas supresionesR3.
+- Rama anterior R2 conservada en d826a17b6f4bd29eaac1ef350111910ab2dfe872; ia-desarrollo conservada en0d231cb2779b7a14d8d336fc2f4de3782663c738. No force, PR, integración ni despliegue.
+- Alcance de14 rutas comprobado. Los archivos heredados no incluidos en el diff (Editor, estilos, calificaciones, Radar, bundles y configuración) no fueron sustituidos.
+- No quedan pruebas locales en curso ni operaciones de servidor completo iniciadas porR3. La única actividad posterior al hito es este registro documental. Espera revisión deCoordinación.
