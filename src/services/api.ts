@@ -268,9 +268,11 @@ export async function submitBusinessRegistration(data: import('../types').Busine
     const response = await fetch(`${API_BASE}/public/business-registrations`, {
       method:'POST', headers:{'Content-Type':'application/json','Idempotency-Key':requestId}, body:JSON.stringify(payload)
     });
-    maybeWritten = response.ok;
+    // HTTP 5xx, respuestas incompletas y fallos de lectura pueden ocurrir tras COMMIT.
+    // No declarar definitivamente fallida una escritura con resultado incierto.
+    maybeWritten = response.ok || response.status >= 500;
     const result = await response.json().catch(()=>({}));
-    if (!response.ok) return {success:false,message:result.message||`Error HTTP ${response.status}`,error:result.error,writeMayHaveSucceeded:result.writeMayHaveSucceeded===true};
+    if (!response.ok) return {success:false,message:result.message||`Error HTTP ${response.status}`,error:result.error,writeMayHaveSucceeded:result.writeMayHaveSucceeded===true || maybeWritten};
     const business = result.business;
     if (result.success!==true || result.directoryVisible!==true || !Number.isSafeInteger(Number(business?.id)) || Number(business.id)<=0 || business.status!=='published') throw new Error('No se confirmó una empresa publicada. Reintenta con la misma clave.');
     const [detailResponse,listResponse] = await Promise.all([
@@ -298,38 +300,14 @@ export async function sendClassifiedReport(data: {
 }): Promise<{ success: boolean; message: string; report?: import("../types").BusinessReport }> {
   try {
     const res = await adminFetch(`${API_BASE}/reports`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "classified",
-        ...data
-      })
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'classified', ...data })
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (err: any) {
-    try {
-      const stored = localStorage.getItem("business_reports") || "[]";
-      const parsed = JSON.parse(stored);
-      const newRep: import("../types").BusinessReport = {
-        id: `rep-${Date.now()}`,
-        type: "classified",
-        classifiedId: data.classifiedId,
-        classifiedTitle: data.classifiedTitle,
-        businessName: data.classifiedTitle,
-        requesterName: data.requesterName,
-        requesterContact: data.requesterContact,
-        reason: data.reason,
-        comment: data.comment,
-        date: new Date().toISOString(),
-        status: "pending"
-      };
-      parsed.unshift(newRep);
-      localStorage.setItem("business_reports", JSON.stringify(parsed));
-      return { success: true, message: "Solicitud enviada al administrador", report: newRep };
-    } catch {
-      return { success: false, message: "No se pudo enviar la solicitud" };
-    }
+    if (!res.ok) return { success: false, message: `No se confirmó el envío del reporte (HTTP ${res.status}).` };
+    const body = await res.json();
+    return body?.success === true ? body : { success: false, message: 'El servidor no confirmó la recepción del reporte.' };
+  } catch {
+    return { success: false, message: 'No se pudo confirmar el envío del reporte al servidor.' };
   }
 }
 
@@ -344,32 +322,14 @@ export async function sendBusinessReport(data: {
 }): Promise<{ success: boolean; message: string; report?: import('../types').BusinessReport }> {
   try {
     const res = await adminFetch(`${API_BASE}/reports`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (err: any) {
-    // Fallback local storage
-    try {
-      const stored = localStorage.getItem('business_reports') || '[]';
-      const parsed = JSON.parse(stored);
-      const newRep: import('../types').BusinessReport = {
-        id: `rep-${Date.now()}`,
-        businessId: data.businessId,
-        businessName: data.businessName,
-        reason: data.reason,
-        details: data.details || data.comment,
-        createdAt: new Date().toISOString(),
-        status: 'pending'
-      };
-      parsed.unshift(newRep);
-      localStorage.setItem('business_reports', JSON.stringify(parsed));
-      return { success: true, message: 'Reporte guardado', report: newRep };
-    } catch {
-      return { success: false, message: 'No se pudo guardar el reporte' };
-    }
+    if (!res.ok) return { success: false, message: `No se confirmó el envío del reporte (HTTP ${res.status}).` };
+    const body = await res.json();
+    return body?.success === true ? body : { success: false, message: 'El servidor no confirmó la recepción del reporte.' };
+  } catch {
+    return { success: false, message: 'No se pudo confirmar el envío del reporte al servidor.' };
   }
 }
 
