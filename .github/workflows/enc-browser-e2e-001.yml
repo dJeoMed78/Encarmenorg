@@ -1,0 +1,34 @@
+name: ENC-BROWSER-E2E-001
+on:
+  push:
+    branches: [work/enc-browser-e2e-001]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    if: github.ref == 'refs/heads/work/enc-browser-e2e-001'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm ci --ignore-scripts --prefix tests/browser
+      - run: npx playwright install --with-deps chromium
+        working-directory: tests/browser
+      - run: npm test
+        working-directory: tests/browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: enc-browser-e2e-${{ github.sha }}
+          path: |
+            tests/browser/report/
+            tests/browser/artifacts/
+            tests/browser/results.json
+          retention-days: 14
+          if-no-files-found: error
