@@ -1,4 +1,4 @@
-import { createPublicRegistrationService, createPoolReaders, createAttemptLimiter, validatePublicRegistration } from './publicRegistrationCore.ts';
+import { createPublicRegistrationService, createPoolReaders, createAttemptLimiter, createCreationLimiter, validatePublicRegistration } from './publicRegistrationCore.ts';
 import { registerPublicRegistrationRoutes, publicRegistrationBodyLimit } from './publicRegistrationRoutes.ts';
 
 export { publicRegistrationBodyLimit };
@@ -15,6 +15,7 @@ export function mountPublicRegistration(app: any, deps: { isStaging: () => boole
     businessStore: deps.businessStore,
     countRecentPublic: readers.countRecentPublic,
     readBusiness: readers.readBusiness,
+    hasPublicReplay: readers.hasPublicReplay,
     categorySlugs: deps.categorySlugs,
     onSaved: deps.saved,
     isVisible: deps.isVisible,
@@ -23,7 +24,7 @@ export function mountPublicRegistration(app: any, deps: { isStaging: () => boole
     service,
     enabled: () => deps.canWrite() && process.env.PUBLIC_REGISTRATION_ENABLED === 'true',
     attempts: createAttemptLimiter(20, 15 * 60 * 1000),
-    creations: createAttemptLimiter(3, 60 * 60 * 1000),
+    creations: createCreationLimiter(3, 60 * 60 * 1000),
     validate: validatePublicRegistration,
   });
 }

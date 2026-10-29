@@ -4,6 +4,10 @@
  * aislamiento y lectura posterior ya incluidos) -> segunda lectura SQL independiente -> respuesta con el ID.
  * No existe etapa de revisión: la empresa queda publicada al confirmarse la lectura.
  */
+import {contactDigits} from '../utils/businessContacts.ts';
+import {STANDARDIZED_DELIVERY_OPTIONS, STANDARDIZED_PAYMENT_OPTIONS} from '../constants/businessOptions.ts';
+import {PUBLIC_REGISTRATION_FIELDS} from '../constants/publicRegistration.ts';
+
 export class RegistrationError extends Error {
   status: number;
   code: string;
@@ -18,18 +22,14 @@ export class RegistrationError extends Error {
 
 export const PUBLIC_SOURCE = 'public-form';
 const UUID_V4 = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
-const ALLOWED_FIELDS = new Set(['name', 'category', 'subcategory', 'description', 'address', 'colonia', 'phone', 'whatsapp', 'schedule', 'facebook', 'instagram', 'website', 'hp']);
+const ALLOWED_FIELDS = new Set<string>(PUBLIC_REGISTRATION_FIELDS);
 
 function fail(status: number, code: string, message: string, maybeWritten = false): never {
   throw new RegistrationError(status, code, message, maybeWritten);
 }
 
 export function mxDigits(value: any): string {
-  const digits = String(value ?? '').replace(/\D/g, '');
-  if (/^\d{10}$/.test(digits)) return digits;
-  if (/^52\d{10}$/.test(digits)) return digits.slice(2);
-  if (/^521\d{10}$/.test(digits)) return digits.slice(3);
-  return '';
+  return contactDigits(value);
 }
 
 export function normalizeName(value: any): string {
@@ -77,6 +77,16 @@ export function validatePublicRegistration(body: any): any {
   for (const key of Object.keys(body)) if (!ALLOWED_FIELDS.has(key)) fail(400, 'INVALID_REGISTRATION', 'El envío contiene campos no permitidos.');
   if (body.hp !== undefined && body.hp !== '') fail(400, 'SPAM_REJECTED', 'Registro rechazado.');
   const category = text(body, 'category', 100, true);
+  const postalCode = text(body, 'postalCode', 5);
+  if (postalCode && !/^\d{5}$/.test(postalCode)) fail(400, 'INVALID_REGISTRATION', 'Código postal inválido.');
+  const options = (key: string, allowed: string[]) => {
+    const value = text(body, key, 255);
+    const entries = value ? value.split(',').map(entry=>entry.trim()) : [];
+    if (entries.some(entry=>!allowed.includes(entry))) fail(400, 'INVALID_REGISTRATION', 'Opción no permitida en ' + key + '.');
+    return [...new Set(entries)].join(', ');
+  };
+  const payment = options('payment', STANDARDIZED_PAYMENT_OPTIONS);
+  const delivery = options('delivery', [...STANDARDIZED_DELIVERY_OPTIONS, 'No Aplica']);
   const draft = {
     name: text(body, 'name', 160, true),
     category,
@@ -85,9 +95,14 @@ export function validatePublicRegistration(body: any): any {
     description: text(body, 'description', 500, false, true),
     address: text(body, 'address', 255),
     colonia: text(body, 'colonia', 100),
+    postalCode,
     phone: contact(body, 'phone'),
     whatsapp: contact(body, 'whatsapp'),
     schedule: text(body, 'schedule', 255),
+    payment,
+    delivery,
+    deliveryOption: delivery,
+    hasDelivery: delivery.split(', ').some(option=>/domicilio|envíos/i.test(option)),
     facebook: link(body, 'facebook'),
     instagram: link(body, 'instagram'),
     website: link(body, 'website'),
@@ -108,6 +123,20 @@ export function createAttemptLimiter(max = 20, windowMs = 15 * 60 * 1000): (key:
   };
 }
 
+/** El mismo UUID no consume nuevamente el cupo de altas; los intentos HTTP siguen limitados por separado. */
+export function createCreationLimiter(max = 3, windowMs = 60 * 60 * 1000) {
+  const reservations = new Map<string, {keys:Set<string>;expires:number}>();
+  return (ip:string, now = Date.now(), requestKey = '') => {
+    if (!UUID_V4.test(requestKey)) return true; // El servicio responderá 400; no es un alta válida.
+    for (const [key,entry] of reservations) if(entry.expires<=now) reservations.delete(key);
+    const entry = reservations.get(ip);
+    if(entry?.keys.has(requestKey)) return true;
+    if((entry && entry.keys.size>=max) || (!entry && reservations.size>=10000)) return false;
+    const current=entry || {keys:new Set<string>(),expires:now+windowMs};
+    current.keys.add(requestKey);reservations.set(ip,current);return true;
+  };
+}
+
 /** Lecturas SQL de solo consulta sobre businesses. Cualquier fallo de MariaDB es un error real (503). */
 export function createPoolReaders(getPool: () => any): any {
   async function run(sql: string, params: any[]): Promise<any> {
@@ -121,6 +150,10 @@ export function createPoolReaders(getPool: () => any): any {
     }
   }
   return {
+    async hasPublicReplay(key:string): Promise<boolean> {
+      const rows = await run('SELECT id FROM businesses WHERE raw_data LIKE ? AND raw_data LIKE ? LIMIT 1', ['%"registrationSource":"' + PUBLIC_SOURCE + '"%', '%"_stagingRegistrationId":"' + key + '"%']);
+      return rows.length > 0;
+    },
     async countRecentPublic(): Promise<any> {
       const rows = await run(
         'SELECT COALESCE(SUM(created_at > (NOW() - INTERVAL 1 HOUR)), 0) AS hour_total, COUNT(*) AS day_total FROM businesses WHERE created_at > (NOW() - INTERVAL 1 DAY) AND raw_data LIKE ?',
@@ -145,8 +178,9 @@ export function createPublicRegistrationService(deps: any): any {
       if (!deps.canWrite()) fail(403, 'PUBLIC_REGISTRATION_DISABLED', 'El registro público no está habilitado.');
       const key = String(input.requestKey || '');
       if (!UUID_V4.test(key)) fail(400, 'REQUEST_KEY_REQUIRED', 'Se requiere una clave de registro UUID para reintentos seguros.');
-      const recent = await deps.countRecentPublic();
-      if (recent.hour >= limits.perHour || recent.day >= limits.perDay) fail(429, 'REGISTRATION_CAPACITY', 'Se alcanzó el límite temporal de registros; intenta más tarde.');
+      const replay = typeof deps.hasPublicReplay === 'function' && await deps.hasPublicReplay(key);
+      const recent = replay ? null : await deps.countRecentPublic();
+      if (recent && (recent.hour >= limits.perHour || recent.day >= limits.perDay)) fail(429, 'REGISTRATION_CAPACITY', 'Se alcanzó el límite temporal de registros; intenta más tarde.');
       const draft: any = { ...input.validated.draft, registrationSource: PUBLIC_SOURCE };
       if (typeof deps.categorySlugs === 'function') draft.categorySlugs = deps.categorySlugs(draft.categories);
 
@@ -171,12 +205,14 @@ export function createPublicRegistrationService(deps: any): any {
 
       let cacheUpdated = true;
       try {
-        if (typeof deps.onSaved === 'function') deps.onSaved(created.business);
+        if (typeof deps.onSaved === 'function') await deps.onSaved(created.business);
       } catch {
         cacheUpdated = false;
       }
-      const visible = typeof deps.isVisible === 'function' ? Boolean(deps.isVisible(id)) : false;
-      return { business: created.business, replayed: Boolean(created.replayed), directoryVisible: cacheUpdated && visible };
+      let visible = false;
+      try { visible = typeof deps.isVisible === 'function' && Boolean(await deps.isVisible(id)); } catch {}
+      if (!cacheUpdated || !visible) fail(503, 'REGISTRATION_VISIBILITY_UNCONFIRMED', 'El guardado puede haberse completado, pero no se confirmó la publicación. Reintenta con la misma clave.', true);
+      return { business: created.business, replayed: Boolean(created.replayed), directoryVisible: true };
     },
   };
 }

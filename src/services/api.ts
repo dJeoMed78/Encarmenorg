@@ -1,6 +1,8 @@
 import seedBusinesses from '../data/businesses_seed.json';
 import { Business, Category, DirectoryStats, WpHealth, AutoBusinessCandidate } from '../types';
 import seedCategories from '../data/categories_seed.json';
+import {PUBLIC_REGISTRATION_FIELDS} from '../constants/publicRegistration';
+import {contactDigits} from '../utils/businessContacts';
 
 const API_BASE = '/api';
 function businessSessionHeaders(): Record<string,string> {
@@ -211,7 +213,7 @@ export async function checkBusinessDuplicate(name: string, phone?: string): Prom
   }
 }
 
-export async function submitBusinessRegistration(data: import('../types').BusinessSubmission, requestId: string = crypto.randomUUID()): Promise<{
+export async function submitAdministrativeBusinessRegistration(data: import('../types').BusinessSubmission, requestId: string = crypto.randomUUID()): Promise<{
   success: boolean;
   message: string;
   isDuplicate?: boolean;
@@ -254,6 +256,37 @@ export async function submitBusinessRegistration(data: import('../types').Busine
 }
 
 // Reports & Admin Management Functions
+export async function submitBusinessRegistration(data: import('../types').BusinessSubmission & {hp?:string;subcategory?:string}, requestId: string = crypto.randomUUID()): Promise<{
+  success:boolean; message:string; business?:Business; directoryVisible?:boolean; replayed?:boolean;
+  isDuplicate?:boolean; existingBusiness?:Business; error?:string; writeMayHaveSucceeded?:boolean;
+}> {
+  let maybeWritten = false;
+  try {
+    const payload = Object.fromEntries(PUBLIC_REGISTRATION_FIELDS.filter(field=>Object.hasOwn(data,field)).map(field=>[field,data[field]]));
+    maybeWritten = true; // Una desconexión puede ocurrir después de que el servidor confirme COMMIT.
+    const response = await fetch(`${API_BASE}/public/business-registrations`, {
+      method:'POST', headers:{'Content-Type':'application/json','Idempotency-Key':requestId}, body:JSON.stringify(payload)
+    });
+    maybeWritten = response.ok;
+    const result = await response.json().catch(()=>({}));
+    if (!response.ok) return {success:false,message:result.message||`Error HTTP ${response.status}`,error:result.error,writeMayHaveSucceeded:result.writeMayHaveSucceeded===true};
+    const business = result.business;
+    if (result.success!==true || result.directoryVisible!==true || !Number.isSafeInteger(Number(business?.id)) || Number(business.id)<=0 || business.status!=='published') throw new Error('No se confirmó una empresa publicada. Reintenta con la misma clave.');
+    const [detailResponse,listResponse] = await Promise.all([
+      fetch(`${API_BASE}/businesses/${encodeURIComponent(business.id)}?_t=${Date.now()}`,{cache:'no-store'}),
+      fetch(`${API_BASE}/businesses?_t=${Date.now()}`,{cache:'no-store'})
+    ]);
+    if(!detailResponse.ok||!listResponse.ok) throw new Error('No se pudo consultar la publicación. Reintenta con la misma clave.');
+    const [detail,list] = await Promise.all([detailResponse.json(),listResponse.json()]);
+    const confirmed = detail.business;
+    const matching = (entry:any)=>entry && String(entry.id)===String(business.id) && entry.status==='published' && entry.name===business.name && contactDigits(entry.phone)===contactDigits(data.phone) && contactDigits(entry.whatsapp)===contactDigits(data.whatsapp);
+    if(detail.success!==true || !matching(confirmed) || !Array.isArray(list.businesses) || !list.businesses.some(matching)) throw new Error('La ficha o el directorio no confirman la publicación. Reintenta con la misma clave.');
+    return {...result,business:confirmed};
+  } catch(error:any) {
+    return {success:false,message:error.message||'No se confirmó el registro; reintenta con la misma clave.',writeMayHaveSucceeded:maybeWritten};
+  }
+}
+
 export async function sendClassifiedReport(data: {
   classifiedId: string;
   classifiedTitle: string;

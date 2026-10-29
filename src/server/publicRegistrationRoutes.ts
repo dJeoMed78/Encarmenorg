@@ -35,7 +35,7 @@ export function registerPublicRegistrationRoutes(app: any, deps: any): void {
       const ip = String(req.ip || '');
       if (!deps.attempts(ip)) throw coded(429, 'RATE_LIMITED', 'Demasiados intentos; intenta más tarde.');
       const validated = deps.validate(req.body);
-      if (!deps.creations(ip)) throw coded(429, 'RATE_LIMITED', 'Demasiados registros desde esta conexión; intenta más tarde.');
+      if (!deps.creations(ip, undefined, req.get('Idempotency-Key') || '')) throw coded(429, 'RATE_LIMITED', 'Demasiados registros desde esta conexión; intenta más tarde.');
       const result = await deps.service.submit({ validated, requestKey: req.get('Idempotency-Key') || '' });
       return res.status(result.replayed ? 200 : 201).json({
         success: true,

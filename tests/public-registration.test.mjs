@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import {
-  createPublicRegistrationService, createPoolReaders, createAttemptLimiter, validatePublicRegistration, mxDigits, RegistrationError, PUBLIC_SOURCE,
+  createPublicRegistrationService, createPoolReaders, createAttemptLimiter, createCreationLimiter, validatePublicRegistration, mxDigits, RegistrationError, PUBLIC_SOURCE,
 } from '../src/server/publicRegistrationCore.ts';
 import { registerPublicRegistrationRoutes, publicRegistrationBodyLimit, PUBLIC_REGISTRATION_PATH, PUBLIC_BODY_LIMIT_BYTES } from '../src/server/publicRegistrationRoutes.ts';
 import { mountPublicRegistration } from '../src/server/publicRegistrationWiring.ts';
@@ -37,6 +37,7 @@ function makeWorld(options = {}) {
   };
   const service = createPublicRegistrationService({
     canWrite: () => w.canWrite, businessStore: w.store, limits: options.limits,
+    hasPublicReplay: async key=>w.rows.some(row=>row._key===key),
     countRecentPublic: async () => { if (w.countFails) throw err(503, 'STORAGE_UNAVAILABLE', false); return w.counts; },
     readBusiness: async (id) => {
       w.readCalls++;
@@ -116,6 +117,14 @@ test('duplicados: nombre (sin acentos/mayúsculas) o cualquier contacto; nunca s
   await submit(w, 1); await rejectsWith(submit(w, 1), 'BUSINESS_DUPLICATE'); assert.equal(w.rows.length, 2);
 });
 
+test('reintento idempotente funciona con cupo global agotado y no consume nuevos cupos por IP', async () => {
+  const w=makeWorld();const key=randomUUID();await submit(w,1,{key});w.counts={hour:30,day:200};
+  assert.equal((await submit(w,1,{key})).replayed,true);assert.equal(w.rows.length,2);
+  await rejectsWith(submit(w,2),'REGISTRATION_CAPACITY');
+  const limit=createCreationLimiter(1,1000);const other=randomUUID();
+  assert.equal(limit('ip',0,key),true);assert.equal(limit('ip',1,key),true);assert.equal(limit('ip',2,other),false);assert.equal(limit('ip',1001,other),true);
+});
+
 test('errores reales de MariaDB: nada se guarda, nada se publica y nunca hay éxito simulado', async () => {
   let w = makeWorld(); w.mode = 'down';
   await rejectsWith(submit(w), 'BUSINESS_WRITE_UNCONFIRMED', (e) => e.status === 503); assert.deepEqual([w.rows.length, w.savedCalls, w.directory.length], [1, 0, 0]);
@@ -131,9 +140,9 @@ test('errores reales de MariaDB: nada se guarda, nada se publica y nunca hay éx
   w.mode = ''; const retry = await submit(w, 1, { key }); assert.deepEqual([retry.replayed, w.rows.length, retry.directoryVisible], [true, 2, true]);
 });
 
-test('el éxito exige lectura confirmada, pero la caché del directorio se informa con honestidad', async () => {
+test('sin visibilidad confirmada no se anuncia publicación exitosa', async () => {
   const w = makeWorld(); w.cacheThrows = true;
-  const out = await submit(w); assert.deepEqual([out.business.id > 4000, out.directoryVisible], [true, false]);
+  await rejectsWith(submit(w), 'REGISTRATION_VISIBILITY_UNCONFIRMED', e=>e.status===503 && e.writeMayHaveSucceeded===true);
 });
 
 test('compuertas: sin escritura habilitada no se consulta ni se escribe; tope global por hora y por día', async () => {
@@ -204,8 +213,8 @@ test('montaje: solo en Staging, una ruta POST, interruptor PUBLIC_REGISTRATION_E
     delete process.env.PUBLIC_REGISTRATION_ENABLED; assert.equal((await call()).body.error, 'PUBLIC_REGISTRATION_DISABLED'); assert.equal(queries.length, 0);
     process.env.PUBLIC_REGISTRATION_ENABLED = 'true'; const ok = await call();
     assert.deepEqual([ok.status, ok.body.business.id, ok.body.directoryVisible], [201, 4001, true]);
-    assert.ok(queries.length === 2 && queries.every((q) => /^SELECT /.test(q.sql)));
-    assert.match(queries[0].params[0], /"registrationSource":"public-form"/); assert.deepEqual(queries[1].params, ['4001']);
+    assert.ok(queries.length === 3 && queries.every((q) => /^SELECT /.test(q.sql)));
+    assert.match(queries[0].params[0], /"registrationSource":"public-form"/); assert.deepEqual(queries[2].params, ['4001']);
   } finally { if (savedEnv === undefined) delete process.env.PUBLIC_REGISTRATION_ENABLED; else process.env.PUBLIC_REGISTRATION_ENABLED = savedEnv; }
   const readers = createPoolReaders(() => null); await rejectsWith(readers.readBusiness(1), 'STORAGE_UNAVAILABLE');
   const broken = createPoolReaders(() => ({ query: async () => { throw new Error('conn lost'); } })); await rejectsWith(broken.countRecentPublic(), 'STORAGE_UNAVAILABLE', (e) => e.status === 503);

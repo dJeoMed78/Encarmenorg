@@ -1,4 +1,5 @@
 import {registerStagingBusinessRoutes} from './src/server/stagingBusinessRoutes';
+import {mountPublicRegistration,publicRegistrationBodyLimit} from './src/server/publicRegistrationWiring.ts';
 import {verifyStagingAdmin,createLoginLimiter,stagingBusinessConfiguration} from './src/server/stagingBusinessSecurity';
 import { prepareContactPatch, contactsMatchReadback, ContactPatchError, contactDigits, contactCounts, matchesContactFilter, CONTACT_FILTERS, type ContactFilter } from './src/utils/businessContacts';
 import dotenv from 'dotenv';
@@ -52,6 +53,7 @@ import {
   isStagingEnvironment,
   isWritePermitted,
   isBusinessWritePermitted,
+  getPool,
   PRODUCTION_DB_USER,
   stagingBusinessStore,
   validateStagingDbConfiguration,
@@ -136,7 +138,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   if (isStagingEnvironment()) {
     if (['GET','HEAD','OPTIONS'].includes(req.method.toUpperCase())) return next();
     if (req.method === 'POST' && req.path === '/api/admin/login') return next();
-    const businessMutation = (req.method === 'POST' && req.path === '/api/submit-business') || (req.method === 'PATCH' && /^\/(?:api\/)?businesses\/[^/]+$/.test(req.path));
+    const businessMutation = (req.method === 'POST' && (req.path === '/api/submit-business' || req.path === '/api/public/business-registrations')) || (req.method === 'PATCH' && /^\/(?:api\/)?businesses\/[^/]+$/.test(req.path));
     if (businessMutation && isBusinessWritePermitted()) return next();
     if (req.path === '/api/ratings/get' || req.path === '/api/events/radar-search') return next();
     return res.status(403).json({success:false,error:'STAGING_READ_ONLY',message:'Solo el carril autorizado de registro y edición puede escribir negocios. Las demás operaciones permanecen bloqueadas.'});
@@ -254,6 +256,7 @@ app.use((req: Request, res: Response, next) => {
   next();
 });
 
+app.use('/api/public/business-registrations', publicRegistrationBodyLimit);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -2629,6 +2632,14 @@ registerStagingBusinessRoutes(app, {
   categorySlugs:generateCategorySlugs,
   isAdmin:req=>isVerifiedAdminSession(req), readAll:()=>dbLoadAllBusinesses(true), store:stagingBusinessStore,
   saved:business=>{businessesCache=[business,...businessesCache.filter(b=>String(b.id)!==String(business.id))];cachedDbSignature=null;}
+});
+
+// ENC-PUBLIC-REGISTRATION-001-R1: el POST anónimo inserta directamente en businesses (solo Staging).
+mountPublicRegistration(app, {
+  isStaging:isStagingEnvironment, canWrite:isBusinessWritePermitted, getPool,
+  businessStore:stagingBusinessStore, categorySlugs:generateCategorySlugs,
+  saved:business=>{businessesCache=[business,...businessesCache.filter(b=>String(b.id)!==String(business.id))];cachedDbSignature=null;},
+  isVisible:id=>businessesCache.some(b=>String(b.id)===String(id)&&(b.status||'published')==='published')
 });
 
 // Submit / Register new Business

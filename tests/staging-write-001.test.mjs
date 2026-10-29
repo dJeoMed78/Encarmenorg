@@ -154,11 +154,11 @@ test('SW browser service has no local success fallback and authentication requir
  try{
   const api=await loadComponent('src/services/api.ts');const auth=await loadComponent('src/utils/adminAuth.ts');
   globalThis.fetch=async()=>{throw new Error('synthetic offline');};
-  const result=await api.submitBusinessRegistration(draft(),key());assert.equal(result.success,false);assert.equal(localStorage.getItem('empresas_local_submissions'),null);
+  const result=await api.submitAdministrativeBusinessRegistration(draft(),key());assert.equal(result.success,false);assert.equal(localStorage.getItem('empresas_local_submissions'),null);
   assert.equal((await auth.loginAdminUser('Y','Synthetic-password-only')).success,false);
   globalThis.fetch=async()=>new Response(JSON.stringify({success:true}));assert.equal((await auth.loginAdminUser('Y','Synthetic-password-only')).success,false);
   const calls=[];sessionStorage.setItem('encarmen_admin_session_token','a'.repeat(64));globalThis.fetch=async(url,options)=>{calls.push(options);return new Response(JSON.stringify({success:true,business:{id:4001}}));};
-  const request=key();assert.equal((await api.submitBusinessRegistration(draft(),request)).success,true);assert.equal(calls[0].headers['Idempotency-Key'],request);assert.equal(calls[0].headers['X-Encarmen-Admin-Token'],'a'.repeat(64));
+  const request=key();assert.equal((await api.submitAdministrativeBusinessRegistration(draft(),request)).success,true);assert.equal(calls[0].headers['Idempotency-Key'],request);assert.equal(calls[0].headers['X-Encarmen-Admin-Token'],'a'.repeat(64));
  }finally{globalThis.fetch=originalFetch;for(const k in saved){if(saved[k]===undefined)delete globalThis[k];else globalThis[k]=saved[k];}dom.window.close();}
 });
 
@@ -168,7 +168,10 @@ test('SW registration form retains request key after error, blocks duplicate cli
  const originalFetch=globalThis.fetch;globalThis.IS_REACT_ACT_ENVIRONMENT=true;window.scrollTo=()=>{};sessionStorage.setItem('encarmen_admin_session_token','a'.repeat(64));let fail=true,duplicate=true;const attempts=[];
  globalThis.fetch=async(url,options={})=>{
   if(String(url).includes('/check-duplicate'))return new Response(JSON.stringify(duplicate?{isDuplicate:true,existingBusiness:{id:1081,name:'Negocio sintético existente'}}:{isDuplicate:false}));
-  if(String(url)==='/api/submit-business'){attempts.push({key:options.headers['Idempotency-Key'],body:JSON.parse(options.body)});return new Response(JSON.stringify(fail?{success:false,message:'Fallo sintético de guardado'}:{success:true,business:{...JSON.parse(options.body),id:4001}}),{status:fail?503:201});}
+  if(String(url)==='/api/public/business-registrations'){attempts.push({key:options.headers['Idempotency-Key'],body:JSON.parse(options.body)});return new Response(JSON.stringify(fail?{success:false,message:'Fallo sintético de guardado'}:{success:true,directoryVisible:true,business:{...JSON.parse(options.body),id:4001,status:'published'}}),{status:fail?503:201});}
+  const business={...attempts.at(-1)?.body,id:4001,status:'published'};
+  if(String(url).startsWith('/api/businesses/')) return new Response(JSON.stringify({success:true,business}));
+  if(String(url).startsWith('/api/businesses?')) return new Response(JSON.stringify({businesses:[business]}));
   return new Response('{}');
  };
  const {createRoot}=await import('react-dom/client');const container=document.getElementById('root');const root=createRoot(container);

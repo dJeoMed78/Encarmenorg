@@ -96,7 +96,7 @@ import {
   adminUpdateBusiness,
   adminDeleteBusiness,
   fetchAnalytics,
-  submitBusinessRegistration,
+  submitAdministrativeBusinessRegistration,
   uploadBusinessLogo,
   checkBusinessDuplicate,
   getPromotions
@@ -578,7 +578,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
       createRequestId.current ||= crypto.randomUUID();
       const {ownerName,ownerEmail,...businessData} = newBizForm;
       const cleanDelivery = normalizeDeliveryOption(newBizForm.delivery);
-      const res = await submitBusinessRegistration({
+      const res = await submitAdministrativeBusinessRegistration({
         ...businessData,
         phone: cleanP,
         whatsapp: cleanW,
