@@ -95,3 +95,17 @@ No prometer vigilancia continua ni actualizaciones automáticas; la revisión se
 - Laboratorio MariaDB PERP `work/enc-mariadb-real-test-001` SHA `e53ba79f9fda5115d813f418e6ffcc0b624b94ae`: no probado con motor real; su uso destructivo `--apply` permanece bloqueado sin aislamiento acreditado.
 - GAS informó cuota gratuita agotada por hoy. W1/W2 tienen restricciones de cuota. Comprobar disponibilidad actual antes de delegar.
 - Referencias de continuidad anteriores: `docs/coordination/ENCARMEN_CONTINUIDAD_2026-10-29.md`, `ENCARMEN_REVISION_GAS_CLASSIFIEDS_2026-10-29.md`, `ENCARMEN_CORRECCIONES_DIRECTAS_2026-10-29.md`.
+
+
+## Política de avance ágil en Staging — decisión del propietario (2026-10-29)
+
+El propietario ha establecido que **Staging es un entorno para probar, encontrar errores y corregir rápidamente**, no un destino que requiera la misma certeza ni el mismo número de auditorías que producción.
+
+1. Priorizar ciclo **implementar → pruebas básicas de seguridad e integración → despliegue autorizado a Staging → ver funcionamiento real → corregir → repetir**. No pedir rondas redundantes de auditoría o docenas de suites nuevas si no resuelven un bloqueo concreto.
+2. El resultado visible en Staging tiene prioridad sobre perfeccionismo de pruebas y consumo innecesario de cuotas de W1/W2/PERP. Delegar encargos amplios y no repetir diagnósticos generales.
+3. Son aceptables en Staging errores reversibles de interfaz, diseño, navegación, presentación y flujos funcionales que no comprometan la seguridad, siempre que exista modo de corregirlos, apagarlos o revertirlos.
+4. Mantener puertas mínimas antes de desplegar: compilación correcta, comprobaciones básicas de integración, comprobación de controles críticos y **prueba de aislamiento real respecto a producción** (base, usuarios, secretos, almacenamiento e infraestructura compartida). No asumir aislamiento por subdominio, variables o marcas.
+5. Si no puede demostrarse aislamiento total, sólo autorizar operaciones que no puedan afectar recursos compartidos, evitando escrituras/migraciones y cualquier riesgo a producción. La ausencia de separación efectiva sigue siendo un bloqueo para pruebas destructivas o mutables.
+6. Los despliegues a Staging siguen requiriendo autorización específica del propietario. La coordinación prepara una versión candidata, riesgos concretos, plan de reversión y solicita la autorización sin demoras artificiales.
+7. Si el riesgo no crítico es reversible y aislado, documentarlo y corregirlo durante la prueba práctica, en lugar de congelar el trabajo hasta obtener pruebas exhaustivas.
+8. Para producción se mantiene un umbral de revisión superior y autorización expresa; esta política ágil aplica al entorno de pruebas protegido.
