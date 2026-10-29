@@ -1,0 +1,59 @@
+name: ENCARMEN - Validar acceso SSH Staging (sin escrituras)
+on:
+  push:
+    branches:
+      - coord/encarmen-work-control-001
+    paths:
+      - .github/workflows/encarmen-staging-ssh-auth.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-ssh-auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SSH_PASSWORD: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Verificar secreto disponible
+        id: prep
+        shell: bash
+        run: |
+          if [[ -n "$SSH_PASSWORD" ]]; then
+            echo "ready=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::Falta secret ENC_STAGING_SSH_PASSWORD en Settings > Secrets and variables > Actions."
+          fi
+      - name: Instalar cliente para autenticacion por secreto
+        if: steps.prep.outputs.ready == 'yes'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verificar huella ED25519 de Hostinger
+        if: steps.prep.outputs.ready == 'yes'
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test -s "$HOME/.ssh/known_hosts"
+          fingerprint=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          expected='SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          if [[ "$fingerprint" != "$expected" ]]; then
+            echo "::error::La huella SSH no coincide; posible servidor equivocado."
+            exit 1
+          fi
+          echo "Huella ED25519 verificada."
+      - name: Autenticacion y verificacion de identidad remota sin mutaciones
+        if: steps.prep.outputs.ready == 'yes'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SSHPASS="$SSH_PASSWORD"
+          sshpass -e ssh -T -p 65002 \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=10 -o PreferredAuthentications=password \
+            -o PubkeyAuthentication=no \
+            u293982346@45.137.159.114 \
+            'printf "ENCARMEN_SSH_AUTH_OK\\n"; id -un; pwd'
+          unset SSHPASS
