@@ -16,8 +16,8 @@ for(const viewport of ['320x568','360x800','390x844','768x1024','1440x900']){
  for(const kind of ['inicio-directorio','ficha-real','geometría','rechazo-403','encabezado']){
   const d=dirs.find(x=>x.name.includes(viewport)&&x.name.includes(kind));if(!d)continue;
   const names=await fs.readdir(path.join(root,'artifacts',d.name));
-  const png=names.find(x=>x==='inicio.png')||names.find(x=>x==='ficha.png')||names.find(x=>x.endsWith('.png'));
-  if(png){const bytes=await sharp(path.join(root,'artifacts',d.name,png)).resize({width:640,withoutEnlargement:true}).jpeg({quality:55}).toBuffer();emit(d.name+'.jpg',bytes);}
+  const pngs=kind==='geometría'?names.filter(x=>['inicio.png','clasificados.png','formulario.png'].includes(x)):[names.find(x=>x==='ficha.png')||names.find(x=>x.endsWith('.png'))].filter(Boolean);
+  for(const png of pngs){const bytes=await sharp(path.join(root,'artifacts',d.name,png)).resize({width:640,withoutEnlargement:true}).jpeg({quality:55}).toBuffer();emit(d.name+'-'+png.replace('.png','.jpg'),bytes);}
   const ctx=names.find(x=>x==='error-context.md');if(ctx)emit(d.name+'-context.md',await fs.readFile(path.join(root,'artifacts',d.name,ctx)));
  }
 }
