@@ -49,3 +49,5 @@ jobs:
         run: npx tsx --test tests/business-description-links.test.mjs tests/public-registration.test.mjs tests/public-registration-server-patch.test.mjs
       - name: Vite build sin alterar versiones ni archivos fuente
         run: npx vite build
+      - name: Compilar servidor Express a directorio temporal
+        run: npx esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=/tmp/encarmen-coord-server.js
