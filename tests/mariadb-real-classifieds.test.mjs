@@ -110,7 +110,7 @@ test('G. Vigencia de siete días y expiración real', async () => {
   const { classifieds } = await service.getActive();
   assert.ok(!classifieds.some((c) => c.id === classified.id));
   const after = await readRow(classified.id);
-  assert.equal(after.status, 'expired');
+  assert.equal(after.status, 'active', 'La expiración se aplica al filtro público, sin mutar filas durante GET');
 });
 
 test('H. Idempotencia: misma clave y datos devuelve el mismo anuncio', async () => {
