@@ -22,6 +22,7 @@ import {
 import { Business } from "./BusinessCard";
 import { StarRatingWidget } from "./StarRatingWidget";
 import { getBusinessPublicUrl } from "../utils/businessUrl";
+import { BusinessDescription } from "./BusinessDescription";
 import "./BusinessPublicDetail.css";
 
 interface Props {
@@ -475,8 +476,10 @@ export function BusinessPublicDetail({
                 <FileText /> Descripción
               </h2>
               <p className="bpd-description">
-                {b.description ||
-                  "El negocio todavía no ha registrado una descripción."}
+                <BusinessDescription
+                  text={b.description}
+                  fallback="El negocio todavía no ha registrado una descripción."
+                />
               </p>
             </section>
             {activePromotion && onOpenPromotion && (
