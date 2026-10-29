@@ -40,7 +40,7 @@ cp -a "$OLD_REAL/.metadata.json" "$NEW/.metadata.json"
 # Archive was uploaded beforehand to the private backup root.
 PAYLOAD="$HOME/encarmen-staging-backups/payload-$ID.tar.gz"
 [[ -f "$PAYLOAD" && ! -L "$PAYLOAD" ]] || exit 4
-tar -tzf "$PAYLOAD" | grep -qx './server.js' || { echo "Bundle missing"; exit 4; }
+tar -tzf "$PAYLOAD" | grep -qx 'server.js' || { echo "Bundle missing"; exit 4; }
 tar -xzf "$PAYLOAD" -C "$NEW/nodejs"
 # The new metadata is owned only by the new release.
 python3 - "$NEW/.metadata.json" "$ID" <<'PY'
