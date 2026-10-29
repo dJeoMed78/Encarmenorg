@@ -1,0 +1,33 @@
+name: ENCARMEN - Layout exacto de version Staging
+on:
+  push:
+    branches: [coord/encarmen-work-control-001]
+    paths: [.github/workflows/encarmen-staging-layout-check.yml]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      SSH_PASSWORD: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Read only layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          export SSHPASS="$SSH_PASSWORD"
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'sh -s' <<'REMOTE'
+          set -eu
+          root="$HOME/domains/staging.encarmen.org/hbuilds/current/nodejs"
+          echo 'NODEJS_LIST'; ls -la "$root" | head -45
+          echo 'DIST'; ls -lah "$root/dist" 2>/dev/null | head -15 || true
+          echo 'MODULES'; ls -ld "$root/node_modules" "$root/api" "$root/tmp" 2>/dev/null || true
+          echo 'ENV'; ls -ld "$root/.env" "$root/../.env" 2>/dev/null || true
+          echo 'METADATA'; cat "$HOME/domains/staging.encarmen.org/hbuilds/current/.metadata.json"
+          echo 'DISK'; df -h "$root" | tail -1
+          echo 'STAGING_RESPONSE'; curl -k -Ls -o /dev/null -w 'HTTP=%{http_code} BYTES=%{size_download}\n' --max-time 12 https://staging.encarmen.org || true
+          REMOTE
