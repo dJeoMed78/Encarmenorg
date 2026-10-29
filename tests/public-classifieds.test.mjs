@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import express from 'express';
 import {
   createClassifiedsService, registerPublicClassifieds, validateClassifiedInput,
   ClassifiedsError, ISOLATION_MARKER, CLASSIFIED_TTL_DAYS, validateClassifiedPatch,
@@ -268,4 +269,70 @@ test('POST entrega token del titular únicamente al crear (no en respuesta idemp
   assert.equal(second.statusCode, 200);
   assert.equal(second.body.duplicate, true);
   assert.equal(second.body.ownerToken, undefined);
+});
+
+test('HTTP Express real: publicar, consultar, proteger titular, editar y retirar', async (t) => {
+  const pool = new FakePool();
+  const app = express();
+  app.use(express.json({ limit: '64kb' }));
+  registerPublicClassifieds(app, { pool, now: () => NOW });
+  const server = await new Promise(resolve => {
+    const instance = app.listen(0, '127.0.0.1', () => resolve(instance));
+  });
+  t.after(() => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())));
+  const base = 'http://127.0.0.1:' + server.address().port + '/api/public/classifieds';
+  const request = async (method, suffix = '', body, token) => {
+    const response = await fetch(base + suffix, {
+      method, headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { 'x-classified-owner-token': token } : {}) },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    return { code: response.status, data: await response.json() };
+  };
+  const empty = await request('GET');
+  assert.equal(empty.code, 200);
+  assert.equal(empty.data.total, 0);
+  const invalid = await request('POST', '', { ...VALID, category: 'desconocida' });
+  assert.equal(invalid.code, 400);
+  assert.equal(invalid.data.success, false);
+  assert.equal(pool.rows.size, 0);
+  const created = await request('POST', '', VALID);
+  assert.equal(created.code, 201);
+  assert.equal(created.data.success, true);
+  assert.ok(created.data.classified.id);
+  assert.ok(created.data.ownerToken);
+  const id = created.data.classified.id;
+  assert.equal(pool.rows.size, 1);
+  const visible = await request('GET');
+  assert.equal(visible.data.total, 1);
+  const unauth = await request('PATCH', '/' + encodeURIComponent(id), { status: 'sold' });
+  assert.equal(unauth.code, 403);
+  const wrong = await request('DELETE', '/' + encodeURIComponent(id), undefined, 'wrong-owner');
+  assert.equal(wrong.code, 403);
+  assert.equal(pool.rows.get(id).status, 'active');
+  const patched = await request('PATCH', '/' + encodeURIComponent(id), { status: 'sold' }, created.data.ownerToken);
+  assert.equal(patched.code, 200);
+  assert.equal(patched.data.classified.status, 'sold');
+  const soldList = await request('GET');
+  assert.equal(soldList.data.total, 0);
+  const retired = await request('DELETE', '/' + encodeURIComponent(id), undefined, created.data.ownerToken);
+  assert.equal(retired.code, 200);
+  assert.equal(pool.rows.get(id).status, 'retired');
+});
+test('HTTP Express real: fallos de aislamiento rechazan alta y lectura sin éxito falso', async t => {
+  const pool = new FakePool({ marker: null });
+  const app = express();
+  app.use(express.json());
+  registerPublicClassifieds(app, { pool, now: () => NOW });
+  const server = await new Promise(resolve => {
+    const instance = app.listen(0, '127.0.0.1', () => resolve(instance));
+  });
+  t.after(() => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())));
+  const url = 'http://127.0.0.1:' + server.address().port + '/api/public/classifieds';
+  const get = await fetch(url);
+  assert.equal(get.status, 503);
+  assert.equal((await get.json()).success, false);
+  const post = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(VALID)});
+  assert.equal(post.status, 503);
+  assert.equal((await post.json()).success, false);
+  assert.equal(pool.rows.size, 0);
 });
