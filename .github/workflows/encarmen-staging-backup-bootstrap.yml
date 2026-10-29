@@ -1,0 +1,48 @@
+name: ENCARMEN - Preparar carpeta privada de respaldo
+on:
+  push:
+    branches: [coord/encarmen-work-control-001]
+    paths: [.github/workflows/encarmen-staging-backup-bootstrap.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SSH_PASSWORD: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Preparar autenticacion y huella SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PASSWORD"
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          [[ "$fp" == 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]] || exit 1
+      - name: Crear solo directorio privado y verificar ubicacion Staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SSHPASS="$SSH_PASSWORD"
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'sh -s' <<'REMOTE'
+          set -eu
+          cd "$HOME"
+          test -d "$HOME/domains/staging.encarmen.org" || exit 4
+          test ! -L "$HOME/domains/staging.encarmen.org" || exit 5
+          target="$HOME/encarmen-staging-backups"
+          if [ -e "$target" ] && [ -L "$target" ]; then exit 6; fi
+          mkdir -p -m 700 "$target" "$target/database" "$target/files"
+          chmod 700 "$target" "$target/database" "$target/files"
+          test ! -L "$target/database" && test ! -L "$target/files"
+          printf 'BACKUP_ROOT='; printf '%s\n' "$target"
+          printf 'BACKUP_MODE='; stat -c '%a' "$target"
+          printf 'STAGING_ROOT='; realpath "$HOME/domains/staging.encarmen.org"
+          printf 'PRODUCTION_ROOT='; realpath "$HOME/domains/encarmen.org/public_html"
+          printf 'PRIVATE_ROOT_OUTSIDE_WEB='
+          case "$target/" in "$HOME/domains/"*) echo no; exit 7;; *) echo yes;; esac
+          printf 'DATABASE_BACKUPS='; find "$target/database" -maxdepth 1 -type f -name '*.sql*' | wc -l
+          REMOTE
