@@ -148,7 +148,7 @@ def run():
             to_remove += survivors[:-MAX_COPIES]
             for _, file in to_remove:
                 file.unlink()
-                file.with_suffix(".json").unlink(missing_ok=True)
+                file.with_name(file.name.replace(".sql.gz", ".json")).unlink(missing_ok=True)
             print("SUCCESS: copia verificada, retención aplicada; archivo:", target.name)
         finally:
             if temp is not None:
