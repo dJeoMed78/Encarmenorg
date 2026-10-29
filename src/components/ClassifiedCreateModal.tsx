@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Tag,
@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { ClassifiedAd } from '../types';
 import { CLASSIFIED_CATEGORIES } from '../data/classifiedCategories';
-import { cleanPhoneNumber } from '../utils/phone';
+import { contactDigits as cleanPhoneNumber } from '../utils/businessContacts';
 
 interface ClassifiedCreateModalProps {
   isOpen: boolean;
@@ -40,14 +40,14 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('compra-venta');
-  const [subcategory, setSubcategory] = useState('articulos-electronica');
+  const [subcategory, setSubcategory] = useState('bazar-electronica');
   const [price, setPrice] = useState<string>('');
   const [priceType, setPriceType] = useState<'fixed' | 'negotiable' | 'consult'>('fixed');
   const [currency] = useState('MXN');
 
   // Location & logistics
   const [location, setLocation] = useState('Ciudad del Carmen, Campeche');
-  const [colonia, setColonia] = useState('Centro');
+  const [colonia, setColonia] = useState('Ciudad del Carmen Centro');
   const [noLocation, setNoLocation] = useState(false);
   const [deliveryCondition, setDeliveryCondition] = useState<'direct' | 'delivery' | 'shipping'>('direct');
 
@@ -65,6 +65,7 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
   const [contactEmail, setContactEmail] = useState(false);
 
   // Status & validation
+  const submitBusy=useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -99,14 +100,14 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
       setPrice(editingAd.price !== undefined && editingAd.price !== null ? String(editingAd.price) : '');
       setPriceType((editingAd.priceType as any) || 'fixed');
       setLocation(editingAd.location || 'Ciudad del Carmen, Campeche');
-      setColonia(editingAd.colonia || 'Centro');
+      setColonia(editingAd.colonia || 'Ciudad del Carmen Centro');
       setNoLocation(Boolean(editingAd.noLocation));
       setDeliveryCondition((editingAd.deliveryCondition as any) || 'direct');
       setImages(editingAd.images && editingAd.images.length > 0 ? editingAd.images : (editingAd.image ? [editingAd.image] : []));
       setVideoUrl(editingAd.videoUrl || '');
       setContactName(editingAd.contactName || '');
       setPhone(cleanPhoneNumber(editingAd.phone) || '');
-      setWhatsapp(cleanPhoneNumber(editingAd.whatsapp) || cleanPhoneNumber(editingAd.phone) || '');
+      setWhatsapp(cleanPhoneNumber(editingAd.whatsapp) || '');
       setEmail(editingAd.email || '');
       setContactWhatsapp(editingAd.contactMethods?.includes('whatsapp') ?? true);
       setContactPhone(editingAd.contactMethods?.includes('phone') ?? true);
@@ -120,11 +121,11 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
     setTitle('');
     setDescription('');
     setCategory('compra-venta');
-    setSubcategory('articulos-electronica');
+    setSubcategory('bazar-electronica');
     setPrice('');
     setPriceType('fixed');
     setLocation('Ciudad del Carmen, Campeche');
-    setColonia('Centro');
+    setColonia('Ciudad del Carmen Centro');
     setNoLocation(false);
     setDeliveryCondition('direct');
     setImages([]);
@@ -191,6 +192,7 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if(submitBusy.current)return;
     setErrorMsg(null);
 
     if (!title.trim()) {
@@ -216,7 +218,7 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
     }
 
     const contactMethods: ('whatsapp' | 'phone' | 'email')[] = [];
-    if (contactWhatsapp && (whatsapp || phone)) contactMethods.push('whatsapp');
+    if (contactWhatsapp && whatsapp) contactMethods.push('whatsapp');
     if (contactPhone && phone) contactMethods.push('phone');
     if (contactEmail && email) contactMethods.push('email');
 
@@ -237,14 +239,14 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
       videoUrl: videoUrl.trim(),
       contactName: contactName.trim(),
       phone: cleanPhoneNumber(phone),
-      whatsapp: cleanPhoneNumber(whatsapp) || cleanPhoneNumber(phone),
+      whatsapp: cleanPhoneNumber(whatsapp),
       email: email.trim(),
       contactMethods,
       ...( { idempotencyKey: submissionKey } as any ),
       status: 'active'
     };
 
-    setIsSubmitting(true);
+    submitBusy.current=true;setIsSubmitting(true);
     try {
       const res = await onSubmitAd(payload);
       if (res && res.success) {
@@ -262,7 +264,7 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
     } catch (err: any) {
       setErrorMsg(err?.message || 'Error de conexión con el servidor. No se pudo guardar.');
     } finally {
-      setIsSubmitting(false);
+      submitBusy.current=false;setIsSubmitting(false);
     }
   };
 
@@ -276,7 +278,7 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
         backdropFilter: 'blur(25px)',
         WebkitBackdropFilter: 'blur(25px)',
       }}
-      onClick={onClose}
+      onClick={() => { if (!submitBusy.current) onClose(); }}
     >
       <div
         className="relative w-full max-w-3xl rounded-3xl overflow-hidden my-auto max-h-[92vh] flex flex-col shadow-2xl border"
@@ -315,7 +317,7 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => { if (!submitBusy.current) onClose(); }}
             className="min-h-[40px] min-w-[40px] p-2 rounded-xl hover:bg-stone-200/70 text-stone-500 hover:text-stone-900 flex items-center justify-center transition-colors cursor-pointer"
             aria-label="Cerrar modal"
           >
@@ -765,7 +767,7 @@ export const ClassifiedCreateModal: React.FC<ClassifiedCreateModalProps> = ({
           <div className="pt-4 border-t border-stone-200/80 flex items-center justify-end gap-3">
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => { if (!submitBusy.current) onClose(); }}
               disabled={isSubmitting}
               className="min-h-[44px] px-4 py-2.5 rounded-2xl border border-stone-300 hover:bg-stone-100 text-stone-700 font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
             >

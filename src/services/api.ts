@@ -555,6 +555,7 @@ export async function fetchPublicClassifieds(params: {
       };
     }
     const data = await res.json();
+    if(data?.success!==true||!Array.isArray(data.classifieds)||!Number.isInteger(data.total)||data.total<0)throw Error('Respuesta incompleta del catálogo.');
     return {
       total: data.total ?? (Array.isArray(data.classifieds) ? data.classifieds.length : 0),
       classifieds: Array.isArray(data.classifieds) ? data.classifieds : [],
@@ -573,7 +574,7 @@ export async function fetchPublicClassifieds(params: {
 export const fetchClassifieds = fetchPublicClassifieds;
 
 /** El backend debe emitir ownerToken tras creación; nunca fabricar permisos de propietario. */
-function classifiedOwnerToken(id: string): string | null {
+export function classifiedOwnerToken(id: string): string | null {
   try { return localStorage.getItem('encarmen_classified_owner_' + id); } catch { return null; }
 }
 function saveClassifiedOwnerToken(id: string, token: unknown): void {
@@ -587,17 +588,24 @@ export async function createPublicClassified(ad: Partial<import('../types').Clas
   message: string;
   classified?: import('../types').ClassifiedAd;
   status?: number;
+  writeMayHaveSucceeded?:boolean;
 }> {
   if ((ad.images || []).length > 0 || (typeof ad.image === 'string' && ad.image.trim())) {
     return { success: false, message: 'La carga pública de fotografías aún no dispone de almacenamiento seguro habilitado.', status: 422 };
   }
+  const key=String((ad as any).idempotencyKey||'');
+  if(!/^[A-Za-z0-9_-]{8,64}$/.test(key))return {success:false,message:'Falta la clave estable de registro.',status:400};
+  let secret:string;
+  try {const storageKey='encarmen_classified_pending_'+key;secret=localStorage.getItem(storageKey)||'';if(!/^[A-Za-z0-9_-]{32,128}$/.test(secret)){secret=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');localStorage.setItem(storageKey,secret);}if(localStorage.getItem(storageKey)!==secret)throw Error();}
+  catch{return {success:false,message:'No se puede conservar la credencial de titular en este navegador; no se envió el anuncio.',status:0};}
   try {
     const res = await fetch(API_BASE + '/public/classifieds', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json','x-classified-owner-token':secret }, redirect:'error',
       body: JSON.stringify({
         title: ad.title, description: ad.description, category: ad.category, price: ad.price,
-        contactPhone: ad.phone || ad.whatsapp, contactWhatsapp: ad.whatsapp || '',
+        contactPhone: ad.phone || '', contactWhatsapp: ad.whatsapp || '',
+        subcategory:ad.subcategory,priceType:ad.priceType,currency:ad.currency,location:ad.location,colonia:ad.colonia,noLocation:ad.noLocation,deliveryCondition:ad.deliveryCondition,contactName:ad.contactName,email:ad.email,contactMethods:ad.contactMethods,videoUrl:ad.videoUrl,
         idempotencyKey: (ad as any).idempotencyKey || undefined
       })
     });
@@ -614,13 +622,13 @@ export async function createPublicClassified(ad: Partial<import('../types').Clas
         const errJson = await res.json();
         if (errJson?.message) errorMsg = errJson.message;
       } catch (_) {}
-      return { success: false, message: errorMsg, status: res.status };
+      return { success: false, message: errorMsg, status: res.status,writeMayHaveSucceeded:res.status>=500 };
     }
     const data = await res.json();
-    const validPublication = data?.success === true && typeof data.classified?.id === 'string' && data.classified.id.length > 0;
-    if (validPublication) saveClassifiedOwnerToken(data.classified.id, data.ownerToken);
+    const validPublication = data?.success === true && typeof data.classified?.id === 'string' && data.classified.id.length > 0 && data.classified.status==='active' && Number.isFinite(Date.parse(data.classified.expiresAt)) && Date.parse(data.classified.expiresAt)>Date.now();
+    if (validPublication) saveClassifiedOwnerToken(data.classified.id, data.ownerToken || (data.ownerAccess===true?secret:undefined));
     const ownerAccessible = validPublication && !!classifiedOwnerToken(data.classified.id);
-    const confirmedWithAccess = validPublication && (data.duplicate !== true || ownerAccessible);
+    const confirmedWithAccess = validPublication && ownerAccessible;
     return {
       success: confirmedWithAccess,
       message: validPublication && data.duplicate === true && !ownerAccessible
@@ -632,8 +640,8 @@ export async function createPublicClassified(ad: Partial<import('../types').Clas
   } catch (err: any) {
     return {
       success: false,
-      message: err?.message || 'Error de conexión con el servidor. No se pudo guardar el aviso.',
-      status: 0
+      message: 'No se confirmó el resultado. Reintenta con la misma clave; la credencial de titular se conserva.',
+      status: 0,writeMayHaveSucceeded:true
     };
   }
 }
@@ -654,8 +662,8 @@ export async function updatePublicClassified(
   try {
     const res = await fetch(API_BASE + '/public/classifieds/' + encodeURIComponent(id), {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-classified-owner-token': ownerToken },
-      body: JSON.stringify(updates)
+      headers: { 'Content-Type': 'application/json', 'x-classified-owner-token': ownerToken },redirect:'error',
+      body: JSON.stringify(Object.fromEntries(['title','description','category','price','status','subcategory','priceType','currency','location','colonia','noLocation','deliveryCondition','contactName','email','contactMethods','videoUrl'].filter(key=>Object.hasOwn(updates,key)).map(key=>[key,(updates as any)[key]]).concat(Object.hasOwn(updates,'phone')?[['contactPhone',updates.phone]]:[]).concat(Object.hasOwn(updates,'whatsapp')?[['contactWhatsapp',updates.whatsapp]]:[])))
     });
     if (res.status === 404) {
       return {
@@ -700,7 +708,7 @@ export async function deletePublicClassified(id: string): Promise<{
   try {
     const res = await fetch(API_BASE + '/public/classifieds/' + encodeURIComponent(id), {
       method: 'DELETE',
-      headers: { 'x-classified-owner-token': ownerToken }
+      headers: { 'x-classified-owner-token': ownerToken },redirect:'error'
     });
     if (res.status === 404) {
       return {

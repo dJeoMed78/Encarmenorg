@@ -269,10 +269,10 @@ app.use((req: Request, res: Response, next) => {
 });
 
 app.use('/api/public/business-registrations', publicRegistrationBodyLimit);
+// Local router body limits precede the broad legacy parser; Stage mutations remain closed.
+registerPublicClassifieds(app);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-// ENC-CLASSIFIEDS integration: read path enabled, write paths remain guarded by Staging and DB isolation.
-registerPublicClassifieds(app);
 
 // Serve media assets directly with long-term caching (bypasses any Cloudflare /wp- blocks)
 app.use('/media', express.static(path.resolve(__dirname, 'public/wp-content/uploads'), {

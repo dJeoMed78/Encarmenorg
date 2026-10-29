@@ -9,60 +9,7 @@ import {
 const NOW = new Date('2026-01-01T00:00:00Z');
 const VALID = { title: 'Bicicleta rodada 26', description: 'Bicicleta en buen estado, poco uso.', category: 'compra-venta', price: 1500, contactPhone: '9381112233', contactWhatsapp: '9382223344', idempotencyKey: 'idem-12345678' };
 
-class FakePool {
-  constructor(opts = {}) {
-    this.database = opts.database || 'enc_lab_classifieds';
-    this.user = opts.user || 'lab@localhost';
-    this.marker = opts.marker === undefined ? ISOLATION_MARKER : opts.marker;
-    this.engine = opts.engine || 'InnoDB';
-    this.grants = opts.grants || 'GRANT SELECT, INSERT, UPDATE, DELETE ON *.* TO `lab`@`localhost`';
-    this.rows = new Map();
-    this.failInsert = false; this.failReadback = false; this.failSelect = false;
-  }
-  async query(sql, params = []) {
-    if (this.failOn && this.failOn.test(sql)) throw this.failError || new Error('fallo sql');
-    if (/SELECT DATABASE\(\)/.test(sql)) return [[{ db_name: this.database }]];
-    if (/^SELECT CURRENT_USER\(\)/.test(sql)) return [[{ 'CURRENT_USER()': this.user }]];
-    if (/marker_value FROM/.test(sql)) return this.marker ? [[{ marker_value: this.marker }]] : [[]];
-    if (/information_schema\.TABLES/.test(sql)) return this.engine ? [[{ ENGINE: this.engine }]] : [[]];
-    if (/SHOW GRANTS/.test(sql)) return [[this.grants]];
-    if (/CREATE TABLE/.test(sql)) return [{ affectedRows: 0 }];
-    if (/INSERT INTO public_classifieds/.test(sql)) {
-      if (this.failInsert) throw new Error('insert failed');
-      const [id, idem, title, description, category, price, phone, wa, image, hash, expires] = params;
-      if (this.rows.has(id)) { const e = new Error('dup'); e.code = 'ER_DUP_ENTRY'; throw e; }
-      this.rows.set(id, { id, idempotency_key: idem, title, description, category, price, contact_phone: phone, contact_whatsapp: wa, image_url: image, status: 'active', owner_token_hash: hash, expires_at: expires, created_at: NOW });
-      return [{ affectedRows: 1 }];
-    }
-    if (/SELECT \* FROM public_classifieds WHERE idempotency_key/.test(sql)) {
-      for (const row of this.rows.values()) if (row.idempotency_key === params[0]) return [[row]];
-      return [[]];
-    }
-    if (/SELECT \* FROM public_classifieds WHERE id = \?/.test(sql)) {
-      if (this.failReadback) throw new Error('readback failed');
-      const row = this.rows.get(params[0]);
-      return [row ? [row] : []];
-    }
-    if (/UPDATE public_classifieds SET status = 'expired'/.test(sql)) {
-      for (const row of this.rows.values()) if (row.status === 'active' && new Date(row.expires_at) <= NOW) row.status = 'expired';
-      return [{ affectedRows: 0 }];
-    }
-    if (/SELECT \* FROM public_classifieds WHERE status = 'active'/.test(sql)) {
-      if (this.failSelect) throw new Error('select failed');
-      return [[...this.rows.values()].filter((r) => r.status === 'active' && new Date(r.expires_at) > NOW)];
-    }
-    if (/UPDATE public_classifieds/.test(sql) && /COALESCE/.test(sql)) {
-      const row = this.rows.get(params[4]);
-      if (!row) return [{ affectedRows: 0 }];
-      if (params[0] != null) row.title = params[0];
-      if (params[1] != null) row.description = params[1];
-      if (params[2] != null) row.price = params[2];
-      if (params[3] != null) row.status = params[3];
-      return [{ affectedRows: 1 }];
-    }
-    throw new Error('SQL no simulado: ' + sql.slice(0, 80));
-  }
-}
+import {FakePool} from './support/classifiedsMemoryPool.mjs';
 
 const service = (pool) => createClassifiedsService({ pool, now: () => NOW });
 const rejects = (promise, code, extra) => assert.rejects(promise, (e) => e instanceof ClassifiedsError && e.code === code && (!extra || extra(e)));
@@ -146,7 +93,7 @@ test('fallo de lectura tras UPDATE responde incertidumbre, no falso éxito', asy
   const originalQuery = pool.query.bind(pool);
   pool.query = async (sql, params) => {
     const result = await originalQuery(sql, params);
-    if (/UPDATE public_classifieds/.test(sql) && /COALESCE/.test(sql)) pool.failReadback = true;
+    if (/UPDATE public_classifieds/.test(sql)) pool.failReadback = true;
     return result;
   };
   await rejects(s.update(classified.id, ownerToken, { title: 'Título actualizado' }), 'CLASSIFIEDS_WRITE_UNCONFIRMED', e => e.uncertain === true);
@@ -223,7 +170,7 @@ test('la vigencia por defecto es de siete días', async () => {
 
 test('el carril público no registra rutas administrativas ni usa classified:manage', async () => {
   const routes = [];
-  const app = { get: (p) => routes.push(['GET', p]), post: (p) => routes.push(['POST', p]), patch: (p) => routes.push(['PATCH', p]), delete: (p) => routes.push(['DELETE', p]) };
+  const app = {use(){}, get: (p) => routes.push(['GET', p]), post: (p) => routes.push(['POST', p]), patch: (p) => routes.push(['PATCH', p]), delete: (p) => routes.push(['DELETE', p]) };
   registerPublicClassifieds(app, { pool: new FakePool(), now: () => NOW });
   assert.deepEqual(routes.map(([m, p]) => `${m} ${p}`), [
     'GET /api/public/classifieds', 'POST /api/public/classifieds',
@@ -255,17 +202,17 @@ test('validación realmente cerrada: campos desconocidos y objetos se rechazan',
 
 test('POST entrega token del titular únicamente al crear (no en respuesta idempotente)', async () => {
   const routes = {};
-  const app = { get(){}, patch(){}, delete(){}, post(p, handler) { routes[p] = handler; } };
+  const app = {use(){}, get(){}, patch(){}, delete(){}, post(p, handler) { routes[p] = handler; } };
   const pool = new FakePool();
   registerPublicClassifieds(app, { pool, now: () => NOW });
   const res = () => ({ statusCode: 200, status(n) { this.statusCode = n; return this; }, json(data) { this.body = data; return this; } });
   const first = res();
-  await routes['/api/public/classifieds']({body: VALID}, first);
+  await routes['/api/public/classifieds']({body: VALID,header:()=>undefined}, first);
   assert.equal(first.statusCode, 201);
   assert.equal(first.body.success, true);
   assert.ok(typeof first.body.ownerToken === 'string' && first.body.ownerToken.length >= 24);
   const second = res();
-  await routes['/api/public/classifieds']({body: VALID}, second);
+  await routes['/api/public/classifieds']({body: VALID,header:()=>undefined}, second);
   assert.equal(second.statusCode, 200);
   assert.equal(second.body.duplicate, true);
   assert.equal(second.body.ownerToken, undefined);

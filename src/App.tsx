@@ -258,6 +258,7 @@ export default function App() {
           setClassifiedsList((prev) =>
             prev.map((item) => (item.id === editingClassified.id ? res.classified! : item))
           );
+          setSelectedClassified(prev => prev?.id === editingClassified.id ? res.classified! : prev);
           setEditingClassified(null);
           return { success: true, message: res.message || 'Anuncio actualizado con éxito en el servidor.' };
         } else {
@@ -278,17 +279,10 @@ export default function App() {
   };
 
   const handleDeleteClassified = async (adId: string) => {
-    try {
-      const res = await deletePublicClassified(adId);
-      if (res && res.success) {
-        setClassifiedsList((prev) => prev.filter((item) => item.id !== adId));
-        if (selectedClassified?.id === adId) {
-          setSelectedClassified(null);
-        }
-      }
-    } catch (err) {
-      console.error('Error al eliminar clasificado:', err);
-    }
+    const res = await deletePublicClassified(adId);
+    if (!res?.success) throw new Error(res?.message || 'No se confirmó el retiro del anuncio.');
+    setClassifiedsList(prev => prev.filter(item => item.id !== adId));
+    setSelectedClassified(prev => prev?.id === adId ? null : prev);
   };
 
   const coloniasListForClassifieds = useMemo(() => {
@@ -923,6 +917,9 @@ export default function App() {
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             onBusinessAdded={(newBiz) => {
+              businessRequestVersion.current += 1;
+              businessRequestController.current?.abort();
+              setBusinessesStatus('ready');
               setBusinessesList((prev) => [newBiz, ...prev.filter((b) => String(b.id) !== String(newBiz.id))]);
               setBusinessOverrides((prev) => ({ ...prev, [newBiz.id]: newBiz }));
             }}

@@ -29,7 +29,7 @@ import {
 import { ClassifiedAd } from '../types';
 import { CLASSIFIED_CATEGORIES } from '../data/classifiedCategories';
 import { cleanPhoneNumber, formatMexicanPhone, getWhatsAppUrl } from '../utils/phone';
-import { sendClassifiedReport } from '../services/api';
+import { sendClassifiedReport,classifiedOwnerToken } from '../services/api';
 import { parseDescription, DescriptionPart } from '../utils/descriptionLinks';
 
 interface ClassifiedDetailModalProps {
@@ -106,20 +106,13 @@ export const ClassifiedDetailModal: React.FC<ClassifiedDetailModalProps> = ({
 
   // Clean WhatsApp number and build URL
   const waUrl = getWhatsAppUrl(
-    ad.whatsapp || ad.phone,
+    ad.whatsapp,
     `Hola ${ad.contactName || 'anunciante'}, vi tu anuncio "${ad.title}" en Empresas en Carmen (https://empresasencarmen.com) y me interesa más información.`
   );
 
-  // Check if current user is owner (stored in localStorage)
-  let isOwner = false;
-  try {
-    const userTokens: string[] = JSON.parse(localStorage.getItem('my_classified_tokens') || '[]');
-    if (ad.userToken && userTokens.includes(ad.userToken)) {
-      isOwner = true;
-    }
-  } catch {}
-
-  const canManage = isOwner || isAdmin;
+  // UI hint only; the backend checks the opaque credential for every mutation.
+  const isOwner=Boolean(classifiedOwnerToken(ad.id));
+  const canManage=isOwner;
 
   const handleCopyShare = () => {
     if (navigator.clipboard && navigator.clipboard.writeText) {
