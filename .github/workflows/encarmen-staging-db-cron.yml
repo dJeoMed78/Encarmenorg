@@ -1,0 +1,52 @@
+name: ENCARMEN - Programar respaldo MariaDB Staging 3 dias
+on:
+  push:
+    branches: [coord/encarmen-work-control-001]
+    paths: [.github/workflows/encarmen-staging-db-cron.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cron:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SSH_PASSWORD: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Autenticacion SSH con verificacion de huella
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PASSWORD"
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          [[ "$fp" == 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]] || exit 1
+      - name: Registrar cron sin modificar otros trabajos
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SSHPASS="$SSH_PASSWORD"
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'sh -s' <<'REMOTE'
+          set -eu
+          if ! command -v crontab >/dev/null 2>&1; then echo CRON_UNAVAILABLE; exit 0; fi
+          base="$HOME/encarmen-staging-backups"
+          test -d "$base" && test ! -L "$base"
+          test -f "$base/bin/run_hostinger_backup.py"
+          marker='# ENCARMEN-STAGING-BACKUP-3DAY'
+          existing=$(mktemp "$base/.cron-XXXXXX")
+          trap 'rm -f "$existing"' EXIT HUP INT TERM
+          chmod 600 "$existing"
+          if crontab -l > "$existing" 2>/dev/null; then :; else
+            if crontab -l 2>&1 | grep -qi 'permission\|denied\|not allowed'; then echo CRON_NOT_PERMITTED; exit 0; fi
+            : > "$existing"
+          fi
+          if grep -Fq "$marker" "$existing"; then
+            echo CRON_ALREADY_PRESENT
+          else
+            { cat "$existing"; printf '\n%s\n' "$marker"; printf '17 3 * * * /usr/bin/python3 %s/bin/run_hostinger_backup.py > %s/cron-last.log 2>&1\n' "$base" "$base"; } | crontab -
+            echo CRON_INSTALLED
+          fi
+          if crontab -l 2>/dev/null | grep -Fq "$marker"; then echo CRON_VERIFIED; else echo CRON_NOT_VERIFIED; exit 1; fi
+          REMOTE
