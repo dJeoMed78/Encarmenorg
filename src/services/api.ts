@@ -617,12 +617,15 @@ export async function createPublicClassified(ad: Partial<import('../types').Clas
       return { success: false, message: errorMsg, status: res.status };
     }
     const data = await res.json();
-    if (data?.success === true && typeof data.classified?.id === 'string') {
-      saveClassifiedOwnerToken(data.classified.id, data.ownerToken);
-    }
+    const validPublication = data?.success === true && typeof data.classified?.id === 'string' && data.classified.id.length > 0;
+    if (validPublication) saveClassifiedOwnerToken(data.classified.id, data.ownerToken);
+    const ownerAccessible = validPublication && !!classifiedOwnerToken(data.classified.id);
+    const confirmedWithAccess = validPublication && (data.duplicate !== true || ownerAccessible);
     return {
-      success: data?.success === true && typeof data.classified?.id === 'string' && data.classified.id.length > 0,
-      message: data?.success === true && typeof data.classified?.id === 'string' && data.classified.id.length > 0 ? (data.message || 'Anuncio recibido por el servidor; persistencia pendiente de verificación independiente.') : 'El servidor no confirmó la publicación del anuncio.',
+      success: confirmedWithAccess,
+      message: validPublication && data.duplicate === true && !ownerAccessible
+        ? 'El anuncio ya existe en el servidor, pero no se pudo recuperar su credencial de titular. No crees otro anuncio; solicita ayuda al administrador.'
+        : (confirmedWithAccess ? (data.message || 'Anuncio confirmado por el servidor.') : 'El servidor no confirmó la publicación del anuncio.'),
       classified: data.classified,
       status: res.status
     };
