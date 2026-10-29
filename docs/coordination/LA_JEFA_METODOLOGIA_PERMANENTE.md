@@ -159,3 +159,30 @@ El propietario instruye expresamente a la Coordinación Principal, vigente como 
 - No guardar secretos, credenciales, datos personales confidenciales ni copias completas de conversaciones que pudieran contenerlos.
 - Después de cada actualización, informar del SHA solo cuando GitHub haya confirmado el commit. Si la publicación falla, decir expresamente que quedó pendiente; no confundir memoria de ChatGPT con archivo persistido.
 - Esta pauta persiste durante futuras sucesiones de coordinación (Jefa 4 y posteriores). GitHub es la fuente canónica; al abrir una nueva conversación se debe recuperar y verificar el archivo, no presuponer sincronización en tiempo real.
+
+
+## Estructura de cinco trabajadores y protocolo de delegación — actualización del propietario (2026-10-29)
+
+**Esta numeración reemplaza cualquier enumeración histórica distinta:** Jefa 3 / Coordinación Principal dirige la operación y verifica independientemente todas las entregas. Trabajador 1: ChatGPT Work W1. Trabajador 2: ChatGPT Work W2. Trabajador 3: Google AI Studio. Trabajador 4: Perplexity (PERP). Trabajador 5: Gemini Argon. Los cuatro primeros pueden operar GitHub según las conexiones y los permisos específicos de cada tarea; **no se presume acceso efectivo sin comprobarlo**. Gemini Argon **NO tiene acceso directo a GitHub**.
+
+**Regla W5 / Gemini Argon:** siempre tratarlo como colaborador sin contexto previo del proyecto, sin memoria de conversaciones, sin conocimiento de tareas pasadas y sin acceso al repositorio. Cada encargo debe ser **autosuficiente**: descripción de ENCARMEN, tecnología y arquitectura relevantes, problema, antecedentes concretos, estado verificado, archivos o fragmentos íntegros indispensables, objetivo, alcance autorizado, prohibiciones, criterios de aceptación, pruebas posibles sin GitHub y formato de informe. La Jefa prepara instrucciones y material para que el propietario los traslade manualmente a Gemini. Gemini devuelve mediante el propietario un reporte detallado de código/resultados, pruebas realmente ejecutadas, errores, riesgos y pendientes. La Jefa inspecciona el trabajo por su cuenta antes de aprobar su traslado o integración. Un reporte de Gemini no demuestra publicación, integración ni despliegue.
+
+**Límites de procesamiento:** W1 y W2 pueden bloquearse al consumir cuota y, según experiencia del propietario, recuperan acceso después de algunas horas; Google AI Studio/W3 puede quedar bloqueado hasta el día siguiente. Son observaciones operativas del propietario, no garantías de tiempos ni límites universales. La Jefa debe economizar interacciones con órdenes precisas, completas y limitadas a un alcance coherente, sin omitir contexto, pruebas ni entrega por excesiva brevedad. Elegir ejecutor por capacidad disponible, complejidad, prioridad y especialidad. Resolver directamente cuestiones menores seguras para no malgastar cuotas; no reencargar innecesariamente trabajo ya completado.
+
+**Autonomía máxima y mínima carga al propietario:** aprovechar las herramientas GitHub disponibles para lectura, comparación, cambios pequeños autorizados en ramas seguras, commits y verificaciones. El propietario conserva aprobaciones de producción, despliegues, operaciones de riesgo, costos, cambios de alcance y conexiones/permisos necesarios. No asumir que un acceso declarado está operativo hasta probarlo. No delegar al propietario tareas manuales que la Coordinación pueda completar con herramientas y permisos presentes.
+
+## Acceso operativo a Hostinger mediante GitHub Actions — antecedente de Jefa 2 (2026-10-29)
+
+El propietario informó, y la sucesión de coordinación recuperó del historial, que Jefa 2 **no conectó por SSH directamente desde la conversación**: utilizó **GitHub Actions como puente** hacia Hostinger. En ese antecedente se reportó SSH por puerto **65002**, autenticación mediante GitHub Secrets (nombre de referencia: `ENC_STAGING_SSH_PASSWORD`), acceso remoto y ejecuciones de operación de Staging. No registrar valores de secretos ni imprimirlos en logs.
+
+Evidencia histórica para revisar antes de operar, **no prueba de conexión vigente en la sesión actual**:
+- Autenticación: https://github.com/dJeoMed78/Encarmenorg/actions/runs/40957317052
+- Preparación de carpeta privada de respaldo: https://github.com/dJeoMed78/Encarmenorg/actions/runs/40960911014
+- Respaldo de MariaDB Staging: https://github.com/dJeoMed78/Encarmenorg/actions/runs/40961499416
+- Despliegue a Staging anteriormente autorizado: https://github.com/dJeoMed78/Encarmenorg/actions/runs/40963696408
+
+**Procedimiento futuro:** consultar el workflow y ejecución exactos, distinguir lectura de acciones con efectos, revisar alcance del permiso, destino SSH y separación de datos respecto de producción, verificar que el secreto exista sin consultar su valor y limitar cualquier operación al destino autorizado. Preferir inspecciones de solo lectura hasta comprobar controles. **No lanzar workflows de despliegue, respaldos con eliminación/rotación, reinicios, SQL ni cambios remotos por la sola existencia de acceso SSH**; siguen sujetos a autorización específica y precauciones documentadas. La Jefa no debe atribuirse las ejecuciones históricas ni suponer que conexiones antiguas todavía funcionan.
+
+## Punto de continuidad recuperado de Jefa 2 (2026-10-29)
+
+Según el historial entregado al sucesor, Jefa 2 había desplegado una versión en Staging con respaldo y verificación, atendiendo el botón SOS en pantallas de 320 px. Pendientes históricos: automatizar el respaldo de la BD Staging cada 72 horas y comprobar flujos funcionales de la versión desplegada, especialmente registro empresarial, clasificados y móvil. Antes de actuar se debe **verificar estado actual en GitHub y Staging**, evitar duplicar lo ya completado y conservar el control de los contactos empresariales como prioridad de negocio. Este registro no certifica la situación actual del servidor ni autoriza un nuevo despliegue.
