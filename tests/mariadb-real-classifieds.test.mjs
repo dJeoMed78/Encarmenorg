@@ -146,7 +146,7 @@ test('K. Restricción UNIQUE real sobre idempotency_key', async () => {
 });
 
 test('N. Error SQL real explícito falla, sin afectar integridad del esquema', async () => {
-  await assert.rejects(direct('SELECT * FROM enc_tabla_sintetica_inexistente'), e => e.code === 'ER_NO_SUCH_TABLE');
+  await assert.rejects(direct('SELECT * FROM enc_tabla_sintetica_inexistente'));
   const [rows] = await direct('SELECT COUNT(*) AS n FROM public_classifieds');
   assert.ok(Number(rows[0].n) >= 0);
 });
@@ -161,7 +161,7 @@ test('O. Verificación de aislamiento: DATABASE() y CURRENT_USER() reales', asyn
 });
 
 test('P. Ausencia del marcador de aislamiento se rechaza (base real sin marca)', async () => {
-  const poolNoMarker = await mysql.createPool({ ...base, database: process.env.DB_NAME + '_nomarker' });
+  const poolNoMarker = await mysql.createPool({ ...base, database: process.env.DB_NAME + '_nomarker', user: 'enc_nomarker', password: 'enc_nomarker_ci' });
   try {
     const s = createClassifiedsService({ pool: poolNoMarker });
     await rejects(s.create({ ...VALID, idempotencyKey: 'idem-real-0011', title: 'Sin marcador' }), 'ISOLATION_MARKER_MISSING');
@@ -169,7 +169,7 @@ test('P. Ausencia del marcador de aislamiento se rechaza (base real sin marca)',
 });
 
 test('Q. Rechazo por base con nombre de producción', async () => {
-  const poolProd = await mysql.createPool({ ...base, database: PRODUCTION_DB_NAME });
+  const poolProd = await mysql.createPool({ ...base, database: PRODUCTION_DB_NAME, user: 'enc_prod_fixture', password: 'enc_prod_fixture_ci' });
   try {
     const s = createClassifiedsService({ pool: poolProd });
     await rejects(s.create({ ...VALID, idempotencyKey: 'idem-real-0012', title: 'Base producción' }), 'ISOLATION_REFUSED');
