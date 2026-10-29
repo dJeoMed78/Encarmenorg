@@ -50,8 +50,8 @@ export function adminPermission(requestPath:string,method:string):string|null {
  if(/^\/api\/businesses\/approve-(?:candidate|multiple-candidates)$/.test(path))return 'business:publish';
  if(/^\/api\/businesses\/(?:auto-search|auto-search-ai|parse-whatsapp-group)$/.test(path))return null;
  if(/^\/(?:api\/)?businesses\/[^/]+(?:\/(?:sync-wp|verify-edit-pin))?$/.test(path)&&mutable)return method.toUpperCase()==='DELETE'?'business:delete':'business:manage';
- if(/^\/(?:api\/)?classifieds(?:\/|$)/.test(path)&&mutable&&!path.endsWith('/radar-search'))return 'classified:manage';
- if(/^\/api\/events(?:\/|$)/.test(path)&&mutable&&!path.endsWith('/radar-search'))return 'event:manage';
+ if(/^\/(?:api\/)?classifieds(?:\/|$)/.test(path)&&mutable&&!(path==='/api/classifieds/radar-search'&&method.toUpperCase()==='POST'))return 'classified:manage';
+ if(/^\/api\/events(?:\/|$)/.test(path)&&mutable&&!(path==='/api/events/radar-search'&&method.toUpperCase()==='POST'))return 'event:manage';
  if(/^\/api\/reports(?:\/|$)/.test(path)&&method.toUpperCase()!=='POST')return 'admin:manage';
  if(/^\/api\/emergency(?:\/|$)/.test(path)&&mutable)return 'admin:manage';
  return null;
