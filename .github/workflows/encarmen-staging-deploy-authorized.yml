@@ -1,4 +1,5 @@
 name: ENCARMEN - Despliegue Staging autorizado y reversible
+# Segunda ejecucion: validar paquete TAR y reutilizar respaldo previo
 on:
   push:
     branches: [coord/encarmen-work-control-001]
