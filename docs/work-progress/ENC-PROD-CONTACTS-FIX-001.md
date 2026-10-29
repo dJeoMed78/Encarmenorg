@@ -81,3 +81,11 @@ Antes de futura integración, la reversión es no integrar esta rama.
 Si se autoriza después: conservar release previa completa (frontend, backend y configuración privada), revertir únicamente los commits de esta tarea mediante nuevos commits bajo autorización; no SQL, force push, reimportación ni restauración masiva. Retornar a main antiguo reactiva riesgos de semillas/upsert/sync: evaluar ese retorno antes de reiniciar. Mantener restauración de datos independiente del rollback de código.
 
 No se modificaron main, ia-desarrollo ni ramas del Trabajador1; sin PR, merge, despliegue, Hostinger, secretos ni consultas SQL reales.
+
+
+## Publicación y verificación remota
+Implementación publicada: https://github.com/dJeoMed78/Encarmenorg/commit/d1ea78d7a88385f29bdd9f224983295b86069c6f
+Comparación: https://github.com/dJeoMed78/Encarmenorg/compare/9c1a1ca8bb0ed0bffe14bfcb175fef3733d38fa1...d1ea78d7a88385f29bdd9f224983295b86069c6f
+Verificación del árbol remoto: 17/17 blobs coinciden con los contenidos locales probados y sus hashes Git. Comparación ahead_by=1, behind_by=0; exactamente17 rutas previstas, sin archivos eliminados. Se preservan los assets históricos, package/lock, semilla, módulos de eventos/Radar y ramas ajenas.
+La carga inicial del árbol con contenido inline recibió422 por timeout/tamaño; se publicaron blobs separados y árbol por SHA, con verificación íntegra posterior. No se omitió ningún artefacto ni se pidió ampliar permisos.
+Este cierre añade solo evidencia documental, sin cambiar código ni repetir pruebas. El commit final documental se identifica en el informe entregado a Coordinación. La autorización para integrar/desplegar permanece pendiente.

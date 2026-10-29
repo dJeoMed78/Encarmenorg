@@ -37,3 +37,11 @@ Este documento es un registro **acumulativo**. Work lo actualiza **únicamente e
 Fecha: 2026-10-28. Rama work/enc-prod-contacts-fix-001 desde main 9c1a1ca8bb0ed0bffe14bfcb175fef3733d38fa1. Reutilización selectiva R3 924127e1b76919918c87ce9563d8b0de62a3d373, sin fusionar desarrollo.
 Implementado y probado aisladamente: columnas SQL autoritativas, lectura fresca/503 sin semillas, preservación por defecto y compare-and-set de contactos, alta insert-only confirmada, importaciones/sincronizaciones retiradas, cliente sin éxito local, canales independientes y ejecutables backend/frontend. JSX Editor y rutas de calificaciones conservados. Pruebas 16 grupos en fuente y ambos bundles con Node22/24; matriz final Node22 48/48 PASS. Backend y Vite PASS. TypeScript global FAIL por TS2339 preexistente de AdminEventsTab.tsx:1499 (archivo intacto). No se declara pipeline completo verde.
 Evidencia, comandos, hashes, limitaciones y reversión: docs/work-progress/ENC-PROD-CONTACTS-FIX-001.md. SQL/pool simulados, sin motor real ni servidor completo. No conexión real, Hostinger, producción, PR, integración ni despliegue. Pendientes revisión independiente, prueba SQL desechable, error de tipos ajeno, autenticación heredada y validación operativa autorizada. Estado PROBADO_POR_WORK en aislamiento, pendiente Coordinación.
+
+
+## Publicación y verificación remota
+Implementación publicada: https://github.com/dJeoMed78/Encarmenorg/commit/d1ea78d7a88385f29bdd9f224983295b86069c6f
+Comparación: https://github.com/dJeoMed78/Encarmenorg/compare/9c1a1ca8bb0ed0bffe14bfcb175fef3733d38fa1...d1ea78d7a88385f29bdd9f224983295b86069c6f
+Verificación del árbol remoto: 17/17 blobs coinciden con los contenidos locales probados y sus hashes Git. Comparación ahead_by=1, behind_by=0; exactamente17 rutas previstas, sin archivos eliminados. Se preservan los assets históricos, package/lock, semilla, módulos de eventos/Radar y ramas ajenas.
+La carga inicial del árbol con contenido inline recibió422 por timeout/tamaño; se publicaron blobs separados y árbol por SHA, con verificación íntegra posterior. No se omitió ningún artefacto ni se pidió ampliar permisos.
+Este cierre añade solo evidencia documental, sin cambiar código ni repetir pruebas. El commit final documental se identifica en el informe entregado a Coordinación. La autorización para integrar/desplegar permanece pendiente.
