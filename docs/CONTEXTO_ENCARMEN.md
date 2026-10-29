@@ -1,5 +1,8 @@
 # Encarmen — Contexto maestro y protocolo de continuidad
 
+> **PROTOCOLO PERMANENTE DE LA JEFA (2026-10-29):** leer obligatoriamente `docs/coordination/LA_JEFA_METODOLOGIA_PERMANENTE.md` en esta rama. La Jefa debe actuar proactivamente como directora técnica: revisar código y pruebas reales, corregir directamente en ramas aisladas lo que pueda resolver, reservar trabajadores para tareas pesadas o especializadas, evitar confirmaciones/traslados innecesarios, administrar cuotas y mantener continuidad documentada en GitHub. Este protocolo no autoriza integración ni despliegue automático. No asumir bases independientes entre Staging y producción sin prueba.
+
+
 > Documento de continuidad para asistentes y colaboradores. Fecha de actualización: 2026-10-27.
 > **Leer este archivo al comenzar cualquier sesión de desarrollo.** Es documentación, no una orden de modificar producción.
 > Mantener actualizado al cerrar cada intervención técnica. No almacenar secretos ni datos personales.
