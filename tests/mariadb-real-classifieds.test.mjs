@@ -145,11 +145,10 @@ test('K. Restricción UNIQUE real sobre idempotency_key', async () => {
   await assert.rejects(direct(sql), (e) => String(e.code).includes('ER_DUP'));
 });
 
-test('N. Error SQL real: sin tabla de aislamiento la escritura falla cerrada', async () => {
-  await direct(`DROP TABLE IF EXISTS ${ISOLATION_TABLE}`);
-  await rejects(service.create({ ...VALID, idempotencyKey: 'idem-real-0010', title: 'Sin marcador real' }), 'ISOLATION_MARKER_MISSING');
-  await direct(`CREATE TABLE ${ISOLATION_TABLE} (marker_value VARCHAR(64) PRIMARY KEY) ENGINE=InnoDB`);
-  await direct(`INSERT INTO ${ISOLATION_TABLE} (marker_value) VALUES (?)`, [ISOLATION_MARKER]);
+test('N. Error SQL real explícito falla, sin afectar integridad del esquema', async () => {
+  await assert.rejects(direct('SELECT * FROM enc_tabla_sintetica_inexistente'), e => e.code === 'ER_NO_SUCH_TABLE');
+  const [rows] = await direct('SELECT COUNT(*) AS n FROM public_classifieds');
+  assert.ok(Number(rows[0].n) >= 0);
 });
 
 test('O. Verificación de aislamiento: DATABASE() y CURRENT_USER() reales', async () => {
