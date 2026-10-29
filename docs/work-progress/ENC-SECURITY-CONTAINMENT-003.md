@@ -91,3 +91,8 @@ No iniciar dev/start, server.ts, bundles completos ni initMariaDb. No ejecutar n
 ## Reversión
 Mantener rama aislada hasta revisión. Si se integra bajo autorización, revertir únicamente commits de esta tarea con una release coherente de frontend/backend; no SQL ni eliminación de respaldos. Revertir a código vulnerable reabre contraseñas/PIN/Git automático, por lo que debe evaluarse antes. La configuración del proveedor/rotación/reinicio es una operación posterior del propietario, no realizada aquí.
 Sin main/ia, Hostinger, bases reales, credenciales reales, PR, integración o despliegue.
+
+## Publicación y verificación remota
+Implementación: https://github.com/dJeoMed78/Encarmenorg/commit/153b557ded6a6d4ec54272eda057ed31421afc82
+Comparación contra0d231cb2779b7a14d8d336fc2f4de3782663c738: ahead_by=1,behind_by=0; exactamente14 archivos previstos, sin eliminaciones. Árbol remoto14/14 blobs coincide con los contenidos locales probados y sus hashes Git. No se modifican package/lock, DB, scripts ZIP, Editor ni ramas ajenas.
+Este cierre solo registra publicación/evidencia. No cambia código ni añade pruebas ficticias; autorización de integración/despliegue pendiente.
