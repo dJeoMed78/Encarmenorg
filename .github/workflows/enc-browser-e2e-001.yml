@@ -22,6 +22,8 @@ jobs:
         working-directory: tests/browser
       - run: npm test
         working-directory: tests/browser
+      - run: node tests/browser/export-evidence.mjs
+        if: always()
       - uses: actions/upload-artifact@v4
         if: always()
         with:

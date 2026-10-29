@@ -32,6 +32,7 @@ export const test=base.extend({lab:async({page},use,testInfo)=>{
    if(state.postMode==='abort')return route.abort('connectionfailed');
    if(state.postMode==='nonjson')return route.fulfill({status:502,contentType:'text/html',body:'Error de proxy sintético'});
    if(['403','500'].includes(state.postMode))return json({success:false,message:'Publicación rechazada por fixture'},Number(state.postMode));
+   if(state.postMode==='unconfirmed')return json({success:true});
    const payload=req.postDataJSON();const created={...ad,...payload,id:'e2e-nuevo',phone:payload.contactPhone,whatsapp:payload.contactWhatsapp};state.ads.unshift(created);return json({success:true,classified:created,ownerToken:'synthetic_owner_token_1234567890',message:'Anuncio confirmado por fixture'},201);
   }
   if(u.pathname==='/api/public/business-registrations'){
@@ -39,7 +40,7 @@ export const test=base.extend({lab:async({page},use,testInfo)=>{
    if(state.postMode==='abort')return route.abort('connectionfailed');
    if(state.postMode==='nonjson')return route.fulfill({status:502,body:'Proxy sintético'});
    if(['403','500'].includes(state.postMode))return json({success:false,message:'Registro rechazado por fixture'},Number(state.postMode));
-   const b={...business,...req.postDataJSON(),id:900003,slug:'nuevo-e2e',status:'published',categories:['Servicios']};state.businesses.push(b);return json({success:true,directoryVisible:true,business:b},201);
+   const b={...business,...req.postDataJSON(),id:900003,slug:'nuevo-e2e',status:'published',categories:['Servicios']};if(state.postMode!=='unconfirmed')state.businesses.push(b);return json({success:true,directoryVisible:true,business:b},201);
   }
   const known={
    '/api/version':{version:'E2E-sintético'},'/api/maintenance':{success:true,maintenance:{enabled:false}},
