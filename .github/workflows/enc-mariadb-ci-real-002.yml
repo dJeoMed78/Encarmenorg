@@ -1,0 +1,44 @@
+name: ENCARMEN Candidate - MariaDB real aislado
+
+on:
+  push:
+    branches: [coord/encarmen-staging-candidate-001]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mariadb-real:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: enc_root_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Instalar dependencias
+        run: npm ci || npm install
+      - name: Preparar laboratorio MariaDB efímero
+        run: mysql -h127.0.0.1 -uroot -penc_root_ci < scripts/mariadb-lab-schema.sql
+      - name: Ejecutar pruebas SQL reales
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USER: enc_lab
+          DB_PASSWORD: enc_lab_ci
+          DB_NAME: enc_classifieds_lab
+          LAB_RO_USER: enc_ro
+          LAB_RO_PASSWORD: enc_ro_ci
+        run: npx tsx --test tests/mariadb-real-classifieds.test.mjs
