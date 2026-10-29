@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createClassifiedsService, registerPublicClassifieds, validateClassifiedInput,
-  ClassifiedsError, ISOLATION_MARKER, CLASSIFIED_TTL_DAYS,
+  ClassifiedsError, ISOLATION_MARKER, CLASSIFIED_TTL_DAYS, validateClassifiedPatch,
 } from '../src/server/publicClassifieds.ts';
 
 const NOW = new Date('2026-01-01T00:00:00Z');
@@ -132,7 +132,7 @@ test('GET devuelve solo activos vigentes y expira los vencidos', async () => {
   const { classifieds, total } = await s.getActive();
   assert.equal(total, 1);
   assert.equal(classifieds[0].id, active.classified.id);
-  assert.equal(pool.rows.get(expired.classified.id).status, 'expired');
+  assert.equal(pool.rows.get(expired.classified.id).status, 'active', 'GET no debe modificar registros; la fecha controla su visibilidad.');
 });
 
 test('GET con fallo SQL responde error y no sirve caché', async () => {
@@ -193,4 +193,43 @@ test('el carril público no registra rutas administrativas ni usa classified:man
     'PATCH /api/public/classifieds/:id', 'DELETE /api/public/classifieds/:id',
   ]);
   assert.ok(!routes.some(([, p]) => String(p).includes('/api/admin')));
+});
+
+
+test('GET no escribe ni crea tablas: lectura pública no tiene efectos secundarios', async () => {
+  const pool = new FakePool();
+  const original = pool.query.bind(pool);
+  const sqls = [];
+  pool.query = async (sql, args) => {
+    sqls.push(sql);
+    if (/^(UPDATE|CREATE TABLE|DROP|INSERT|DELETE)/i.test(sql.trim())) throw Error('READ_MUST_NOT_WRITE');
+    return original(sql, args);
+  };
+  const { total } = await service(pool).getActive();
+  assert.equal(total, 0);
+  assert.ok(sqls.every(q => !/^(UPDATE|CREATE TABLE|DROP|INSERT|DELETE)/i.test(q.trim())));
+});
+
+test('validación realmente cerrada: campos desconocidos y objetos se rechazan', async () => {
+  await rejects(service(new FakePool()).create({ ...VALID, admin: true }), 'VALIDATION_FAILED');
+  await rejects(service(new FakePool()).create({ ...VALID, title: { malicious: true } }), 'VALIDATION_FAILED');
+  assert.throws(() => validateClassifiedPatch({ status: 'active', owner_token_hash: 'rogue' }), e => e.code === 'VALIDATION_FAILED');
+});
+
+test('POST entrega token del titular únicamente al crear (no en respuesta idempotente)', async () => {
+  const routes = {};
+  const app = { get(){}, patch(){}, delete(){}, post(p, handler) { routes[p] = handler; } };
+  const pool = new FakePool();
+  registerPublicClassifieds(app, { pool, now: () => NOW });
+  const res = () => ({ statusCode: 200, status(n) { this.statusCode = n; return this; }, json(data) { this.body = data; return this; } });
+  const first = res();
+  await routes['/api/public/classifieds']({body: VALID}, first);
+  assert.equal(first.statusCode, 201);
+  assert.equal(first.body.success, true);
+  assert.ok(typeof first.body.ownerToken === 'string' && first.body.ownerToken.length >= 24);
+  const second = res();
+  await routes['/api/public/classifieds']({body: VALID}, second);
+  assert.equal(second.statusCode, 200);
+  assert.equal(second.body.duplicate, true);
+  assert.equal(second.body.ownerToken, undefined);
 });
