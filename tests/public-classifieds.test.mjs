@@ -117,8 +117,16 @@ test('duplicado: misma clave con datos distintos se rechaza', async () => {
 test('fallo SQL en INSERT: error confirmado, sin mutación de caché', async () => {
   const pool = new FakePool();
   pool.failInsert = true;
-  await rejects(service(pool).create(VALID), 'PERSISTENCE_FAILED', (e) => e.uncertain === false);
+  await rejects(service(pool).create(VALID), 'CLASSIFIEDS_WRITE_UNCONFIRMED', (e) => e.uncertain === true);
   assert.equal(pool.rows.size, 0);
+});
+
+test('fallo de lectura tras UPDATE responde incertidumbre, no falso éxito', async () => {
+  const pool = new FakePool();
+  const s = service(pool);
+  const { classified, ownerToken } = await s.create(VALID);
+  pool.failReadback = true;
+  await rejects(s.update(classified.id, ownerToken, { title: 'Título actualizado' }), 'CLASSIFIEDS_WRITE_UNCONFIRMED', e => e.uncertain === true);
 });
 
 test('resultado incierto: INSERT ok pero lectura posterior falla', async () => {
