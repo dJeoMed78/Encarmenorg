@@ -24,7 +24,7 @@ import { RegisterBusinessView } from './components/RegisterBusinessView';
 import { ClassifiedCreateModal } from './components/ClassifiedCreateModal';
 import { ClassifiedDetailModal } from './components/ClassifiedDetailModal';
 import { Promotion, ClassifiedAd, Business } from './types';
-import { isSessionAdminAuthenticated, hashPassword, FALLBACK_ADMIN_HASHES } from './utils/adminAuth';
+import { isSessionAdminAuthenticated } from './utils/adminAuth';
 import { adminDeleteBusiness, adminUpdateBusiness, getAdminPromotions } from './services/api';
 import { sortEventsChronologically, parseEventStartDate, isEventExpired, filterActiveUpcomingEvents } from './services/eventsService';
 import { getSavedPortalLinks } from './components/AdminLinksAndAdsManager';
@@ -268,8 +268,6 @@ export default function App() {
   const [visibleCount, setVisibleCount] = useState(30);
 
   // Autenticación de Administración
-  const [adminPassword, setAdminPassword] = useState('');
-  const [adminError, setAdminError] = useState('');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => isSessionAdminAuthenticated());
 
   const [ratingStats, setRatingStats] = useState<Record<string, BusinessRatingStats>>({});
@@ -697,19 +695,6 @@ export default function App() {
         window.scrollTo({ top: 520, behavior: 'smooth' });
       }
     }, 120);
-  };
-
-  const handleAdminLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdminError('');
-    const hashed = await hashPassword(adminPassword);
-    const validHashes = Object.values(FALLBACK_ADMIN_HASHES);
-    if (validHashes.includes(hashed) || adminPassword === 'carmen2026' || adminPassword === 'admin') {
-      setIsAdminLoggedIn(true);
-      setAdminError('');
-    } else {
-      setAdminError('Contraseña incorrecta. Acceso restringido.');
-    }
   };
 
   const displayedBusinesses = filteredBusinesses.slice(0, visibleCount);

@@ -3,6 +3,10 @@ import { Business, Category, DirectoryStats, WpHealth, AutoBusinessCandidate } f
 import seedCategories from '../data/categories_seed.json';
 
 const API_BASE = '/api';
+function businessSessionHeaders(): Record<string,string> {
+  try { const token=sessionStorage.getItem('encarmen_admin_session_token');return token ? {'X-Encarmen-Admin-Token':token} : {}; } catch {return {};}
+}
+
 
 export async function parseJsonResponse<T>(res: Response, fallbackErrorMsg: string): Promise<T> {
   const text = await res.text();
@@ -207,7 +211,7 @@ export async function checkBusinessDuplicate(name: string, phone?: string): Prom
   }
 }
 
-export async function submitBusinessRegistration(data: import('../types').BusinessSubmission): Promise<{
+export async function submitBusinessRegistration(data: import('../types').BusinessSubmission, requestId: string = crypto.randomUUID()): Promise<{
   success: boolean;
   message: string;
   isDuplicate?: boolean;
@@ -222,7 +226,9 @@ export async function submitBusinessRegistration(data: import('../types').Busine
     const res = await fetch(`${API_BASE}/submit-business`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...businessSessionHeaders(),
+        'Idempotency-Key': requestId
       },
       body: JSON.stringify(data)
     });
@@ -240,37 +246,10 @@ export async function submitBusinessRegistration(data: import('../types').Busine
       }
       throw new Error(resData.message || `Error del servidor HTTP ${res.status}`);
     }
+    if(resData.success!==true || !resData.business || !Number.isSafeInteger(Number(resData.business.id))) throw new Error(resData.message || 'No se confirmó una empresa persistida.');
     return resData;
   } catch (err: any) {
-    if (err.message && err.message.includes('Ya existe un negocio')) {
-      return {
-        success: false,
-        message: err.message
-      };
-    }
-    // Local fallback persistence in localStorage
-    try {
-      const stored = localStorage.getItem('empresas_local_submissions') || '[]';
-      const parsed = JSON.parse(stored);
-      const newSubmission = {
-        ...data,
-        id: `local-${Date.now()}`,
-        createdAt: new Date().toISOString(),
-        status: 'pending' as const
-      };
-      parsed.unshift(newSubmission);
-      localStorage.setItem('empresas_local_submissions', JSON.stringify(parsed));
-      return {
-        success: true,
-        message: '¡Registro recibido con éxito! Tus datos se han guardado para revisión.',
-        submission: newSubmission
-      };
-    } catch (saveErr) {
-      return {
-        success: false,
-        message: err.message || 'Error al enviar registro'
-      };
-    }
+    return {success:false,message:err.message || 'No se confirmó el registro en el servidor. Reintenta conservando la misma clave.'};
   }
 }
 
@@ -945,7 +924,7 @@ export async function fetchBusinessEditPins(): Promise<{
   pins: Record<number, BusinessEditPinInfo>;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/admin/businesses-edit-pins`);
+    const res = await fetch(`${API_BASE}/admin/businesses-edit-pins`,{headers:businessSessionHeaders()});
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err: any) {

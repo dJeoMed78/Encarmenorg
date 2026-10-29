@@ -8,14 +8,15 @@ import {execute,read,repository,contacts,fixture,routeHarness,loadComponent} fro
 test('R3 configuration matrix and readonly connection never invoke schema initialization',async()=>{
  const source=read('src/db/mariadb.ts');
  const prefix=source.slice(source.indexOf('export interface MariaDbConfig'),source.indexOf('export function isMariaDbActive'));
+ const security=await loadComponent('src/server/stagingBusinessSecurity.ts');
  const base={APP_ENV:'staging',NODE_ENV:'production',DB_NAME:'u293982346_encarmentest',DB_HOST:'synthetic.invalid',DB_USER:'synthetic_reader',DB_PASSWORD:'synthetic-placeholder',STAGING_READ_ONLY:'true'};
  const cases=[
   {env:{},valid:true,write:false,ddl:0},
   {env:{STAGING_ALLOW_SCHEMA_INIT:'true'},valid:true,write:false,ddl:0},
   {env:{STAGING_DB_CONFIRMED:'true',STAGING_ALLOW_SCHEMA_INIT:'true'},valid:true,write:false,ddl:0},
   {env:{STAGING_READ_ONLY:'false'},valid:false,write:false,ddl:0},
-  {env:{STAGING_READ_ONLY:'false',STAGING_DB_CONFIRMED:'true'},valid:true,write:true,ddl:0},
-  {env:{STAGING_READ_ONLY:'false',STAGING_DB_CONFIRMED:'true',STAGING_ALLOW_SCHEMA_INIT:'true'},valid:true,write:true,ddl:1},
+  {env:{STAGING_READ_ONLY:'false',STAGING_DB_CONFIRMED:'true'},valid:true,write:false,ddl:0},
+  {env:{STAGING_READ_ONLY:'false',STAGING_DB_CONFIRMED:'true',STAGING_ALLOW_SCHEMA_INIT:'true'},valid:true,write:false,ddl:0},
   {env:{DB_NAME:''},valid:false,write:false,ddl:0},
   {env:{DB_HOST:''},valid:false,write:false,ddl:0},
   {env:{DB_USER:''},valid:false,write:false,ddl:0},
@@ -24,13 +25,13 @@ test('R3 configuration matrix and readonly connection never invoke schema initia
  ];
  for(const item of cases){
   let ddl=0,pools=0;const queries=[];
-  const api=execute(prefix,{process:{env:{...base,...item.env}},console:{log(){},warn(){},error(){}},mysql:{createPool:()=>{pools++;return {query:async sql=>{queries.push(sql);return [[{test:1}]];},end:async()=>{}};}},createTablesIfNotExist:async()=>{ddl++;}});
+  const api=execute(prefix,{...security,process:{env:{...base,...item.env}},console:{log(){},warn(){},error(){}},mysql:{createPool:()=>{pools++;return {query:async sql=>{queries.push(sql);return sql==='SELECT DATABASE() AS db_name'?[[{db_name:base.DB_NAME}]]:[[{test:1}]];},end:async()=>{}};}},createTablesIfNotExist:async()=>{ddl++;}});
   assert.equal(api.isStagingEnvironment(),true);
   assert.equal(api.validateStagingDbConfiguration().valid,item.valid);
   assert.equal(api.isWritePermitted(),item.write);
   assert.equal(await api.initMariaDb(),item.valid);
   assert.equal(pools,item.valid?1:0);assert.equal(ddl,item.ddl);
-  assert.ok(queries.every(sql=>sql==='SELECT 1 as test'));
+  assert.ok(queries.every(sql=>['SELECT 1 as test','SELECT DATABASE() AS db_name'].includes(sql)));
  }
 });
 

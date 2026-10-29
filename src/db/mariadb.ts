@@ -1,3 +1,5 @@
+import {STAGING_BUSINESS_DATABASE,stagingBusinessConfiguration} from '../server/stagingBusinessSecurity';
+import {createStagingBusinessStore} from './stagingBusinessStore';
 import mysql from 'mysql2/promise';
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -11,6 +13,7 @@ export interface MariaDbConfig {
 
 let pool: mysql.Pool | null = null;
 let isConnected = false;
+let connectedDatabase: string | null = null;
 let lastConnectionError: string | null = null;
 
 export const PRODUCTION_DB_NAME = 'u293982346_encarmenapp';
@@ -21,22 +24,17 @@ export function isStagingEnvironment(): boolean {
   const env = (process.env.APP_ENV || process.env.NODE_ENV || '').toLowerCase().trim();
   const isStagingFlag = process.env.STAGING === 'true' || process.env.STAGING_SAFE_MODE === 'true';
   const isStagingHost = (process.env.APP_URL || process.env.PUBLIC_URL || '').toLowerCase().includes('staging.encarmen.org');
-  return env === 'staging' || isStagingFlag || isStagingHost;
+  const businessProfile = process.env.STAGING_BUSINESS_WRITES_ENABLED !== undefined;
+  const configuredDatabase = (process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE || '').trim();
+  return env === 'staging' || isStagingFlag || isStagingHost || businessProfile || configuredDatabase === STAGING_BUSINESS_DATABASE;
 }
 
 export function isWritePermitted(): boolean {
   if (process.env.STAGING_READ_ONLY === 'true') {
     return false;
   }
-  if (isStagingEnvironment()) {
-    const rawDbName = (process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE || '').trim();
-    if (!rawDbName || rawDbName === PRODUCTION_DB_NAME) {
-      return false;
-    }
-    if (process.env.STAGING_DB_CONFIRMED !== 'true') {
-      return false;
-    }
-  }
+  // Staging never grants general writes: only the separate businesses capability may write.
+  if (isStagingEnvironment()) return false;
   return true;
 }
 
@@ -77,21 +75,8 @@ export function validateStagingDbConfiguration(): StagingDbValidationResult {
     };
   }
 
-  if (rawDbName === PRODUCTION_DB_NAME) {
-    if (!isReadOnly) {
-      return {
-        valid: false,
-        isStaging: true,
-        error: `[PELIGRO DE PRODUCCIÓN]: Staging tiene configurada la base de datos de PRODUCCIÓN '${PRODUCTION_DB_NAME}' sin STAGING_READ_ONLY=true. Esto está estrictamente prohibido para evitar sobreescritura de producción.`
-      };
-    }
-    if (rawDbUser === PRODUCTION_DB_USER) {
-      return {
-        valid: false,
-        isStaging: true,
-        error: `[PELIGRO DE PRODUCCIÓN]: Staging no puede reutilizar el usuario con permisos de escritura de producción '${PRODUCTION_DB_USER}'. Debe utilizar un usuario dedicado con privilegios SELECT exclusivamente.`
-      };
-    }
+  if (rawDbName !== STAGING_BUSINESS_DATABASE || (rawDbUser === PRODUCTION_DB_USER && !isReadOnly)) {
+    return {valid:false,isStaging:true,error:'Staging requiere su base exacta y una cuenta distinta a producción.'};
   }
 
   if (!isReadOnly && !isConfirmed) {
@@ -173,6 +158,11 @@ export async function initMariaDb(): Promise<boolean> {
       });
 
       await pool.query('SELECT 1 as test');
+      if (isStaging) {
+        const [context]: any = await pool.query('SELECT DATABASE() AS db_name');
+        if (context[0]?.db_name !== STAGING_BUSINESS_DATABASE) throw new Error('STAGING_DATABASE_TARGET_MISMATCH');
+        connectedDatabase = context[0].db_name;
+      }
       isConnected = true;
       lastConnectionError = null;
       console.log(`[MariaDB/Hostinger] Conectado exitosamente a ${config.database} en ${candidateHost}`);
@@ -196,6 +186,7 @@ export async function initMariaDb(): Promise<boolean> {
         try { await pool.end(); } catch (_) {}
       }
       pool = null;
+      connectedDatabase = null;
       isConnected = false;
     }
   }
@@ -415,15 +406,14 @@ export async function dbGetUploadedFile(filename: string): Promise<{ mimeType: s
 }
 
 // MariaDB CRUD Operations
-export async function dbLoadAllBusinesses(strict = true): Promise<any[]> {
-  if (!pool) { if (strict) throw new Error("BUSINESSES_SOURCE_UNAVAILABLE"); return []; }
-  try {
-    const [rows]: any = await pool.query('SELECT * FROM businesses ORDER BY id ASC');
-    return rows.map((r: any) => {
+export function businessFromRow(r: any): any {
+
       let extra: any = {};
       if (r.raw_data) {
-        try { extra = JSON.parse(r.raw_data); } catch (_) {}
+        try { const parsed=JSON.parse(r.raw_data); if(parsed && typeof parsed==='object' && !Array.isArray(parsed)) extra=parsed; } catch (_) {}
       }
+      delete extra._stagingRegistrationId;
+      delete extra._stagingRegistrationDigest;
       return {
         ...extra,
         id: isNaN(Number(r.id)) ? r.id : Number(r.id),
@@ -459,7 +449,14 @@ export async function dbLoadAllBusinesses(strict = true): Promise<any[]> {
         isTopBusiness: Boolean(extra.isTopBusiness ?? false),
         status: extra.status || r.status || 'published'
       };
-    });
+
+}
+
+export async function dbLoadAllBusinesses(strict = true): Promise<any[]> {
+  if (!pool) { if (strict) throw new Error("BUSINESSES_SOURCE_UNAVAILABLE"); return []; }
+  try {
+    const [rows]: any = await pool.query('SELECT * FROM businesses ORDER BY id ASC');
+    return rows.map(businessFromRow);
   } catch (err: any) {
     console.warn('[MariaDB] Error cargando businesses:', err.message);
     if (strict) throw new Error('BUSINESSES_SOURCE_UNAVAILABLE');
@@ -1263,3 +1260,13 @@ export async function dbInsertRating(id: string, visitorKey: string, rating: num
 }
 // ENC-REVIEWS-006 RATINGS REPOSITORY END
 
+
+
+export function isBusinessWritePermitted(): boolean {
+  return isStagingEnvironment() && isConnected && pool !== null && connectedDatabase === STAGING_BUSINESS_DATABASE && stagingBusinessConfiguration(process.env, PRODUCTION_DB_USER);
+}
+export const stagingBusinessStore = createStagingBusinessStore({
+  canWrite:isBusinessWritePermitted,
+  getConnection:async()=>{if(!pool)throw new Error('STAGING_DATABASE_UNAVAILABLE');return pool.getConnection();},
+  serialize:businessFromRow
+});

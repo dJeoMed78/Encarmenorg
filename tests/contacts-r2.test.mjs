@@ -18,7 +18,7 @@ function execute(source, globals={}) {
 }
 const contacts=execute(read('src/utils/businessContacts.ts'));
 const db=read('src/db/mariadb.ts');
-const dbFragment=db.slice(db.indexOf('export async function dbLoadAllBusinesses'),db.indexOf('// Ultra-lightweight query')) + db.slice(db.indexOf('export async function dbSaveBusiness('),db.indexOf('export async function dbSaveDismissedCandidate'));
+const dbFragment=db.slice(db.indexOf('export function businessFromRow'),db.indexOf('// Ultra-lightweight query')) + db.slice(db.indexOf('export async function dbSaveBusiness('),db.indexOf('export async function dbSaveDismissedCandidate'));
 function repository(rows=[]) {
  const state={rows:structuredClone(rows), fail:false, queries:[], writeAllowed:true};
  const pool={query:async (sql, params=[])=>{

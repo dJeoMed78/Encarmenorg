@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { contactDigits } from '../utils/businessContacts';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
   Search,
@@ -437,6 +438,9 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     ownerEmail: 'admin@empresasencarmen.com'
   });
   const [isSubmittingNewBiz, setIsSubmittingNewBiz] = useState(false);
+  const createRequestId = useRef<string | null>(null);
+  const createBusy = useRef(false);
+  const inlineContactStart = useRef({phone:'',whatsapp:'',address:''});
   const [newBizSuccessMsg, setNewBizSuccessMsg] = useState<string | null>(null);
   const [newBizErrorMsg, setNewBizErrorMsg] = useState<string | null>(null);
   const [newBizLogoPreview, setNewBizLogoPreview] = useState<string | null>(null);
@@ -534,8 +538,9 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     reader.readAsDataURL(file);
   };
 
-  const handleAdminCreateBusiness = async (e: React.FormEvent, forceAllowDuplicate = false) => {
+  const handleAdminCreateBusiness = async (e: React.FormEvent) => {
     if (e) e.preventDefault();
+    if(createBusy.current) return;
     setNewBizErrorMsg(null);
     setNewBizSuccessMsg(null);
 
@@ -547,12 +552,15 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
       setNewBizErrorMsg('Por favor selecciona una categoría.');
       return;
     }
-    if (!newBizForm.phone.trim()) {
+    if (!contactDigits(newBizForm.phone) && !contactDigits(newBizForm.whatsapp)) {
       setNewBizErrorMsg('Por favor ingresa un teléfono o WhatsApp.');
       return;
     }
 
-    if (!forceAllowDuplicate) {
+    createBusy.current = true;
+    setIsSubmittingNewBiz(true);
+    try {
+    {
       const dupCheck = await checkBusinessDuplicate(newBizForm.name.trim(), newBizForm.phone.trim());
       if (dupCheck.isDuplicate && dupCheck.existingBusiness) {
         setNewBizDuplicateWarning({
@@ -564,19 +572,19 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
       }
     }
 
-    setIsSubmittingNewBiz(true);
-    try {
-      const cleanP = cleanPhoneNumber(newBizForm.phone);
-      const cleanW = cleanPhoneNumber(newBizForm.whatsapp) || cleanP;
+      const cleanP = contactDigits(newBizForm.phone);
+      const cleanW = contactDigits(newBizForm.whatsapp);
+      if((newBizForm.phone.trim()&&!cleanP)||(newBizForm.whatsapp.trim()&&!cleanW))throw new Error('Contacto mexicano inválido.');
+      createRequestId.current ||= crypto.randomUUID();
+      const {ownerName,ownerEmail,...businessData} = newBizForm;
       const cleanDelivery = normalizeDeliveryOption(newBizForm.delivery);
       const res = await submitBusinessRegistration({
-        ...newBizForm,
+        ...businessData,
         phone: cleanP,
         whatsapp: cleanW,
         delivery: cleanDelivery,
-        gallery: newBizGallery,
-        allowDuplicate: forceAllowDuplicate
-      });
+        gallery: newBizGallery
+      }, createRequestId.current);
 
       if (res.success) {
         setNewBizDuplicateWarning(null);
@@ -607,6 +615,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
         });
         setNewBizLogoPreview(null);
         setNewBizGallery([]);
+        createRequestId.current = null;
       } else if (res.isDuplicate) {
         setNewBizDuplicateWarning({
           detected: true,
@@ -619,6 +628,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     } catch (err: any) {
       setNewBizErrorMsg(err.message || 'Error de conexión.');
     } finally {
+      createBusy.current = false;
       setIsSubmittingNewBiz(false);
     }
   };
@@ -705,19 +715,21 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
   const handleStartEdit = (report: BusinessReport) => {
     const biz = businesses.find(b => b.id === report.businessId);
     setEditingBizId(report.businessId !== undefined ? report.businessId : null);
-    setEditWaInput(cleanPhoneNumber(biz?.whatsapp || report.businessWhatsapp || ''));
-    setEditPhoneInput(cleanPhoneNumber(biz?.phone || report.businessPhone || ''));
-    setEditAddressInput(biz?.address || '');
+    const initial={whatsapp:contactDigits(biz?.whatsapp),phone:contactDigits(biz?.phone),address:biz?.address || ''};
+    inlineContactStart.current = initial;
+    setEditWaInput(initial.whatsapp);
+    setEditPhoneInput(initial.phone);
+    setEditAddressInput(initial.address);
   };
 
   const handleSaveBusinessEdits = async (bizId: number, reportId?: string) => {
     setIsSavingBiz(true);
     try {
-      const res = await adminUpdateBusiness(bizId, {
-        whatsapp: cleanPhoneNumber(editWaInput),
-        phone: cleanPhoneNumber(editPhoneInput),
-        address: editAddressInput
-      });
+      const patch: Partial<Business> = {};
+      if(editWaInput!==inlineContactStart.current.whatsapp)patch.whatsapp=editWaInput;
+      if(editPhoneInput!==inlineContactStart.current.phone)patch.phone=editPhoneInput;
+      if(editAddressInput!==inlineContactStart.current.address)patch.address=editAddressInput;
+      const res = await adminUpdateBusiness(bizId, patch);
 
       if (res.success) {
         setActionSuccessMsg('¡Datos del negocio actualizados con éxito en el directorio!');
@@ -2550,16 +2562,16 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                     <button
                       type="button"
                       disabled={isSubmittingNewBiz}
-                      onClick={(e) => handleAdminCreateBusiness(e, true)}
+                      onClick={() => setNewBizDuplicateWarning(null)}
                       className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs"
                     >
-                      {isSubmittingNewBiz ? 'Guardando...' : 'Guardar de Todos Modos'}
+                      Revisar datos del negocio
                     </button>
                   </div>
                 </div>
               )}
 
-              <form onSubmit={(e) => handleAdminCreateBusiness(e, false)} className="space-y-4">
+              <form onSubmit={handleAdminCreateBusiness} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Name */}
                   <div className="space-y-1">
@@ -2608,7 +2620,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                     <label className="text-xs font-bold text-stone-700">Teléfono Directo *</label>
                     <input
                       type="tel"
-                      required
+                      required={!newBizForm.whatsapp.trim()}
                       value={newBizForm.phone}
                       onChange={e => {
                         const val = e.target.value;

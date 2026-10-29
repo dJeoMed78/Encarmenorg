@@ -56,16 +56,13 @@ export function isSessionAdminAuthenticated(): boolean {
       sessionStorage.getItem(ADMIN_AUTH_STORAGE_KEY) === 'true';
     const expiresAt = Number(localStorage.getItem(ADMIN_EXPIRES_STORAGE_KEY) || 0);
 
-    if (isAuth && expiresAt > Date.now()) {
+    const token = sessionStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) || '';
+    if (isAuth && /^[a-f0-9]{64}$/i.test(token) && expiresAt > Date.now()) {
       return true;
     }
     if (isAuth && expiresAt > 0 && expiresAt <= Date.now()) {
       clearAdminAuth();
       return false;
-    }
-    if (isAuth && expiresAt === 0) {
-      saveAdminAuth(getLoggedInAdminName() || 'Administrador');
-      return true;
     }
     return false;
   } catch {
@@ -149,48 +146,15 @@ export async function loginAdminUser(
   username: string,
   passwordInput: string
 ): Promise<{ success: boolean; user?: AdminAccountInfo; error?: string }> {
+  clearAdminAuth();
   try {
-    const res = await fetch('/api/admin/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password: passwordInput })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.success) {
-        if (data.token) sessionStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, data.token);
-        saveAdminAuth(data.user?.username || username);
-        return { success: true, user: data.user };
-      }
-    }
-
-    // Fallback to client-side hash check
-    const normKey = username.toLowerCase() === 'yuss' ? 'Y' : (username.toLowerCase() === 'jeo' ? 'J' : username);
-    const hashed = await hashPassword(passwordInput);
-    const expectedHash = FALLBACK_ADMIN_HASHES[normKey] || FALLBACK_ADMIN_HASHES[username];
-    if (expectedHash && hashed === expectedHash) {
-      const user =
-        DEFAULT_ADMIN_ACCOUNTS.find(a => a.username === normKey) || {
-          username: normKey,
-          role: 'Administrador',
-          avatarColor: normKey === 'Y' ? 'from-sky-500 to-indigo-600' : 'from-amber-500 to-rose-600',
-          initial: normKey.charAt(0)
-        };
-      saveAdminAuth(normKey);
-      return { success: true, user };
-    }
-
-    return { success: false, error: 'Contraseña incorrecta' };
-  } catch (err: any) {
-    const normKey = username.toLowerCase() === 'yuss' ? 'Y' : (username.toLowerCase() === 'jeo' ? 'J' : username);
-    const hashed = await hashPassword(passwordInput);
-    const expectedHash = FALLBACK_ADMIN_HASHES[normKey] || FALLBACK_ADMIN_HASHES[username];
-    if (expectedHash && hashed === expectedHash) {
-      saveAdminAuth(normKey);
-      return { success: true, user: DEFAULT_ADMIN_ACCOUNTS.find(a => a.username === normKey) };
-    }
-    return { success: false, error: err.message || 'Error al autenticar' };
-  }
+    const res=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password:passwordInput})});
+    const data=await res.json();
+    if(!res.ok || data.success!==true || typeof data.token!=='string' || !/^[a-f0-9]{64}$/i.test(data.token)) return {success:false,error:data.error || 'El servidor no confirmó una sesión válida.'};
+    sessionStorage.setItem(ADMIN_TOKEN_STORAGE_KEY,data.token);
+    saveAdminAuth(data.user?.username || data.username || username);
+    return {success:true,user:data.user || DEFAULT_ADMIN_ACCOUNTS.find(a=>a.username===(data.username||username))};
+  } catch {return {success:false,error:'No se pudo autenticar con el servidor. No se habilitó acceso local.'};}
 }
 
 export async function changeAdminPassword(
@@ -213,3 +177,4 @@ export async function changeAdminPassword(
     return { success: false, error: err.message || 'Error de conexión con el servidor' };
   }
 }
+

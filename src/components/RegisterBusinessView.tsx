@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Building2,
   CheckCircle,
@@ -33,6 +33,7 @@ import {
   uploadImage
 } from '../services/api';
 import { cleanPhoneNumber } from '../utils/phone';
+import { contactDigits } from '../utils/businessContacts';
 import { formatBusinessName, formatAddressText } from '../utils/textUtils';
 import { DELIVERY_OPTIONS, normalizeDeliveryOption } from '../constants/delivery';
 import {
@@ -138,6 +139,8 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
   };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const registrationRequestId = useRef<string | null>(null);
+  const registrationBusy = useRef(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [registeredBusiness, setRegisteredBusiness] = useState<Business | null>(null);
   const [wpPermalink, setWpPermalink] = useState<string | null>(null);
@@ -243,8 +246,9 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
     setFormData({ ...formData, payment: next.join(', ') });
   };
 
-  const handleSubmit = async (e: React.FormEvent, allowDuplicate = false) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     if (e) e.preventDefault();
+    if(registrationBusy.current) return;
     setErrorMessage(null);
 
     if (!formData.name.trim()) {
@@ -255,12 +259,16 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
       setErrorMessage('Por favor selecciona una categoría o giro comercial.');
       return;
     }
-    if (!formData.phone.trim()) {
+    if (!contactDigits(formData.phone) && !contactDigits(formData.whatsapp)) {
       setErrorMessage('Por favor ingresa al menos un número telefónico o WhatsApp de contacto.');
       return;
     }
 
-    if (!allowDuplicate) {
+    if ((formData.phone.trim()&&!contactDigits(formData.phone))||(formData.whatsapp.trim()&&!contactDigits(formData.whatsapp))) {setErrorMessage('El contacto debe tener diez dígitos mexicanos válidos.');return;}
+    registrationBusy.current = true;
+    setIsSubmitting(true);
+    try {
+    {
       const dup = await checkBusinessDuplicate(formData.name.trim(), formData.phone.trim());
       if (dup.isDuplicate && dup.existingBusiness) {
         setDuplicateWarning({
@@ -273,10 +281,9 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
       }
     }
 
-    setIsSubmitting(true);
-    try {
-      const phoneClean = cleanPhoneNumber(formData.phone);
-      const waClean = cleanPhoneNumber(formData.whatsapp) || phoneClean;
+      const phoneClean = contactDigits(formData.phone);
+      const waClean = contactDigits(formData.whatsapp);
+      registrationRequestId.current ||= crypto.randomUUID();
       const deliveryStr = selectedDeliveryOptions.join(', ') || 'Atención en el Local de la empresa';
       const paymentStr = selectedPaymentOptions.join(', ') || 'Efectivo';
       const hasDel = selectedDeliveryOptions.some(o => o.toLowerCase().includes('domicilio') || o.toLowerCase().includes('envío'));
@@ -299,7 +306,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
         deliveryOption: deliveryStr,
         image: formData.image || logoPreview || '',
         gallery: galleryImages
-      });
+      }, registrationRequestId.current);
 
       if (res.success) {
         setDuplicateWarning(null);
@@ -325,6 +332,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
     } catch (err: any) {
       setErrorMessage(err.message || 'Error de conexión');
     } finally {
+      registrationBusy.current = false;
       setIsSubmitting(false);
     }
   };
@@ -416,6 +424,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
             <button
               onClick={() => {
                 setIsSuccess(false);
+                registrationRequestId.current = null;
                 setFormData({
                   name: '',
                   category: '',
@@ -496,10 +505,10 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={e => handleSubmit(e, true)}
+              onClick={() => {setDuplicateWarning(null);setErrorMessage('Revisa los datos o edita el negocio existente. Los duplicados no se registran.');}}
               className="px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-stone-950 font-black text-xs cursor-pointer shadow-md transition-all"
             >
-              Continuar y registrar de todas formas
+              Revisar datos del negocio
             </button>
           </div>
         </div>
@@ -634,7 +643,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
               <label className="text-xs font-bold text-stone-800">Teléfono Local *</label>
               <input
                 type="tel"
-                required
+                required={!formData.whatsapp.trim()}
                 value={formData.phone}
                 onChange={e => setFormData({ ...formData, phone: e.target.value })}
                 placeholder="Ej. 938 123 4567"
@@ -1080,3 +1089,4 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
     </div>
   );
 };
+

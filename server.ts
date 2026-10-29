@@ -1,3 +1,5 @@
+import {registerStagingBusinessRoutes} from './src/server/stagingBusinessRoutes';
+import {verifyStagingAdmin,createLoginLimiter,stagingBusinessConfiguration} from './src/server/stagingBusinessSecurity';
 import { prepareContactPatch, contactsMatchReadback, ContactPatchError, contactDigits, contactCounts, matchesContactFilter, CONTACT_FILTERS, type ContactFilter } from './src/utils/businessContacts';
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
@@ -49,6 +51,9 @@ import {
   dbGetRatingStats, dbGetBusinessRating, dbInsertRating,
   isStagingEnvironment,
   isWritePermitted,
+  isBusinessWritePermitted,
+  PRODUCTION_DB_USER,
+  stagingBusinessStore,
   validateStagingDbConfiguration,
   PRODUCTION_DB_NAME
 } from './src/db/mariadb.ts';
@@ -128,6 +133,14 @@ app.use((req: Request, res: Response, next) => {
 // Staging safety & write protection: do not allow requests that can modify shared production data.
 // In Staging or when read-only mode is active, block mutating HTTP methods (POST, PUT, DELETE, PATCH).
 app.use((req: Request, res: Response, next: NextFunction) => {
+  if (isStagingEnvironment()) {
+    if (['GET','HEAD','OPTIONS'].includes(req.method.toUpperCase())) return next();
+    if (req.method === 'POST' && req.path === '/api/admin/login') return next();
+    const businessMutation = (req.method === 'POST' && req.path === '/api/submit-business') || (req.method === 'PATCH' && /^\/(?:api\/)?businesses\/[^/]+$/.test(req.path));
+    if (businessMutation && isBusinessWritePermitted()) return next();
+    if (req.path === '/api/ratings/get' || req.path === '/api/events/radar-search') return next();
+    return res.status(403).json({success:false,error:'STAGING_READ_ONLY',message:'Solo el carril autorizado de registro y edición puede escribir negocios. Las demás operaciones permanecen bloqueadas.'});
+  }
   if (!isWritePermitted()) {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
       // Excepción para búsquedas o consultas enviadas por POST que no modifican datos
@@ -1591,6 +1604,7 @@ app.get('/api/database-status', (_req: Request, res: Response) => {
 
   res.json({
     success: true,
+    businessWrites: {configured:isStagingEnvironment() && stagingBusinessConfiguration(process.env,PRODUCTION_DB_USER),permitted:isBusinessWritePermitted(),scope:'businesses-only'},
     activeEngine: isMariaDbActive() ? 'mariadb_hostinger' : 'local_json',
     environment: isStaging ? 'staging' : (process.env.NODE_ENV || 'production'),
     stagingIsolation: {
@@ -2609,6 +2623,14 @@ app.get('/api/check-duplicate', (req: Request, res: Response) => {
   return res.json({ isDuplicate: false });
 });
 
+// Controlled Staging routes own these paths before the legacy handlers; normal environments fall through.
+registerStagingBusinessRoutes(app, {
+  isStaging:isStagingEnvironment, canWrite:isBusinessWritePermitted,
+  categorySlugs:generateCategorySlugs,
+  isAdmin:req=>isVerifiedAdminSession(req), readAll:()=>dbLoadAllBusinesses(true), store:stagingBusinessStore,
+  saved:business=>{businessesCache=[business,...businessesCache.filter(b=>String(b.id)!==String(business.id))];cachedDbSignature=null;}
+});
+
 // Submit / Register new Business
 app.post('/api/submit-business', async (req: Request, res: Response) => {
   try {
@@ -3019,7 +3041,8 @@ function savePinsToFile() {
 }
 
 // Admin get all active edit pins
-app.get('/api/admin/businesses-edit-pins', (_req: Request, res: Response) => {
+app.get('/api/admin/businesses-edit-pins', (req: Request, res: Response) => {
+  if (!isVerifiedAdminSession(req)) return res.status(401).json({success:false,pins:{}});
   const now = Date.now();
   const activePins: Record<number, any> = {};
   for (const [key, val] of Object.entries(editPinsCache)) {
@@ -7726,6 +7749,11 @@ app.post('/api/businesses/approve-multiple-candidates', async (req: Request, res
 });
 
 // Admin Accounts
+app.get('/api/admin/session',(req:Request,res:Response)=>{
+  res.setHeader('Cache-Control','no-store');
+  return isVerifiedAdminSession(req)?res.json({success:true,authenticated:true}):res.status(401).json({success:false,authenticated:false});
+});
+
 app.get('/api/admin/accounts', (_req: Request, res: Response) => {
   res.json({
     success: true,
@@ -7745,7 +7773,18 @@ const normalizeAdminName = (name: string) => {
   return n;
 };
 
+const stagingLoginAllowed = createLoginLimiter();
 app.post('/api/admin/login', (req: Request, res: Response) => {
+  if (isStagingEnvironment()) {
+    if (!stagingLoginAllowed(req.ip || 'unknown')) return res.status(429).json({success:false,error:'Demasiados intentos; espera antes de reintentar.'});
+    const result = verifyStagingAdmin(req.body?.username,req.body?.password,process.env);
+    if (!result.configured) return res.status(503).json({success:false,error:'Autenticación segura de Staging pendiente de configuración.'});
+    if (!result.ok) return res.status(401).json({success:false,error:'Credenciales incorrectas.'});
+    for (const [key,expires] of privilegedAdminSessions) if(expires <= Date.now())privilegedAdminSessions.delete(key);
+    if (privilegedAdminSessions.size >= 1000) return res.status(429).json({success:false,error:'Límite de sesiones alcanzado.'});
+    const token=crypto.randomBytes(32).toString('hex');privilegedAdminSessions.set(token,Date.now()+6*60*60*1000);
+    return res.json({success:true,username:req.body.username,token});
+  }
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ success: false, error: 'Usuario y contraseña requeridos' });
