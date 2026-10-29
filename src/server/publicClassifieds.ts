@@ -10,7 +10,7 @@ export const CLASSIFIEDS_TABLE = 'public_classifieds';
 export const ISOLATION_TABLE = 'enc_classifieds_isolation';
 export const ISOLATION_MARKER = 'ENC-CLASSIFIEDS-LAB-ISOLATED';
 export const CLASSIFIED_TTL_DAYS = 7;
-const CATEGORIES = ['servicios', 'compra-venta', 'empleos', 'inmuebles', 'vehiculos', 'otros'];
+const CATEGORIES = ['inmuebles', 'vehiculos', 'empleos', 'compra-venta', 'mascotas', 'eventos'];
 
 export class ClassifiedsError extends Error {
   constructor(public code: string, public status: number, message: string, public uncertain = false) {
@@ -55,8 +55,8 @@ export function validateClassifiedInput(body: ClassifiedInput) {
     if (!Number.isFinite(price) || price < 0 || price > 9999999.99) fail('VALIDATION_FAILED', 400, 'Precio inválido.');
   }
   const imageUrl = String(body.imageUrl ?? '').trim();
-  if (imageUrl && (imageUrl.includes('..') || !/^\/(uploads|images|wp-content)\/[A-Za-z0-9._\-/]+$/.test(imageUrl))) {
-    fail('VALIDATION_FAILED', 400, 'Solo se permiten rutas multimedia internas.');
+  if (imageUrl) {
+    fail('VALIDATION_FAILED', 400, 'Las fotografías públicas requieren almacenamiento seguro y aún no están habilitadas.');
   }
   const idempotencyKey = String(body.idempotencyKey ?? '').trim();
   if (idempotencyKey && !/^[A-Za-z0-9_-]{8,64}$/.test(idempotencyKey)) fail('VALIDATION_FAILED', 400, 'Clave de idempotencia inválida.');
@@ -134,7 +134,8 @@ export function createClassifiedsService(deps: ClassifiedsDeps = {}) {
     id: row.id, title: row.title, description: row.description, category: row.category,
     price: row.price === null || row.price === undefined ? null : Number(row.price),
     contactPhone: row.contact_phone, contactWhatsapp: row.contact_whatsapp || '',
-    imageUrl: row.image_url || '', status: row.status, expiresAt: row.expires_at,
+    phone: row.contact_phone, whatsapp: row.contact_whatsapp || '',
+    imageUrl: row.image_url || '', image: row.image_url || '', status: row.status, expiresAt: row.expires_at,
     createdAt: row.created_at,
   });
 
