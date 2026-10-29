@@ -612,6 +612,16 @@ export async function fetchPublicClassifieds(params: {
 
 export const fetchClassifieds = fetchPublicClassifieds;
 
+/** El backend debe emitir ownerToken tras creación; nunca fabricar permisos de propietario. */
+function classifiedOwnerToken(id: string): string | null {
+  try { return localStorage.getItem('encarmen_classified_owner_' + id); } catch { return null; }
+}
+function saveClassifiedOwnerToken(id: string, token: unknown): void {
+  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{24,128}$/.test(token)) return;
+  try { localStorage.setItem('encarmen_classified_owner_' + id, token); } catch {}
+}
+
+
 export async function createPublicClassified(ad: Partial<import('../types').ClassifiedAd>): Promise<{
   success: boolean;
   message: string;
@@ -643,6 +653,9 @@ export async function createPublicClassified(ad: Partial<import('../types').Clas
       return { success: false, message: errorMsg, status: res.status };
     }
     const data = await res.json();
+    if (data?.success === true && typeof data.classified?.id === 'string') {
+      saveClassifiedOwnerToken(data.classified.id, data.ownerToken);
+    }
     return {
       success: data?.success === true && typeof data.classified?.id === 'string' && data.classified.id.length > 0,
       message: data?.success === true && typeof data.classified?.id === 'string' && data.classified.id.length > 0 ? (data.message || 'Anuncio recibido por el servidor; persistencia pendiente de verificación independiente.') : 'El servidor no confirmó la publicación del anuncio.',
@@ -669,10 +682,12 @@ export async function updatePublicClassified(
   classified?: import('../types').ClassifiedAd;
   status?: number;
 }> {
+  const ownerToken = classifiedOwnerToken(id);
+  if (!ownerToken) return {success:false,message:'No hay credencial de titular verificada para editar este anuncio.',status:403};
   try {
     const res = await fetch(API_BASE + '/public/classifieds/' + encodeURIComponent(id), {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-classified-owner-token': ownerToken },
       body: JSON.stringify(updates)
     });
     if (res.status === 404) {
@@ -713,9 +728,12 @@ export async function deletePublicClassified(id: string): Promise<{
   message: string;
   status?: number;
 }> {
+  const ownerToken = classifiedOwnerToken(id);
+  if (!ownerToken) return {success:false,message:'No hay credencial de titular verificada para retirar este anuncio.',status:403};
   try {
     const res = await fetch(API_BASE + '/public/classifieds/' + encodeURIComponent(id), {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: { 'x-classified-owner-token': ownerToken }
     });
     if (res.status === 404) {
       return {
