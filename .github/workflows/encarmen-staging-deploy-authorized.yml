@@ -1,0 +1,126 @@
+name: ENCARMEN - Despliegue Staging autorizado y reversible
+on:
+  push:
+    branches: [coord/encarmen-work-control-001]
+    paths: [.github/workflows/encarmen-staging-deploy-authorized.yml]
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-authorized-staging-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      SSH_PASSWORD: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Obtener herramientas de coordinación
+        uses: actions/checkout@v4
+        with:
+          path: coordination
+          persist-credentials: false
+      - name: Obtener SHA candidato exacto
+        uses: actions/checkout@v4
+        with:
+          ref: 7e7818166beecb9e3905aa8af83ec61f7d993737
+          path: candidate
+          persist-credentials: false
+      - name: Preparar Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+      - name: Compilacion minima de la version aprobada
+        working-directory: candidate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '7e7818166beecb9e3905aa8af83ec61f7d993737'
+          npm ci --ignore-scripts
+          npx tsc --noEmit
+          npx vite build
+          npx esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=server.js
+          mkdir -p api
+          cp server.js api/server.bundle.js
+          printf '7e7818166beecb9e3905aa8af83ec61f7d993737\n' > dist/encarmen-release.txt
+          tar -czf ../staging-payload.tar.gz server.js dist api/server.bundle.js
+          gzip -t ../staging-payload.tar.gz
+          sha256sum ../staging-payload.tar.gz
+      - name: Configurar SSH con huella Hostinger verificada
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PASSWORD"
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+      - name: Validar Staging y respaldo SQL previo
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SSHPASS="$SSH_PASSWORD"
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'sh -s' <<'REMOTE'
+          set -eu
+          root="$HOME/domains/staging.encarmen.org/hbuilds"
+          test -L "$root/current"
+          test "$(readlink "$root/current")" = 'versions/01a18545-6254-7060-bb07-7b73bf4df65f'
+          test -d "$root/current/nodejs/node_modules"
+          test -f "$root/current/nodejs/api/server.bundle.js"
+          test -d "$HOME/encarmen-staging-backups/database"
+          test "$(find "$HOME/encarmen-staging-backups/database" -maxdepth 1 -name 'staging-db-*.sql.gz' -type f | wc -l)" -ge 1
+          test -d "$HOME/domains/encarmen.org"
+          echo 'PRECHECK_STAGING_BACKUP_AND_OLD_VERSION=PASS'
+          REMOTE
+      - name: Transferir payload y script a directorio privado
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SSHPASS="$SSH_PASSWORD"
+          HOST=u293982346@45.137.159.114
+          OPT=(-T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no)
+          sshpass -e ssh "${OPT[@]}" "$HOST" 'umask 077; cat > "$HOME/encarmen-staging-backups/payload-enc-coord-7e7818166bee.tar.gz"' < staging-payload.tar.gz
+          sshpass -e ssh "${OPT[@]}" "$HOST" 'umask 077; cat > "$HOME/encarmen-staging-backups/deploy-staging-candidate.sh"' < coordination/ops/staging-backups/deploy_staging_candidate.sh
+      - name: Backup selectivo y cambio atomico de version Staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SSHPASS="$SSH_PASSWORD"
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 "bash \"\$HOME/encarmen-staging-backups/deploy-staging-candidate.sh\" '7e7818166beecb9e3905aa8af83ec61f7d993737'"
+      - name: Comprobar sitio publicado y marca de nueva version
+        shell: bash
+        run: |
+          set -euo pipefail
+          for n in 1 2 3 4 5; do
+            http=$(curl -sS -L -o /tmp/encarmen-staging-response -w '%{http_code}' --max-time 12 https://staging.encarmen.org/ || true)
+            version=$(curl -sS -L --max-time 12 https://staging.encarmen.org/encarmen-release.txt || true)
+            echo "CHECK=$n HTTP=$http RELEASE_MATCH=$([[ "$version" == '7e7818166beecb9e3905aa8af83ec61f7d993737' ]] && echo yes || echo no)"
+            if [[ "$http" = "200" && "$version" = '7e7818166beecb9e3905aa8af83ec61f7d993737' ]]; then
+              echo "STAGING_RELEASE_VERIFIED=7e7818166beecb9e3905aa8af83ec61f7d993737"
+              exit 0
+            fi
+            sleep 8
+          done
+          echo "::error::Staging no confirmó la versión; ejecutar rollback"
+          exit 1
+      - name: Reversion automatica si falla despliegue o healthcheck
+        if: failure()
+        shell: bash
+        run: |
+          if [[ -z "$SSH_PASSWORD" ]]; then exit 0; fi
+          if [[ ! -f "$HOME/.ssh/known_hosts" ]]; then exit 0; fi
+          export SSHPASS="$SSH_PASSWORD"
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'sh -s' <<'REMOTE'
+          set -eu
+          root="$HOME/domains/staging.encarmen.org/hbuilds"
+          if [ "$(readlink "$root/current" 2>/dev/null)" = 'versions/enc-coord-7e7818166bee' ]; then
+            link="$root/.rollback-enc-coord"
+            test ! -e "$link" && test ! -L "$link"
+            ln -s 'versions/01a18545-6254-7060-bb07-7b73bf4df65f' "$link"
+            mv -Tf "$link" "$root/current"
+            touch "$root/current/nodejs/tmp/restart.txt"
+            echo 'ROLLBACK_TO_PREVIOUS_STAGING_VERSION=COMPLETE'
+          else
+            echo 'ROLLBACK_NOT_REQUIRED_CURRENT_VERSION_UNCHANGED'
+          fi
+          REMOTE
