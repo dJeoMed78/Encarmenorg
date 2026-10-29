@@ -1,3 +1,4 @@
+import { contactDigits } from '../utils/businessContacts';
 import React, { useState, useEffect } from 'react';
 import { X, Share2, Copy, Check, Download, ExternalLink, QrCode, MapPin, Phone, Globe } from 'lucide-react';
 import { Business } from '../types';
@@ -35,7 +36,8 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
   const fullWebUrl = getBusinessPublicUrl(business);
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=8&data=${encodeURIComponent(fullWebUrl)}`;
   const categoryName = getBusinessPrimaryCategory(business);
-  const phoneDisplay = formatPhoneNumber(business.phone || business.whatsapp) || 'Teléfono no registrado';
+  const phoneDisplay = contactDigits(business.phone) ? formatPhoneNumber(business.phone) : 'No registrado';
+  const whatsappDisplay = contactDigits(business.whatsapp) ? formatPhoneNumber(business.whatsapp) : 'No registrado';
   const addressDisplay = business.address
     ? formatAddressText(business.address)
     : business.colonia
@@ -125,7 +127,8 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
       // Teléfono / WhatsApp
       ctx.fillStyle = '#0f172a';
       ctx.font = 'bold 20px system-ui, sans-serif';
-      ctx.fillText(`📞 Tel / WhatsApp: ${phoneDisplay}`, 45, 275);
+      ctx.fillText(`📞 Teléfono: ${phoneDisplay}`, 45, 275);
+      ctx.fillText(`WhatsApp: ${whatsappDisplay}`, 45, 300);
 
       // Caja Web Oficial Completa
       ctx.fillStyle = '#fffbeb';
@@ -263,7 +266,7 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
 
               <div className="flex items-center gap-2.5 text-base font-black text-stone-900">
                 <Phone className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Tel / WhatsApp: {phoneDisplay}</span>
+                <span>Teléfono: {phoneDisplay}<br />WhatsApp: {whatsappDisplay}</span>
               </div>
 
               {/* Dirección Web Completa SIN truncar */}
@@ -347,4 +350,5 @@ export const DigitalCardModal: React.FC<DigitalCardModalProps> = ({
     </div>
   );
 };
+
 

@@ -176,8 +176,9 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
   };
 
   const getWaPinUrl = (biz: Business, pin: string) => {
-    const rawNum = (biz.whatsapp || biz.phone || '').replace(/\D/g, '');
-    const num = rawNum.startsWith('52') ? rawNum : `52${rawNum}`;
+    const rawNum = contactDigits(biz.whatsapp);
+    if (!rawNum) return '';
+    const num = `52${rawNum}`;
     const msg = `Hola, este es tu código de edición temporal de 10 dígitos para tu negocio "${biz.name}" en el directorio oficial Empresas en Carmen:\n\n🔑 CÓDIGO: ${pin}\n\n⏱️ Validez: 12 horas.\n\nPuedes ingresar a https://encarmen.org, buscar tu empresa y tocar "Editar mi negocio" para actualizar tus datos, fotos, horarios y teléfonos.`;
     return `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
   };
@@ -561,7 +562,7 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
                             <Copy className="w-3.5 h-3.5" />
                           )}
                         </button>
-                        <a
+                        {contactDigits(biz.whatsapp) && <a
                           href={getWaPinUrl(biz, pinInfo.pin)}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -569,7 +570,7 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
                           title="Enviar código al dueño por WhatsApp"
                         >
                           <MessageSquare className="w-3.5 h-3.5" />
-                        </a>
+                        </a>}
                         <button
                           type="button"
                           onClick={() => handleGeneratePin(biz.id)}

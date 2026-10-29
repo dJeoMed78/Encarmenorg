@@ -4,7 +4,8 @@ export const CONTACT_FILTERS: ContactFilter[] = ['all', 'phone', 'no-phone', 'wh
 
 // Mexican business contacts only. Never infer WhatsApp from the voice number.
 export function contactDigits(value: unknown): string {
-  const text = String(value ?? '').trim();
+  if (typeof value !== 'string' && (typeof value !== 'number' || !Number.isSafeInteger(value))) return '';
+  const text = String(value).trim();
   if (!/^[+\d\s().-]+$/.test(text)) return '';
   const digits = text.replace(/\D/g, '');
   if (/^521\d{10}$/.test(digits)) return digits.slice(3);
@@ -47,4 +48,11 @@ export function prepareContactPatch(body: Record<string, unknown>, isAdmin: bool
     }
   }
   return {patch, clear};
+}
+
+// A write acknowledgement alone is insufficient to confirm the requested contacts.
+export function contactsMatchReadback(patch: Partial<Record<ContactField, string>>, record: {phone?: unknown; whatsapp?: unknown}): boolean {
+  return (Object.keys(patch) as ContactField[]).every(field => patch[field] === ''
+    ? String(record[field] ?? '').trim() === ''
+    : contactDigits(record[field]) === patch[field]);
 }

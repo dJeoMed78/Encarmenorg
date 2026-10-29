@@ -178,9 +178,9 @@ export async function initMariaDb(): Promise<boolean> {
       console.log(`[MariaDB/Hostinger] Conectado exitosamente a ${config.database} en ${candidateHost}`);
 
       // Staging nunca ejecuta DDL destructivo sobre producción ni en modo read-only
-      const canRunDdl = !isStaging
+      const canRunDdl = isWritePermitted() && (!isStaging
         ? process.env.STAGING_READ_ONLY !== 'true'
-        : (process.env.STAGING_ALLOW_SCHEMA_INIT === 'true' && config.database !== PRODUCTION_DB_NAME);
+        : (process.env.STAGING_ALLOW_SCHEMA_INIT === 'true' && config.database !== PRODUCTION_DB_NAME));
 
       if (canRunDdl) {
         await createTablesIfNotExist();

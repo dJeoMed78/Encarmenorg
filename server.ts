@@ -1,4 +1,4 @@
-import { prepareContactPatch, ContactPatchError, contactDigits, contactCounts, matchesContactFilter, CONTACT_FILTERS, type ContactFilter } from './src/utils/businessContacts';
+import { prepareContactPatch, contactsMatchReadback, ContactPatchError, contactDigits, contactCounts, matchesContactFilter, CONTACT_FILTERS, type ContactFilter } from './src/utils/businessContacts';
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 import express from 'express';
@@ -2772,6 +2772,7 @@ const isVerifiedAdminSession = (req: Request): boolean => {
 };
 // Admin update business
 app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: Response) => {
+  let writeMayHaveSucceeded = false;
   try {
     await refreshBusinessesFromDbIfNeeded(true);
     const id = req.params.id;
@@ -2848,15 +2849,17 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
     if (!isMariaDbActive()) {
       return res.status(503).json({ success: false, message: 'MariaDB no está disponible. Los cambios no se guardaron.' });
     }
+    writeMayHaveSucceeded = true; // A lost acknowledgement does not prove rollback.
     const persisted = await dbSaveBusiness({ ...updated,
       phone: contactIntent.patch.phone,
       whatsapp: contactIntent.patch.whatsapp
     }, { clearContacts: contactIntent.clear, updateContacts: true });
     if (!persisted) {
-      return res.status(503).json({ success: false, message: 'No fue posible guardar los cambios en MariaDB.' });
+      return res.status(503).json({ success: false, writeMayHaveSucceeded:true, message: 'No se pudo confirmar el guardado. Recarga antes de reintentar.' });
     }
     const confirmed = (await dbLoadAllBusinesses(true)).find(b => String(b.id) === String(oldBiz.id));
-    if (!confirmed) return res.status(503).json({success:false, message:'No se pudo verificar el resultado del guardado; recarga antes de reintentar.'});
+    if (!confirmed) return res.status(503).json({success:false, writeMayHaveSucceeded:true, message:'No se pudo verificar el resultado del guardado; recarga antes de reintentar.'});
+    if (!contactsMatchReadback(contactIntent.patch, confirmed)) return res.status(409).json({success:false, writeMayHaveSucceeded:true, message:'Los contactos releídos no coinciden con el cambio solicitado. Recarga antes de reintentar.'});
     updated = confirmed;
     if (contactIntent.clear.length) console.info('[Business contacts] Authorized explicit removal', { businessId: String(oldBiz.id), fields: contactIntent.clear });
     businessesCache = businessesCache.map(b => String(b.id) === String(oldBiz.id) ? updated : b);
@@ -2925,7 +2928,7 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
     return res.json({ success: true, message: 'Empresa actualizada con éxito', business: updated });
   } catch (err: any) {
     if (err instanceof ContactPatchError) return res.status(err.status).json({success:false, message:err.message});
-    return res.status(503).json({ success: false, message: 'No fue posible confirmar el guardado en MariaDB.' });
+    return res.status(503).json({ success: false, writeMayHaveSucceeded, message: writeMayHaveSucceeded ? 'La escritura fue aceptada, pero no pudo confirmarse. Recarga antes de reintentar.' : 'No fue posible confirmar el guardado en MariaDB.' });
   }
 });
 

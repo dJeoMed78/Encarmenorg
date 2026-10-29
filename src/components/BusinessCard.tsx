@@ -36,7 +36,7 @@ export function BusinessCard({
   const handleCall = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!targetCall) return;
-    window.open(`tel:${targetCall}`, '_self');
+    window.open(`tel:+${targetCall}`, '_self');
   };
 
   // Nombre formateado automáticamente en mayúsculas y minúsculas (Title Case)

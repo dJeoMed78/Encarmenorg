@@ -151,8 +151,8 @@ test('real Express GET/PATCH handlers with mocked DB: fresh reads despite unchan
  } finally {await api.close();}
 });
 
-async function loadComponent(file) {
- const result=await build({entryPoints:[new URL(file,root).pathname],bundle:true,write:false,platform:'node',format:'cjs',packages:'external',loader:{'.css':'empty'},jsx:'automatic'});
+async function loadComponent(file, plugins=[]) {
+ const result=await build({entryPoints:[new URL(file,root).pathname],bundle:true,write:false,platform:'node',format:'cjs',packages:'external',loader:{'.css':'empty'},jsx:'automatic',plugins});
  const module={exports:{}};
  vm.runInThisContext(`(function(require,module,exports,setTimeout,setInterval){${result.outputFiles[0].text}\n})`)(require,module,module.exports,()=>0,()=>0);
  return module.exports;
@@ -174,7 +174,7 @@ test('real rendered cards, Glass contact links and admin filters/pagination use 
   const buttons=[...container.querySelectorAll('button')];
   const wa=buttons.find(b=>/WhatsApp/.test(b.textContent));const call=buttons.find(b=>/Llamar/.test(b.textContent));
   assert.ok(wa);assert.ok(call);await act(async()=>{wa.click();call.click();});
-  assert.match(opened[0][0],/^https:\/\/wa.me\/525556667788\?/);assert.equal(opened[1][0],'tel:521112223344');
+  assert.match(opened[0][0],/^https:\/\/wa.me\/525556667788\?/);assert.equal(opened[1][0],'tel:+521112223344');
   await act(async()=>reactRoot.render(React.createElement(BusinessCard,{business:{...base,whatsapp:''},onClick:()=>{}})));
   assert.ok([...container.querySelectorAll('button')].find(b=>/WhatsApp/.test(b.textContent)).disabled);
   const {BusinessPublicDetail}=await loadComponent('src/components/BusinessPublicDetail.tsx');
@@ -242,3 +242,5 @@ test('App shows source error without seed contacts, retries and refreshes an ope
   assert.equal(container.querySelector('a[href="tel:+521112223344"]'),null);
  } finally {await act(async()=>reactRoot.unmount());globalThis.fetch=savedFetch;for(const key in saved){if(saved[key])Object.defineProperty(globalThis,key,saved[key]);else delete globalThis[key];}dom.window.close();delete globalThis.IS_REACT_ACT_ENVIRONMENT;}
 });
+
+export {execute, read, repository, contacts, fixture, routeHarness, loadComponent};

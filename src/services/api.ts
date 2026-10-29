@@ -411,6 +411,7 @@ export async function adminUpdateBusiness(id: number, data: Partial<import('../t
     });
     const parsed = await parseJsonResponse<{success:boolean;message:string;business?:Business}>(res, 'Error al actualizar negocio');
     if (!res.ok) return {success:false, message:parsed.message || `HTTP ${res.status}`};
+    if (parsed.success && (!parsed.business || Number(parsed.business.id) !== Number(id))) return {success:false, message:'El servidor no confirmó el negocio actualizado. Recarga antes de reintentar.'};
     return parsed;
   } catch (err: any) {
     return { success: false, message: err.message || 'Error al actualizar negocio' };

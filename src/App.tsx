@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { Hero, PromoItem, EventItem } from './components/Hero';
 import { BusinessCard } from './components/BusinessCard';
@@ -79,6 +79,7 @@ function findBusinessInList(list: Business[], candidateSlug: string): Business |
   return list.find(b =>
     (b.slug && b.slug.toLowerCase() === clean) ||
     String(b.id) === clean ||
+    ((b as any).oldId != null && String((b as any).oldId).toLowerCase() === clean) ||
     (Array.isArray((b as any).previousSlugs) && (b as any).previousSlugs.some((ps: string) => ps.toLowerCase() === clean)) ||
     (Array.isArray((b as any).previousNames) && (b as any).previousNames.some((pn: string) => pn.toLowerCase().replace(/[^a-z0-9]+/g, '-') === clean || pn.toLowerCase().trim() === clean)) ||
     (b.name && b.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === clean) ||
@@ -296,24 +297,28 @@ export default function App() {
   const [businessesList, setBusinessesList] = useState<Business[]>([]);
   const [businessesStatus, setBusinessesStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [businessesReload, setBusinessesReload] = useState(0);
+  const businessRequestVersion = useRef(0);
+  const businessRequestController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let alive = true;
     const controller = new AbortController();
+    businessRequestController.current = controller;
+    const version = ++businessRequestVersion.current;
     setBusinessesStatus('loading');
     fetch('/api/businesses', { cache: 'no-store', signal: controller.signal })
       .then(async r => {
         if (!r.ok) throw new Error('Business source unavailable');
         const data = await r.json();
         if (!Array.isArray(data.businesses)) throw new Error('Invalid business response');
-        if (!alive) return;
+        if (!alive || version !== businessRequestVersion.current) return;
         setBusinessesList(data.businesses);
         setBusinessOverrides({});
         setBusinessesStatus('ready');
         const slug = getBusinessSlugFromUrl();
         if (slug) setLandingBusiness(findBusinessInList(data.businesses, slug));
         setSelectedBusiness(previous => previous ? data.businesses.find((b: Business) => String(b.id) === String(previous.id)) || null : null);
-      }).catch(() => { if (alive) { setBusinessesStatus('error'); setBusinessesList([]); setSelectedBusiness(null); setLandingBusiness(null); } });
+      }).catch(() => { if (alive && version === businessRequestVersion.current) { setBusinessesStatus('error'); setBusinessesList([]); setSelectedBusiness(null); setLandingBusiness(null); } });
     return () => { alive = false; controller.abort(); };
   }, [businessesReload]);
 
@@ -625,6 +630,10 @@ export default function App() {
       // 1. Enviar cambios al servidor (persiste en MariaDB, businessesCache y businesses_seed.json)
       const res = await adminUpdateBusiness(id, updatedData);
       if (!res.success) return { success: false, message: res.message || 'No se pudieron guardar los cambios en el servidor.' };
+      // A pending older catalog response must not overwrite a confirmed save.
+      businessRequestVersion.current += 1;
+      businessRequestController.current?.abort();
+      setBusinessesStatus('ready');
       const serverUpdated = res.business;
       const finalData: Partial<Business> = serverUpdated ? { ...updatedData, ...serverUpdated } : updatedData;
 

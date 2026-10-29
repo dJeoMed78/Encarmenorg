@@ -921,7 +921,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                     )}
                     <p className="flex items-center gap-1 text-stone-950 font-black">
                       <Phone className="w-3.5 h-3.5 text-stone-900 shrink-0" />
-                      <span>{formatMexicanPhone(business.phone || business.whatsapp) || 'Contacto disponible en web'}</span>
+                      <span>Tel: {contactDigits(business.phone) ? formatMexicanPhone(business.phone) : 'No registrado'} · WhatsApp: {contactDigits(business.whatsapp) ? formatMexicanPhone(business.whatsapp) : 'No registrado'}</span>
                     </p>
                   </div>
                 </div>
