@@ -1,9 +1,16 @@
 /**
- * ENC-PUBLIC-REGISTRATION-001 — rutas HTTP. Sin importaciones en tiempo de ejecución: el almacén y los guardas se inyectan.
- * Público (anónimo): solo POST /api/public/business-registrations. Administración: sesión de servidor obligatoria.
+ * ENC-PUBLIC-REGISTRATION-001-R1 — ruta HTTP pública. Sin importaciones en tiempo de ejecución.
+ * Única ruta: POST /api/public/business-registrations (anónima, sin permisos administrativos).
  */
 export const PUBLIC_REGISTRATION_PATH = '/api/public/business-registrations';
-export const ADMIN_REGISTRATION_PATH = '/api/admin/business-registrations';
+export const PUBLIC_BODY_LIMIT_BYTES = 16384;
+
+function coded(status: number, code: string, message: string): any {
+  const error: any = new Error(message);
+  error.status = status;
+  error.code = code;
+  return error;
+}
 
 function describe(error: any): any {
   if (error && typeof error.status === 'number' && typeof error.code === 'string') {
@@ -12,75 +19,34 @@ function describe(error: any): any {
   return { status: 503, body: { success: false, error: 'STORAGE_UNAVAILABLE', message: 'No se pudo completar la operación; no se guardó nada.', writeMayHaveSucceeded: false } };
 }
 
-export function registerPublicRegistrationRoutes(app: any, deps: any): void {
-  const send = (res: any, error: any) => {
-    const failure = describe(error);
-    return res.status(failure.status).json(failure.body);
-  };
-  const requireAdmin = (req: any) => {
-    if (!deps.isAdmin(req)) {
-      const error: any = new Error('Se requiere sesión administrativa vigente del servidor.');
-      error.status = 401;
-      error.code = 'ADMIN_SESSION_REQUIRED';
-      throw error;
-    }
-    return deps.actor ? String(deps.actor(req)) : 'admin-session';
-  };
+/** Debe montarse ANTES del analizador JSON global (50 MB): exige Content-Length y limita el tamaño del cuerpo. */
+export function publicRegistrationBodyLimit(req: any, res: any, next: any): any {
+  if (req.method !== 'POST') return next();
+  const length = Number(req.headers && req.headers['content-length']);
+  if (!Number.isFinite(length)) return res.status(411).json({ success: false, error: 'LENGTH_REQUIRED', message: 'Se requiere Content-Length.' });
+  if (length > PUBLIC_BODY_LIMIT_BYTES) return res.status(413).json({ success: false, error: 'PAYLOAD_TOO_LARGE', message: 'El envío es demasiado grande.' });
+  return next();
+}
 
+export function registerPublicRegistrationRoutes(app: any, deps: any): void {
   app.post(PUBLIC_REGISTRATION_PATH, async (req: any, res: any) => {
     try {
-      if (!deps.enabled()) {
-        const error: any = new Error('El registro público no está habilitado.');
-        error.status = 403;
-        error.code = 'PUBLIC_REGISTRATION_DISABLED';
-        throw error;
-      }
-      if (!deps.attempts(String(req.ip || ''))) {
-        const error: any = new Error('Demasiados intentos; intenta más tarde.');
-        error.status = 429;
-        error.code = 'RATE_LIMITED';
-        throw error;
-      }
+      if (!deps.enabled()) throw coded(403, 'PUBLIC_REGISTRATION_DISABLED', 'El registro público no está habilitado.');
+      const ip = String(req.ip || '');
+      if (!deps.attempts(ip)) throw coded(429, 'RATE_LIMITED', 'Demasiados intentos; intenta más tarde.');
       const validated = deps.validate(req.body);
-      const result = await deps.store.submit({ validated, requestKey: req.get('Idempotency-Key') || '', ip: req.ip || '' });
+      if (!deps.creations(ip)) throw coded(429, 'RATE_LIMITED', 'Demasiados registros desde esta conexión; intenta más tarde.');
+      const result = await deps.service.submit({ validated, requestKey: req.get('Idempotency-Key') || '' });
       return res.status(result.replayed ? 200 : 201).json({
         success: true,
         replayed: result.replayed,
-        request: result.request,
-        message: 'Solicitud recibida y guardada en espera de revisión. La empresa todavía no está publicada.',
+        business: result.business,
+        directoryVisible: result.directoryVisible,
+        message: 'Empresa registrada y publicada. El guardado se confirmó con una lectura en MariaDB.',
       });
     } catch (error) {
-      return send(res, error);
-    }
-  });
-
-  app.get(ADMIN_REGISTRATION_PATH, async (req: any, res: any) => {
-    try {
-      requireAdmin(req);
-      const result = await deps.store.list({ status: req.query && req.query.status, limit: req.query && req.query.limit, offset: req.query && req.query.offset });
-      return res.json({ success: true, ...result });
-    } catch (error) {
-      return send(res, error);
-    }
-  });
-
-  app.post(ADMIN_REGISTRATION_PATH + '/:id/approve', async (req: any, res: any) => {
-    try {
-      const actor = requireAdmin(req);
-      const result = await deps.store.approve(req.params.id, actor);
-      return res.json({ success: true, ...result, message: 'Solicitud aprobada y empresa confirmada en MariaDB de Staging.' });
-    } catch (error) {
-      return send(res, error);
-    }
-  });
-
-  app.post(ADMIN_REGISTRATION_PATH + '/:id/reject', async (req: any, res: any) => {
-    try {
-      const actor = requireAdmin(req);
-      const result = await deps.store.reject(req.params.id, actor, req.body && req.body.reason);
-      return res.json({ success: true, ...result, message: 'Solicitud rechazada.' });
-    } catch (error) {
-      return send(res, error);
+      const failure = describe(error);
+      return res.status(failure.status).json(failure.body);
     }
   });
 }

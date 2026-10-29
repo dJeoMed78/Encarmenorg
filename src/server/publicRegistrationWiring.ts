@@ -1,30 +1,29 @@
-import { createPublicRegistrationStore, createAttemptLimiter, validatePublicRegistration } from './publicRegistrationCore';
-import { registerPublicRegistrationRoutes } from './publicRegistrationRoutes';
-import { verifyStagingIsolation } from './stagingIsolationProof';
+import { createPublicRegistrationService, createPoolReaders, createAttemptLimiter, validatePublicRegistration } from './publicRegistrationCore.ts';
+import { registerPublicRegistrationRoutes, publicRegistrationBodyLimit } from './publicRegistrationRoutes.ts';
+
+export { publicRegistrationBodyLimit };
 
 /**
- * Montaje exclusivo de Staging. Debe invocarse junto a registerStagingBusinessRoutes y, si el guardián global
- * de métodos de Staging bloquea rutas desconocidas, esas cuatro rutas deben permitirse allí (ver documento).
- * businessStore: el almacén de createStagingBusinessStore (reutilizado para la aprobación).
+ * Montaje exclusivo de Staging del registro público directo. En otros entornos no registra nada.
+ * businessStore: el almacén de createStagingBusinessStore (INSERT sin upsert, duplicados, idempotencia, aislamiento).
  */
-export function mountPublicRegistration(app: any, deps: { isStaging: () => boolean; canWrite: () => boolean; isAdmin: (req: any) => boolean; getPool: () => any; businessStore: any }): void {
+export function mountPublicRegistration(app: any, deps: { isStaging: () => boolean; canWrite: () => boolean; getPool: () => any; businessStore: any; categorySlugs?: (categories: string[]) => string[]; saved: (business: any) => void; isVisible: (id: any) => boolean }): void {
   if (!deps.isStaging()) return;
-  const store = createPublicRegistrationStore({
+  const readers = createPoolReaders(deps.getPool);
+  const service = createPublicRegistrationService({
     canWrite: deps.canWrite,
-    getConnection: async () => {
-      const pool = deps.getPool();
-      if (!pool) throw new Error('POOL_UNAVAILABLE');
-      return pool.getConnection();
-    },
-    verifyIsolation: (conn: any) => verifyStagingIsolation(conn, process.env),
     businessStore: deps.businessStore,
-    ipSalt: () => process.env.PUBLIC_REGISTRATION_IP_SALT || '',
+    countRecentPublic: readers.countRecentPublic,
+    readBusiness: readers.readBusiness,
+    categorySlugs: deps.categorySlugs,
+    onSaved: deps.saved,
+    isVisible: deps.isVisible,
   });
   registerPublicRegistrationRoutes(app, {
-    store,
-    isAdmin: deps.isAdmin,
+    service,
     enabled: () => deps.canWrite() && process.env.PUBLIC_REGISTRATION_ENABLED === 'true',
     attempts: createAttemptLimiter(20, 15 * 60 * 1000),
+    creations: createAttemptLimiter(3, 60 * 60 * 1000),
     validate: validatePublicRegistration,
   });
 }

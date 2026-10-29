@@ -1,57 +1,41 @@
-# ENC-PUBLIC-REGISTRATION-001 — solicitudes públicas de registro (backend)
+# ENC-PUBLIC-REGISTRATION-001-R1 — registro público directo en businesses
 
-Rama: `work/enc-public-registration-001`, base `0e2488f5552bf7768a15711316b0de4d71b5d17e`. Sin merge, PR, despliegue, SQL real, migraciones, variables ni Hostinger.
+Rama `work/enc-public-registration-001`, base `a6dc0a73ee394f1f5e07901814c2f123e7be01cc`. Sin merge, PR, despliegue, SQL real, migraciones, variables ni Hostinger.
 
-## Flujo
+## Flujo implementado
 
-1. Visitante anónimo: `POST /api/public/business-registrations` con cabecera `Idempotency-Key` (UUID v4). Se valida, se guarda una fila `pending` en `business_registration_requests` y se confirma con lectura SQL posterior. No se publica nada ni se toca `businesses`.
-2. Administrador (sesión de servidor): `GET /api/admin/business-registrations?status=&limit=&offset=`, `POST .../:id/approve`, `POST .../:id/reject` (cuerpo `{reason}`).
-3. Aprobar: reclama la solicitud (`approving`, con `FOR UPDATE`), llama al almacén existente `createStagingBusinessStore().create(draft, <id de la solicitud>)` (INSERT sin upsert, duplicados, ID bajo bloqueo, lectura posterior, aislamiento) y cierra la solicitud (`approved` + `business_id`) con lectura posterior. El id de la solicitud es la clave de idempotencia del almacén: un reintento tras un fallo incierto converge sin crear una segunda empresa. Un duplicado devuelve la solicitud a `pending` y responde 409.
+Usuario -> formulario -> `POST /api/public/business-registrations` -> validación -> `stagingBusinessStore.create(draft, Idempotency-Key)` (INSERT sin upsert, duplicados por nombre o contacto, ID bajo bloqueo, idempotencia, aislamiento de Staging, lectura posterior) -> segunda lectura SQL independiente (`SELECT id, name, phone, whatsapp, status FROM businesses WHERE id = ?`) -> caché del directorio actualizada -> `201` con el ID.
 
-Antiabuso: honeypot `hp`, campos permitidos cerrados, sin HTML, límites de longitud, contactos mexicanos de 10 dígitos (WhatsApp nunca se infiere), límite persistente por IP (3/hora, 6/día; la IP solo se guarda como SHA-256 con sal), cola máxima de 200 pendientes y límite en memoria de 20 intentos/15 min. Duplicados contra empresas y contra solicitudes pendientes.
+- Sin estados de revisión, sin aprobación administrativa y sin tabla nueva: se retiró la tabla de solicitudes y las rutas de administración de la entrega anterior.
+- El POST es anónimo y no consulta sesiones. No recibe ni acepta campos privilegiados (`id`, `status`, `slug`, `isTopBusiness`, `isRecommended`, `clearContacts`, `rating`...). La capa pública no escribe SQL propio: solo `SELECT`.
+- Teléfono y WhatsApp son independientes; se exige al menos uno válido (10 dígitos, acepta 52/521). El negocio guarda `registrationSource: "public-form"` para poder auditar y moderar a posteriori.
+- Abuso: campos cerrados, honeypot `hp`, sin HTML, longitudes, URL http(s) sin credenciales, `Content-Length` obligatorio y máximo 16 KB antes del analizador JSON global (50 MB), 20 intentos/15 min y 3 registros válidos/hora por IP (en memoria), y tope global persistente de 30/hora y 200/día contado sobre `businesses` (`raw_data LIKE`).
+- Errores reales: 400 validación, 403 deshabilitado, 409 duplicado o clave reutilizada con otros datos, 429 límites, 503 MariaDB o lectura de confirmación fallida (`writeMayHaveSucceeded` indica si conviene reintentar con la misma clave). Nunca se guarda en local ni se responde éxito sin lectura confirmada.
+- Solo Staging: `mountPublicRegistration` no registra nada fuera de Staging y exige `PUBLIC_REGISTRATION_ENABLED=true` más el interruptor de escritura de negocios existente.
 
-Aislamiento: toda escritura exige `canWrite()` y `verifyStagingIsolation` (commit `0e2488f`); sin ambos, 403 y ninguna consulta de escritura. El almacén no se construye sin verificador.
+## Conexión en server.ts (PENDIENTE: la herramienta no puede editar server.ts)
 
-## Tabla requerida (propuesta, NO ejecutada; el código falla con 503 `REGISTRATION_STORAGE_NOT_READY` si no existe)
+`server.ts` pesa cientos de KB y la herramienta no permite editarlo parcialmente. El parche exacto y verificable es el script de este commit; se aplica desde la raíz del repositorio en esta rama:
 
-    CREATE TABLE business_registration_requests (
-      id CHAR(36) NOT NULL PRIMARY KEY,
-      request_key CHAR(36) NOT NULL,
-      digest CHAR(64) NOT NULL,
-      status VARCHAR(16) NOT NULL DEFAULT 'pending',
-      name VARCHAR(160) NOT NULL,
-      name_norm VARCHAR(160) NOT NULL,
-      phone VARCHAR(10) NOT NULL DEFAULT '',
-      whatsapp VARCHAR(10) NOT NULL DEFAULT '',
-      applicant_email VARCHAR(160) NOT NULL DEFAULT '',
-      payload LONGTEXT NOT NULL,
-      ip_hash CHAR(64) NOT NULL,
-      business_id VARCHAR(64) NULL,
-      reject_reason VARCHAR(500) NULL,
-      reviewed_by VARCHAR(64) NULL,
-      reviewed_at DATETIME NULL,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      UNIQUE KEY uq_request_key (request_key),
-      KEY idx_status_created (status, created_at),
-      KEY idx_ip_created (ip_hash, created_at),
-      KEY idx_name_norm (name_norm),
-      KEY idx_phone (phone)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    node scripts/apply-public-registration-patch.mjs server.ts --check
+    node scripts/apply-public-registration-patch.mjs server.ts
 
-La cuenta de Staging necesita SELECT, INSERT y UPDATE sobre esta tabla (la comprobación de aislamiento ya exige INSERT/UPDATE sobre la base de Staging).
+Cada paso exige que su ancla aparezca exactamente una vez (si no, aborta sin escribir) y es idempotente. Cambios:
+1. Importa `mountPublicRegistration` y `publicRegistrationBodyLimit` de `./src/server/publicRegistrationWiring.ts`.
+2. Añade `getPool` a la importación de `./src/db/mariadb.ts`.
+3. En el guardián de Staging, `businessMutation` pasa a incluir `req.method === 'POST' && req.path === '/api/public/business-registrations'` (coincidencia exacta; PUT, PATCH, DELETE, barra final y subrutas siguen bloqueados).
+4. `app.use('/api/public/business-registrations', publicRegistrationBodyLimit)` justo antes de `app.use(express.json({ limit: '50mb' }))`.
+5. Tras `registerStagingBusinessRoutes(...)`, llama a `mountPublicRegistration(app, {...})` reutilizando `stagingBusinessStore`, `generateCategorySlugs` y la misma actualización de `businessesCache`/`cachedDbSignature` que usa el alta administrativa.
 
-## Cableado pendiente en server.ts (no editable con la herramienta: 350 KB)
+Después de aplicarlo: `npx tsc --noEmit` y `npx vite build` (no ejecutados por Perplexity).
 
-Junto a `registerStagingBusinessRoutes(...)`:
+## Variables (solo Staging, por el propietario)
 
-    import { mountPublicRegistration } from './src/server/publicRegistrationWiring';
-    mountPublicRegistration(app, { isStaging, canWrite: isBusinessWritePermitted, isAdmin: isVerifiedAdminSession, getPool, businessStore: stagingBusinessStore });
+`PUBLIC_REGISTRATION_ENABLED=true`, además de la configuración de escrituras ya documentada (`STAGING_READ_ONLY=false`, `STAGING_DB_CONFIRMED=true`, `STAGING_BUSINESS_WRITES_ENABLED=true`, marca de entorno y cuenta limitada de `ENC-STAGING-WRITE-001-RECOVERY`). Detrás de un proxy hay que configurar `trust proxy` para que `req.ip` sea la IP real; si no, todos los visitantes comparten el límite por IP. Reversión: quitar `PUBLIC_REGISTRATION_ENABLED` y reiniciar solo Staging. Para revisar altas públicas: `SELECT id, name, created_at FROM businesses WHERE raw_data LIKE '%"registrationSource":"public-form"%' ORDER BY created_at DESC;`.
 
-Si el guardián global de Staging bloquea métodos de escritura desconocidos, permitir `POST /api/public/business-registrations` y `POST /api/admin/business-registrations/:id/(approve|reject)`. Variables nuevas (solo en Staging, por el propietario): `PUBLIC_REGISTRATION_ENABLED=true` y `PUBLIC_REGISTRATION_IP_SALT` (secreto aleatorio de al menos 16 caracteres). Si falta cualquiera, el envío público responde con error real (403/503). Detrás de un proxy, configurar `trust proxy` para que `req.ip` sea la IP del visitante.
+## Pendientes y riesgos
 
-Reversión: quitar `PUBLIC_REGISTRATION_ENABLED` (o la llamada de montaje) y reiniciar solo Staging; las solicitudes guardadas permanecen y no afectan al directorio.
-
-## Pruebas y límites
-
-`tests/public-registration.test.mjs`: 17 pruebas con MariaDB y almacén de negocios SIMULADOS (Node 20, tipos eliminados con un script propio): validación, alta, idempotencia, duplicados, límites, errores, aislamiento, aprobación (concurrente, duplicado, fallo incierto, cierre fallido), rechazo, listado, rutas y lista blanca de SQL. 9 mutaciones del código fueron detectadas. No se ejecutó `tsc`, `vite build` ni nada contra MariaDB real, ni contra el almacén real `stagingBusinessStore`. Sin CAPTCHA (solo honeypot y límites): si se expone a Internet, añadir uno. El correo del solicitante se guarda solo en la solicitud y no pasa a la empresa.
+- La publicación inmediata de contenido anónimo no tiene revisión previa: honeypot y límites reducen el abuso pero no sustituyen un CAPTCHA ni la moderación posterior con las herramientas administrativas existentes.
+- El formulario del frontend aún apunta a `/api/submit-business` (requiere sesión administrativa en Staging); debe enviar a la ruta nueva solo los campos permitidos. No se modificó el frontend.
+- Si el tope global se agota, un reintento de un registro ya guardado recibe 429 hasta que baje el contador (luego se repite de forma idempotente).
+- Pruebas ejecutadas con MariaDB y almacén simulados; la persistencia real y el almacén real no se probaron. `tsc` y `vite build` no se ejecutaron.
