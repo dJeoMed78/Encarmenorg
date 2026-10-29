@@ -29,6 +29,7 @@ const VALID = {
 };
 
 const pool = await mysql.createPool(base);
+test.after(async () => { await pool.end(); });
 const service = createClassifiedsService({ pool });
 const rejects = (promise, code) => assert.rejects(promise, (e) => e instanceof ClassifiedsError && e.code === code);
 const direct = (sql, params = []) => pool.query(sql, params);
