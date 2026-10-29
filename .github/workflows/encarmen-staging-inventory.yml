@@ -1,0 +1,47 @@
+name: ENCARMEN - Inventario seguro de Staging via SSH
+on:
+  push:
+    branches: [coord/encarmen-work-control-001]
+    paths: [.github/workflows/encarmen-staging-inventory.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SSH_PASSWORD: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Verificar secreto
+        run: |
+          if [[ -z "$SSH_PASSWORD" ]]; then echo "::error::Falta secreto SSH"; exit 1; fi
+      - name: Preparar SSH con host verificado
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          [[ "$fp" == 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]] || { echo "::error::Huella no coincide"; exit 1; }
+      - name: Inventario solo lectura de directorios y utilidades
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SSHPASS="$SSH_PASSWORD"
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'sh -s' <<'REMOTE'
+          set -eu
+          printf 'SSH_IDENTITY='; id -un
+          printf 'HOME_DIR='; printf '%s\n' "$HOME"
+          printf 'DOMAINS_PARENT='
+          if [ -d "$HOME/domains" ]; then echo PRESENT; else echo ABSENT; fi
+          printf 'STAGING_DIRECTORIES:\n'
+          if [ -d "$HOME/domains" ]; then find "$HOME/domains" -maxdepth 4 -type d \( -iname '*staging*' -o -iname '*test*' \) -print 2>/dev/null | head -30; fi
+          printf 'BACKUP_TOOLS:\n'
+          for cmd in mariadb mariadb-dump mysqldump python3 tar gzip; do
+            if command -v "$cmd" >/dev/null 2>&1; then printf '%s=AVAILABLE\n' "$cmd"; else printf '%s=MISSING\n' "$cmd"; fi
+          done
+          printf 'PRIVATE_BACKUP_BASE_CANDIDATE='
+          if [ -d "$HOME" ] && [ -w "$HOME" ]; then echo HOME_WRITABLE; else echo NOT_WRITABLE; fi
+          REMOTE
