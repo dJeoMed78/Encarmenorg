@@ -1,10 +1,156 @@
 // server.ts
 import dotenv from "dotenv";
-import express from "express";
+import express2 from "express";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { execSync } from "child_process";
+
+// src/server/adminSecurity.ts
+import express from "express";
+import { createHmac, randomBytes, scrypt as derive, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
+var scrypt = promisify(derive);
+var ADMIN_PERMISSIONS = ["admin:manage", "business:manage", "business:delete", "business:publish", "event:manage", "classified:manage"];
+function environmentAdminProvider(env) {
+  try {
+    const encoded = env.ENC_ADMIN_CREDENTIALS_JSON;
+    if (!encoded || encoded.length > 65536) return;
+    const config = JSON.parse(encoded);
+    const origin = new URL(env.ENC_ADMIN_PUBLIC_ORIGIN || "");
+    if (origin.protocol !== "https:" || origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash) return;
+    if (config.version !== 1 || !Array.isArray(config.accounts) || !config.accounts.length || config.accounts.length > 20) return;
+    const names = /* @__PURE__ */ new Set();
+    const accounts = config.accounts.map((account) => {
+      if (typeof account.username !== "string" || !/^[a-z0-9_.-]{1,64}$/i.test(account.username)) throw Error("CONFIG");
+      const username = account.username.toLowerCase();
+      if (names.has(username)) throw Error("CONFIG");
+      names.add(username);
+      const match = typeof account.passwordHash === "string" && account.passwordHash.match(/^scrypt\$([a-f0-9]{32,64})\$([a-f0-9]{128})$/i);
+      if (!match || !Array.isArray(account.permissions) || !account.permissions.length || account.permissions.some((p) => !ADMIN_PERMISSIONS.includes(p))) throw Error("CONFIG");
+      return { username, permissions: [...new Set(account.permissions)], salt: Buffer.from(match[1], "hex"), hash: Buffer.from(match[2], "hex") };
+    });
+    const dummy = { salt: randomBytes(16), hash: randomBytes(64) };
+    return {
+      accounts: accounts.map((a) => ({ username: a.username, role: "Administrador", initial: a.username.slice(0, 1), avatarColor: "from-sky-500 to-indigo-600" })),
+      async authenticate(username, password) {
+        const account = accounts.find((a) => a.username === username.toLowerCase());
+        const target = account || dummy;
+        const actual = await scrypt(password, target.salt, 64);
+        const valid = timingSafeEqual(actual, target.hash);
+        return valid && account ? { username: account.username, permissions: [...account.permissions] } : null;
+      }
+    };
+  } catch {
+    return;
+  }
+}
+function adminPermission(requestPath, method) {
+  let decoded = requestPath;
+  try {
+    for (let i = 0; i < 4 && decoded.includes("%"); i++) decoded = decodeURIComponent(decoded);
+  } catch {
+    return "admin:manage";
+  }
+  if (decoded.includes("%") || /[\0\r\n]/.test(decoded)) return "admin:manage";
+  const path2 = decoded.replace(/\\/g, "/").replace(/\/{2,}/g, "/").replace(/\/$/, "").toLowerCase();
+  const mutable = !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
+  if (/^\/(?:api\/)?admin(?:\/|$)/.test(path2)) return "admin:manage";
+  if (/^\/api\/(?:mariadb|database-status)(?:\/|$)/.test(path2) || /^\/api\/(?:sync|webhook)(?:[-/]|$)/.test(path2)) return "admin:manage";
+  if (/^\/api\/businesses\/approve-(?:candidate|multiple-candidates)$/.test(path2)) return "business:publish";
+  if (/^\/api\/businesses\/(?:auto-search|auto-search-ai|parse-whatsapp-group)$/.test(path2)) return null;
+  if (/^\/(?:api\/)?businesses\/[^/]+(?:\/(?:sync-wp|verify-edit-pin))?$/.test(path2) && mutable) return method.toUpperCase() === "DELETE" ? "business:delete" : "business:manage";
+  if (/^\/(?:api\/)?classifieds(?:\/|$)/.test(path2) && mutable && !path2.endsWith("/radar-search")) return "classified:manage";
+  if (/^\/api\/events(?:\/|$)/.test(path2) && mutable && !path2.endsWith("/radar-search")) return "event:manage";
+  if (/^\/api\/reports(?:\/|$)/.test(path2) && method.toUpperCase() !== "POST") return "admin:manage";
+  if (/^\/api\/emergency(?:\/|$)/.test(path2) && mutable) return "admin:manage";
+  return null;
+}
+function registerAdminSecurity(app2, options = {}) {
+  const sessions = /* @__PURE__ */ new Map();
+  const attempts = /* @__PURE__ */ new Map();
+  const sessionSecret = randomBytes(32);
+  const now = options.now || Date.now;
+  const digest = (value) => createHmac("sha256", sessionSecret).update(value).digest("hex");
+  const fail = (res, status, message) => res.status(status).set("Cache-Control", "no-store").json({ success: false, message });
+  const sameOrigin = (req) => {
+    if (!req.get("Origin")) return true;
+    try {
+      const origin = new URL(req.get("Origin"));
+      const expected = options.allowedOrigin || req.protocol + "://" + req.get("host");
+      return origin.origin === new URL(expected).origin && origin.username === "" && origin.password === "";
+    } catch {
+      return false;
+    }
+  };
+  const read = (req) => {
+    const token = req.get("X-Encarmen-Admin-Token") || "";
+    if (!/^[a-f0-9]{64}$/.test(token)) return;
+    const key = digest(token), session = sessions.get(key);
+    if (!session || session.expiresAt <= now()) {
+      sessions.delete(key);
+      return;
+    }
+    return session;
+  };
+  app2.post("/api/admin/login", (req, res, next) => {
+    if (!req.is("application/json")) return fail(res, 415, "Env\xEDa JSON.");
+    next();
+  }, express.json({ limit: "2kb", strict: true }), async (req, res) => {
+    if (!sameOrigin(req)) return fail(res, 403, "Origen no permitido.");
+    const time = now(), key = digest(req.ip || req.socket.remoteAddress || "unknown");
+    for (const [k, v] of attempts) if (v.until <= time) attempts.delete(k);
+    if (attempts.size >= 1e3 && !attempts.has(key)) return fail(res, 429, "Demasiados intentos.");
+    const window = attempts.get(key) || { count: 0, until: time + 6e4 };
+    attempts.set(key, window);
+    if (++window.count > 5) {
+      res.setHeader("Retry-After", "60");
+      return fail(res, 429, "Demasiados intentos.");
+    }
+    if (!options.provider) return fail(res, 503, "Acceso administrativo no configurado de forma segura.");
+    const body = req.body;
+    if (!body || Array.isArray(body) || Object.keys(body).some((k) => !["username", "password"].includes(k)) || typeof body.username !== "string" || !/^[a-z0-9_.-]{1,64}$/i.test(body.username) || typeof body.password !== "string" || body.password.length < 12 || body.password.length > 200) return fail(res, 400, "Datos de acceso inv\xE1lidos.");
+    try {
+      const principal = await options.provider.authenticate(body.username, body.password);
+      if (!principal) return fail(res, 401, "Usuario o contrase\xF1a incorrectos.");
+      if (typeof principal.username !== "string" || !Array.isArray(principal.permissions) || principal.permissions.some((p) => !ADMIN_PERMISSIONS.includes(p))) return fail(res, 503, "Proveedor de identidad no disponible.");
+      for (const [k, v] of sessions) if (v.expiresAt <= time) sessions.delete(k);
+      if (sessions.size >= 1e3) return fail(res, 503, "Sesiones no disponibles.");
+      const token = randomBytes(32).toString("hex"), expiresAt = time + Math.max(1, Math.min(options.sessionMs || 6 * 36e5, 6 * 36e5));
+      sessions.set(digest(token), { principal: { username: principal.username, permissions: [...principal.permissions] }, expiresAt });
+      return res.set("Cache-Control", "no-store").json({ success: true, token });
+    } catch {
+      return fail(res, 503, "No se pudo verificar la identidad.");
+    }
+  });
+  app2.get("/api/admin/session", (req, res) => {
+    const session = read(req);
+    if (!session) return fail(res, 401, "Sesi\xF3n ausente o vencida.");
+    return res.set("Cache-Control", "no-store").json({ success: true, user: { username: session.principal.username, role: "Administrador" }, permissions: session.principal.permissions, expiresAt: session.expiresAt });
+  });
+  app2.post("/api/admin/logout", (req, res) => {
+    if (!sameOrigin(req)) return fail(res, 403, "Origen no permitido.");
+    const token = req.get("X-Encarmen-Admin-Token") || "";
+    sessions.delete(digest(token));
+    return res.set("Cache-Control", "no-store").json({ success: true });
+  });
+  app2.use((req, res, next) => {
+    const required = adminPermission(req.path, req.method);
+    if (!required) return next();
+    if (!sameOrigin(req)) return fail(res, 403, "Origen no permitido.");
+    const session = read(req);
+    if (!session) return fail(res, 401, "Sesi\xF3n ausente o vencida.");
+    if (!session.principal.permissions.includes(required)) return fail(res, 403, "Permisos insuficientes.");
+    if (!["GET", "HEAD", "OPTIONS"].includes(req.method) && !options.writesReady?.()) return fail(res, 503, "Operaci\xF3n bloqueada hasta habilitar administraci\xF3n segura.");
+    res.setHeader("Cache-Control", "no-store");
+    next();
+  });
+  app2.all("/api/admin/change-password", (_req, res) => fail(res, 503, "La rotaci\xF3n de credenciales requiere el procedimiento seguro del servidor."));
+  app2.get("/api/admin/accounts", (_req, res) => res.set("Cache-Control", "no-store").json({ success: true, accounts: options.provider?.accounts || [] }));
+  app2.use("/api/admin/login", (error, _req, res, _next) => fail(res, error?.status === 413 ? 413 : 400, "Cuerpo de acceso inv\xE1lido o demasiado grande."));
+  return { isAuthorized: (req, permission = "business:manage") => Boolean(read(req)?.principal.permissions.includes(permission)) };
+}
+
+// server.ts
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
 import sharp from "sharp";
@@ -1217,7 +1363,7 @@ try {
 } catch (_) {
 }
 var __dirname = _dirnameStr || process.cwd();
-var app = express();
+var app = express2();
 var PORT = Number(process.env.PORT || process.env.DEFAULT_APP_PORT) || 3e3;
 function backupDownloadContainment(req, res, next) {
   let requestPath = req.path;
@@ -1270,6 +1416,11 @@ function backupDownloadContainment(req, res, next) {
   return res.status(403).json({ success: false, error: "DOWNLOAD_DISABLED", message: "Descarga no disponible." });
 }
 app.use(backupDownloadContainment);
+var adminSecurity = registerAdminSecurity(app, {
+  provider: environmentAdminProvider(process.env),
+  allowedOrigin: process.env.ENC_ADMIN_PUBLIC_ORIGIN,
+  writesReady: () => process.env.ENC_ADMIN_MUTATIONS_ENABLED === "true" && isWritePermitted()
+});
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -1331,8 +1482,7 @@ app.use((req, res, next) => {
   if (req.path.startsWith("/media/") || req.path.startsWith("/wp-content/") || req.path.startsWith("/uploads/") || req.path.startsWith("/assets/") || /\.(jpg|jpeg|png|webp|svg|gif|ico|css|js|woff2?|ttf|json|map)$/i.test(req.path) || req.path === "/api/version" || req.path === "/api/database-status") {
     return next();
   }
-  const authHeader = req.headers.authorization;
-  if (authHeader || req.headers["x-admin-auth"]) {
+  if (adminSecurity.isAuthorized(req, "admin:manage")) {
     return next();
   }
   const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.ip || "unknown";
@@ -1351,21 +1501,21 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
-app.use("/media", express.static(path.resolve(__dirname, "public/wp-content/uploads"), {
+app.use(express2.json({ limit: "50mb" }));
+app.use(express2.urlencoded({ extended: true, limit: "50mb" }));
+app.use("/media", express2.static(path.resolve(__dirname, "public/wp-content/uploads"), {
   maxAge: 30 * 24 * 60 * 60 * 1e3,
   setHeaders: (res) => {
     res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
   }
 }));
-app.use("/wp-content", express.static(path.resolve(__dirname, "public/wp-content"), {
+app.use("/wp-content", express2.static(path.resolve(__dirname, "public/wp-content"), {
   maxAge: 7 * 24 * 60 * 60 * 1e3,
   setHeaders: (res) => {
     res.setHeader("Cache-Control", "public, max-age=604800, immutable");
   }
 }));
-app.use("/uploads", express.static(path.resolve(__dirname, "public/uploads"), {
+app.use("/uploads", express2.static(path.resolve(__dirname, "public/uploads"), {
   maxAge: 30 * 24 * 60 * 60 * 1e3,
   setHeaders: (res) => {
     res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
@@ -1681,7 +1831,6 @@ var reportsCache = [];
 var claimedCouponsCache = [];
 var classifiedsCache = [];
 var emergencyServicesCache = [];
-var editPinsCache = {};
 try {
   let bizPath = path.resolve(__dirname, "src/data/businesses_seed.json");
   if (!fs.existsSync(bizPath)) {
@@ -1886,37 +2035,6 @@ try {
 } catch (e) {
   emergencyServicesCache = [];
 }
-try {
-  const pinsPath = path.resolve(__dirname, "pins_db.json");
-  if (fs.existsSync(pinsPath)) {
-    editPinsCache = JSON.parse(fs.readFileSync(pinsPath, "utf8"));
-    console.log(`[Cache] C\xF3digos PIN de edici\xF3n cargados.`);
-  } else {
-    editPinsCache = {};
-  }
-} catch (e) {
-  editPinsCache = {};
-}
-var ADMIN_SALT = "carmen_directory_2026_secure_salt";
-function hashPassword(pass) {
-  return crypto.createHash("sha256").update(pass + ADMIN_SALT).digest("hex");
-}
-var adminAccounts = [
-  {
-    username: "Y",
-    passwordHash: hashPassword("Gioyuss"),
-    role: "Administrador",
-    initial: "Y",
-    avatarColor: "from-purple-600 to-indigo-600"
-  },
-  {
-    username: "J",
-    passwordHash: hashPassword("63097"),
-    role: "Administrador",
-    initial: "J",
-    avatarColor: "from-blue-600 to-cyan-600"
-  }
-];
 function getRequestBaseUrl(req) {
   const rawHost = req.get("x-forwarded-host") || req.get("host") || "empresasencarmen.com";
   const hostHeader = rawHost.toLowerCase().split(":")[0];
@@ -3541,17 +3659,7 @@ app.post("/api/submit-business", async (req, res) => {
     return res.status(500).json({ success: false, message: "Error interno al registrar la empresa" });
   }
 });
-var privilegedAdminSessions = /* @__PURE__ */ new Map();
-var isVerifiedAdminSession = (req) => {
-  const token = req.get("X-Encarmen-Admin-Token") || "";
-  const expires = privilegedAdminSessions.get(token);
-  if (!token || !expires) return false;
-  if (expires <= Date.now()) {
-    privilegedAdminSessions.delete(token);
-    return false;
-  }
-  return true;
-};
+var isVerifiedAdminSession = (req) => adminSecurity.isAuthorized(req, "business:manage");
 app.patch(["/api/businesses/:id", "/businesses/:id"], async (req, res) => {
   try {
     await refreshBusinessesFromDbIfNeeded();
@@ -3735,106 +3843,8 @@ app.post("/api/businesses/:id/sync-wp", async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
-function savePinsToFile() {
-  try {
-    const pinsPath = path.resolve(__dirname, "pins_db.json");
-    fs.writeFileSync(pinsPath, JSON.stringify(editPinsCache, null, 2), "utf8");
-  } catch (_) {
-  }
-}
-app.get("/api/admin/businesses-edit-pins", (_req, res) => {
-  const now = Date.now();
-  const activePins = {};
-  for (const [key, val] of Object.entries(editPinsCache)) {
-    if (val && val.expiresAt > now) {
-      const remainingMinutes = Math.max(0, Math.round((val.expiresAt - now) / 6e4));
-      activePins[Number(key)] = {
-        pin: val.pin,
-        expiresAt: val.expiresAt,
-        remainingMinutes
-      };
-    }
-  }
-  return res.json({ success: true, pins: activePins });
-});
-app.post("/api/admin/businesses/:id/generate-pin", (req, res) => {
-  const rawId = req.params.id;
-  const bizId = Number(rawId);
-  const biz = businessesCache.find(
-    (b) => bizId && Number(b.id) === bizId || bizId && Number(b.oldId) === bizId || String(b.id) === String(rawId) || String(b.oldId) === String(rawId) || b.slug && b.slug === rawId
-  );
-  const targetId = biz ? Number(biz.id) : bizId || Date.now();
-  const bizName = biz?.name || `Empresa #${rawId}`;
-  const pin = Math.floor(1e9 + Math.random() * 9e9).toString();
-  const expiresAt = Date.now() + 12 * 60 * 60 * 1e3;
-  const remainingMinutes = 720;
-  editPinsCache[targetId] = {
-    pin,
-    expiresAt,
-    remainingMinutes
-  };
-  if (biz?.oldId) {
-    editPinsCache[Number(biz.oldId)] = {
-      pin,
-      expiresAt,
-      remainingMinutes
-    };
-  }
-  if (bizId && bizId !== targetId) {
-    editPinsCache[bizId] = {
-      pin,
-      expiresAt,
-      remainingMinutes
-    };
-  }
-  savePinsToFile();
-  console.log(`[Admin PIN] Generado PIN de 10 d\xEDgitos ${pin} para empresa "${bizName}" (ID: ${targetId}) con validez de 12 horas.`);
-  return res.json({
-    success: true,
-    pin,
-    expiresAt,
-    remainingMinutes,
-    message: `PIN de 10 d\xEDgitos generado con \xE9xito para ${bizName}`
-  });
-});
-app.post("/api/businesses/:id/verify-edit-pin", (req, res) => {
-  const rawId = req.params.id;
-  const bizId = Number(rawId);
-  const { pin } = req.body;
-  if (!pin) {
-    return res.status(400).json({ success: false, valid: false, message: "C\xF3digo PIN de 10 d\xEDgitos requerido" });
-  }
-  const cleanPin = String(pin).replace(/\D/g, "").trim();
-  const biz = businessesCache.find(
-    (b) => bizId && Number(b.id) === bizId || bizId && Number(b.oldId) === bizId || String(b.id) === String(rawId) || String(b.oldId) === String(rawId) || b.slug && b.slug === rawId
-  );
-  const targetId = biz ? Number(biz.id) : bizId;
-  const altId = biz?.oldId ? Number(biz.oldId) : null;
-  const stored = editPinsCache[targetId] || (altId ? editPinsCache[altId] : void 0) || (bizId ? editPinsCache[bizId] : void 0);
-  const now = Date.now();
-  const isMaster = cleanPin === "9380001234";
-  if (!isMaster && (!stored || stored.expiresAt < now)) {
-    return res.status(400).json({
-      success: false,
-      valid: false,
-      message: "El c\xF3digo ha expirado o a\xFAn no ha sido generado por el administrador. Solicita tu c\xF3digo por WhatsApp."
-    });
-  }
-  if (!isMaster && stored.pin !== cleanPin) {
-    return res.status(400).json({
-      success: false,
-      valid: false,
-      message: "C\xF3digo incorrecto. Verifica los 10 d\xEDgitos que te fueron proporcionados."
-    });
-  }
-  const remainingMinutes = stored ? Math.max(0, Math.round((stored.expiresAt - now) / 6e4)) : 720;
-  return res.json({
-    success: true,
-    valid: true,
-    expiresAt: stored ? stored.expiresAt : Date.now() + 12 * 3600 * 1e3,
-    remainingMinutes,
-    message: "C\xF3digo verificado con \xE9xito"
-  });
+app.all(["/api/admin/businesses-edit-pins", "/api/admin/businesses/:id/generate-pin", "/api/businesses/:id/verify-edit-pin"], (_req, res) => {
+  return res.status(410).set("Cache-Control", "no-store").json({ success: false, valid: false, message: "El acceso mediante PIN est\xE1 deshabilitado. Utiliza una sesi\xF3n administrativa verificada." });
 });
 app.delete(["/api/businesses/:id", "/businesses/:id"], async (req, res) => {
   try {
@@ -5079,10 +5089,8 @@ app.get(["/api/emergency", "/api/emergency-services"], (_req, res) => {
 });
 app.post("/api/emergency", async (req, res) => {
   try {
-    const authHeader = req.headers.authorization || "";
-    const adminKey = req.headers["x-admin-auth"];
-    const isAdmin = Boolean(adminKey || typeof authHeader === "string" && authHeader.length > 5 || req.body?.isAdmin);
-    if (!isAdmin && process.env.NODE_ENV === "production") {
+    const isAdmin = adminSecurity.isAuthorized(req, "admin:manage");
+    if (!isAdmin) {
       return res.status(403).json({ success: false, message: "Acceso restringido \xFAnicamente a administradores autorizados." });
     }
     const item = req.body;
@@ -5108,10 +5116,8 @@ app.post("/api/emergency", async (req, res) => {
 });
 app.delete("/api/emergency/:id", async (req, res) => {
   try {
-    const authHeader = req.headers.authorization || "";
-    const adminKey = req.headers["x-admin-auth"];
-    const isAdmin = Boolean(adminKey || typeof authHeader === "string" && authHeader.length > 5 || req.query.isAdmin === "true");
-    if (!isAdmin && process.env.NODE_ENV === "production") {
+    const isAdmin = adminSecurity.isAuthorized(req, "admin:manage");
+    if (!isAdmin) {
       return res.status(403).json({ success: false, message: "Acceso restringido \xFAnicamente a administradores autorizados." });
     }
     const id = req.params.id;
@@ -7797,53 +7803,6 @@ app.post("/api/businesses/approve-multiple-candidates", async (req, res) => {
     res.status(500).json({ success: false, message: err.message || "Error en publicaci\xF3n m\xFAltiple" });
   }
 });
-app.get("/api/admin/accounts", (_req, res) => {
-  res.json({
-    success: true,
-    accounts: adminAccounts.map((a) => ({
-      username: a.username,
-      role: a.role,
-      initial: a.initial,
-      avatarColor: a.avatarColor
-    }))
-  });
-});
-var normalizeAdminName = (name) => {
-  const n = (name || "").trim().toLowerCase();
-  if (n === "yuss" || n === "y") return "y";
-  if (n === "jeo" || n === "j") return "j";
-  return n;
-};
-app.post("/api/admin/login", (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ success: false, error: "Usuario y contrase\xF1a requeridos" });
-  }
-  const user = adminAccounts.find((a) => normalizeAdminName(a.username) === normalizeAdminName(username));
-  if (!user) {
-    return res.status(401).json({ success: false, error: "Usuario no encontrado" });
-  }
-  const hash = hashPassword(password.trim());
-  if (hash === user.passwordHash) {
-    const token = crypto.randomBytes(32).toString("hex");
-    privilegedAdminSessions.set(token, Date.now() + 6 * 60 * 60 * 1e3);
-    res.json({ success: true, message: "Autenticaci\xF3n exitosa", username: user.username, token });
-  } else {
-    res.status(401).json({ success: false, error: "Contrase\xF1a incorrecta" });
-  }
-});
-app.post("/api/admin/change-password", async (req, res) => {
-  const { username, newPassword } = req.body;
-  if (!username || !newPassword || newPassword.trim().length < 3) {
-    return res.status(400).json({ success: false, error: "Datos inv\xE1lidos" });
-  }
-  const userIdx = adminAccounts.findIndex((a) => normalizeAdminName(a.username) === normalizeAdminName(username));
-  if (userIdx === -1) {
-    return res.status(404).json({ success: false, error: "Usuario no encontrado" });
-  }
-  adminAccounts[userIdx].passwordHash = hashPassword(newPassword.trim());
-  res.json({ success: true, message: `Contrase\xF1a de ${username} actualizada con \xE9xito` });
-});
 app.post("/api/upload-logo", async (req, res) => {
   try {
     const rawImage = req.body.imageBase64 || req.body.image;
@@ -7887,7 +7846,7 @@ app.post("/api/upload-logo", async (req, res) => {
 });
 app.post("/api/admin/banner-and-logo", async (req, res) => {
   try {
-    const { bannerBase64, logoBase64, commitAndPush } = req.body;
+    const { bannerBase64, logoBase64 } = req.body;
     let bannerUpdated = false;
     let logoUpdated = false;
     const decodeB64 = (raw) => {
@@ -7951,32 +7910,17 @@ app.post("/api/admin/banner-and-logo", async (req, res) => {
         });
       }
     }
-    let gitPushed = false;
-    let gitOutput = "";
-    if ((bannerUpdated || logoUpdated) && commitAndPush !== false) {
-      try {
-        execSync("node scripts/update_version.cjs 2>&1", { cwd: __dirname });
-        execSync("git add src/constants/version.ts public/images/ public/empresas.png public/uploads/ 2>&1", { cwd: __dirname });
-        execSync('git commit -m "fix(brand): actualizar banner y logo oficial desde panel de administracion" 2>&1', { cwd: __dirname });
-        execSync("git push origin main 2>&1", { cwd: __dirname });
-        gitPushed = true;
-        gitOutput = "Publicado exitosamente en origin/main (Render producci\xF3n)";
-      } catch (gErr) {
-        console.warn("Git push warning:", gErr.message);
-        gitOutput = gErr.message;
-      }
-    }
     res.json({
       success: true,
       bannerUpdated,
       logoUpdated,
-      gitPushed,
-      gitOutput,
+      gitPushed: false,
+      gitOutput: "La publicaci\xF3n autom\xE1tica est\xE1 deshabilitada.",
       bannerUrl: `/images/banner-empresas-en-carmen.png?v=${Date.now()}`,
       logoUrl: `/images/logo-oficial.png?v=${Date.now()}`
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: "No fue posible actualizar las im\xE1genes." });
   }
 });
 app.get("/api/admin/banner-and-logo", (_req, res) => {
@@ -8059,7 +8003,7 @@ app.get("/sitemap.xml", (req, res) => {
 });
 var oneDayMs = 24 * 60 * 60 * 1e3;
 var oneWeekMs = 7 * oneDayMs;
-app.use(express.static(path.resolve(__dirname, "public"), {
+app.use(express2.static(path.resolve(__dirname, "public"), {
   maxAge: oneDayMs,
   setHeaders: (res, filePath) => {
     if (/\.(jpg|jpeg|png|webp|svg|gif|ico|woff2?|ttf)$/i.test(filePath)) {
@@ -8121,7 +8065,7 @@ if (!isProduction && !process.env.VERCEL) {
     next();
   });
 } else {
-  app.use(express.static(path.resolve(__dirname, "dist"), {
+  app.use(express2.static(path.resolve(__dirname, "dist"), {
     maxAge: oneWeekMs,
     index: false,
     setHeaders: (res, filePath) => {

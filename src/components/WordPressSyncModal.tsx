@@ -1,3 +1,4 @@
+import {adminFetch} from '../utils/adminAuth';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
@@ -159,6 +160,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => isSessionAdminAuthenticated());
   const [adminAccounts, setAdminAccounts] = useState<AdminAccountInfo[]>(DEFAULT_ADMIN_ACCOUNTS);
+  const [adminUsernameInput, setAdminUsernameInput] = useState('');
   const [selectedAdminUser, setSelectedAdminUser] = useState<AdminAccountInfo | null>(null);
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
@@ -269,7 +271,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
   const loadDbStatus = async () => {
     try {
-      const res = await fetch('/api/database-status');
+      const res = await adminFetch('/api/database-status');
       const data = await res.json();
       if (data.success) {
         setDbStatus(data);
@@ -287,7 +289,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
   const loadAiStatus = async () => {
     try {
-      const res = await fetch('/api/ai/status');
+      const res = await adminFetch('/api/ai/status');
       const data = await res.json();
       setAiStatus(data);
     } catch (_) {}
@@ -297,7 +299,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     setIsTestingDb(true);
     setDbTestMessage(null);
     try {
-      const res = await fetch('/api/mariadb/reconnect', { method: 'POST' });
+      const res = await adminFetch('/api/mariadb/reconnect', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         setDbTestMessage('¡Conexión exitosa y activa a Hostinger MariaDB!');
@@ -316,7 +318,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     setIsSyncingDbCatalog(true);
     setDbTestMessage(null);
     try {
-      const res = await fetch('/api/mariadb/sync-catalog', { method: 'POST' });
+      const res = await adminFetch('/api/mariadb/sync-catalog', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         setDbTestMessage(data.message || '¡Catálogo de empresas sincronizado con éxito en Hostinger MariaDB!');
@@ -340,7 +342,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     setAiError(null);
     setAiSuccessMsg(null);
     try {
-      const res = await fetch('/api/ai/parse-business', {
+      const res = await adminFetch('/api/ai/parse-business', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: aiInputText })
@@ -658,7 +660,9 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
   const handleAdminLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAdminUser) return;
+    if (isLoggingIn) return;
+    const username=adminUsernameInput.trim() || selectedAdminUser?.username || '';
+    if (!username) { setAdminLoginError('Ingresa el usuario configurado en el servidor.'); return; }
     if (!adminPasswordInput.trim()) {
       setAdminLoginError('Ingresa la contraseña');
       return;
@@ -667,10 +671,11 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     try {
       setIsLoggingIn(true);
       setAdminLoginError(null);
-      const res = await loginAdminUser(selectedAdminUser.username, adminPasswordInput);
+      const res = await loginAdminUser(username, adminPasswordInput);
       if (res.success) {
         setIsAuthenticated(true);
         setAdminPasswordInput('');
+        setAdminUsernameInput('');
         setAdminLoginError(null);
         setSelectedAdminUser(null);
       } else {
@@ -872,7 +877,11 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 className="space-y-2.5"
               >
                 <div className="relative flex items-center max-w-xs mx-auto">
+                  <input aria-label="Usuario administrativo" autoComplete="username" value={adminUsernameInput} onChange={e=>setAdminUsernameInput(e.target.value)} placeholder="Usuario configurado en el servidor" className="w-full py-2.5 px-4 rounded-full bg-white/85 border border-stone-300/90 text-xs sm:text-sm text-stone-800" />
+                </div>
+                <div className="relative flex items-center max-w-xs mx-auto">
                   <input
+                    autoComplete="current-password"
                     type={showAdminPassword ? 'text' : 'password'}
                     autoFocus
                     placeholder="Contraseña de administrador..."
