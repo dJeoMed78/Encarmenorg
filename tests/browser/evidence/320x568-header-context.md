@@ -1,0 +1,115 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - img "Puente de Ciudad del Carmen al Atardecer"
+    - banner [ref=e7]:
+      - generic [ref=e8]:
+        - generic [ref=e9]:
+          - img "Empresas en Carmen" [ref=e11] [cursor=pointer]
+          - generic [ref=e12]:
+            - button "Subir Mi Negocio" [ref=e13] [cursor=pointer]:
+              - img [ref=e14]
+              - generic [ref=e16]: Subir Mi Negocio
+            - button "Números de Emergencia 911" [ref=e17] [cursor=pointer]:
+              - img [ref=e18]
+              - generic [ref=e20]: SOS
+        - navigation [ref=e21]:
+          - button "Negocios" [ref=e22] [cursor=pointer]:
+            - generic [ref=e23]: Negocios
+            - img [ref=e24]
+          - button "Clasificados" [ref=e26] [cursor=pointer]:
+            - generic [ref=e27]: Clasificados
+          - button "Eventos" [ref=e28] [cursor=pointer]:
+            - generic [ref=e29]: Eventos
+          - button "Promociones" [ref=e30] [cursor=pointer]:
+            - generic [ref=e31]: Promociones
+    - generic [ref=e35]:
+      - generic [ref=e37]:
+        - button "Promociones (1)" [ref=e38]:
+          - generic [ref=e39]:
+            - img [ref=e40]
+            - generic [ref=e42]: Promociones (1)
+          - img [ref=e44]
+        - button "Eventos (3)" [ref=e46]:
+          - generic [ref=e47]:
+            - img [ref=e48]
+            - generic [ref=e50]: Eventos (3)
+          - img [ref=e52]
+      - generic [ref=e54]:
+        - heading "Encuentra lo mejor de Ciudad del Carmen" [level=1] [ref=e55]:
+          - text: Encuentra lo mejor de
+          - text: Ciudad del Carmen
+        - generic [ref=e56]:
+          - textbox "Buscar empresas, productos o servicios..." [ref=e57]
+          - button "Buscar con la voz" [ref=e58] [cursor=pointer]:
+            - img [ref=e59]
+          - button "Buscar" [ref=e62] [cursor=pointer]:
+            - img [ref=e63]
+      - button "Canales Oficiales y Comunidades WhatsApp" [ref=e67] [cursor=pointer]:
+        - img [ref=e68]
+        - generic [ref=e71]: Canales Oficiales y Comunidades WhatsApp
+        - img [ref=e72]
+  - main [ref=e74]:
+    - generic [ref=e75]:
+      - heading "Directorio de Empresas" [level=2] [ref=e76]
+      - generic [ref=e77]: Mostrando 2 de 2 empresas
+    - generic [ref=e78]:
+      - generic [ref=e79] [cursor=pointer]:
+        - generic [ref=e80]:
+          - generic [ref=e81]:
+            - img "Logo de Panadería Sintética E2E" [ref=e82]
+            - button "Guardar en favoritos" [ref=e83]:
+              - img [ref=e84]
+          - heading "Panadería Sintética E2E" [level=3] [ref=e86]
+          - generic [ref=e87]:
+            - img [ref=e88]
+            - generic "Calle de prueba 1" [ref=e91]
+        - generic [ref=e92]:
+          - button "WhatsApp" [ref=e93]:
+            - img [ref=e94]
+            - generic [ref=e96]: WhatsApp
+          - button "Llamar" [ref=e97]:
+            - img [ref=e98]
+            - generic [ref=e100]: Llamar
+      - generic [ref=e101] [cursor=pointer]:
+        - generic [ref=e102]:
+          - generic [ref=e103]:
+            - img "Logo de Taller Sintético E2E" [ref=e104]
+            - button "Guardar en favoritos" [ref=e105]:
+              - img [ref=e106]
+          - heading "Taller Sintético E2E" [level=3] [ref=e108]
+          - generic [ref=e109]:
+            - img [ref=e110]
+            - generic "Calle de prueba 1" [ref=e113]
+        - generic [ref=e114]:
+          - button "WhatsApp" [ref=e115]:
+            - img [ref=e116]
+            - generic [ref=e118]: WhatsApp
+          - button "Llamar" [ref=e119]:
+            - img [ref=e120]
+            - generic [ref=e122]: Llamar
+  - contentinfo [ref=e123]:
+    - generic [ref=e124]:
+      - generic [ref=e125]:
+        - generic [ref=e126]:
+          - img "Empresas en Carmen" [ref=e128]
+          - paragraph [ref=e129]: Directorio empresarial interactivo de Ciudad del Carmen, Campeche. Conectando a ciudadanos y visitantes con comercios, talleres, servicios profesionales y restaurantes locales.
+          - generic [ref=e130]:
+            - link "Facebook" [ref=e131] [cursor=pointer]:
+              - /url: https://www.facebook.com/empresasencarmen
+            - link "Grupo Ventas" [ref=e132] [cursor=pointer]:
+              - /url: https://www.facebook.com/groups/506440126097710
+            - link "WhatsApp" [ref=e133] [cursor=pointer]:
+              - /url: https://api.whatsapp.com/send/?phone=%2B5219383895009
+        - link "Espacio Publicitario Oficial - Anúnciate en encarmen.org" [ref=e135] [cursor=pointer]:
+          - /url: https://wa.me/529383895009?text=Hola,%20me%20interesa%20anunciarme%20en%20encarmen.org
+          - img "Espacio Publicitario Oficial - Anúnciate en encarmen.org" [ref=e136]
+      - generic [ref=e138]:
+        - button "©" [ref=e139] [cursor=pointer]
+        - generic [ref=e140]: 2026 encarmen.org · Ciudad del Carmen, Campeche · 261026:1858
+  - button "Ayuda en línea" [ref=e142]:
+    - img [ref=e143]
+    - generic [ref=e145]: Ayuda en línea
+```

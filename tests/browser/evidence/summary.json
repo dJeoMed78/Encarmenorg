@@ -1,0 +1,1035 @@
+{
+  "task": "ENC-BROWSER-E2E-001",
+  "tested_sha": "0b05f9a14ffb58270fb9f7356d839aa2fc55a407",
+  "run": "https://github.com/dJeoMed78/Encarmenorg/actions/runs/40955633868",
+  "browser": "Chromium Headless Shell 141.0.7390.37",
+  "playwright": "1.56.1",
+  "api": "controlled synthetic responses; no SQL",
+  "stats": {
+    "startTime": "2026-10-29T21:12:21.377Z",
+    "duration": 354779.138,
+    "expected": 164,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  },
+  "by_viewport": {
+    "chromium-1440x900": {
+      "passed": 33
+    },
+    "chromium-320x568": {
+      "passed": 32,
+      "failed": 1
+    },
+    "chromium-360x800": {
+      "passed": 33
+    },
+    "chromium-390x844": {
+      "passed": 33
+    },
+    "chromium-768x1024": {
+      "passed": 33
+    }
+  },
+  "scenarios": [
+    {
+      "scenario": "inicio, directorio, búsqueda y restablecer filtros",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "inicio, directorio, búsqueda y restablecer filtros",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "inicio, directorio, búsqueda y restablecer filtros",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "inicio, directorio, búsqueda y restablecer filtros",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "inicio, directorio, búsqueda y restablecer filtros",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "ficha real, contactos independientes y cierre por teclado",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "ficha real, contactos independientes y cierre por teclado",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "ficha real, contactos independientes y cierre por teclado",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "ficha real, contactos independientes y cierre por teclado",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "ficha real, contactos independientes y cierre por teclado",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "navegación entre secciones y retorno al directorio",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "navegación entre secciones y retorno al directorio",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "navegación entre secciones y retorno al directorio",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "navegación entre secciones y retorno al directorio",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "navegación entre secciones y retorno al directorio",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: búsqueda, categoría, sin imagen y detalle",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: búsqueda, categoría, sin imagen y detalle",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: búsqueda, categoría, sin imagen y detalle",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: búsqueda, categoría, sin imagen y detalle",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: búsqueda, categoría, sin imagen y detalle",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "modal: campos incompletos y cierre Escape",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "modal: campos incompletos y cierre Escape",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "modal: campos incompletos y cierre Escape",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "modal: campos incompletos y cierre Escape",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "modal: campos incompletos y cierre Escape",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo 403 nunca anuncia éxito",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo 403 nunca anuncia éxito",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo 403 nunca anuncia éxito",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo 403 nunca anuncia éxito",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo 403 nunca anuncia éxito",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo 500 nunca anuncia éxito",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo 500 nunca anuncia éxito",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo 500 nunca anuncia éxito",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo 500 nunca anuncia éxito",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo 500 nunca anuncia éxito",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo nonjson nunca anuncia éxito",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo nonjson nunca anuncia éxito",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo nonjson nunca anuncia éxito",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo nonjson nunca anuncia éxito",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo nonjson nunca anuncia éxito",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo abort nunca anuncia éxito",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo abort nunca anuncia éxito",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo abort nunca anuncia éxito",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo abort nunca anuncia éxito",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: rechazo abort nunca anuncia éxito",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: envío lento, doble clic y confirmación",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: envío lento, doble clic y confirmación",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: envío lento, doble clic y confirmación",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: envío lento, doble clic y confirmación",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: envío lento, doble clic y confirmación",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados 403: error visible",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados 403: error visible",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados 403: error visible",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados 403: error visible",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados 403: error visible",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados 500: error visible",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados 500: error visible",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados 500: error visible",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados 500: error visible",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados 500: error visible",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados nonjson: error visible",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados nonjson: error visible",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados nonjson: error visible",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados nonjson: error visible",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados nonjson: error visible",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados abort: error visible",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados abort: error visible",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados abort: error visible",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados abort: error visible",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "lectura clasificados abort: error visible",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "catálogo vacío legítimo",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "catálogo vacío legítimo",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "catálogo vacío legítimo",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "catálogo vacío legítimo",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "catálogo vacío legítimo",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "API empresarial caída no muestra catálogo semilla",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "API empresarial caída no muestra catálogo semilla",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "API empresarial caída no muestra catálogo semilla",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "API empresarial caída no muestra catálogo semilla",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "API empresarial caída no muestra catálogo semilla",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público: validación sin enviar",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público: validación sin enviar",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público: validación sin enviar",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público: validación sin enviar",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público: validación sin enviar",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público 403: sin éxito falso",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público 403: sin éxito falso",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público 403: sin éxito falso",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público 403: sin éxito falso",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público 403: sin éxito falso",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público 500: sin éxito falso",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público 500: sin éxito falso",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público 500: sin éxito falso",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público 500: sin éxito falso",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público 500: sin éxito falso",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público nonjson: sin éxito falso",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público nonjson: sin éxito falso",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público nonjson: sin éxito falso",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público nonjson: sin éxito falso",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público nonjson: sin éxito falso",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público abort: sin éxito falso",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público abort: sin éxito falso",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público abort: sin éxito falso",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público abort: sin éxito falso",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público abort: sin éxito falso",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público: confirmación con ficha y directorio",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público: confirmación con ficha y directorio",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público: confirmación con ficha y directorio",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público: confirmación con ficha y directorio",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro público: confirmación con ficha y directorio",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "geometría medible: inicio, clasificados y modal dentro del viewport",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "geometría medible: inicio, clasificados y modal dentro del viewport",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "geometría medible: inicio, clasificados y modal dentro del viewport",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "geometría medible: inicio, clasificados y modal dentro del viewport",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "geometría medible: inicio, clasificados y modal dentro del viewport",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "historial real atrás y adelante conserva destino",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "historial real atrás y adelante conserva destino",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "historial real atrás y adelante conserva destino",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "historial real atrás y adelante conserva destino",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "historial real atrás y adelante conserva destino",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "navegación pendiente: respuesta atrasada no reemplaza destino (H02)",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "navegación pendiente: respuesta atrasada no reemplaza destino (H02)",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "navegación pendiente: respuesta atrasada no reemplaza destino (H02)",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "navegación pendiente: respuesta atrasada no reemplaza destino (H02)",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "navegación pendiente: respuesta atrasada no reemplaza destino (H02)",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "categorías y subcategorías del formulario son seleccionables",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "categorías y subcategorías del formulario son seleccionables",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "categorías y subcategorías del formulario son seleccionables",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "categorías y subcategorías del formulario son seleccionables",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "categorías y subcategorías del formulario son seleccionables",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "filtro avanzado de clasificados por categoría",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "filtro avanzado de clasificados por categoría",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "filtro avanzado de clasificados por categoría",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "filtro avanzado de clasificados por categoría",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "filtro avanzado de clasificados por categoría",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "contacto obligatorio impide publicación",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "contacto obligatorio impide publicación",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "contacto obligatorio impide publicación",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "contacto obligatorio impide publicación",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "contacto obligatorio impide publicación",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "objetivo táctil principal y formulario con scroll",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "objetivo táctil principal y formulario con scroll",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "objetivo táctil principal y formulario con scroll",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "objetivo táctil principal y formulario con scroll",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "objetivo táctil principal y formulario con scroll",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: HTTP 200 incompleto no confirma publicación",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: HTTP 200 incompleto no confirma publicación",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: HTTP 200 incompleto no confirma publicación",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: HTTP 200 incompleto no confirma publicación",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "clasificados: HTTP 200 incompleto no confirma publicación",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro: falta lectura posterior impide éxito",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro: falta lectura posterior impide éxito",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro: falta lectura posterior impide éxito",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro: falta lectura posterior impide éxito",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro: falta lectura posterior impide éxito",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro: reintento tras 502 conserva idempotencia",
+      "project": "chromium-320x568",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro: reintento tras 502 conserva idempotencia",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro: reintento tras 502 conserva idempotencia",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro: reintento tras 502 conserva idempotencia",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "registro: reintento tras 502 conserva idempotencia",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "encabezado: acciones principales sin recorte lateral",
+      "project": "chromium-320x568",
+      "status": "failed",
+      "errors": [
+        {
+          "location": {
+            "file": "/home/runner/work/Encarmenorg/Encarmenorg/tests/browser/portal.spec.mjs",
+            "column": 75,
+            "line": 65
+          },
+          "message": "Error: Acción /Números de Emergencia 911|Núm. Emergencia/ recortada por el borde derecho\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m321\u001b[39m\nReceived:    \u001b[31m352.796875\u001b[39m\n\n  63 |   const button=page.getByRole('button',{name}).first();const box=await button.boundingBox();\n  64 |   expect(box,`Botón ${name}`).not.toBeNull();expect(box.x).toBeGreaterThanOrEqual(0);\n> 65 |   expect(box.x+box.width,`Acción ${name} recortada por el borde derecho`).toBeLessThanOrEqual(page.viewportSize().width+1);\n     |                                                                           ^\n  66 |  }\n  67 | });\n  68 |\n    at /home/runner/work/Encarmenorg/Encarmenorg/tests/browser/portal.spec.mjs:65:75"
+        }
+      ]
+    },
+    {
+      "scenario": "encabezado: acciones principales sin recorte lateral",
+      "project": "chromium-360x800",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "encabezado: acciones principales sin recorte lateral",
+      "project": "chromium-390x844",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "encabezado: acciones principales sin recorte lateral",
+      "project": "chromium-768x1024",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "scenario": "encabezado: acciones principales sin recorte lateral",
+      "project": "chromium-1440x900",
+      "status": "passed",
+      "errors": []
+    }
+  ]
+}

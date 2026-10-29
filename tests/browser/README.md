@@ -35,3 +35,20 @@ reproduce un guardado administrativo SQL ni acredita todas las carreras históri
 Las capturas prueban render real, no equivalencia con un diseño aprobado ni carga
 real de mapas/fuentes externos. Las medidas de overflow y objetivo principal son
 aserciones puntuales; no certifican todos los objetivos táctiles de la aplicación.
+
+## Recuperación si Actions rechaza artefactos por cuota
+
+El paso export-evidence.mjs emite al log JSON comprimido, JPEG reducidos y una
+traza representativa reducida. No publica credenciales ni contacta servicios.
+Descargar el log del job de GitHub y ejecutar desde la raíz del checkout:
+
+```sh
+python3 tests/browser/recover-evidence.py job.log /tmp/enc-e2e-recuperado
+```
+
+El directorio destino debe ser nuevo. Se validan base64, CRC de ZIP y JSON.
+La traza reducida incluye e2e-reduced-manifest.json con recursos grandes omitidos;
+algunas imágenes/CSS pueden faltar al reproducirla. Los ZIP completos y el reporte
+HTML se generan en el runner; su recuperación normal requiere cuota disponible.
+Las capturas JPEG recuperadas son evidencia real reducida, sin promesa de fidelidad
+de píxeles respecto a los PNG originales. El servidor usa build+preview de Vite.

@@ -1,0 +1,230 @@
+[
+  {
+    "file": "768x1024-header.jpg",
+    "source": "portal-encabezado-acciones-principales-sin-recorte-lateral-chromium-768x1024-encabezado.jpg",
+    "bytes": 55441,
+    "sha256": "fca213c6f6dac7acb44973ee650574418dde933f74962c0a78027cf39c7ed81e"
+  },
+  {
+    "file": "768x1024-business.jpg",
+    "source": "portal-ficha-real-contacto-5873d-ientes-y-cierre-por-teclado-chromium-768x1024-ficha.jpg",
+    "bytes": 46718,
+    "sha256": "fb76b35336c42b31f0a011fe7781ea4c49c73c0d91fc80b65020b42d2e17c75c"
+  },
+  {
+    "file": "1440x900-header.jpg",
+    "source": "portal-encabezado-acciones-principales-sin-recorte-lateral-chromium-1440x900-encabezado.jpg",
+    "bytes": 26999,
+    "sha256": "37c9a130ad3d376a73a3642e0bf70c33b4404703a2fe369b24e91221aad94c6f"
+  },
+  {
+    "file": "1440x900-business.jpg",
+    "source": "portal-ficha-real-contacto-5873d-ientes-y-cierre-por-teclado-chromium-1440x900-ficha.jpg",
+    "bytes": 32388,
+    "sha256": "7c5700e25e72338a0c9277dd13c34d078d60486f0ad7e82089a290dc950a0227"
+  },
+  {
+    "file": "390x844-search-result.jpg",
+    "source": "portal-inicio-directorio-búsqueda-y-restablecer-filtros-chromium-390x844-test-finished-1.jpg",
+    "bytes": 33189,
+    "sha256": "8f30d55b05641fc437f8e81e24c6df75a546e960a25023ed27f4103476b83d14"
+  },
+  {
+    "file": "390x844-header.jpg",
+    "source": "portal-encabezado-acciones-principales-sin-recorte-lateral-chromium-390x844-encabezado.jpg",
+    "bytes": 33876,
+    "sha256": "339c8620f325d467489e2b135f919e82a82246db69f2c56e73cea395d9b57f6d"
+  },
+  {
+    "file": "1440x900-home.jpg",
+    "source": "portal-geometría-medible-i-fa006-y-modal-dentro-del-viewport-chromium-1440x900-inicio.jpg",
+    "bytes": 40848,
+    "sha256": "7edc647d51996a30095da330d61bb4ff7fbe8142e3cedfca520f4ee6f36804c6"
+  },
+  {
+    "file": "1440x900-classifieds.jpg",
+    "source": "portal-geometría-medible-i-fa006-y-modal-dentro-del-viewport-chromium-1440x900-clasificados.jpg",
+    "bytes": 49550,
+    "sha256": "b9b6404530c3db083fe11aced63da9a578a365f8ff10454596d789c0034d9d59"
+  },
+  {
+    "file": "768x1024-classifieds.jpg",
+    "source": "portal-geometría-medible-i-fa006-y-modal-dentro-del-viewport-chromium-768x1024-clasificados.jpg",
+    "bytes": 97059,
+    "sha256": "9f2bb7c0dfee863357fd5247edd125c126a7499680405e2eff52532a368b8f0e"
+  },
+  {
+    "file": "320x568-home.jpg",
+    "source": "portal-geometría-medible-i-fa006-y-modal-dentro-del-viewport-chromium-320x568-inicio.jpg",
+    "bytes": 58308,
+    "sha256": "ea307c8013e3413247787e949e1c7eef935fef3a9e380c89c77307db3e959c3c"
+  },
+  {
+    "file": "320x568-form.jpg",
+    "source": "portal-geometría-medible-i-fa006-y-modal-dentro-del-viewport-chromium-320x568-formulario.jpg",
+    "bytes": 78659,
+    "sha256": "f8a877b22722e431388b76415905f8a19f9171ef4503780a9af2a57af0f8a58d"
+  },
+  {
+    "file": "768x1024-server-error.jpg",
+    "source": "portal-clasificados-rechazo-403-nunca-anuncia-éxito-chromium-768x1024-test-finished-1.jpg",
+    "bytes": 42492,
+    "sha256": "43da49ddfacc909e052da9750b828e4e426abfff8d3f0f6024bafefd2a88d0b1"
+  },
+  {
+    "file": "768x1024-search-result.jpg",
+    "source": "portal-inicio-directorio-búsqueda-y-restablecer-filtros-chromium-768x1024-test-finished-1.jpg",
+    "bytes": 55656,
+    "sha256": "f1198b2c00465427457ee7e0a503bf0821a5806b0daa98b3da7b0497180d6175"
+  },
+  {
+    "file": "1440x900-form.jpg",
+    "source": "portal-geometría-medible-i-fa006-y-modal-dentro-del-viewport-chromium-1440x900-formulario.jpg",
+    "bytes": 33400,
+    "sha256": "944b6e607ec33c5501ddf5cfc4da77b69db1bedef39052559c720d541ba52d3d"
+  },
+  {
+    "file": "320x568-search-result.jpg",
+    "source": "portal-inicio-directorio-búsqueda-y-restablecer-filtros-chromium-320x568-test-finished-1.jpg",
+    "bytes": 23095,
+    "sha256": "25a3deb1ac174faab6c34f42798cd9c435596f768c580f76902fe2ba1d5f043c"
+  },
+  {
+    "file": "320x568-business.jpg",
+    "source": "portal-ficha-real-contacto-5873d-ientes-y-cierre-por-teclado-chromium-320x568-ficha.jpg",
+    "bytes": 58030,
+    "sha256": "1ac5626b8be0d619961f767e0982b24a35cacb73e083e333b6ee26dc1b8986e9"
+  },
+  {
+    "file": "360x800-home.jpg",
+    "source": "portal-geometría-medible-i-fa006-y-modal-dentro-del-viewport-chromium-360x800-inicio.jpg",
+    "bytes": 64111,
+    "sha256": "edf91a582d5483dcc03de4ecd63e2472818f77007f3b5bf74bfd9838ed217e1f"
+  },
+  {
+    "file": "320x568-header-context.md",
+    "source": "portal-encabezado-acciones-principales-sin-recorte-lateral-chromium-320x568-context.md",
+    "bytes": 5056,
+    "sha256": "ead2e90f415b8be27ff75476236bc7839f16f3ae1252776d8dd45aa7b668dfd6"
+  },
+  {
+    "file": "360x800-server-error.jpg",
+    "source": "portal-clasificados-rechazo-403-nunca-anuncia-éxito-chromium-360x800-test-finished-1.jpg",
+    "bytes": 27078,
+    "sha256": "76b45a45bcd217dfe2e68279734f5c04b629aeed0a466bfbae61eb300d7ad246"
+  },
+  {
+    "file": "320x568-server-error.jpg",
+    "source": "portal-clasificados-rechazo-403-nunca-anuncia-éxito-chromium-320x568-test-finished-1.jpg",
+    "bytes": 17970,
+    "sha256": "535e1d8c904a8c6069b9619fe6d02bf5c4646356a245f785278b88157d5fc7d5"
+  },
+  {
+    "file": "768x1024-home.jpg",
+    "source": "portal-geometría-medible-i-fa006-y-modal-dentro-del-viewport-chromium-768x1024-inicio.jpg",
+    "bytes": 68049,
+    "sha256": "c5be3560e544922fc8bb423bc792c6369b5341b28018e96253c5898c0071fd67"
+  },
+  {
+    "file": "320x568-header.jpg",
+    "source": "portal-encabezado-acciones-principales-sin-recorte-lateral-chromium-320x568-encabezado.jpg",
+    "bytes": 23401,
+    "sha256": "b2ef63a0c0d91a6ace05a4b5c453d7124b88d682c2070088cf058549dd774807"
+  },
+  {
+    "file": "360x800-form.jpg",
+    "source": "portal-geometría-medible-i-fa006-y-modal-dentro-del-viewport-chromium-360x800-formulario.jpg",
+    "bytes": 73450,
+    "sha256": "b439d95e8525f895c6e0d94be7e8ea0c02b5693af3c44e541a652bc4dae8bfcf"
+  },
+  {
+    "file": "representative-trace-reduced.zip",
+    "source": "representative-trace-reduced.zip",
+    "bytes": 804600,
+    "sha256": "937711482e12a697ef04eabdfd853f7ef27c37fd6aa165f3e7cfd085d25755b6"
+  },
+  {
+    "file": "390x844-form.jpg",
+    "source": "portal-geometría-medible-i-fa006-y-modal-dentro-del-viewport-chromium-390x844-formulario.jpg",
+    "bytes": 74846,
+    "sha256": "f8f957b944dcd565db678fbc3da064e3ea214107035d2e44c637673e6c2fb722"
+  },
+  {
+    "file": "390x844-server-error.jpg",
+    "source": "portal-clasificados-rechazo-403-nunca-anuncia-éxito-chromium-390x844-test-finished-1.jpg",
+    "bytes": 30895,
+    "sha256": "43b4c01f28d8c05e14a9b4ce075451ac38fd61171ea1277c14809e1bb132c43e"
+  },
+  {
+    "file": "1440x900-server-error.jpg",
+    "source": "portal-clasificados-rechazo-403-nunca-anuncia-éxito-chromium-1440x900-test-finished-1.jpg",
+    "bytes": 15443,
+    "sha256": "daf87b56bf5005324f79a23495fb60adb98edacfe353cb54803bba006bfc5edb"
+  },
+  {
+    "file": "360x800-classifieds.jpg",
+    "source": "portal-geometría-medible-i-fa006-y-modal-dentro-del-viewport-chromium-360x800-clasificados.jpg",
+    "bytes": 84692,
+    "sha256": "a83d5a84281928e1fc6cedccc76a34d7bfb68b3d64b9d9ff8f56a0a20c908475"
+  },
+  {
+    "file": "390x844-home.jpg",
+    "source": "portal-geometría-medible-i-fa006-y-modal-dentro-del-viewport-chromium-390x844-inicio.jpg",
+    "bytes": 66811,
+    "sha256": "a88f4b4003a4de1635e3c997f4f97e6753e8d0d5e823c8a5fbecd183e6a18705"
+  },
+  {
+    "file": "360x800-header.jpg",
+    "source": "portal-encabezado-acciones-principales-sin-recorte-lateral-chromium-360x800-encabezado.jpg",
+    "bytes": 30270,
+    "sha256": "e1a4782083048dcdec8bd7ce85699a85e010716f677884fe49f5366a97f0cd72"
+  },
+  {
+    "file": "360x800-search-result.jpg",
+    "source": "portal-inicio-directorio-búsqueda-y-restablecer-filtros-chromium-360x800-test-finished-1.jpg",
+    "bytes": 30386,
+    "sha256": "6045b58044c283c55632bdb6735cb38e4cc0895e761c76238b3d1131bc484a1b"
+  },
+  {
+    "file": "results.json.gz",
+    "source": "results.json.gz",
+    "bytes": 21802,
+    "sha256": "bf81a5706d5d7d71f9688dfef49163169e7a6a0e544d1f549af932a1d20d33a9"
+  },
+  {
+    "file": "360x800-business.jpg",
+    "source": "portal-ficha-real-contacto-5873d-ientes-y-cierre-por-teclado-chromium-360x800-ficha.jpg",
+    "bytes": 63010,
+    "sha256": "eee65ebee5a57c17534e1e29b60e59e56067a2f71225b38123d85b975ed7b012"
+  },
+  {
+    "file": "1440x900-search-result.jpg",
+    "source": "portal-inicio-directorio-búsqueda-y-restablecer-filtros-chromium-1440x900-test-finished-1.jpg",
+    "bytes": 27109,
+    "sha256": "6b3755944cc18de5b7274bf64bd0117ccbdb94d20f05f53b282857c44f3cb311"
+  },
+  {
+    "file": "390x844-business.jpg",
+    "source": "portal-ficha-real-contacto-5873d-ientes-y-cierre-por-teclado-chromium-390x844-ficha.jpg",
+    "bytes": 66142,
+    "sha256": "f080427ce81f2935cb590200e6874cc94e00ca5c40c262ef3b53fef25fded9d9"
+  },
+  {
+    "file": "768x1024-form.jpg",
+    "source": "portal-geometría-medible-i-fa006-y-modal-dentro-del-viewport-chromium-768x1024-formulario.jpg",
+    "bytes": 78876,
+    "sha256": "5fb548cdd5711ba0b08fd2a15a31ce9bfce9a6763ca7e74e78c191ee95fc8967"
+  },
+  {
+    "file": "320x568-classifieds.jpg",
+    "source": "portal-geometría-medible-i-fa006-y-modal-dentro-del-viewport-chromium-320x568-clasificados.jpg",
+    "bytes": 78997,
+    "sha256": "e56285282517939e12ce86b690dd45a97adfd2e4b3f14c5296ee0bba0537d8cc"
+  },
+  {
+    "file": "390x844-classifieds.jpg",
+    "source": "portal-geometría-medible-i-fa006-y-modal-dentro-del-viewport-chromium-390x844-clasificados.jpg",
+    "bytes": 88228,
+    "sha256": "9ee9b0aced5a2dd612719dcdc4b0fbc3d05f03bb1853c10805ba49fd450dbe23"
+  }
+]
