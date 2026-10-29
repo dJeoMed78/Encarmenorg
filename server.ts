@@ -152,13 +152,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.method === 'POST' && ['/api/admin/login','/api/admin/logout'].includes(req.path)) return next();
     const businessMutation = (req.method === 'POST' && (req.path === '/api/submit-business' || req.path === '/api/public/business-registrations')) || (req.method === 'PATCH' && /^\/(?:api\/)?businesses\/[^/]+$/.test(req.path));
     if (businessMutation && isBusinessWritePermitted()) return next();
-    if (req.path === '/api/ratings/get' || req.path === '/api/events/radar-search') return next();
+    if (req.method.toUpperCase() === 'POST' && (req.path === '/api/ratings/get' || req.path === '/api/events/radar-search')) return next();
     return res.status(403).json({success:false,error:'STAGING_READ_ONLY',message:'Solo el carril autorizado de registro y edición puede escribir negocios. Las demás operaciones permanecen bloqueadas.'});
   }
   if (!isWritePermitted()) {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
       // Excepción para búsquedas o consultas enviadas por POST que no modifican datos
-      if (req.path === '/api/events/radar-search' || req.path === '/api/ratings/get') {
+      if (req.method.toUpperCase() === 'POST' && (req.path === '/api/events/radar-search' || req.path === '/api/ratings/get')) {
         return next();
       }
       return res.status(403).json({
@@ -3075,11 +3075,7 @@ app.get('/api/events', async (_req: Request, res: Response) => {
     } catch (_) {}
   }
 
-  try {
-    await pruneExpiredEvents();
-  } catch (_) {}
-
-  const eventsWithImages = eventsCache.map((e: any) => ({
+  const eventsWithImages = eventsCache.filter((evt: any) => !isEventPast(evt.date, evt.time)).map((e: any) => ({
     ...e,
     image: (e.image && typeof e.image === 'string' && e.image.trim())
       ? e.image.trim()
@@ -3130,6 +3126,10 @@ app.post('/api/events', async (req: Request, res: Response) => {
 app.put('/api/events/:id', async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
+    // Literal service endpoints must never be interpreted as mutable resource IDs.
+    if (['radar-search','reset','publish-candidates','radar-scan','radar-status'].includes(String(id).toLowerCase())) {
+      return res.status(405).json({success:false,error:'RESERVED_RESOURCE_ID',message:'Identificador reservado para una operación del servicio.'});
+    }
     const idx = eventsCache.findIndex(e => e.id === id);
     if (idx === -1) {
       return res.status(404).json({ success: false, message: 'Evento no encontrado' });
@@ -3163,6 +3163,10 @@ app.put('/api/events/:id', async (req: Request, res: Response) => {
 app.delete('/api/events/:id', async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
+    // Literal service endpoints must never be interpreted as mutable resource IDs.
+    if (['radar-search','reset','publish-candidates','radar-scan','radar-status'].includes(String(id).toLowerCase())) {
+      return res.status(405).json({success:false,error:'RESERVED_RESOURCE_ID',message:'Identificador reservado para una operación del servicio.'});
+    }
     eventsCache = eventsCache.filter(e => e.id !== id);
     fs.writeFileSync(path.resolve(__dirname, 'events_db.json'), JSON.stringify(eventsCache, null, 2), 'utf8');
 
@@ -3514,7 +3518,7 @@ setInterval(() => {
 
 app.get('/api/classifieds', (req: Request, res: Response) => {
   try {
-    pruneExpiredClassifieds();
+    // Public reads derive expiration without persisting maintenance.
 
     if (classifiedsCache.length === 0) {
       try {
@@ -3525,7 +3529,7 @@ app.get('/api/classifieds', (req: Request, res: Response) => {
       } catch (_) {}
     }
 
-    let list = [...classifiedsCache];
+    let list = classifiedsCache.map(ad => ad.status !== 'trash' && Date.now() - new Date(ad.createdAt || Date.now()).getTime() > 7 * 24 * 60 * 60 * 1000 ? {...ad, status:'trash'} : ad);
     const { category, subcategory, q, colonia, status, priceType, allStatus } = req.query;
 
     if (!allStatus) {
@@ -3602,6 +3606,10 @@ app.post('/api/classifieds', async (req: Request, res: Response) => {
 app.patch('/api/classifieds/:id', async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
+    // Literal service endpoints must never be interpreted as mutable resource IDs.
+    if (['radar-search','reset','publish-candidates','radar-scan','radar-status'].includes(String(id).toLowerCase())) {
+      return res.status(405).json({success:false,error:'RESERVED_RESOURCE_ID',message:'Identificador reservado para una operación del servicio.'});
+    }
     const idx = classifiedsCache.findIndex(c => c.id === id);
     if (idx === -1) {
       return res.status(404).json({ success: false, message: 'Aviso clasificado no encontrado' });
@@ -3638,6 +3646,10 @@ app.patch('/api/classifieds/:id', async (req: Request, res: Response) => {
 app.delete('/api/classifieds/:id', async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
+    // Literal service endpoints must never be interpreted as mutable resource IDs.
+    if (['radar-search','reset','publish-candidates','radar-scan','radar-status'].includes(String(id).toLowerCase())) {
+      return res.status(405).json({success:false,error:'RESERVED_RESOURCE_ID',message:'Identificador reservado para una operación del servicio.'});
+    }
     classifiedsCache = classifiedsCache.filter(c => c.id !== id);
     try {
       fs.writeFileSync(path.resolve(__dirname, 'classifieds_db.json'), JSON.stringify(classifiedsCache, null, 2), 'utf8');
@@ -4913,11 +4925,7 @@ function getGeminiClient(): GoogleGenAI | null {
 // Endpoint para búsqueda de eventos en cartelera y detección de candidatos por Radar
 app.post('/api/events/radar-search', async (req: Request, res: Response) => {
   try {
-    // 1. Limpieza preventiva de eventos pasados (Cambio 4)
-    try {
-      await pruneExpiredEvents();
-    } catch (_) {}
-
+    // Public search is read-only: maintenance belongs to an authorized operation.
     const userQuery = (req.body?.query || '').toLowerCase().trim();
     const useAi = Boolean(req.body?.useAi);
     console.log(`[Búsqueda Radar de Eventos] Consulta recibida: "${userQuery}", useAi: ${useAi}`);
@@ -5049,7 +5057,7 @@ Devuelve ÚNICAMENTE un array JSON válido sin texto adicional ni markdown exter
     }
 
     // 1. Eventos ya publicados en cartelera
-    let publishedCandidates = eventsCache.map((raw: any) => {
+    let publishedCandidates = eventsCache.filter((evt: any) => !isEventPast(evt.date, evt.time)).map((raw: any) => {
       const candidateImg = (raw.image && typeof raw.image === 'string' && raw.image.trim())
         ? raw.image.trim()
         : getEventRepresentativeImageServer(raw);

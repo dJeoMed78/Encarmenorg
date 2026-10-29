@@ -48,10 +48,10 @@ export function adminPermission(requestPath:string,method:string):string|null {
  if(/^\/(?:api\/)?admin(?:\/|$)/.test(path))return 'admin:manage';
  if(/^\/api\/(?:mariadb|database-status)(?:\/|$)/.test(path) || /^\/api\/(?:sync|webhook)(?:[-/]|$)/.test(path))return 'admin:manage';
  if(/^\/api\/businesses\/approve-(?:candidate|multiple-candidates)$/.test(path))return 'business:publish';
- if(/^\/api\/businesses\/(?:auto-search|auto-search-ai|parse-whatsapp-group)$/.test(path))return null;
+ if(method.toUpperCase()==='POST'&&/^\/api\/businesses\/(?:auto-search|auto-search-ai|parse-whatsapp-group)$/.test(path))return null;
  if(/^\/(?:api\/)?businesses\/[^/]+(?:\/(?:sync-wp|verify-edit-pin))?$/.test(path)&&mutable)return method.toUpperCase()==='DELETE'?'business:delete':'business:manage';
- if(/^\/(?:api\/)?classifieds(?:\/|$)/.test(path)&&mutable&&!path.endsWith('/radar-search'))return 'classified:manage';
- if(/^\/api\/events(?:\/|$)/.test(path)&&mutable&&!path.endsWith('/radar-search'))return 'event:manage';
+ if(/^\/(?:api\/)?classifieds(?:\/|$)/.test(path)&&mutable&&!(method.toUpperCase()==='POST'&&path==='/api/classifieds/radar-search'))return 'classified:manage';
+ if(/^\/api\/events(?:\/|$)/.test(path)&&mutable&&!(method.toUpperCase()==='POST'&&path==='/api/events/radar-search'))return 'event:manage';
  if(/^\/api\/reports(?:\/|$)/.test(path)&&method.toUpperCase()!=='POST')return 'admin:manage';
  if(/^\/api\/emergency(?:\/|$)/.test(path)&&mutable)return 'admin:manage';
  return null;
