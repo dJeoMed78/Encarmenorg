@@ -549,7 +549,16 @@ export async function fetchNewestBusinesses(): Promise<{
   }
 }
 
-export async function fetchClassifieds(params: {
+/**
+ * ENC-CLASSIFIEDS-INTEGRATION-002
+ * Contrato de API pública para clasificados (trabajo en paralelo con PERP):
+ * - GET /api/public/classifieds — consultar clasificados publicados.
+ * - POST /api/public/classifieds — solicitar publicación con confirmación de persistencia.
+ * - PATCH /api/public/classifieds/:id — edición autenticada por titular.
+ * - DELETE /api/public/classifieds/:id — baja autenticada por titular.
+ * Si el endpoint aún no existe o falla, se devuelve un estado honesto sin inventar persistencia local.
+ */
+export async function fetchPublicClassifieds(params: {
   category?: string;
   subcategory?: string;
   q?: string;
@@ -557,7 +566,7 @@ export async function fetchClassifieds(params: {
   status?: string;
   priceType?: string;
   allStatus?: boolean;
-} = {}): Promise<{ total: number; classifieds: import('../types').ClassifiedAd[] }> {
+} = {}): Promise<{ total: number; classifieds: import('../types').ClassifiedAd[]; error?: string; status?: number }> {
   try {
     const query = new URLSearchParams();
     if (params.category && params.category !== 'all') query.set('category', params.category);
@@ -568,49 +577,174 @@ export async function fetchClassifieds(params: {
     if (params.priceType) query.set('priceType', params.priceType);
     if (params.allStatus) query.set('allStatus', 'true');
 
-    const res = await adminFetch(API_BASE + '/classifieds?' + query.toString());
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return await res.json();
-  } catch (err) {
-    return { total: 0, classifieds: [] };
+    const res = await fetch(API_BASE + '/public/classifieds?' + query.toString());
+    if (res.status === 404) {
+      return {
+        total: 0,
+        classifieds: [],
+        error: 'El servicio público de clasificados está en preparación por PERP (HTTP 404).',
+        status: 404
+      };
+    }
+    if (!res.ok) {
+      return {
+        total: 0,
+        classifieds: [],
+        error: `Error al consultar clasificados (HTTP ${res.status}).`,
+        status: res.status
+      };
+    }
+    const data = await res.json();
+    return {
+      total: data.total ?? (Array.isArray(data.classifieds) ? data.classifieds.length : 0),
+      classifieds: Array.isArray(data.classifieds) ? data.classifieds : [],
+      status: res.status
+    };
+  } catch (err: any) {
+    return {
+      total: 0,
+      classifieds: [],
+      error: err?.message || 'Error de conexión con el servidor de clasificados.',
+      status: 0
+    };
   }
 }
 
-export async function createClassified(ad: Partial<import('../types').ClassifiedAd>): Promise<{
+export const fetchClassifieds = fetchPublicClassifieds;
+
+export async function createPublicClassified(ad: Partial<import('../types').ClassifiedAd>): Promise<{
   success: boolean;
   message: string;
   classified?: import('../types').ClassifiedAd;
+  status?: number;
 }> {
-  const res = await adminFetch(API_BASE + '/classifieds', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(ad)
-  });
-  return await res.json();
+  try {
+    const res = await fetch(API_BASE + '/public/classifieds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ad)
+    });
+    if (res.status === 404) {
+      return {
+        success: false,
+        message: 'El servicio público de publicación de clasificados está en preparación por PERP (HTTP 404).',
+        status: 404
+      };
+    }
+    if (!res.ok) {
+      let errorMsg = `Error del servidor (HTTP ${res.status})`;
+      try {
+        const errJson = await res.json();
+        if (errJson?.message) errorMsg = errJson.message;
+      } catch (_) {}
+      return { success: false, message: errorMsg, status: res.status };
+    }
+    const data = await res.json();
+    return {
+      success: data.success ?? true,
+      message: data.message || 'Anuncio publicado exitosamente en el servidor.',
+      classified: data.classified,
+      status: res.status
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || 'Error de conexión con el servidor. No se pudo guardar el aviso.',
+      status: 0
+    };
+  }
 }
 
-export async function updateClassified(id: string, updates: Partial<import('../types').ClassifiedAd>): Promise<{
+export const createClassified = createPublicClassified;
+
+export async function updatePublicClassified(
+  id: string,
+  updates: Partial<import('../types').ClassifiedAd>
+): Promise<{
   success: boolean;
   message: string;
   classified?: import('../types').ClassifiedAd;
+  status?: number;
 }> {
-  const res = await adminFetch(API_BASE + '/classifieds/' + id, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(updates)
-  });
-  return await res.json();
+  try {
+    const res = await fetch(API_BASE + '/public/classifieds/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+    if (res.status === 404) {
+      return {
+        success: false,
+        message: 'La edición pública de clasificados está en preparación por PERP (HTTP 404).',
+        status: 404
+      };
+    }
+    if (!res.ok) {
+      let errorMsg = `Error al actualizar anuncio (HTTP ${res.status})`;
+      try {
+        const errJson = await res.json();
+        if (errJson?.message) errorMsg = errJson.message;
+      } catch (_) {}
+      return { success: false, message: errorMsg, status: res.status };
+    }
+    const data = await res.json();
+    return {
+      success: data.success ?? true,
+      message: data.message || 'Anuncio actualizado con éxito.',
+      classified: data.classified,
+      status: res.status
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || 'Error de conexión con el servidor.',
+      status: 0
+    };
+  }
 }
 
-export async function deleteClassified(id: string): Promise<{
+export const updateClassified = updatePublicClassified;
+
+export async function deletePublicClassified(id: string): Promise<{
   success: boolean;
   message: string;
+  status?: number;
 }> {
-  const res = await adminFetch(API_BASE + '/classifieds/' + id, {
-    method: 'DELETE'
-  });
-  return await res.json();
+  try {
+    const res = await fetch(API_BASE + '/public/classifieds/' + encodeURIComponent(id), {
+      method: 'DELETE'
+    });
+    if (res.status === 404) {
+      return {
+        success: false,
+        message: 'La baja pública de clasificados está en preparación por PERP (HTTP 404).',
+        status: 404
+      };
+    }
+    if (!res.ok) {
+      let errorMsg = `Error al retirar anuncio (HTTP ${res.status})`;
+      try {
+        const errJson = await res.json();
+        if (errJson?.message) errorMsg = errJson.message;
+      } catch (_) {}
+      return { success: false, message: errorMsg, status: res.status };
+    }
+    const data = await res.json();
+    return {
+      success: data.success ?? true,
+      message: data.message || 'Anuncio retirado exitosamente.',
+      status: res.status
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || 'Error de conexión con el servidor.',
+      status: 0
+    };
+  }
 }
+
+export const deleteClassified = deletePublicClassified;
 
 export async function searchClassifiedRadarCandidates(
   query: string = '',
