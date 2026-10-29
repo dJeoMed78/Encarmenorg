@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {contactDigits, contactsMatchReadback} from '../utils/businessContacts';
 import {STAGING_BUSINESS_DATABASE} from '../server/stagingBusinessSecurity';
+import {verifyStagingIsolation} from '../server/stagingIsolationProof';
 export class BusinessWriteError extends Error {
   constructor(public status:number, public code:string, message:string, public writeMayHaveSucceeded=false){super(message);}
 }
@@ -8,14 +9,15 @@ const columns=['id','name','category','subcategory','description','address','col
 const raw=(row:any)=>{try {const data=JSON.parse(row.raw_data || '{}');return data && typeof data==='object' && !Array.isArray(data) ? data : {};}catch{return {};}};
 const values=(b:any,metadata:any={})=>[String(b.id),b.name||'',b.category||'',b.subcategory||'',b.description||'',b.address||'',b.colonia||'',b.phone||'',b.whatsapp||'',b.email||'',b.website||'',b.facebook||'',b.instagram||'',b.schedule||'',b.image||'',b.rating??0,b.reviews_count??0,b.verified?1:0,b.featured?1:0,b.status||'published',JSON.stringify({...b,...metadata})];
 const norm=(s:unknown)=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
-export function createStagingBusinessStore(deps:{canWrite:()=>boolean;getConnection:()=>Promise<any>;serialize:(row:any)=>any}) {
+export function createStagingBusinessStore(deps:{canWrite:()=>boolean;getConnection:()=>Promise<any>;serialize:(row:any)=>any;verifyIsolation?:(conn:any)=>Promise<{ok:boolean;code:string}>}) {
+ const verify=deps.verifyIsolation ?? ((conn:any)=>verifyStagingIsolation(conn,process.env));
  const assertWrite=()=>{if(!deps.canWrite())throw new BusinessWriteError(403,'STAGING_BUSINESS_READ_ONLY','Escritura de negocios no habilitada de forma segura.');};
  async function connection(){assertWrite();const conn=await deps.getConnection();try {const [rows]=await conn.query('SELECT DATABASE() AS db_name');if(rows[0]?.db_name!==STAGING_BUSINESS_DATABASE)throw new BusinessWriteError(403,'DATABASE_TARGET_MISMATCH','La conexión no corresponde a la base autorizada.');
     const [engine]=await conn.query("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'businesses'");
     if(String(engine[0]?.ENGINE||'').toLowerCase()!=='innodb')throw new BusinessWriteError(503,'BUSINESS_ENGINE_UNVERIFIED','Se requiere businesses transaccional InnoDB; no se modificó el esquema.');
     const [primary]=await conn.query("SELECT COLUMN_NAME, NON_UNIQUE, SEQ_IN_INDEX FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'businesses' AND INDEX_NAME = 'PRIMARY'");
     if(primary.length!==1||primary[0].COLUMN_NAME!=='id'||Number(primary[0].NON_UNIQUE)!==0)throw new BusinessWriteError(503,'BUSINESS_PRIMARY_KEY_UNVERIFIED','Se requiere clave primaria única id; no se modificó el esquema.');
-    return conn;}catch(e){conn.release();throw e;}}
+    const proof=await verify(conn);if(!proof.ok)throw new BusinessWriteError(403,'STAGING_ISOLATION_UNPROVEN',`No se comprobó el aislamiento de Staging (${proof.code}); escritura bloqueada.`);return conn;}catch(e){conn.release();throw e;}}
  async function transaction<T>(conn:any, action:()=>Promise<T>){let committing=false;try {await conn.beginTransaction();const value=await action();assertWrite();committing=true;await conn.commit();return value;}catch(e){try{await conn.rollback();}catch{}if(e instanceof BusinessWriteError)throw e;throw new BusinessWriteError(503,'BUSINESS_WRITE_UNCONFIRMED','No se confirmó el guardado. Recarga antes de reintentar; conserva la clave de registro.',committing);} }
  return {
   async create(draft:any,requestId:string){
