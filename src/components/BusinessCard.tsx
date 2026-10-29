@@ -1,3 +1,4 @@
+import { contactDigits } from '../utils/businessContacts';
 import React from 'react';
 import { Phone, Star, CheckCircle2, Bookmark, MapPin } from 'lucide-react';
 import { CATEGORY_VISUALS } from '../data/categoryVisuals';
@@ -21,20 +22,19 @@ export function BusinessCard({
   isFavorite = false,
   onToggleFavorite,
 }: BusinessCardProps) {
-  const phoneClean = business.phone ? business.phone.replace(/\D/g, '') : '';
-  const waClean = business.whatsapp ? business.whatsapp.replace(/\D/g, '') : '';
-  const targetCall = phoneClean || waClean || '9381522623';
-  const targetWa = waClean || phoneClean || '529381522623';
+  const targetCall = contactDigits(business.phone);
+  const targetWa = contactDigits(business.whatsapp);
 
   const handleWhatsApp = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!targetWa) return;
     const phoneWithCountry = targetWa.startsWith('52') ? targetWa : `52${targetWa}`;
     window.open(`https://wa.me/${phoneWithCountry}?text=Hola,%20vi%20su%20negocio%20en%20encarmen.org`, '_blank');
   };
 
   const handleCall = (e: React.MouseEvent) => {
     e.stopPropagation();
-    window.open(`tel:${targetCall}`, '_self');
+    if (targetCall) window.open(`tel:+52${targetCall}`, '_self');
   };
 
   // Nombre formateado automáticamente en mayúsculas y minúsculas (Title Case)
@@ -184,6 +184,7 @@ export function BusinessCard({
         <button
           type="button"
           onClick={handleWhatsApp}
+          disabled={!targetWa}
           className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-full font-semibold text-xs sm:text-[13px] text-white bg-[#25D366] hover:bg-[#20ba59] active:scale-95 transition-all shadow-md cursor-pointer"
         >
           <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
@@ -195,6 +196,7 @@ export function BusinessCard({
         <button
           type="button"
           onClick={handleCall}
+          disabled={!targetCall}
           className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-full font-semibold text-xs sm:text-[13px] text-white bg-[#1E88E5] hover:bg-[#1976D2] active:scale-95 transition-all shadow-md cursor-pointer"
         >
           <Phone className="w-3.5 h-3.5 shrink-0" />

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { Hero, PromoItem, EventItem } from './components/Hero';
 import { BusinessCard } from './components/BusinessCard';
@@ -13,7 +13,6 @@ import { DigitalCardModal } from './components/DigitalCardModal';
 import { EditBusinessModal } from './components/EditBusinessModal';
 import { WordPressSyncModal } from './components/WordPressSyncModal';
 import { MessageSquare, RefreshCw, Lock, X, Globe, ChevronDown } from 'lucide-react';
-import seedBusinesses from './data/businesses_seed.json';
 import seedPromotions from './data/promotions_seed.json';
 import seedEvents from './data/events_carmen.json';
 import seedRatings from '../ratings_db.json';
@@ -279,54 +278,44 @@ export default function App() {
     return () => window.removeEventListener('real-ratings-updated', onRatingUpdate);
   }, []);
 
-  const [businessesList, setBusinessesList] = useState<Business[]>(() => (seedBusinesses as unknown as Business[]) || []);
+  const [businessesList, setBusinessesList] = useState<Business[]>([]);
+  const [businessesStatus, setBusinessesStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [businessesReload, setBusinessesReload] = useState(0);
+  const businessRequestVersion = useRef(0);
+  const businessRequestController = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    fetch('/api/businesses?t=' + Date.now(), { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data && Array.isArray(data.businesses) && data.businesses.length > 0) {
-          setBusinessesList(data.businesses);
-          const slug = getBusinessSlugFromUrl();
-          if (slug) {
-            const match = findBusinessInList(data.businesses, slug);
-            if (match) {
-              setLandingBusiness(match);
-            }
-          }
-        }
-      })
-      .catch(() => {});
+    let alive = true;
+    const controller = new AbortController();
+    businessRequestController.current = controller;
+    const version = ++businessRequestVersion.current;
+    setBusinessesStatus('loading');
+    fetch('/api/businesses', { cache: 'no-store', signal: controller.signal })
+      .then(async r => {
+        if (!r.ok) throw new Error('Business source unavailable');
+        const data = await r.json();
+        if (data.success === false || !Array.isArray(data.businesses)) throw new Error('Invalid business response');
+        if (!alive || version !== businessRequestVersion.current) return;
+        setBusinessesList(data.businesses);
+        setBusinessOverrides({});
+        setBusinessesStatus('ready');
+        const slug = getBusinessSlugFromUrl();
+        if (slug) setLandingBusiness(findBusinessInList(data.businesses, slug));
+        setSelectedBusiness(previous => previous ? data.businesses.find((b: Business) => String(b.id) === String(previous.id)) || null : null);
+      }).catch(() => { if (alive && version === businessRequestVersion.current) { setBusinessesStatus('error'); setBusinessesList([]); setSelectedBusiness(null); setLandingBusiness(null); } });
+    return () => { alive = false; controller.abort(); };
+  }, [businessesReload]);
+
+  useEffect(() => {
+    const refresh = () => setBusinessesReload(previous => previous + 1);
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
   }, []);
 
-  // Detect direct business landing page or tab on initial load
+  // Landing data comes from the same authoritative catalog request.
   useEffect(() => {
-    const slug = getBusinessSlugFromUrl();
-    if (slug) {
-      const match = findBusinessInList(businessesList, slug);
-      if (match) {
-        setLandingBusiness(match);
-      } else {
-        // Query endpoint directly in case business was just registered in DB
-        fetch(`/api/businesses/${encodeURIComponent(slug)}`)
-          .then((r) => (r.ok ? r.json() : null))
-          .then((resData) => {
-            if (resData && resData.business) {
-              setLandingBusiness(resData.business);
-              setBusinessesList((prev) => [
-                resData.business,
-                ...prev.filter((b) => String(b.id) !== String(resData.business.id)),
-              ]);
-            }
-          })
-          .catch(() => {});
-      }
-    } else {
-      const cleanPath = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
-      if (['promociones', 'eventos', 'clasificados', 'registro'].includes(cleanPath)) {
-        setActiveTab(cleanPath);
-      }
-    }
+    const cleanPath = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
+    if (['promociones', 'eventos', 'clasificados', 'registro'].includes(cleanPath)) setActiveTab(cleanPath);
   }, []);
 
   // Listen to browser Back/Forward (popstate)
@@ -338,14 +327,8 @@ export default function App() {
         if (match) {
           setLandingBusiness(match);
         } else {
-          fetch(`/api/businesses/${encodeURIComponent(slug)}`)
-            .then((r) => (r.ok ? r.json() : null))
-            .then((resData) => {
-              if (resData && resData.business) {
-                setLandingBusiness(resData.business);
-              }
-            })
-            .catch(() => {});
+          setLandingBusiness(null);
+          setBusinessesReload(n => n + 1);
         }
       } else {
         setLandingBusiness(null);
@@ -628,8 +611,13 @@ export default function App() {
     try {
       // 1. Enviar cambios al servidor (persiste en MariaDB, businessesCache y businesses_seed.json)
       const res = await adminUpdateBusiness(id, updatedData);
+      if (!res.success || !res.business) return { success: false, message: res.message || 'No se pudieron guardar los cambios en el servidor.' };
+      // A pending older catalog response must not overwrite a confirmed save.
+      businessRequestVersion.current += 1;
+      businessRequestController.current?.abort();
+      setBusinessesStatus('ready');
       const serverUpdated = res.business;
-      const finalData: Partial<Business> = serverUpdated ? { ...updatedData, ...serverUpdated } : updatedData;
+      const finalData: Partial<Business> = res.business;
 
       // 2. Actualizar lista de negocios en memoria
       setBusinessesList((prev) =>
@@ -660,20 +648,12 @@ export default function App() {
       }
 
       return {
-        success: res.success !== false,
+        success: true,
         message: res.message || 'Empresa actualizada correctamente'
       };
     } catch (err: any) {
       console.error('Error saving business to API:', err);
-      // Fallback local en caso de falla momentánea de red
-      setBusinessesList((prev) =>
-        prev.map((b) => (Number(b.id) === id ? { ...b, ...updatedData } : b))
-      );
-      setBusinessOverrides((prev) => ({
-        ...prev,
-        [String(id)]: { ...prev[String(id)], ...updatedData }
-      }));
-      return { success: true, message: 'Guardado localmente' };
+      return { success: false, message: err instanceof Error ? err.message : 'Error de conexión. Los cambios no se guardaron.' };
     }
   };
 
@@ -807,6 +787,7 @@ export default function App() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/30 pointer-events-none" />
 
         <div className="relative z-30">
+          {businessesStatus === 'error' && <div role="alert" className="p-3 text-center bg-amber-50 text-stone-900">No se pudo cargar el catálogo desde MariaDB. <button type="button" onClick={() => setBusinessesReload(n => n + 1)}>Reintentar catálogo</button></div>}
           <Navbar
             activeTab={activeTab}
             setActiveTab={setActiveTab}

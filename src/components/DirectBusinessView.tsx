@@ -1,3 +1,4 @@
+import { contactDigits } from '../utils/businessContacts';
 import React, { useState } from 'react';
 import { 
   ArrowLeft, Share2, MapPin, Phone, MessageSquare, Navigation, 
@@ -87,8 +88,8 @@ export function DirectBusinessView({
   const [ownerPinError, setOwnerPinError] = useState<string | null>(null);
   const [isVerifyingPin, setIsVerifyingPin] = useState(false);
 
-  const cleanPhone = business.phone ? business.phone.replace(/\D/g, '') : '';
-  const cleanWhatsApp = (business.whatsapp || business.phone || '').replace(/\D/g, '');
+  const cleanPhone = contactDigits(business.phone);
+  const cleanWhatsApp = contactDigits(business.whatsapp);
   const businessUrl = `https://encarmen.org/${business.slug || business.id}`;
   
   const logoUrl = (business as any).logo_url || business.image || (business as any).imageUrl || '';
@@ -372,7 +373,7 @@ export function DirectBusinessView({
 
               {cleanPhone && (
                 <a
-                  href={`tel:${cleanPhone}`}
+                  href={`tel:+52${cleanPhone}`}
                   className="py-3.5 px-4 rounded-2xl font-black text-sm text-white flex items-center justify-center gap-2 shadow-lg hover:brightness-105 transition active:scale-98"
                   style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}
                 >

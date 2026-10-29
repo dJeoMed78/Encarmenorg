@@ -1,3 +1,4 @@
+import { contactDigits, type ContactField } from '../utils/businessContacts';
 import mysql from 'mysql2/promise';
 
 export interface MariaDbConfig {
@@ -301,13 +302,13 @@ export async function dbGetUploadedFile(filename: string): Promise<{ mimeType: s
 
 // MariaDB CRUD Operations
 export async function dbLoadAllBusinesses(): Promise<any[]> {
-  if (!pool) return [];
+  if (!pool || !isConnected) throw new Error('BUSINESSES_SOURCE_UNAVAILABLE');
   try {
     const [rows]: any = await pool.query('SELECT * FROM businesses ORDER BY id ASC');
     return rows.map((r: any) => {
       let extra: any = {};
       if (r.raw_data) {
-        try { extra = JSON.parse(r.raw_data); } catch (_) {}
+        try { const parsed = JSON.parse(r.raw_data); extra = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}; } catch (_) {}
       }
       return {
         ...extra,
@@ -323,8 +324,8 @@ export async function dbLoadAllBusinesses(): Promise<any[]> {
         address: extra.address || r.address || '',
         colonia: extra.colonia || r.colonia || '',
         postalCode: extra.postalCode || '',
-        phone: extra.phone || r.phone || '',
-        whatsapp: extra.whatsapp || r.whatsapp || '',
+        phone: String(r.phone ?? ''),
+        whatsapp: String(r.whatsapp ?? ''),
         email: extra.email || r.email || '',
         website: extra.website || r.website || '',
         facebook: extra.facebook || r.facebook || '',
@@ -345,8 +346,8 @@ export async function dbLoadAllBusinesses(): Promise<any[]> {
       };
     });
   } catch (err: any) {
-    console.warn('[MariaDB] Error cargando businesses:', err.message);
-    return [];
+    console.warn('[MariaDB] Lectura de businesses no disponible.');
+    throw new Error('BUSINESSES_SOURCE_UNAVAILABLE');
   }
 }
 
@@ -368,12 +369,12 @@ export async function dbGetBusinessesSignature(): Promise<{ lastUpdate: string |
   }
 }
 
-export async function dbSaveBusiness(biz: any): Promise<boolean> {
+export async function dbSaveBusiness(biz: any, options: { createOnly?: boolean; expectedContacts?: Partial<Record<ContactField, string>> } = {}): Promise<boolean> {
   if (!pool) return false;
   try {
     const id = String(biz.id);
     const rawData = JSON.stringify(biz);
-    const query = `
+    let query = `
       INSERT INTO businesses (
         id, name, category, subcategory, description, address, colonia,
         phone, whatsapp, email, website, facebook, instagram, schedule,
@@ -386,8 +387,8 @@ export async function dbSaveBusiness(biz: any): Promise<boolean> {
         description = VALUES(description),
         address = VALUES(address),
         colonia = VALUES(colonia),
-        phone = VALUES(phone),
-        whatsapp = VALUES(whatsapp),
+        phone = IF(? AND COALESCE(phone, '') <=> ?, COALESCE(NULLIF(TRIM(VALUES(phone)), ''), phone), phone),
+        whatsapp = IF(? AND COALESCE(whatsapp, '') <=> ?, COALESCE(NULLIF(TRIM(VALUES(whatsapp)), ''), whatsapp), whatsapp),
         email = VALUES(email),
         website = VALUES(website),
         facebook = VALUES(facebook),
@@ -402,7 +403,8 @@ export async function dbSaveBusiness(biz: any): Promise<boolean> {
         raw_data = VALUES(raw_data),
         updated_at = NOW();
     `;
-    await pool.query(query, [
+    if (options.createOnly) query = query.split('ON DUPLICATE KEY UPDATE')[0];
+    const parameters: any[] = [
       id,
       biz.name || '',
       biz.category || '',
@@ -410,8 +412,8 @@ export async function dbSaveBusiness(biz: any): Promise<boolean> {
       biz.description || '',
       biz.address || '',
       biz.colonia || '',
-      biz.phone || '',
-      biz.whatsapp || '',
+      contactDigits(biz.phone),
+      contactDigits(biz.whatsapp),
       biz.email || '',
       biz.website || '',
       biz.facebook || '',
@@ -424,7 +426,12 @@ export async function dbSaveBusiness(biz: any): Promise<boolean> {
       biz.featured ? 1 : 0,
       biz.status || 'published',
       rawData
-    ]);
+    ];
+    if (!options.createOnly) parameters.push(
+      Object.hasOwn(options.expectedContacts || {}, 'phone') ? 1 : 0, options.expectedContacts?.phone ?? '',
+      Object.hasOwn(options.expectedContacts || {}, 'whatsapp') ? 1 : 0, options.expectedContacts?.whatsapp ?? ''
+    );
+    await pool.query(query, parameters);
     return true;
   } catch (err: any) {
     console.warn('[MariaDB] Error guardando empresa:', err.message);

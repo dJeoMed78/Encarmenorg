@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import {
   X,
   Building2,
@@ -115,6 +115,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   coloniasList,
   onSave
 }) => {
+  const contactBaseline = useRef({phone:String(business?.phone ?? ''), whatsapp:String(business?.whatsapp ?? '')});
   const [formData, setFormData] = useState<Partial<Business>>({});
   const [postalCode, setPostalCode] = useState<string>('');
   const [selectedDeliveryOptions, setSelectedDeliveryOptions] = useState<string[]>([]);
@@ -223,13 +224,14 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         const safePrevNames = ensureArray(business.previousNames);
         const safeGallery = ensureArray(business.gallery);
 
+        contactBaseline.current = {phone:String(business.phone ?? ''), whatsapp:String(business.whatsapp ?? '')};
         setFormData({
           name: ensureString(business.name),
           category: safeCats[0] || ensureString(business.category, 'Servicios'),
           categories: safeCats.length > 0 ? safeCats : [ensureString(business.category, 'Servicios')],
           description: ensureString(business.description),
           phone: cleanPhoneNumber(ensureString(business.phone)) || '',
-          whatsapp: cleanPhoneNumber(ensureString(business.whatsapp)) || cleanPhoneNumber(ensureString(business.phone)) || '',
+          whatsapp: cleanPhoneNumber(ensureString(business.whatsapp)) || '',
           address: ensureString(business.address),
           colonia: initialCol,
           postalCode: initialCp,
@@ -351,7 +353,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       const cleanName = formatBusinessName(formData.name.trim());
       const cleanAddress = formatAddressText(formData.address || '');
       const cleanPhone = cleanPhoneNumber(formData.phone);
-      const cleanWa = cleanPhoneNumber(formData.whatsapp) || cleanPhone;
+      const cleanWa = cleanPhoneNumber(formData.whatsapp);
       const cleanDelivery = selectedDeliveryOptions.length > 0
         ? selectedDeliveryOptions.join(', ')
         : (normalizeDeliveryOption(formData.delivery) || 'Atención en el Local de la empresa');
@@ -364,6 +366,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
 
       const res = await onSave(business.id, {
         ...formData,
+        ...{expectedContacts:contactBaseline.current},
         slug: cleanSlug || undefined,
         name: cleanName,
         address: cleanAddress,

@@ -1,3 +1,4 @@
+import { contactDigits } from '../utils/businessContacts';
 import React, { useState, useEffect } from 'react';
 import { 
   X, Bookmark, Share2, MapPin, Phone, MessageSquare, 
@@ -121,8 +122,8 @@ export function BusinessDetailModal({
     }
   };
 
-  const cleanPhone = business.phone ? business.phone.replace(/\D/g, '') : '';
-  const cleanWhatsApp = (business.whatsapp || business.phone || '').replace(/\D/g, '');
+  const cleanPhone = contactDigits(business.phone);
+  const cleanWhatsApp = contactDigits(business.whatsapp);
   
   const logoUrl = (business as any).logo_url || business.image || (business as any).imageUrl;
   const isTop = Boolean((business as any).is_top ?? business.isTopBusiness);
@@ -284,7 +285,7 @@ export function BusinessDetailModal({
 
               {cleanPhone && (
                 <a
-                  href={`tel:${cleanPhone}`}
+                  href={`tel:+52${cleanPhone}`}
                   className="w-full py-3.5 px-4 rounded-2xl font-black text-sm text-white flex items-center justify-center gap-2 shadow-lg hover:brightness-105 transition active:scale-98"
                   style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}
                 >
