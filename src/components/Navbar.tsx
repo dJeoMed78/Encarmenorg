@@ -229,13 +229,13 @@ export function Navbar({
           /*    RENGLÓN 2: NEGOCIOS · CLASIFICADOS · EVENTOS · PROMOS   */
           /* ========================================================== */
           <div className="flex flex-col">
-            <div className="flex items-center justify-between gap-1.5 sm:gap-3 w-full pb-2 border-b border-white/60">
+            <div className="flex items-center justify-between gap-1.5 sm:gap-3 w-full pb-2 border-b border-white/60 max-[350px]:flex-wrap">
               <div
                 onClick={() => {
                   setActiveTab('negocios');
                   setIsFilterPopoverOpen(false);
                 }}
-                className="flex items-center cursor-pointer select-none shrink-0"
+                className="flex items-center cursor-pointer select-none shrink-0 max-[350px]:w-full"
               >
                 <img
                   src="/logo.png"
@@ -247,7 +247,7 @@ export function Navbar({
                 />
               </div>
 
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 max-[350px]:w-full max-[350px]:justify-between">
                 <button
                   type="button"
                   onClick={handleRegisterClick}
