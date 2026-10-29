@@ -21,7 +21,7 @@ class FakePool {
   async query(sql, params = []) {
     if (this.failOn && this.failOn.test(sql)) throw this.failError || new Error('fallo sql');
     if (/SELECT DATABASE\(\)/.test(sql)) return [[{ db_name: this.database }]];
-    if (/CURRENT_USER\(\)/.test(sql)) return [[{ 'CURRENT_USER()': this.user }]];
+    if (/^SELECT CURRENT_USER\(\)/.test(sql)) return [[{ 'CURRENT_USER()': this.user }]];
     if (/marker_value FROM/.test(sql)) return this.marker ? [[{ marker_value: this.marker }]] : [[]];
     if (/information_schema\.TABLES/.test(sql)) return this.engine ? [[{ ENGINE: this.engine }]] : [[]];
     if (/SHOW GRANTS/.test(sql)) return [[this.grants]];
@@ -68,7 +68,7 @@ const rejects = (promise, code, extra) => assert.rejects(promise, (e) => e insta
 
 test('validación cerrada rechaza campos inválidos', async () => {
   for (const bad of [
-    { ...VALID, title: 'corto' },
+    { ...VALID, title: 'abc' },
     { ...VALID, description: 'corta' },
     { ...VALID, category: 'x' },
     { ...VALID, contactPhone: '123' },
