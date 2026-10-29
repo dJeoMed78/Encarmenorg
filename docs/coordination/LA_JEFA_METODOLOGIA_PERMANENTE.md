@@ -123,3 +123,16 @@ El propietario ha establecido que **Staging es un entorno para probar, encontrar
 6. **Restauración.** Ante regresión significativa: detener nuevas modificaciones, identificar la instantánea anterior estable, restaurar **solamente los archivos afectados**, eliminar archivos nuevos de ese cambio cuando proceda, reiniciar/reconstruir lo necesario y verificar respuesta HTTP y flujo afectado. Registrar la reversión. No automatizar restauraciones de bases de datos con este mecanismo de archivos.
 7. **Límite crítico.** Este mecanismo NO garantiza recuperación de datos SQL, archivos subidos por usuarios, secretos rotados ni cambios de infraestructura. Si una operación incluye migraciones, DB o recursos compartidos, aplicar respaldo y reversión específicos, y confirmar previamente su aislamiento de producción.
 8. **Autorizaciones.** Esta política autoriza diseñar el mecanismo y preparar scripts no destructivos; no autoriza por sí misma acceso remoto, despliegue, escritura ni restauración en Staging. Los despliegues y restauraciones que modifiquen el servidor siguen requiriendo la aprobación específica del propietario y verificación del destino.
+
+
+## Copias rotativas de MariaDB de Staging — decisión del propietario (2026-10-29)
+
+El respaldo de archivos selectivos descrito arriba se complementa con una copia lógica **exclusiva de la base de Staging**. La intención es proteger el trabajo no productivo del equipo sin demorar las pruebas.
+
+- **Frecuencia:** un dump consistente cada **3 días (72 horas)**. No repetir por cambios menores.
+- **Cantidad:** conservar **máximo tres respaldos válidos** correspondientes a una ventana rotativa de **9 días**; después de generar y verificar la nueva copia, borrar siempre la más antigua (y cualquier copia que exceda nueve días). **Si falla la copia nueva, no eliminar las anteriores.**
+- **Ubicación:** `<ruta-privada-comprobada>/encarmen-staging-backups/database/`, fuera de webroot, nunca alojar dumps ni secretos en GitHub. Los archivos y manifiestos deben protegerse con permisos mínimos, y cifrado si el almacenamiento lo requiere.
+- **Evidencia:** identificar fecha UTC, base/usuario reales, archivo, tamaño y SHA-256. Probar la restauración en una base efímera separada antes de confiar en el procedimiento. La restauración en Staging requiere verificación del objetivo y autorización específica.
+- **Condición de seguridad:** comprobar primero que base, usuario, host, volumen y credenciales son independientes de producción; la autorización de GitHub por sí sola **no constituye acceso a MariaDB/Hostinger**.
+- **Implementación preparada:** `ops/staging-backups/backup_staging_db.py` y `ops/staging-backups/README.md` en la rama de coordinación. Scripts no habilitados automáticamente, sin cron activo ni dumps reales hasta comprobar el destino y conexión.
+- **No incluye producción:** los respaldos completos de producción y las migraciones tienen otro proceso y nunca participan en la rotación de Staging.
