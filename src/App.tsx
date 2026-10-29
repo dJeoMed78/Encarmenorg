@@ -864,8 +864,6 @@ export default function App() {
             onBusinessAdded={(newBiz) => {
               setBusinessesList((prev) => [newBiz, ...prev.filter((b) => String(b.id) !== String(newBiz.id))]);
               setBusinessOverrides((prev) => ({ ...prev, [newBiz.id]: newBiz }));
-              setActiveTab('negocios');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
           />
         </div>
