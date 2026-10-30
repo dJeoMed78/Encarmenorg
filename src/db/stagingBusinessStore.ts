@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {isDeepStrictEqual} from 'node:util';
 import {contactDigits, contactsMatchReadback} from '../utils/businessContacts';
 import {STAGING_BUSINESS_DATABASE} from '../server/stagingBusinessSecurity';
 import {verifyStagingIsolation} from '../server/stagingIsolationProof';
@@ -9,6 +10,19 @@ const columns=['id','name','category','subcategory','description','address','col
 const raw=(row:any)=>{try {const data=JSON.parse(row.raw_data || '{}');return data && typeof data==='object' && !Array.isArray(data) ? data : {};}catch{return {};}};
 const values=(b:any,metadata:any={})=>[String(b.id),b.name||'',b.category||'',b.subcategory||'',b.description||'',b.address||'',b.colonia||'',b.phone||'',b.whatsapp||'',b.email||'',b.website||'',b.facebook||'',b.instagram||'',b.schedule||'',b.image||'',b.rating??0,b.reviews_count??0,b.verified?1:0,b.featured?1:0,b.status||'published',JSON.stringify({...b,...metadata})];
 const norm=(s:unknown)=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+// Verify the actual SQL columns as well as raw_data before COMMIT. A projected
+// object can hide a discarded column behind its raw_data alias (e.g. a trigger).
+function matchesWrittenValues(row:any, fields:string[], data:any[]):boolean {
+ if(!row || String(row.id)!==String(data[0]))return false;
+ return fields.every(field=>{
+  const expected=data[columns.indexOf(field)];
+  if(field==='raw_data'){
+   try{return isDeepStrictEqual(JSON.parse(row.raw_data),JSON.parse(expected));}catch{return false;}
+  }
+  if(['rating','reviews_count','verified','featured'].includes(field))return Number(row[field])===Number(expected);
+  return String(row[field] ?? '')===String(expected ?? '');
+ });
+}
 export function createStagingBusinessStore(deps:{canWrite:()=>boolean;getConnection:()=>Promise<any>;serialize:(row:any)=>any;verifyIsolation?:(conn:any)=>Promise<{ok:boolean;code:string}>}) {
  const verify=deps.verifyIsolation ?? ((conn:any)=>verifyStagingIsolation(conn,process.env));
  const assertWrite=()=>{if(!deps.canWrite())throw new BusinessWriteError(403,'STAGING_BUSINESS_READ_ONLY','Escritura de negocios no habilitada de forma segura.');};
@@ -40,6 +54,7 @@ export function createStagingBusinessStore(deps:{canWrite:()=>boolean;getConnect
      assertWrite();await conn.query(`INSERT INTO businesses (${columns.join(', ')}) VALUES (${columns.map(()=>'?').join(', ')})`,values(business,{_stagingRegistrationId:requestId,_stagingRegistrationDigest:digest}));
      const [saved]=await conn.query('SELECT * FROM businesses WHERE id = ?',[String(id)]);
      if(!saved[0]||!contactsMatchReadback({phone:business.phone,whatsapp:business.whatsapp},saved[0]))throw new BusinessWriteError(503,'REGISTRATION_READBACK_FAILED','No se verificó el negocio; no se confirmó el registro.');
+     if(!matchesWrittenValues(saved[0],columns,values(business,{_stagingRegistrationId:requestId,_stagingRegistrationDigest:digest})))throw new BusinessWriteError(503,'REGISTRATION_READBACK_FAILED','Los campos persistidos no coinciden con el registro; no se confirmó el guardado.');
      return {business:deps.serialize(saved[0]),replayed:false};
     });
    } finally {if(locked){try{await conn.query('SELECT RELEASE_LOCK(?)',['encarmen:staging:business-create']);}catch{}}conn.release();}
@@ -65,6 +80,7 @@ export function createStagingBusinessStore(deps:{canWrite:()=>boolean;getConnect
     const [saved]=await conn.query('SELECT * FROM businesses WHERE id = ?',[String(current.id)]);
     const expected=Object.fromEntries(['phone','whatsapp'].filter(k=>Object.hasOwn(patch,k)).map(k=>[k,patch[k]]));
     if(!saved[0]||!contactsMatchReadback(expected,saved[0]))throw new BusinessWriteError(409,'CONTACT_READBACK_CONFLICT','No se pudo confirmar el cambio de contactos.');
+    if(!matchesWrittenValues(saved[0],fields,data))throw new BusinessWriteError(503,'BUSINESS_READBACK_FAILED','Los campos persistidos no coinciden con la edición; no se confirmó el guardado.');
     return {business:deps.serialize(saved[0])};
    });}finally{conn.release();}
   }

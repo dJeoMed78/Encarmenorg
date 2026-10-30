@@ -1,0 +1,8 @@
+{
+  "stage": "SIGKILL after SQL-confirmed HTTP POST",
+  "runnerSignal": "SIGKILL",
+  "committedPostVerified": true,
+  "ownedContainersRemaining": 0,
+  "verifiedServerStopped": true,
+  "recovery": "owned container and tmpfs destroyed"
+}

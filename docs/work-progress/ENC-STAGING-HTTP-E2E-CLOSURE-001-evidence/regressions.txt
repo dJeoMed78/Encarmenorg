@@ -1,0 +1,65 @@
+✔ server.ts completo contiene el parche aplicado e idempotente (1.564818ms)
+✔ contrato público valida modalidades/pagos/CP y rechaza imágenes, privilegios y teléfonos contaminados (1.25349ms)
+✔ cliente público → HTTP real → almacén/verificador reales con SQL simulado → listado/ficha y recarga (173.363985ms)
+✔ confirmación incierta conserva UUID, reintento no duplica; aislamiento y rutas inseguras bloqueados (78.758177ms)
+✔ consolidación HTTP: público anónimo y administración autenticada comparten aislamiento sin abrir mutaciones generales (284.389453ms)
+✔ aislamiento probado: base, permisos, esquemas y marca coinciden con Staging (3.838675ms)
+✔ el resultado nunca contiene grants, hash, host, usuario ni contraseña (0.375107ms)
+✔ configuración incompleta, ambigua o de otro entorno bloquea antes de consultar la base (1.171084ms)
+✔ la identidad efectiva de la base debe ser Staging (no basta el nombre configurado) (0.33502ms)
+✔ permisos: cuenta limitada pasa; permisos globales, ajenos, comodín o de producción bloquean (1.502566ms)
+✔ privilegios amplios sobre Staging avisan; con STAGING_REQUIRE_MINIMAL_GRANTS=true bloquean (0.587872ms)
+✔ visibilidad de esquemas: producción u otros esquemas de la cuenta bloquean (0.795664ms)
+✔ marca de entorno dentro de la base: falta, producción, ambigua o de otra base bloquean (2.738439ms)
+✔ cualquier error de consulta falla cerrado, sin filtrar el mensaje original (0.719389ms)
+✔ parseGrant interpreta formatos de MariaDB y rechaza lo desconocido (0.346552ms)
+[MariaDB] Error cargando businesses: simulated database outage
+[MariaDB] Error guardando empresa: simulated database outage
+[MariaDB] Catálogo no disponible; no se importaron semillas ni se escribieron negocios.
+[MariaDB] 0 empresas cargadas desde la fuente autorizada; sin importación automática.
+[MariaDB] 1 empresas cargadas desde la fuente autorizada; sin importación automática.
+✔ MX contacts: independent fields, international and legacy prefix; invalid values absent (1.075008ms)
+✔ MariaDB serialization uses columns rather than stale raw_data; empty never resurrected (7.96761ms)
+✔ upsert preserves omitted/null/empty/whitespace contacts, supports independent replacement and explicit removal (5.583627ms)
+✔ contact deletion intent rejects invalid, unauthenticated and conflicting requests (0.444769ms)
+✔ startup/restart does not seed businesses after failed or legitimately empty reads (57.897443ms)
+[Business contacts] Authorized explicit removal { businessId: '1081', fields: [ 'phone' ] }
+[MariaDB] Error cargando businesses: simulated database outage
+✔ real Express GET/PATCH handlers with mocked DB: fresh reads despite unchanged signature; failures and authorization (154.103292ms)
+✔ real rendered cards, Glass contact links and admin filters/pagination use synthetic data only (1374.719834ms)
+✔ API client refuses seed fallback and false success on an HTTP failure (85.597009ms)
+✔ App shows source error without seed contacts, retries and refreshes an open business from fresh API data (887.133304ms)
+✔ sin verificador inyectado, un proceso que no es Staging no puede crear ni editar (2.321467ms)
+✔ con configuración de Staging pero sin permisos/marca verificables, el almacén sigue bloqueado (0.665887ms)
+[MariaDB] Error cargando businesses: simulated database outage
+[MariaDB] Error guardando empresa: simulated database outage
+[MariaDB] Catálogo no disponible; no se importaron semillas ni se escribieron negocios.
+[MariaDB] 0 empresas cargadas desde la fuente autorizada; sin importación automática.
+[MariaDB] 1 empresas cargadas desde la fuente autorizada; sin importación automática.
+✔ MX contacts: independent fields, international and legacy prefix; invalid values absent (1.814742ms)
+✔ MariaDB serialization uses columns rather than stale raw_data; empty never resurrected (16.012418ms)
+✔ upsert preserves omitted/null/empty/whitespace contacts, supports independent replacement and explicit removal (5.412064ms)
+✔ contact deletion intent rejects invalid, unauthenticated and conflicting requests (0.407097ms)
+✔ startup/restart does not seed businesses after failed or legitimately empty reads (9.999097ms)
+[Business contacts] Authorized explicit removal { businessId: '1081', fields: [ 'phone' ] }
+[MariaDB] Error cargando businesses: simulated database outage
+✔ real Express GET/PATCH handlers with mocked DB: fresh reads despite unchanged signature; failures and authorization (304.88754ms)
+✔ real rendered cards, Glass contact links and admin filters/pagination use synthetic data only (1370.896614ms)
+✔ API client refuses seed fallback and false success on an HTTP failure (39.277108ms)
+✔ App shows source error without seed contacts, retries and refreshes an open business from fresh API data (683.247989ms)
+✔ SW explicit configuration, selected database and production account guards fail closed (53.889888ms)
+✔ SW secure staging credentials and login throttling do not accept embedded/short/client-only credentials (145.280679ms)
+✔ SW INSERT/replay/conflict/duplicates and parallel registrations never upsert an existing business (3.376323ms)
+✔ SW transactional update preserves fresh SQL contacts, metadata and unrelated fields; missing business never inserts (2.361624ms)
+✔ SW rollback and lost commit acknowledgement never report success or duplicate a retried registration (1.10462ms)
+✔ SW real HTTP guard/login/routes enforce authorization and controlled scope with mocked MariaDB (361.245074ms)
+✔ SW browser service has no local success fallback and authentication requires a server token (39.915131ms)
+✔ SW registration form retains request key after error, blocks duplicate clicks and keeps WhatsApp independent (274.866699ms)
+ℹ tests 43
+ℹ suites 0
+ℹ pass 43
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13106.407657

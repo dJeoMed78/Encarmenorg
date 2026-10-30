@@ -1,0 +1,51 @@
+{
+  "utc": "2026-10-30T19:44:51.466332+00:00",
+  "scope": "public staging GET only",
+  "productionAccessed": false,
+  "/api/health": {
+    "httpStatus": 200,
+    "response": {
+      "status": "ok",
+      "uptime": 1831,
+      "timestamp": "2026-10-30T19:44:52.112Z",
+      "environment": "staging",
+      "staging": {
+        "isStaging": true,
+        "readOnly": true,
+        "writesPermitted": false
+      },
+      "businesses": 207,
+      "events": 13,
+      "classifieds": 11,
+      "promotions": 1,
+      "emergencyServices": 13,
+      "database": "mariadb"
+    }
+  },
+  "/api/version": {
+    "httpStatus": 200,
+    "response": {
+      "success": true,
+      "version": "6618e1d53de1f229-1793375896229",
+      "timestamp": 1793389492554
+    }
+  },
+  "/encarmen-release.txt": {
+    "httpStatus": 200,
+    "shaCandidates": [],
+    "contentType": "text/html; charset=utf-8"
+  },
+  "/api/businesses?limit=1": {
+    "httpStatus": 200,
+    "source": "mariadb",
+    "total": 207,
+    "count": 1
+  },
+  "/api/businesses?hasWhatsapp=true&limit=1": {
+    "httpStatus": 200,
+    "source": "mariadb",
+    "total": 206,
+    "count": 1
+  },
+  "deployedGitShaVerified": false
+}
