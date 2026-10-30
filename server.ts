@@ -6,6 +6,16 @@ import {verifyStagingAdmin,createLoginLimiter,stagingBusinessConfiguration} from
 import { prepareContactPatch, contactsMatchReadback, ContactPatchError, contactDigits, contactCounts, matchesContactFilter, CONTACT_FILTERS, type ContactFilter } from './src/utils/businessContacts';
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
+// Staging-only: Hostinger keeps its private environment outside the active Node build.
+// Never attempt to load this file from production or from a foreign database.
+const STAGING_PRIVATE_DB_NAME = 'u293982346_encarmentest';
+if (process.env.APP_ENV === 'staging' && process.env.DB_NAME === STAGING_PRIVATE_DB_NAME && process.env.HOME) {
+  const stagingPrivateEnv = process.env.HOME + '/domains/staging.encarmen.org/hbuilds/config/.env';
+  const loaded = dotenv.config({ path: stagingPrivateEnv, override: true });
+  if (loaded.error || process.env.APP_ENV !== 'staging' || process.env.DB_NAME !== STAGING_PRIVATE_DB_NAME) {
+    throw new Error('STAGING_PRIVATE_CONFIGURATION_UNAVAILABLE');
+  }
+}
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import path from 'path';
@@ -124,7 +134,7 @@ app.use(backupDownloadContainment);
 // Server-issued identity gate precedes all legacy middleware and handlers.
 const adminSecurity = registerAdminSecurity(app, {
   provider: environmentAdminProvider(process.env),
-  allowedOrigin: process.env.ENC_ADMIN_PUBLIC_ORIGIN,
+  allowedOrigin: process.env.ENC_ADMIN_PUBLIC_ORIGIN || ((process.env.APP_ENV === 'staging' && process.env.DB_NAME === STAGING_PRIVATE_DB_NAME) ? 'https://staging.encarmen.org' : undefined),
   writesReady: req=>administrativeWritesReady(req, {
     mutationsEnabled:process.env.ENC_ADMIN_MUTATIONS_ENABLED==='true',
     isStaging:isStagingEnvironment(), businessWrites:isBusinessWritePermitted()
