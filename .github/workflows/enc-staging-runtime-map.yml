@@ -1,4 +1,4 @@
-name: ENCARMEN staging runtime mapping read-only
+name: ENCARMEN staging PR10 deployed bundle read-only inspection
 on:
   push:
     branches: [coord/staging-runtime-map-20261030]
@@ -92,6 +92,22 @@ jobs:
             exe=os.readlink(entry/'exe')
             print('STAGING_NODE_EXE_INSIDE_HOME='+str(exe.startswith(str(h))).lower())
            except Exception:continue
+          signatures=set()
+          active=0
+          for entry in pathlib.Path('/proc').iterdir():
+           if not entry.name.isdecimal():continue
+           try:
+            cwd=os.readlink(entry/'cwd')
+            if 'domains/staging.encarmen.org/hbuilds/versions/' not in cwd:continue
+            app=pathlib.Path(cwd)/'server.js'
+            if not app.is_file():continue
+            active+=1
+            data=app.read_bytes()
+            signatures.add('strict' if b'BUSINESS_READBACK_FAILED' in data and b'matchesWrittenValues' in data else 'legacy_or_unknown')
+           except Exception:continue
+          print('ACTIVE_STAGING_SERVER_FILES='+str(active))
+          print('ACTIVE_STAGING_STRICT_READBACK='+str(active>0 and signatures=={'strict'}).lower())
+          print('STAGING_SIGNATURE_CLASSES='+','.join(sorted(signatures)))
           print('RESULT=INSPECTED')
           REMOTE
           } > ENC_STAGING_RUNTIME_MAP_RESULT.txt 2>&1
