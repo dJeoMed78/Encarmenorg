@@ -194,6 +194,17 @@ jobs:
             echo "SSH_EXIT=$?"
             public_code=$(curl -LsS --max-time 12 -o /tmp/enc-staging-health.json -w '%{http_code}' https://staging.encarmen.org/api/health || true)
             echo "PUBLIC_STAGING_HEALTH_HTTP=$public_code"
+            python3 - <<'PYHEALTH'
+          import json
+          try:
+              with open('/tmp/enc-staging-health.json') as f:d=json.load(f)
+              print('PUBLIC_HEALTH_ENV_STAGING='+str(d.get('environment')=='staging').lower())
+              print('PUBLIC_HEALTH_DATABASE_MARIADB='+str(d.get('database')=='mariadb').lower())
+              print('PUBLIC_HEALTH_STAGING_OBJECT='+str(isinstance(d.get('staging'),dict)).lower())
+              print('PUBLIC_HEALTH_STAGING_READONLY='+str(d.get('staging',{}).get('readOnly') is True).lower())
+              print('PUBLIC_HEALTH_STAGING_WRITE_PERMITTED='+str(d.get('staging',{}).get('writesPermitted') is True).lower())
+          except Exception as e:print('PUBLIC_HEALTH_PARSE='+type(e).__name__)
+          PYHEALTH
           } > ENC_STAGING_SAFETY_READONLY_RESULT.txt 2>&1
           cat ENC_STAGING_SAFETY_READONLY_RESULT.txt
       - name: Record sanitized result on isolated branch only
