@@ -52,7 +52,7 @@ try:
  out('RUNTIME_ENV_IS_STAGING',str(health.get('environment')=='staging').lower())
  out('GENERAL_WRITES_BLOCKED',str(health.get('staging',{}).get('readOnly') is True).lower())
  out('GENERAL_WRITES_PERMITTED',str(health.get('staging',{}).get('writesPermitted') is True).lower())
- if status!=200 or health.get('environment')!='staging' or health.get('readOnly') is not False:stop('RUNTIME_FLAGS_NOT_ACTIVE')
+ if status!=200 or health.get('environment')!='staging' or health.get('staging',{}).get('readOnly') is not True:stop('RUNTIME_FLAGS_NOT_ACTIVE')
  status,auth=http('POST','/api/admin/login',credentials)
  out('ADMIN_LOGIN_HTTP',status)
  token=auth.get('token') if isinstance(auth,dict) else None
