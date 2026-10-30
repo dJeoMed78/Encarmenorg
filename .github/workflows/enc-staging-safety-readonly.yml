@@ -155,6 +155,23 @@ jobs:
           o('STAGING_DB_BACKUP_PRESENT',str(any(f.is_file() and f.stat().st_size>0 for f in backups)).lower())
           o('STAGING_CURRENT_SYMLINK',str(current.is_symlink()).lower())
           o('STAGING_PREVIOUS_VERSIONS_AVAILABLE',str(len(candidates)>1).lower())
+          logdirs=[H/'domains/staging.encarmen.org/logs',base/'logs',active/'logs',active/'tmp/logs']
+          logfiles=[]
+          for ld in logdirs:
+              if not ld.is_dir() or ld.is_symlink():continue
+              try:
+                  for item in ld.iterdir():
+                      if item.is_file() and not item.is_symlink() and item.suffix.lower() in ('.log','.txt') and item.stat().st_size<10000000:
+                          logfiles.append(item)
+              except (PermissionError,OSError):pass
+          o('SAFE_CANDIDATE_LOG_FILE_COUNT',len(logfiles))
+          if logfiles:
+              try:
+                  recent=max(logfiles,key=lambda p:p.stat().st_mtime)
+                  chunk=recent.read_bytes()[-40000:].decode('utf8',errors='replace')
+                  for marker in ['STAGING_PRIVATE_CONFIGURATION_UNAVAILABLE','ERR_MODULE_NOT_FOUND','MODULE_NOT_FOUND','EADDRINUSE','TypeError','ReferenceError','ECONNREFUSED','dotenv']:
+                      o('RECENT_LOG_MARKER_'+marker.upper(),str(marker.lower() in chunk.lower()).lower())
+              except Exception:o('RECENT_LOG_SAFE_SCAN','UNAVAILABLE')
           o('SSH_READONLY_INSPECTION_ONLY','true')
           o('SQL_OR_STAGING_WRITES_EXECUTED','false')
           o('RESULT','READONLY_INSPECTION_COMPLETE')
