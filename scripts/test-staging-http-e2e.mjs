@@ -159,9 +159,9 @@ try{
  await expect('/api/submit-business','POST',draft,403,limited,{'Idempotency-Key':key});
  await expect('/api/submit-business','POST',draft,403,token,{Origin:'https://unauthorized.invalid','Idempotency-Key':key});
  for(const [route,method] of [['/api/reports','POST'],['/api/mariadb/reconnect','POST'],['/api/upload-logo','POST'],['/api/events','POST'],['/api/businesses/3999','DELETE'],['/businesses/3999','PUT']]){const r=await request(route,method,{});assert.ok([403,503].includes(r.status));record('unrelated-write',{route,method,status:r.status});}
- const created=await expect('/api/submit-business','POST',draft,201,token,{'Idempotency-Key':key});assert.equal(created.json.success,true);id=created.json.business.id;assert.ok(id);assert.equal(created.json.replayed,false);
+ const created=await expect('/api/submit-business','POST',draft,201,token,{'Idempotency-Key':key});assert.equal(created.json.success,true);record('HTTP POST JSON',{status:created.status,response:created.json});id=created.json.business.id;assert.ok(id);assert.equal(created.json.replayed,false);
  const afterCreate=await sqlRow();assert.equal(afterCreate.description,draft.description);assert.equal(afterCreate.phone,draft.phone);assert.equal(afterCreate.whatsapp,draft.whatsapp);assert.equal(JSON.parse(afterCreate.raw_data)._stagingRegistrationId,key);
- record('SQL after POST',{query:'SELECT id,name,description,phone,whatsapp,raw_data FROM businesses WHERE id=?',id,description:afterCreate.description,phone:afterCreate.phone,whatsapp:afterCreate.whatsapp});
+ record('SQL after POST',{query:'SELECT id,name,description,phone,whatsapp,raw_data FROM businesses WHERE id=?',id,name:afterCreate.name,description:afterCreate.description,phone:afterCreate.phone,whatsapp:afterCreate.whatsapp,registrationId:JSON.parse(afterCreate.raw_data)._stagingRegistrationId});
  if(process.argv.includes('--kill-after-post')){record('intentional SIGKILL',{committedId:id,journal});process.kill(process.pid,'SIGKILL');await delay(10000);}
  const replay=await expect('/api/submit-business','POST',draft,200,token,{'Idempotency-Key':key});assert.equal(replay.json.replayed,true);assert.equal(replay.json.business.id,id);
  const parallel=await Promise.all([request('/api/submit-business','POST',draft,token,{'Idempotency-Key':key}),request('/api/submit-business','POST',draft,token,{'Idempotency-Key':key})]);assert.ok(parallel.every(r=>r.status===200&&r.json.replayed&&r.json.business.id===id));
@@ -177,8 +177,8 @@ try{
  await expect('/api/businesses/'+id,'PATCH',{description:'invalid token'},401,'b'.repeat(64));
  await expect('/api/businesses/'+id,'PATCH',{description:'limited'},403,limited);
  await expect('/api/businesses/'+id,'PATCH',{description:'origin'},403,token,{Origin:'https://unauthorized.invalid'});
- const edited=await expect('/api/businesses/'+id,'PATCH',{description:'W5 after HTTP edit'},200);assert.equal(edited.json.business.id,id);assert.equal(edited.json.business.description,'W5 after HTTP edit');
- const afterEdit=await sqlRow();assert.equal(afterEdit.description,'W5 after HTTP edit');assert.equal(afterEdit.phone,draft.phone);record('SQL after PATCH',{id,description:afterEdit.description,phone:afterEdit.phone,whatsapp:afterEdit.whatsapp});
+ const edited=await expect('/api/businesses/'+id,'PATCH',{description:'W5 after HTTP edit'},200);record('HTTP PATCH JSON',{status:edited.status,response:edited.json});assert.equal(edited.json.business.id,id);assert.equal(edited.json.business.description,'W5 after HTTP edit');
+ const afterEdit=await sqlRow();assert.equal(afterEdit.description,'W5 after HTTP edit');assert.equal(afterEdit.phone,draft.phone);record('SQL after PATCH',{query:'SELECT id,name,description,phone,whatsapp,raw_data FROM businesses WHERE id=?',id,description:afterEdit.description,rawDescription:JSON.parse(afterEdit.raw_data).description,phone:afterEdit.phone,whatsapp:afterEdit.whatsapp});
  await expect('/api/businesses/'+id,'PATCH',{description:'W5 after HTTP edit'},200);
  await expect('/businesses/'+id,'PATCH',{description:'W5 after HTTP edit'},200);
  // Real SQL SIGNAL simulates persistence failures without replacing the driver/store.
@@ -210,7 +210,7 @@ try{
  if(probe)await expect('/api/businesses/'+id,'PATCH',{description:'W5 after HTTP edit'},200);
  // Process restart clears all application caches/sessions, SQL data survives.
  await start();token=await login();
- const listing=await expect('/api/businesses','GET',undefined,200);assert.equal(listing.source,'mariadb');assert.equal(listing.json.source,'mariadb');const found=listing.json.businesses.find(b=>String(b.id)===String(id));assert.equal(found.description,'W5 after HTTP edit');assert.equal(found.phone,draft.phone);record('HTTP fresh read after restart',{status:200,source:listing.source,id:found.id,description:found.description});
+ const listing=await expect('/api/businesses','GET',undefined,200);assert.equal(listing.source,'mariadb');assert.equal(listing.json.source,'mariadb');const found=listing.json.businesses.find(b=>String(b.id)===String(id));assert.equal(found.description,'W5 after HTTP edit');assert.equal(found.phone,draft.phone);record('HTTP fresh read after restart',{status:200,source:listing.source,id:found.id,description:found.description,response:listing.json});
  // SQL SELECT failure must produce 503 even with a warm cache.
  await admin.query('RENAME TABLE businesses TO w5_temporarily_unavailable');
  await expect('/api/businesses','GET',undefined,503);
@@ -226,7 +226,7 @@ try{
   for(const [route,method,body]of [['/api/submit-business','POST',draft],['/api/businesses/'+id,'PATCH',{description:'blocked'}],['/businesses/'+id,'PATCH',{description:'blocked'}]]){const r=await request(route,method,body,token,{'Idempotency-Key':key});assert.ok([403,503].includes(r.status));assert.notEqual(r.json.success,true);record('flags block',{flag:Object.keys(flags)[0],route,status:r.status});}
  }
  const [sentinelAfter]=await reader.query("SELECT * FROM businesses WHERE id='3999'");assert.deepEqual(sentinelAfter,sentinelBefore);record('unrelated rows',{sentinelUnchanged:true});
-}catch(error){failed=true;record('FAILURE',{name:error.name,message:String(error.message).replaceAll(password,'[redacted]').replaceAll(appPassword,'[redacted]').replaceAll(adminPassword,'[redacted]')});}
+}catch(error){failed=true;record('FAILURE',{name:error.name,message:String(error.message).replaceAll(password,'[redacted]').replaceAll(appPassword,'[redacted]').replaceAll(adminPassword,'[redacted]').replace(/\b[a-f0-9]{64,}\b/gi,'[redacted]')});}
 finally{
  await stop();
  try{

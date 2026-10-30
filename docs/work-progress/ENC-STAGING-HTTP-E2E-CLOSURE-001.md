@@ -164,3 +164,26 @@ No certificamos SHA del proceso Hostinger con endpoint de versión sin SHA.
 Revisar lockfile como tarea independiente; no se afirma instalación limpia.
 Revisión independiente, integración autorizada y prueba pública de POST/PATCH
 siguen pendientes. Los criterios HTTP/SQL quedan demostrados EN ENTORNO AISLADO.
+
+## Checkpoint 5 — entrega para revisión
+Estados independientes: IMPLEMENTADO y PROBADO EN ENTORNO AISLADO por W5;
+VERIFICADO EN STAGING PÚBLICO únicamente GET/protecciones declaradas por health;
+flujo de escritura corregido NO verificado allí. NO INTEGRADO, NO DESPLEGADO,
+NO APROBADO por Coordinación. Producción sin acceso ni modificaciones.
+
+GET final 2026-10-30T19:44:52Z en public-readonly.json:health200/staging/readOnly
+true/writesPermitted false/MariaDB; catálogo207,WhatsApp206. Version sin SHA;
+release.txt devuelve HTML, no atestación de release. No concluir código remoto.
+
+El harness final registra respuestas JSON completas POST/PATCH y GET de fixtures,
+además de columnas SQL/UUID de registro y comparación raw_data en edición.
+Sin tokens, contraseñas, hashes de credenciales ni contenido.env.
+Evidencia y resultados en esta rama exclusivamente; no se abrió PR.
+
+Criterios demostrados aislados:aislamiento+marcador+grants,autenticación,
+bloqueos,rutas reales HTTP POST/PATCH,INSERT/UPDATE confirmados por conexiónSQL
+independiente,idempotencia secuencial/concurrente,lecturaHTTP tras reinicio,
+errores sin éxito falso,limpieza normal y recuperación tras SIGKILL,regresiones,
+lint/build. Instalación npm ci reproducible NO demostrada (fallo previo).
+Publicación remota de corrección y sus pruebas es un candidato revisable,
+no autorización propia de integración. Queda pendiente revisión independiente.

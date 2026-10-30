@@ -452,3 +452,62 @@ Código, suites, backendartefactos y plan en docs/work-progress/ENC-STAGING-CAND
 
 ## ENC-STAGING-CANDIDATE-CLOSURE-004-R1
 Correcciones de carreras de imágenes y conservación de base64 histórico. 188 pruebas PASS, TypeScript y Vite PASS. Pendiente revisión; sin integración ni despliegue. Evidencia y comandos: docs/work-progress/ENC-STAGING-CANDIDATE-CLOSURE-004-R1.md.
+
+## ENC-STAGING-HTTP-E2E-CLOSURE-001 — W5 (2026-10-30 UTC)
+Estado: PROBADO_POR_WORK EN ENTORNO AISLADO; pendiente revisión de Coordinación.
+Base real ia-desarrollo: 4407e6aeb08b52cc750c952735467a0e04fe19cc.
+Rama única: work/enc-staging-http-e2e-closure-001.
+Instrucciones: orden integral transmitida por propietario; WORK_INSTRUCCIONES.md
+no existe en base, leído en coord/encarmen-work-control-001, igual que registro
+maestro. No actualizar/crear esos documentos compartidos.
+
+Checkpoints publicados: b7da24e (inspección), 232a222 (harness), bd663d9 (SQL/HTTP
+base y defecto reproducido), 1df6bc7 (corrección y regresiones). El commit que
+contiene esta entrada entrega checkpoint5; SHA definitivo en informe de sesión.
+
+Cambio operativo único: src/db/stagingBusinessStore.ts, matchesWrittenValues,
+create y update cotejan ID, columnas escritas y raw_data antes de COMMIT.
+Reproducción base real: trigger conserva description SQL, PATCH200/success=true
+ocultaba discrepancia mediante raw_data. Corrección:503+rollback; INSERT también
+rechaza discrepancias con503. Sin cambios de flags/autorización/rutas/esquema.
+
+Nuevo scripts/test-staging-http-e2e.mjs compila servidor COMPLETO real en carpeta
+sin.env y usa MariaDB11.4 propia en Docker local, tmpfs, puerto loopback,
+credenciales aleatorias, permisos mínimos y marcador válido. No mocks de
+persistencia. POST201/ID4001/SELECT independiente; reintento200, dos concurrentes
+200,COUNT1; PATCH200/UPDATE+SELECT; reinicio de proceso/GET200 fuente mariadb.
+Negativas:401/403 permisos/origen/sesión;400 validaciones;404 ausente;409
+duplicado/clave distinta;503 SIGNAL SQL/readback/caché caliente sin fuente.
+Marcador ausente/production bloquea403. Cuatro flags apagados bloquean503;
+operaciones ajenas y alias heredados protegidos. Sentinel sin cambios.
+
+Limpieza:DELETE exacto ID+nombre+UUID interno,affectedRows1/restantes0; verificación
+solo sentinel y destrucción de contenedor/tmpfs. Prueba adicional --test-recovery:
+SIGKILL tras POST confirmado; recuperación por journal verifica dueño/etiquetas,
+PID+CWD+cmdline y elimina contenedor de pruebas, servidor detenido,0contenedores.
+Tras SIGKILL es necesaria recuperación explícita; no se promete finally.
+
+Validación:43/43 regresiones con node --import tsx --test (cuatro suites citadas
+en checkpoint),npm run lint exit0,npm run build completo exit0 en copia temporal
+1271 entradas de build,1726 módulos,warning chunk>500kB. npm ci FALLÓ por lockfile
+previo incompleto; fallback npm install --no-package-lock --ignore-scripts y
+jsdom --no-save para suites existentes. No package/lock modificados. Versiones,
+comandos completos y logs saneados están en carpeta de evidencia del checkpoint.
+Errores iniciales del harness/invocación TS están documentados, no ocultados.
+
+GET público final:staging protegido/readOnly=true/writesPermitted=false,MariaDB,
+207 negocios/206 WhatsApp. /api/version no expone SHA Git; /encarmen-release.txt
+responde HTML sin SHA. NO se certifica código desplegado ni POST/PATCH público.
+No producción,Hostinger SSH,SQL remoto,variables remotas,reinicios,workflows,PR,
+merge,integración o despliegue. Bundles/dist rastreados permanecen heredados;
+Coordinación debe recompilar antes de eventual publicación. No usar npm start
+con bundles antiguos para evaluar esta corrección.
+
+Archivos:store,script,WORK_RESULTADOS,checkpoint y evidencia de esta tarea.
+Detalle/reproducción/riesgos/reversión:
+docs/work-progress/ENC-STAGING-HTTP-E2E-CLOSURE-001.md.
+Reversión:descartar rama o revertir solo el commit correctivo mediante commit
+normal; ninguna migración/dato remoto que revertir. No force push.
+Pendientes:revisión independiente,lockfile,Node22Hostinger,atestación SHA remoto,
+integración/despliegue y ventana de pruebas públicas separadamente autorizadas.
+Dictamen de revisión/integración:RESERVADO EXCLUSIVAMENTE A COORDINACIÓN.

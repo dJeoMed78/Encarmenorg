@@ -1,6 +1,6 @@
 {
   "task": "ENC-STAGING-HTTP-E2E-CLOSURE-001",
-  "run": "61a76865-fe65-465c-b12a-e232d23fff96",
+  "run": "4fc04642-1614-486e-aec9-029f49a22279",
   "node": "v24.19.0",
   "probe": false,
   "passed": true,
@@ -33,7 +33,7 @@
       "stage": "health",
       "status": "ok",
       "uptime": 0,
-      "timestamp": "2026-10-30T19:44:20.499Z",
+      "timestamp": "2026-10-30T19:46:25.783Z",
       "environment": "staging",
       "staging": {
         "isStaging": true,
@@ -120,12 +120,62 @@
       "status": 201
     },
     {
+      "stage": "HTTP POST JSON",
+      "status": 201,
+      "response": {
+        "success": true,
+        "business": {
+          "name": "ENC W5 SYNTHETIC 4fc04642-1614-486e-aec9-029f49a22279",
+          "category": "Servicios",
+          "description": "W5 before HTTP edit",
+          "phone": "0000000000",
+          "whatsapp": "0000000001",
+          "categories": [
+            "Servicios"
+          ],
+          "categorySlugs": [
+            "servicios"
+          ],
+          "id": 4001,
+          "slug": "enc-w5-synthetic-4fc04642-1614-486e-aec9-029f49a22279",
+          "createdAt": "2026-10-30T19:46:25.998Z",
+          "isTopBusiness": false,
+          "isRecommended": false,
+          "rating": 0,
+          "reviewCount": 0,
+          "status": "published",
+          "subcategory": "",
+          "address": "",
+          "colonia": "",
+          "postalCode": "",
+          "email": "",
+          "website": "",
+          "facebook": "",
+          "instagram": "",
+          "schedule": "",
+          "image": "",
+          "gallery": [],
+          "delivery": "",
+          "hasDelivery": false,
+          "payment": "",
+          "reviews_count": 0,
+          "verified": false,
+          "featured": false
+        },
+        "replayed": false,
+        "message": "Empresa confirmada en MariaDB de Staging.",
+        "publishedToWordPress": false
+      }
+    },
+    {
       "stage": "SQL after POST",
       "query": "SELECT id,name,description,phone,whatsapp,raw_data FROM businesses WHERE id=?",
       "id": 4001,
+      "name": "ENC W5 SYNTHETIC 4fc04642-1614-486e-aec9-029f49a22279",
       "description": "W5 before HTTP edit",
       "phone": "0000000000",
-      "whatsapp": "0000000001"
+      "whatsapp": "0000000001",
+      "registrationId": "f23d1f24-bcb2-4a6f-bf72-6848302cafef"
     },
     {
       "stage": "POST /api/submit-business",
@@ -196,9 +246,58 @@
       "status": 200
     },
     {
+      "stage": "HTTP PATCH JSON",
+      "status": 200,
+      "response": {
+        "success": true,
+        "business": {
+          "name": "ENC W5 SYNTHETIC 4fc04642-1614-486e-aec9-029f49a22279",
+          "category": "Servicios",
+          "description": "W5 after HTTP edit",
+          "phone": "0000000000",
+          "whatsapp": "0000000001",
+          "categories": [
+            "Servicios"
+          ],
+          "categorySlugs": [
+            "servicios"
+          ],
+          "id": 4001,
+          "slug": "enc-w5-synthetic-4fc04642-1614-486e-aec9-029f49a22279",
+          "createdAt": "2026-10-30T19:46:25.998Z",
+          "isTopBusiness": false,
+          "isRecommended": false,
+          "rating": 0,
+          "reviewCount": 0,
+          "status": "published",
+          "subcategory": "",
+          "address": "",
+          "colonia": "",
+          "postalCode": "",
+          "email": "",
+          "website": "",
+          "facebook": "",
+          "instagram": "",
+          "schedule": "",
+          "image": "",
+          "gallery": [],
+          "delivery": "",
+          "hasDelivery": false,
+          "payment": "",
+          "reviews_count": 0,
+          "verified": false,
+          "featured": false,
+          "updatedAt": "2026-10-30T19:46:26.065Z"
+        },
+        "message": "Edición confirmada en MariaDB de Staging."
+      }
+    },
+    {
       "stage": "SQL after PATCH",
+      "query": "SELECT id,name,description,phone,whatsapp,raw_data FROM businesses WHERE id=?",
       "id": 4001,
       "description": "W5 after HTTP edit",
+      "rawDescription": "W5 after HTTP edit",
       "phone": "0000000000",
       "whatsapp": "0000000001"
     },
@@ -244,7 +343,7 @@
       "stage": "health",
       "status": "ok",
       "uptime": 0,
-      "timestamp": "2026-10-30T19:44:21.180Z",
+      "timestamp": "2026-10-30T19:46:26.507Z",
       "environment": "staging",
       "staging": {
         "isStaging": true,
@@ -271,7 +370,97 @@
       "status": 200,
       "source": "mariadb",
       "id": 4001,
-      "description": "W5 after HTTP edit"
+      "description": "W5 after HTTP edit",
+      "response": {
+        "source": "mariadb",
+        "total": 2,
+        "count": 2,
+        "offset": 0,
+        "limit": 2,
+        "contactCounts": {
+          "all": 2,
+          "phone": 2,
+          "no-phone": 0,
+          "whatsapp": 1,
+          "no-whatsapp": 1,
+          "none": 0
+        },
+        "businesses": [
+          {
+            "slug": "w5-sentinel",
+            "id": 3999,
+            "name": "W5 isolated sentinel",
+            "category": "",
+            "categories": [
+              "Servicios"
+            ],
+            "categorySlugs": [],
+            "subcategory": "",
+            "description": "must remain unchanged",
+            "address": "",
+            "colonia": "",
+            "postalCode": "",
+            "phone": "0000000002",
+            "whatsapp": "",
+            "email": "",
+            "website": "",
+            "facebook": "",
+            "instagram": "",
+            "schedule": "",
+            "image": "",
+            "gallery": [],
+            "delivery": "",
+            "hasDelivery": false,
+            "payment": "",
+            "rating": 5,
+            "reviews_count": 0,
+            "verified": true,
+            "featured": false,
+            "isRecommended": false,
+            "isTopBusiness": false,
+            "status": "published"
+          },
+          {
+            "name": "ENC W5 SYNTHETIC 4fc04642-1614-486e-aec9-029f49a22279",
+            "category": "Servicios",
+            "description": "W5 after HTTP edit",
+            "phone": "0000000000",
+            "whatsapp": "0000000001",
+            "categories": [
+              "Servicios"
+            ],
+            "categorySlugs": [
+              "servicios"
+            ],
+            "id": 4001,
+            "slug": "enc-w5-synthetic-4fc04642-1614-486e-aec9-029f49a22279",
+            "createdAt": "2026-10-30T19:46:25.998Z",
+            "isTopBusiness": false,
+            "isRecommended": false,
+            "rating": 0,
+            "reviewCount": 0,
+            "status": "published",
+            "subcategory": "",
+            "address": "",
+            "colonia": "",
+            "postalCode": "",
+            "email": "",
+            "website": "",
+            "facebook": "",
+            "instagram": "",
+            "schedule": "",
+            "image": "",
+            "gallery": [],
+            "delivery": "",
+            "hasDelivery": false,
+            "payment": "",
+            "reviews_count": 0,
+            "verified": false,
+            "featured": false,
+            "updatedAt": "2026-10-30T19:46:26.082Z"
+          }
+        ]
+      }
     },
     {
       "stage": "GET /api/businesses",
@@ -291,14 +480,14 @@
       "stage": "health",
       "status": "ok",
       "uptime": 0,
-      "timestamp": "2026-10-30T19:44:21.541Z",
+      "timestamp": "2026-10-30T19:46:26.965Z",
       "environment": "staging",
       "staging": {
         "isStaging": true,
         "readOnly": true,
         "writesPermitted": false
       },
-      "businesses": 0,
+      "businesses": 2,
       "events": 0,
       "classifieds": 0,
       "promotions": 0,
@@ -331,7 +520,7 @@
       "stage": "health",
       "status": "ok",
       "uptime": 0,
-      "timestamp": "2026-10-30T19:44:21.972Z",
+      "timestamp": "2026-10-30T19:46:27.395Z",
       "environment": "staging",
       "staging": {
         "isStaging": true,
@@ -371,7 +560,7 @@
       "stage": "health",
       "status": "ok",
       "uptime": 0,
-      "timestamp": "2026-10-30T19:44:22.401Z",
+      "timestamp": "2026-10-30T19:46:27.840Z",
       "environment": "staging",
       "staging": {
         "isStaging": true,
@@ -411,7 +600,7 @@
       "stage": "health",
       "status": "ok",
       "uptime": 0,
-      "timestamp": "2026-10-30T19:44:22.840Z",
+      "timestamp": "2026-10-30T19:46:28.289Z",
       "environment": "staging",
       "staging": {
         "isStaging": true,
