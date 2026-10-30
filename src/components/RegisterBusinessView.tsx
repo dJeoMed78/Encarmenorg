@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Building2,
   CheckCircle,
@@ -29,10 +29,10 @@ import {
 import ALL_COLONIAS_CARMEN from '../data/colonias_carmen.json';
 import {
   submitBusinessRegistration,
-  checkBusinessDuplicate,
-  uploadImage
+  checkBusinessDuplicate
 } from '../services/api';
 import { cleanPhoneNumber } from '../utils/phone';
+import { contactDigits } from '../utils/businessContacts';
 import { formatBusinessName, formatAddressText } from '../utils/textUtils';
 import { DELIVERY_OPTIONS, normalizeDeliveryOption } from '../constants/delivery';
 import {
@@ -138,6 +138,8 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
   };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const registrationRequestId = useRef<string | null>(null);
+  const registrationBusy = useRef(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [registeredBusiness, setRegisteredBusiness] = useState<Business | null>(null);
   const [wpPermalink, setWpPermalink] = useState<string | null>(null);
@@ -152,83 +154,12 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [isUploadingGallery, setIsUploadingGallery] = useState(false);
 
-  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    const remaining = 10 - galleryImages.length;
-    if (remaining <= 0) {
-      setErrorMessage('Ya alcanzaste el límite máximo de 10 fotos para la galería.');
-      return;
-    }
-    const selected = files.slice(0, remaining);
-    setIsUploadingGallery(true);
-    setErrorMessage(null);
-
-    try {
-      const urls: string[] = [];
-      for (const file of selected) {
-        if (file.size > 8 * 1024 * 1024) continue;
-        const b64 = await new Promise<string>(res => {
-          const reader = new FileReader();
-          reader.onload = () => res(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        try {
-          const uploadRes = await uploadImage(b64, file.name);
-          if (uploadRes.success && uploadRes.url) {
-            urls.push(uploadRes.url);
-          } else {
-            urls.push(b64);
-          }
-        } catch {
-          urls.push(b64);
-        }
-      }
-      setGalleryImages(prev => [...prev, ...urls].slice(0, 10));
-    } catch (err) {
-      console.error('Error uploading gallery photos:', err);
-    } finally {
-      setIsUploadingGallery(false);
-      e.target.value = '';
-    }
+  // La carga anónima no dispone de contrato seguro: no usar el uploader heredado ni dataURI.
+  const handleGalleryUpload = (_e: React.ChangeEvent<HTMLInputElement>) => {
+    setErrorMessage('La carga pública de imágenes todavía no está habilitada. El registro de texto sí está disponible.');
   };
-
-  const handleRemoveGalleryImage = (index: number) => {
-    setGalleryImages(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMessage('La imagen seleccionada supera los 5MB. Por favor elige un archivo más liviano.');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const result = reader.result as string;
-      setLogoPreview(result);
-      setIsUploadingLogo(true);
-      setErrorMessage(null);
-
-      try {
-        const uploadRes = await uploadImage(result, file.name);
-        if (uploadRes.success && uploadRes.url) {
-          setFormData(prev => ({ ...prev, image: uploadRes.url || result }));
-          setLogoUploadedSuccess(true);
-          setTimeout(() => setLogoUploadedSuccess(false), 3000);
-        } else {
-          setFormData(prev => ({ ...prev, image: result }));
-        }
-      } catch {
-        setFormData(prev => ({ ...prev, image: result }));
-      } finally {
-        setIsUploadingLogo(false);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
+  const handleRemoveGalleryImage = (index: number) => setGalleryImages(prev=>prev.filter((_,i)=>i!==index));
+  const handleLogoUpload = handleGalleryUpload;
 
   const handleRemoveLogo = () => {
     setLogoPreview(null);
@@ -243,8 +174,9 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
     setFormData({ ...formData, payment: next.join(', ') });
   };
 
-  const handleSubmit = async (e: React.FormEvent, allowDuplicate = false) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     if (e) e.preventDefault();
+    if(registrationBusy.current) return;
     setErrorMessage(null);
 
     if (!formData.name.trim()) {
@@ -255,12 +187,16 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
       setErrorMessage('Por favor selecciona una categoría o giro comercial.');
       return;
     }
-    if (!formData.phone.trim()) {
+    if (!contactDigits(formData.phone) && !contactDigits(formData.whatsapp)) {
       setErrorMessage('Por favor ingresa al menos un número telefónico o WhatsApp de contacto.');
       return;
     }
 
-    if (!allowDuplicate) {
+    if ((formData.phone.trim()&&!contactDigits(formData.phone))||(formData.whatsapp.trim()&&!contactDigits(formData.whatsapp))) {setErrorMessage('El contacto debe tener diez dígitos mexicanos válidos.');return;}
+    registrationBusy.current = true;
+    setIsSubmitting(true);
+    try {
+    if (!registrationRequestId.current) {
       const dup = await checkBusinessDuplicate(formData.name.trim(), formData.phone.trim());
       if (dup.isDuplicate && dup.existingBusiness) {
         setDuplicateWarning({
@@ -273,13 +209,11 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
       }
     }
 
-    setIsSubmitting(true);
-    try {
-      const phoneClean = cleanPhoneNumber(formData.phone);
-      const waClean = cleanPhoneNumber(formData.whatsapp) || phoneClean;
+      const phoneClean = contactDigits(formData.phone);
+      const waClean = contactDigits(formData.whatsapp);
+      registrationRequestId.current ||= crypto.randomUUID();
       const deliveryStr = selectedDeliveryOptions.join(', ') || 'Atención en el Local de la empresa';
       const paymentStr = selectedPaymentOptions.join(', ') || 'Efectivo';
-      const hasDel = selectedDeliveryOptions.some(o => o.toLowerCase().includes('domicilio') || o.toLowerCase().includes('envío'));
       let site = (formData.website || '').trim();
       if (site && !site.startsWith('http://') && !site.startsWith('https://')) {
         site = `https://${site}`;
@@ -287,27 +221,16 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
 
       const formattedBizName = formatBusinessName(formData.name.trim());
       const res = await submitBusinessRegistration({
-        ...formData,
-        name: formattedBizName,
-        address: formatAddressText(formData.address),
-        delivery: deliveryStr,
-        hasDelivery: hasDel,
-        payment: paymentStr,
-        website: site,
-        phone: phoneClean,
-        whatsapp: waClean,
-        deliveryOption: deliveryStr,
-        image: formData.image || logoPreview || '',
-        gallery: galleryImages
-      });
+        name: formattedBizName, category: formData.category,
+        description: formData.description, address: formatAddressText(formData.address),
+        colonia: formData.colonia, postalCode: formData.postalCode,
+        schedule: formData.schedule, payment: paymentStr, delivery: deliveryStr,
+        facebook: formData.facebook, website: site, phone: phoneClean, whatsapp: waClean
+      }, registrationRequestId.current);
 
-      if (res.success) {
+      if (res.success && res.directoryVisible === true && res.business) {
         setDuplicateWarning(null);
         setIsSuccess(true);
-        if (res.publishedToWordPress) {
-          setIsWpPublished(true);
-          setWpPermalink(res.wpPermalink || null);
-        }
         if (res.business) {
           setRegisteredBusiness(res.business);
           if (onBusinessAdded) onBusinessAdded(res.business);
@@ -317,14 +240,15 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
           detected: true,
           existingBusiness: res.existingBusiness
         });
-        setErrorMessage(res.message);
+        setErrorMessage(res.message || 'Ya existe un negocio registrado con este nombre o teléfono.');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
-        setErrorMessage(res.message || 'No fue posible registrar la empresa. Inténtalo de nuevo.');
+        setErrorMessage(res.message || 'No fue posible confirmar el registro en MariaDB. Inténtalo de nuevo.');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Error de conexión');
+      setErrorMessage(err.message || 'Error de conexión con el servidor MariaDB.');
     } finally {
+      registrationBusy.current = false;
       setIsSubmitting(false);
     }
   };
@@ -347,16 +271,17 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
           </div>
 
           <div className="space-y-2">
-            <span className="text-xs uppercase tracking-wider font-extrabold text-emerald-800 bg-emerald-50/80 px-3 py-1 rounded-full border border-emerald-200/80">
-              Solicitud Recibida con Éxito
-            </span>
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black text-emerald-900 bg-emerald-100/90 border border-emerald-300 shadow-2xs">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>Guardado y Publicado en MariaDB</span>
+            </div>
             <h2 className="text-2xl sm:text-3xl font-black text-stone-900 tracking-tight">
               ¡Tu negocio ya está publicado en el directorio!
             </h2>
             <p className="text-stone-600 text-sm sm:text-base max-w-lg mx-auto leading-relaxed">
               La empresa <strong className="text-stone-900 font-bold">{formData.name}</strong> ha sido
-              agregada con éxito y ya aparece activa para todos los usuarios en el catálogo de{' '}
-              <span className="font-bold text-amber-600">Empresas en Carmen</span>.
+              guardada y confirmada en la base de datos MariaDB. Ya se encuentra activa de forma inmediata en el catálogo público de{' '}
+              <span className="font-bold text-amber-600">Empresas en Carmen</span> sin requerir aprobaciones intermedias.
             </p>
           </div>
 
@@ -378,30 +303,33 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
                   />
                 </div>
               )}
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-1.5">
                   <p className="font-extrabold text-stone-900 truncate text-base">{formData.name}</p>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                    Activo
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0">
+                    {registeredBusiness?.id ? `ID #${registeredBusiness.id}` : 'Publicado'}
                   </span>
                 </div>
                 <p className="text-amber-600 font-bold text-xs">{formData.category}</p>
               </div>
             </div>
 
-            <div className="space-y-1.5 pt-1 border-t border-stone-200/60 font-semibold">
-              <p>
-                <strong>Contacto:</strong> {formData.phone}
-              </p>
+            <div className="space-y-1.5 pt-2 border-t border-stone-200/60 font-semibold text-xs">
+              <div className="flex items-center gap-2">
+                <Phone className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span><strong>Teléfono Local:</strong> {formData.phone || 'No registrado'}</span>
+              </div>
               {formData.whatsapp && (
-                <p>
-                  <strong>WhatsApp:</strong> {formData.whatsapp}
-                </p>
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span><strong>WhatsApp:</strong> {formData.whatsapp}</span>
+                </div>
               )}
               {formData.colonia && (
-                <p>
-                  <strong>Zona:</strong> {formData.colonia}
-                </p>
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                  <span><strong>Zona:</strong> {formData.colonia} {formData.postalCode ? `(CP ${formData.postalCode})` : ''}</span>
+                </div>
               )}
             </div>
           </div>
@@ -416,6 +344,8 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
             <button
               onClick={() => {
                 setIsSuccess(false);
+                registrationRequestId.current = null;
+                setRegisteredBusiness(null);
                 setFormData({
                   name: '',
                   category: '',
@@ -426,8 +356,8 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
                   colonia: '',
                   postalCode: '',
                   schedule: '',
-                  payment: '',
-                  delivery: '',
+                  payment: 'Efectivo',
+                  delivery: 'Atención en el Local de la empresa',
                   facebook: '',
                   website: '',
                   image: '',
@@ -496,10 +426,10 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={e => handleSubmit(e, true)}
+              onClick={() => {setDuplicateWarning(null);setErrorMessage('Revisa los datos o edita el negocio existente. Los duplicados no se registran.');}}
               className="px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-stone-950 font-black text-xs cursor-pointer shadow-md transition-all"
             >
-              Continuar y registrar de todas formas
+              Revisar datos del negocio
             </button>
           </div>
         </div>
@@ -507,15 +437,34 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
 
       {errorMessage && (
         <div
-          className="p-4 rounded-2xl text-rose-900 text-xs font-bold flex items-center gap-2 shadow-sm"
+          className="p-4 sm:p-5 rounded-2xl text-rose-950 text-xs font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md"
           style={{
-            background: 'rgba(255, 241, 242, 0.85)',
-            backdropFilter: 'blur(15px)',
-            border: '1.5px solid rgba(254, 205, 211, 0.85)',
+            background: 'rgba(255, 241, 242, 0.90)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: '1.5px solid rgba(254, 205, 211, 0.90)',
           }}
         >
-          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-          <span>{errorMessage}</span>
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <p className="font-extrabold text-rose-900">No se pudo confirmar la publicación</p>
+              <p className="font-medium text-rose-800">{errorMessage}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => handleSubmit(e as any)}
+            disabled={isSubmitting}
+            className="self-end sm:self-auto px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs cursor-pointer shadow-xs transition-all disabled:opacity-50 shrink-0 flex items-center gap-1.5"
+          >
+            {isSubmitting ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5" />
+            )}
+            <span>Reintentar Guardado</span>
+          </button>
         </div>
       )}
 
@@ -586,7 +535,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
               <label className="text-xs font-bold text-stone-800">Servicio a Domicilio</label>
               <select
                 value={formData.delivery}
-                onChange={e => setFormData({ ...formData, delivery: e.target.value })}
+                onChange={e => { setFormData({ ...formData, delivery: e.target.value }); setSelectedDeliveryOptions([e.target.value]); }}
                 className="w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold text-stone-900 outline-none transition-all focus:ring-2 focus:ring-amber-500/50 shadow-inner cursor-pointer"
                 style={{
                   background: 'rgba(255, 255, 255, 0.75)',
@@ -630,11 +579,25 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
           </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-stone-800">Teléfono Local *</label>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Teléfono Local de Atención (o WhatsApp)</span>
+                </label>
+                {formData.phone.trim() ? (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    contactDigits(formData.phone)
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {contactDigits(formData.phone) ? '✓ 10 dígitos válidos' : 'Requiere 10 dígitos'}
+                  </span>
+                ) : null}
+              </div>
               <input
                 type="tel"
-                required
+                required={!formData.whatsapp.trim()}
                 value={formData.phone}
                 onChange={e => setFormData({ ...formData, phone: e.target.value })}
                 placeholder="Ej. 938 123 4567"
@@ -646,10 +609,25 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
                   border: '1.5px solid rgba(255, 255, 255, 0.90)',
                 }}
               />
+              <p className="text-[10px] text-stone-500">Llamadas directas para clientes en Ciudad del Carmen.</p>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-stone-800">WhatsApp (para pedidos)</label>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>WhatsApp para Pedidos</span>
+                </label>
+                {formData.whatsapp.trim() ? (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    contactDigits(formData.whatsapp)
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {contactDigits(formData.whatsapp) ? '✓ 10 dígitos válidos' : 'Requiere 10 dígitos'}
+                  </span>
+                ) : null}
+              </div>
               <input
                 type="tel"
                 value={formData.whatsapp}
@@ -663,6 +641,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
                   border: '1.5px solid rgba(255, 255, 255, 0.90)',
                 }}
               />
+              <p className="text-[10px] text-stone-500">Canal independiente de mensajería (no se infiere de teléfono).</p>
             </div>
 
             <div className="space-y-1">
@@ -938,6 +917,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
                   <span className="text-[10px] mt-1 font-bold text-stone-700">Subir</span>
                   <input
                     type="file"
+                    disabled
                     accept="image/*"
                     onChange={handleLogoUpload}
                     className="hidden"
@@ -946,7 +926,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
               )}
               <div className="text-xs text-stone-600 leading-relaxed">
                 <p className="font-bold text-stone-800">Formato JPG, PNG o WebP (máx. 5MB).</p>
-                <p>Tu logotipo se optimizará automáticamente para verse nítido en móviles.</p>
+                <p>Carga pública de logotipo y galería no disponible todavía; no se enviarán imágenes.</p>
                 {isUploadingLogo && (
                   <span className="text-amber-700 font-bold flex items-center gap-1 mt-1">
                     <RefreshCw className="w-3 h-3 animate-spin" /> Subiendo logo...
@@ -970,7 +950,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
                   <span>Fotos de Productos, Servicios o Menú (Hasta 10 fotos)</span>
                 </label>
                 <p className="text-[11px] sm:text-xs text-stone-600 mt-0.5">
-                  Sube fotos de tus platillos, trabajos realizados, productos estrella o instalaciones para tu catálogo digital.
+                  La galería está deshabilitada hasta disponer de una carga pública segura. Puedes registrar los datos del negocio.
                 </p>
               </div>
               <span
@@ -1035,7 +1015,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
                     multiple
                     accept="image/*"
                     onChange={handleGalleryUpload}
-                    disabled={isUploadingGallery}
+                    disabled={true}
                     className="hidden"
                   />
                 </label>
@@ -1069,10 +1049,10 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
             {isSubmitting ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Registrando Empresa...</span>
+                <span>Guardando y confirmando en MariaDB...</span>
               </>
             ) : (
-              <span>Registrar Negocio en Carmen</span>
+              <span>Registrar y Publicar Negocio en Carmen</span>
             )}
           </button>
         </div>
@@ -1080,3 +1060,4 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
     </div>
   );
 };
+

@@ -1,0 +1,16 @@
+import test from'node:test';import assert from'node:assert/strict';import {JSDOM}from'jsdom';import React,{act}from'react';import {build}from'esbuild';import vm from'node:vm';import{createRequire}from'node:module';
+const require=createRequire(import.meta.url);
+test('H04 React real: error remoto conserva formulario, no muestra éxito y permite reintentar',async()=>{
+ const dom=new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>',{url:'https://local.invalid'});const saved={};for(const key of ['window','document','navigator','HTMLElement','localStorage','sessionStorage','Event','MouseEvent']){saved[key]=Object.getOwnPropertyDescriptor(globalThis,key);Object.defineProperty(globalThis,key,{configurable:true,writable:true,value:dom.window[key]});}const native=globalThis.fetch;globalThis.IS_REACT_ACT_ENVIRONMENT=true;let status=403,calls=0;
+ globalThis.fetch=async()=>{calls++;return new Response(JSON.stringify(status===200?{success:true,message:'Recepción confirmada por servidor',report:{id:'synthetic'}}:{success:false}),{status});};
+ const {createRoot}=await import('react-dom/client');const root=createRoot(document.getElementById('root'));
+ try{
+  const result=await build({entryPoints:['src/components/ClassifiedDetailModal.tsx'],bundle:true,write:false,platform:'node',format:'cjs',packages:'external',jsx:'automatic'});const module={exports:{}};vm.runInThisContext('(function(require,module,exports,setTimeout){'+result.outputFiles[0].text+'})')(require,module,module.exports,()=>0);
+  await act(async()=>root.render(React.createElement(module.exports.ClassifiedDetailModal,{ad:{id:'synthetic',title:'Anuncio ficticio',category:'compra-venta',description:'Prueba sintética',phone:'2223334455',createdAt:new Date().toISOString()},isOpen:true,onClose(){}})));
+  const button=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Solicitar baja'));assert.ok(button);await act(async()=>button.click());
+  const area=document.querySelector('textarea');assert.ok(area);await act(async()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype,'value').set.call(area,'Comentario sintético que debe conservarse');area.dispatchEvent(new dom.window.Event('input',{bubbles:true}));area.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});
+  const form=document.querySelector('form');await act(async()=>form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true})));
+  assert.equal(calls,1);assert.ok(document.querySelector('form'));assert.equal(document.querySelector('textarea').value,'Comentario sintético que debe conservarse');assert.match(document.body.textContent,/No se confirmó/);assert.ok(!document.body.textContent.includes('Recepción confirmada por servidor'));assert.equal(localStorage.getItem('business_reports'),null);
+  status=200;await act(async()=>form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true})));assert.equal(calls,2);assert.match(document.body.textContent,/Recepción confirmada por servidor/);
+ }finally{await act(async()=>root.unmount());globalThis.fetch=native;for(const [key,descriptor]of Object.entries(saved)){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}dom.window.close();}
+});

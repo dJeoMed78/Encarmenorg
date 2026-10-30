@@ -1,3 +1,4 @@
+import { contactDigits } from '../utils/businessContacts';
 import React, { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -22,6 +23,7 @@ import {
 import { Business } from "./BusinessCard";
 import { StarRatingWidget } from "./StarRatingWidget";
 import { getBusinessPublicUrl } from "../utils/businessUrl";
+import { BusinessDescription } from "./BusinessDescription";
 import "./BusinessPublicDetail.css";
 
 interface Props {
@@ -45,10 +47,8 @@ function safeUrl(value?: string): string | undefined {
   }
 }
 function phone(value?: string) {
-  const n = (value || "").replace(/\D/g, "");
-  if (/^\d{10}$/.test(n)) return `52${n}`;
-  if (/^52\d{10}$/.test(n)) return n;
-  if (/^521\d{10}$/.test(n)) return `52${n.slice(3)}`;
+  const digits = contactDigits(value);
+  return digits ? `52${digits}` : undefined;
 }
 // Only known Google Maps origins can become links/frames; no address/name geocoding.
 export function businessMapPresentation(b: {
@@ -470,17 +470,16 @@ export function BusinessPublicDetail({
                 ★ Ver calificaciones de la comunidad
               </a>
             </header>
-            <section className="bpd-card">
+            <section className="bpd-card bpd-story-description">
               <h2>
                 <FileText /> Descripción
               </h2>
               <p className="bpd-description">
-                {b.description ||
-                  "El negocio todavía no ha registrado una descripción."}
+                <BusinessDescription text={b.description} fallback="El negocio todavía no ha registrado una descripción." />
               </p>
             </section>
             {activePromotion && onOpenPromotion && (
-              <section className="bpd-card">
+              <section className="bpd-card bpd-story-promotion">
                 <h2>Promoción del negocio</h2>
                 <p>{activePromotion.title}</p>
                 <button onClick={() => onOpenPromotion(activePromotion)}>
@@ -488,20 +487,6 @@ export function BusinessPublicDetail({
                 </button>
               </section>
             )}
-            <section className="bpd-card bpd-reviews" id="bpd-ratings">
-              <h2>
-                <Star /> Opiniones de la comunidad
-              </h2>
-              <StarRatingWidget businessId={b.id} businessName={b.name} />
-              <div className="bpd-comments">
-                <MessageCircle size={20} />
-                <strong>Comentarios todavía no disponibles</strong>
-                <p>
-                  Puedes calificar con estrellas. Aún no se pueden publicar
-                  comentarios ni fotografías de reseñas.
-                </p>
-              </div>
-            </section>
           </main>
           <div className="bpd-card bpd-identity">
             {registeredLogo && !logoFailed ? (
@@ -599,6 +584,20 @@ export function BusinessPublicDetail({
               <p>{delivery || "Modalidades de entrega no registradas"}</p>
             </section>
           </aside>
+          <section className="bpd-card bpd-reviews" id="bpd-ratings">
+              <h2>
+                <Star /> Opiniones de la comunidad
+              </h2>
+              <StarRatingWidget businessId={b.id} businessName={b.name} />
+              <div className="bpd-comments">
+                <MessageCircle size={20} />
+                <strong>Comentarios todavía no disponibles</strong>
+                <p>
+                  Puedes calificar con estrellas. Aún no se pueden publicar
+                  comentarios ni fotografías de reseñas.
+                </p>
+              </div>
+            </section>
         </div>
         <footer className="bpd-footer">
           <button ref={adminButton} onClick={() => setAdmin(true)}>
@@ -679,3 +678,4 @@ export function BusinessPublicDetail({
     </div>
   );
 }
+

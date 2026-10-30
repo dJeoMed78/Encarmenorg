@@ -1,3 +1,4 @@
+import { contactDigits } from '../utils/businessContacts';
 import React, { useState } from 'react';
 import {
   ArrowLeft,
@@ -124,7 +125,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
 
   const getWhatsAppLink = (b: Business): string => {
     return getWhatsAppUrl(
-      b.whatsapp || b.phone,
+      contactDigits(b.whatsapp),
       `Hola, encontré su información en el directorio Empresas en Carmen y deseo solicitar informes sobre ${b.name}.`
     );
   };
@@ -546,9 +547,9 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
               )}
 
               {/* Call Button */}
-              {business.phone && (
+              {contactDigits(business.phone) && (
                 <a
-                  href={`tel:${business.phone}`}
+                  href={`tel:+52${contactDigits(business.phone)}`}
                   onClick={() => {
                     trackAnalyticsEvent({
                       type: 'call',
@@ -920,7 +921,7 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
                     )}
                     <p className="flex items-center gap-1 text-stone-950 font-black">
                       <Phone className="w-3.5 h-3.5 text-stone-900 shrink-0" />
-                      <span>{formatMexicanPhone(business.phone || business.whatsapp) || 'Contacto disponible en web'}</span>
+                      <span>Tel: {contactDigits(business.phone) ? formatMexicanPhone(business.phone) : 'No registrado'} · WhatsApp: {contactDigits(business.whatsapp) ? formatMexicanPhone(business.whatsapp) : 'No registrado'}</span>
                     </p>
                   </div>
                 </div>
@@ -1113,3 +1114,4 @@ export const ClientBusinessPageView: React.FC<ClientBusinessPageViewProps> = ({
     </div>
   );
 };
+

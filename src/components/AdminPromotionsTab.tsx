@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Tag,
   Gift,
@@ -25,14 +25,22 @@ import {
 import { Promotion, ClaimedCoupon, Business } from '../types';
 import { cleanPhoneNumber } from '../utils/phone';
 import {
-  getAdminPromotions,
   saveAdminPromotion,
   deleteAdminPromotion,
   getAdminCoupons,
   updateCouponStatus,
   uploadBusinessLogo
 } from '../services/api';
-import seedPromotions from '../data/promotions_seed.json';
+import { adminFetch } from '../utils/adminAuth';
+
+function remotePromoImage(value: string): boolean {
+  if (!value || /[\\\s\u0000-\u001f]/.test(value)) return false;
+  if (value.startsWith('/') && !value.startsWith('//')) return true;
+  try { const url=new URL(value); return ['http:','https:'].includes(url.protocol) && !url.username && !url.password; } catch { return false; }
+}
+function historicalRaster(value: string): boolean {
+  return /^data:image\/(?:png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/i.test(value);
+}
 
 interface AdminPromotionsTabProps {
   businesses: Business[];
@@ -62,9 +70,24 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
   const [promoOwnerWhatsapp, setPromoOwnerWhatsapp] = useState('');
   const [promoImage, setPromoImage] = useState('');
   const [promoImageData, setPromoImageData] = useState('');
+  const [promoImageUnconfirmed,setPromoImageUnconfirmed] = useState(false);
   const [isUploadingPromoImg, setIsUploadingPromoImg] = useState(false);
   const [promoTerms, setPromoTerms] = useState('Válido para las primeras personas en presentar su código oficial.');
   const [isSaving, setIsSaving] = useState(false);
+
+  const imageUploadGeneration = useRef(0);
+  const imageUploadPending = useRef(false);
+  const savePending = useRef(false);
+  const imageMode = useRef<'historical'|'new'|'removed'>('removed');
+  const historicalImages = useRef<{promoImage?:string|null;promoImageData?:string|null}>({});
+  const confirmedImage = useRef<{mode:'historical'|'new'|'removed';image:string;data:string}>({mode:'removed',image:'',data:''});
+  const invalidateImageUpload = () => { imageUploadGeneration.current++;imageUploadPending.current=false;setIsUploadingPromoImg(false); };
+  const handleRemovePromoImage = () => {
+    invalidateImageUpload();imageMode.current='removed';historicalImages.current={};
+    confirmedImage.current={mode:'removed',image:'',data:''};
+    setPromoImage('');setPromoImageData('');setPromoImageUnconfirmed(false);setErrorMsg(null);
+  };
+  useEffect(()=>()=>{imageUploadGeneration.current++;},[]);
 
   const compressFlyerImage = (file: File, maxDim = 1200, quality = 0.85): Promise<string> => {
     return new Promise((resolve) => {
@@ -103,30 +126,31 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
   };
 
   const handlePromoImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const input=e.target;
+    const file=input.files?.[0];
     if (!file) return;
-    setIsUploadingPromoImg(true);
+    const generation=++imageUploadGeneration.current;
+    const current=()=>generation===imageUploadGeneration.current;
+    imageMode.current='new';imageUploadPending.current=true;
+    setIsUploadingPromoImg(true);setPromoImageUnconfirmed(true);setErrorMsg(null);
     try {
-      const compressedDataUrl = await compressFlyerImage(file);
-      if (!compressedDataUrl) {
-        setIsUploadingPromoImg(false);
-        return;
-      }
+      const compressedDataUrl=await compressFlyerImage(file);
+      if(!current())return;
+      if(!compressedDataUrl)throw new Error('No se pudo preparar la imagen.');
       setPromoImageData(compressedDataUrl);
-      try {
-        const res = await uploadBusinessLogo(compressedDataUrl, file.name);
-        if (res.success && res.url) {
-          setPromoImage(res.url);
-        } else {
-          setPromoImage(compressedDataUrl);
-        }
-      } catch {
-        setPromoImage(compressedDataUrl);
-      }
-    } catch (err) {
-      console.error('Error uploading promo image:', err);
+      const res=await uploadBusinessLogo(compressedDataUrl,file.name);
+      if(!current())return;
+      if(res.success!==true || typeof res.url!=='string' || !remotePromoImage(res.url))throw new Error(res.message || 'No se confirmó una URL remota válida para la imagen.');
+      setPromoImage(res.url);setPromoImageData('');setPromoImageUnconfirmed(false);
+      confirmedImage.current={mode:'new',image:res.url,data:''};
+    } catch(error) {
+      if(!current())return;
+      const last=confirmedImage.current;
+      imageMode.current=last.mode;
+      setPromoImage(last.image);setPromoImageData(last.data);setPromoImageUnconfirmed(false);
+      setErrorMsg((error instanceof Error ? error.message : 'No se confirmó la carga de la imagen.')+' Se conserva el cartel anterior; puedes guardar los demás cambios.');
     } finally {
-      setIsUploadingPromoImg(false);
+      if(current()){imageUploadPending.current=false;setIsUploadingPromoImg(false);input.value='';}
     }
   };
 
@@ -138,6 +162,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
 
   // Handler to select business and automatically extract its phone
   const handleSelectBusiness = (bizId: number) => {
+    invalidateImageUpload();
     setSelectedBizId(bizId);
     const biz = businesses.find(b => b.id === bizId);
     if (biz) {
@@ -161,14 +186,14 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
     setIsLoading(true);
     try {
       const [promosRes, couponsRes] = await Promise.all([
-        getAdminPromotions(),
+        (async()=>{const response=await adminFetch('/api/admin/promotions',{cache:'no-store'});if(!response.ok)throw new Error('No se pudieron consultar las promociones del servidor.');const body=await response.json();if(body?.success!==true || !Array.isArray(body.promotions))throw new Error('Respuesta de promociones inválida.');return body;})(),
         getAdminCoupons()
       ]);
-      if (promosRes.success && Array.isArray(promosRes.promotions) && promosRes.promotions.length > 0) {
+      if (promosRes.success && Array.isArray(promosRes.promotions)) {
         setPromotions(promosRes.promotions);
         if (promosRes.adminAlertEmails) setAlertEmails(promosRes.adminAlertEmails);
       } else {
-        setPromotions(seedPromotions as any);
+        setPromotions([]);setErrorMsg('No se pudieron consultar las promociones del servidor.');
       }
       if (couponsRes.success && Array.isArray(couponsRes.coupons)) {
         setCoupons(couponsRes.coupons);
@@ -177,7 +202,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
       }
     } catch (err) {
       console.error('Error loading admin promo data:', err);
-      setPromotions(seedPromotions as any);
+      setPromotions([]);setErrorMsg('No se pudieron consultar las promociones del servidor.');
       setCoupons([]);
     } finally {
       setIsLoading(false);
@@ -189,6 +214,11 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
   }, []);
 
   const handleEditPromo = (promo: Promotion) => {
+    invalidateImageUpload();imageMode.current='historical';
+    historicalImages.current={};
+    if(Object.hasOwn(promo,'promoImage'))historicalImages.current.promoImage=promo.promoImage;
+    if(Object.hasOwn(promo,'promoImageData'))historicalImages.current.promoImageData=promo.promoImageData;
+    setErrorMsg(null);
     setFormId(promo.id);
     setSelectedBizId(promo.businessId);
     setPromoTitle(promo.title);
@@ -199,12 +229,16 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
     setPromoOwnerEmail(promo.ownerEmail || '');
     setPromoOwnerWhatsapp(cleanPhoneNumber(promo.businessWhatsapp || promo.businessPhone || ''));
     setPromoImage(promo.promoImage || promo.promoImageData || '');
+    setPromoImageUnconfirmed(false);
     setPromoImageData(promo.promoImageData || (promo.promoImage?.startsWith('data:') ? promo.promoImage : ''));
+    confirmedImage.current={mode:'historical',image:promo.promoImage || promo.promoImageData || '',data:promo.promoImageData || (promo.promoImage?.startsWith('data:') ? promo.promoImage : '')};
     setPromoTerms(promo.terms || '');
     setActiveSubTab('create');
   };
 
   const handleResetForm = () => {
+    invalidateImageUpload();imageMode.current='removed';historicalImages.current={};
+    confirmedImage.current={mode:'removed',image:'',data:''};
     setFormId(null);
     const firstBiz = businesses[0];
     setSelectedBizId(firstBiz?.id || 0);
@@ -217,18 +251,25 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
     setPromoOwnerWhatsapp(extractCleanPhone(firstBiz));
     setPromoImage('');
     setPromoImageData('');
+    setPromoImageUnconfirmed(false);
     setPromoTerms('Válido para las primeras personas en presentar su código oficial.');
     setBizSearchQuery('');
   };
 
   const handleSavePromo = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savePending.current || isSaving) return;
+    if (imageUploadPending.current || isUploadingPromoImg || promoImageUnconfirmed || (promoImage && !(remotePromoImage(promoImage) || (imageMode.current==='historical' && historicalRaster(promoImage))))) {
+      setErrorMsg('La imagen solo está en previsualización; confirma su carga remota antes de guardar.');
+      return;
+    }
     if (!selectedBizId || !promoTitle.trim() || !promoDiscount.trim()) {
       setErrorMsg('Por favor completa el negocio, título y descuento.');
       return;
     }
 
     const biz = businesses.find(b => b.id === Number(selectedBizId));
+    savePending.current=true;
     setIsSaving(true);
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -247,8 +288,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
         validUntil: promoValidUntil.trim(),
         ownerEmail: promoOwnerEmail.trim(),
         ownerWhatsapp: cleanWa,
-        promoImage: promoImage.trim() || promoImageData || null,
-        promoImageData: promoImageData || (promoImage.startsWith('data:') ? promoImage : null),
+        ...(imageMode.current==='historical' ? historicalImages.current : imageMode.current==='removed' ? {promoImage:null,promoImageData:null} : {promoImage:promoImage.trim(),promoImageData:null}),
         terms: promoTerms.trim(),
         isActive: true
       });
@@ -265,6 +305,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
     } catch (err: any) {
       setErrorMsg(err.message || 'Error de conexión');
     } finally {
+      savePending.current=false;
       setIsSaving(false);
     }
   };
@@ -855,10 +896,10 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
                     Sube la imagen publicitaria que te entregó el negocio (ej. estética, taller, restaurante). El usuario verá este cartel en grande para conocer todos los detalles antes de solicitar su cupón.
                   </p>
                 </div>
-                {promoImage && (
+                {(promoImage || promoImageData) && (
                   <button
                     type="button"
-                    onClick={() => setPromoImage('')}
+                    onClick={handleRemovePromoImage}
                     className="text-xs text-rose-600 hover:text-rose-800 font-bold underline cursor-pointer"
                   >
                     Quitar cartel
@@ -906,10 +947,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
                     {(promoImage || promoImageData) && (
                       <button
                         type="button"
-                        onClick={() => {
-                          setPromoImage('');
-                          setPromoImageData('');
-                        }}
+                        onClick={handleRemovePromoImage}
                         className="px-3 py-2 rounded-xl border border-stone-200 bg-white hover:bg-rose-50 hover:text-rose-600 text-stone-600 text-xs font-bold transition-colors cursor-pointer"
                       >
                         Quitar cartel

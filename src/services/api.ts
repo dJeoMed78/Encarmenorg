@@ -1,8 +1,15 @@
-import { Business, Category, DirectoryStats, WpHealth, AutoBusinessCandidate } from '../types';
+import {adminFetch} from '../utils/adminAuth';
 import seedBusinesses from '../data/businesses_seed.json';
+import { Business, Category, DirectoryStats, WpHealth, AutoBusinessCandidate } from '../types';
 import seedCategories from '../data/categories_seed.json';
+import {PUBLIC_REGISTRATION_FIELDS} from '../constants/publicRegistration';
+import {contactDigits, prepareContactPatch, contactsMatchReadback} from '../utils/businessContacts';
 
 const API_BASE = '/api';
+function businessSessionHeaders(): Record<string,string> {
+  try { const token=sessionStorage.getItem('encarmen_admin_session_token');return token ? {'X-Encarmen-Admin-Token':token} : {}; } catch {return {};}
+}
+
 
 export async function parseJsonResponse<T>(res: Response, fallbackErrorMsg: string): Promise<T> {
   const text = await res.text();
@@ -40,7 +47,7 @@ export async function fetchBusinesses(params: {
   query.set('_t', String(Date.now()));
 
   try {
-    const res = await fetch(`${API_BASE}/businesses?${query.toString()}`, {
+    const res = await adminFetch(`${API_BASE}/businesses?${query.toString()}`, {
       cache: 'no-store',
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -54,53 +61,8 @@ export async function fetchBusinesses(params: {
       businesses: data.businesses
     };
   } catch (err) {
-    console.warn('API fetch failed, fallback to local seed dataset:', err);
-    // Local filter fallback
-    let list: Business[] = seedBusinesses as unknown as Business[];
-
-    if (params.q) {
-      const term = params.q.toLowerCase();
-      list = list.filter(b =>
-        b.name.toLowerCase().includes(term) ||
-        b.description.toLowerCase().includes(term) ||
-        b.address.toLowerCase().includes(term) ||
-        b.categories.some(c => c.toLowerCase().includes(term))
-      );
-    }
-    if (params.subcategory) {
-      const sub = params.subcategory.toLowerCase();
-      list = list.filter(b =>
-        b.categorySlugs.some(s => s.toLowerCase() === sub) ||
-        b.categories.some(c => c.toLowerCase() === sub)
-      );
-    } else if (params.category && params.category !== 'all') {
-      const cat = params.category.toLowerCase();
-      list = list.filter(b =>
-        b.categorySlugs.some(s => s.toLowerCase() === cat) ||
-        b.categories.some(c => c.toLowerCase() === cat)
-      );
-    }
-    if (params.colonia && params.colonia !== 'todas') {
-      const col = params.colonia.toLowerCase();
-      list = list.filter(b => b.colonia && b.colonia.toLowerCase().includes(col));
-    }
-    if (params.hasWhatsapp) {
-      list = list.filter(b => Boolean(b.whatsapp));
-    }
-    if (params.hasDelivery) {
-      list = list.filter(b => Boolean(b.delivery && !b.delivery.toLowerCase().includes('no')));
-    }
-    if (params.hasPhone) {
-      list = list.filter(b => Boolean(b.phone));
-    }
-    if (params.hasAddress) {
-      list = list.filter(b => Boolean(b.address && b.address.length > 5));
-    }
-
-    return {
-      total: list.length,
-      businesses: list
-    };
+    // Never substitute historical contacts for the current database response.
+    throw err;
   }
 }
 
@@ -110,7 +72,7 @@ export async function fetchCategories(): Promise<{
   allCategories: Category[];
 }> {
   try {
-    const res = await fetch(`${API_BASE}/categories`);
+    const res = await adminFetch(`${API_BASE}/categories`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -131,7 +93,7 @@ export async function fetchCategories(): Promise<{
 
 export async function fetchStats(): Promise<DirectoryStats> {
   try {
-    const res = await fetch(`${API_BASE}/stats`);
+    const res = await adminFetch(`${API_BASE}/stats`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -159,7 +121,7 @@ export async function syncWordPress(): Promise<{
   categoriesCount?: number;
   timestamp?: string;
 }> {
-  const res = await fetch(`${API_BASE}/sync`, {
+  const res = await adminFetch(`${API_BASE}/sync`, {
     method: 'POST'
   });
   return await res.json();
@@ -172,7 +134,7 @@ export async function syncSingleBusinessToWordPress(id: number): Promise<{
   wpId?: number;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/businesses/${id}/sync-wp`, {
+    const res = await adminFetch(`${API_BASE}/businesses/${id}/sync-wp`, {
       method: 'POST'
     });
     return await res.json();
@@ -183,7 +145,7 @@ export async function syncSingleBusinessToWordPress(id: number): Promise<{
 
 export async function checkWpHealth(): Promise<WpHealth> {
   try {
-    const res = await fetch(`${API_BASE}/health-wp`);
+    const res = await adminFetch(`${API_BASE}/health-wp`);
     return await res.json();
   } catch (err: any) {
     return {
@@ -201,7 +163,7 @@ export async function uploadBusinessLogo(imageBase64: string, filename?: string)
   message?: string;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/upload-logo`, {
+    const res = await adminFetch(`${API_BASE}/upload-logo`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -212,13 +174,18 @@ export async function uploadBusinessLogo(imageBase64: string, filename?: string)
       const errData = await res.json().catch(() => ({}));
       throw new Error(errData.message || `Error del servidor HTTP ${res.status}`);
     }
-    return await res.json();
+    const result = await res.json();
+    const url = typeof result?.url === 'string' ? result.url.trim() : '';
+    // A data URI or a javascript: URL is not a persisted remote image.
+    if (result?.success !== true || !/^(?:https?:\/\/|\/(?!\/))/.test(url)) {
+      return {success:false,message:result?.message || 'El servidor no confirmó una URL persistente de imagen.'};
+    }
+    return {...result,url};
   } catch (err: any) {
-    // If backend endpoint is unavailable, return dataURI as client-side image so user never gets blocked
+    // A local data URI is not evidence that the remote server stored the image.
     return {
-      success: true,
-      url: imageBase64,
-      message: 'Imagen cargada en el navegador'
+      success: false,
+      message: err?.message || 'No se pudo confirmar el almacenamiento de la imagen en el servidor.'
     };
   }
 }
@@ -244,15 +211,17 @@ export async function checkBusinessDuplicate(name: string, phone?: string): Prom
     const params = new URLSearchParams();
     if (name) params.append('name', name);
     if (phone) params.append('phone', phone);
-    const res = await fetch(`${API_BASE}/check-duplicate?${params.toString()}`);
-    if (!res.ok) return { isDuplicate: false };
-    return await res.json();
-  } catch {
-    return { isDuplicate: false };
+    const res = await adminFetch(`${API_BASE}/check-duplicate?${params.toString()}`);
+    if (!res.ok) throw new Error(`No se pudo comprobar duplicados (HTTP ${res.status}). Intenta de nuevo.`);
+    const result = await res.json();
+    if (typeof result?.isDuplicate !== 'boolean') throw new Error('El servidor no confirmó el resultado de la comprobación de duplicados.');
+    return result;
+  } catch (err: any) {
+    throw new Error(err?.message || 'No se pudo comprobar si la empresa ya existe.');
   }
 }
 
-export async function submitBusinessRegistration(data: import('../types').BusinessSubmission): Promise<{
+export async function submitAdministrativeBusinessRegistration(data: import('../types').BusinessSubmission, requestId: string = crypto.randomUUID()): Promise<{
   success: boolean;
   message: string;
   isDuplicate?: boolean;
@@ -264,10 +233,12 @@ export async function submitBusinessRegistration(data: import('../types').Busine
   wpProductId?: number | null;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/submit-business`, {
+    const res = await adminFetch(`${API_BASE}/submit-business`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...businessSessionHeaders(),
+        'Idempotency-Key': requestId
       },
       body: JSON.stringify(data)
     });
@@ -285,41 +256,49 @@ export async function submitBusinessRegistration(data: import('../types').Busine
       }
       throw new Error(resData.message || `Error del servidor HTTP ${res.status}`);
     }
+    if(resData.success!==true || !resData.business || !Number.isSafeInteger(Number(resData.business.id))) throw new Error(resData.message || 'No se confirmó una empresa persistida.');
     return resData;
   } catch (err: any) {
-    if (err.message && err.message.includes('Ya existe un negocio')) {
-      return {
-        success: false,
-        message: err.message
-      };
-    }
-    // Local fallback persistence in localStorage
-    try {
-      const stored = localStorage.getItem('empresas_local_submissions') || '[]';
-      const parsed = JSON.parse(stored);
-      const newSubmission = {
-        ...data,
-        id: `local-${Date.now()}`,
-        createdAt: new Date().toISOString(),
-        status: 'pending' as const
-      };
-      parsed.unshift(newSubmission);
-      localStorage.setItem('empresas_local_submissions', JSON.stringify(parsed));
-      return {
-        success: true,
-        message: '¡Registro recibido con éxito! Tus datos se han guardado para revisión.',
-        submission: newSubmission
-      };
-    } catch (saveErr) {
-      return {
-        success: false,
-        message: err.message || 'Error al enviar registro'
-      };
-    }
+    return {success:false,message:err.message || 'No se confirmó el registro en el servidor. Reintenta conservando la misma clave.'};
   }
 }
 
 // Reports & Admin Management Functions
+export async function submitBusinessRegistration(data: import('../types').BusinessSubmission & {hp?:string;subcategory?:string}, requestId: string = crypto.randomUUID()): Promise<{
+  success:boolean; message:string; business?:Business; directoryVisible?:boolean; replayed?:boolean;
+  isDuplicate?:boolean; existingBusiness?:Business; error?:string; writeMayHaveSucceeded?:boolean;
+}> {
+  let maybeWritten = false;
+  try {
+    const payload = Object.fromEntries(PUBLIC_REGISTRATION_FIELDS.filter(field=>Object.hasOwn(data,field)).map(field=>[field,data[field]]));
+    const serialized = JSON.stringify(payload);
+    maybeWritten = true; // Una desconexión puede ocurrir después de que el servidor confirme COMMIT.
+    const response = await fetch(`${API_BASE}/public/business-registrations`, {
+      method:'POST', headers:{'Content-Type':'application/json','Idempotency-Key':requestId}, body:serialized
+    });
+    // Only an explicit contractual 4xx rejection can establish non-publication.
+    const result = await response.json().catch(()=>null);
+    const rejection = response.status >= 400 && response.status < 500 && response.status !== 408 && result?.success === false;
+    maybeWritten = !rejection || result?.writeMayHaveSucceeded === true;
+    if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Respuesta no verificable. Reintenta con la misma clave.');
+    if (!response.ok) return {success:false,message:maybeWritten ? 'No se pudo confirmar si el registro quedó publicado. Reintenta con la misma clave; no inicies otro registro.' : (result.message||`Error HTTP ${response.status}`),error:result.error,writeMayHaveSucceeded:maybeWritten};
+    const business = result.business;
+    if (result.success!==true || result.directoryVisible!==true || !Number.isSafeInteger(Number(business?.id)) || Number(business.id)<=0 || business.status!=='published') throw new Error('No se confirmó una empresa publicada. Reintenta con la misma clave.');
+    const [detailResponse,listResponse] = await Promise.all([
+      fetch(`${API_BASE}/businesses/${encodeURIComponent(business.id)}?_t=${Date.now()}`,{cache:'no-store'}),
+      fetch(`${API_BASE}/businesses?_t=${Date.now()}`,{cache:'no-store'})
+    ]);
+    if(!detailResponse.ok||!listResponse.ok) throw new Error('No se pudo consultar la publicación. Reintenta con la misma clave.');
+    const [detail,list] = await Promise.all([detailResponse.json(),listResponse.json()]);
+    const confirmed = detail.business;
+    const matching = (entry:any)=>entry && String(entry.id)===String(business.id) && entry.status==='published' && entry.name===business.name && contactDigits(entry.phone)===contactDigits(data.phone) && contactDigits(entry.whatsapp)===contactDigits(data.whatsapp);
+    if(detail.success!==true || !matching(confirmed) || !Array.isArray(list.businesses) || !list.businesses.some(matching)) throw new Error('La ficha o el directorio no confirman la publicación. Reintenta con la misma clave.');
+    return {...result,business:confirmed};
+  } catch(error:any) {
+    return {success:false,message:error.message||'No se confirmó el registro; reintenta con la misma clave.',writeMayHaveSucceeded:maybeWritten};
+  }
+}
+
 export async function sendClassifiedReport(data: {
   classifiedId: string;
   classifiedTitle: string;
@@ -327,41 +306,17 @@ export async function sendClassifiedReport(data: {
   requesterContact?: string;
   reason: "owner_lost_access" | "sold" | "spam_inappropriate" | "wrong_info";
   comment?: string;
-}): Promise<{ success: boolean; message: string; report?: import("../types").BusinessReport }> {
+}): Promise<{ success: boolean; message: string; deliveryState?: "confirmed" | "rejected" | "uncertain"; report?: import("../types").BusinessReport }> {
   try {
-    const res = await fetch(`${API_BASE}/reports`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "classified",
-        ...data
-      })
+    const res = await adminFetch(`${API_BASE}/reports`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'classified', ...data })
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (err: any) {
-    try {
-      const stored = localStorage.getItem("business_reports") || "[]";
-      const parsed = JSON.parse(stored);
-      const newRep: import("../types").BusinessReport = {
-        id: `rep-${Date.now()}`,
-        type: "classified",
-        classifiedId: data.classifiedId,
-        classifiedTitle: data.classifiedTitle,
-        businessName: data.classifiedTitle,
-        requesterName: data.requesterName,
-        requesterContact: data.requesterContact,
-        reason: data.reason,
-        comment: data.comment,
-        date: new Date().toISOString(),
-        status: "pending"
-      };
-      parsed.unshift(newRep);
-      localStorage.setItem("business_reports", JSON.stringify(parsed));
-      return { success: true, message: "Solicitud enviada al administrador", report: newRep };
-    } catch {
-      return { success: false, message: "No se pudo enviar la solicitud" };
-    }
+    if (!res.ok) return { success: false, deliveryState: res.status >= 500 || res.status === 408 ? 'uncertain' : 'rejected', message: `No se confirmó el envío del reporte (HTTP ${res.status}).` };
+    const body = await res.json();
+    return body?.success === true ? {...body,deliveryState:'confirmed'} : { success: false, deliveryState:'uncertain', message: 'El servidor no confirmó la recepción del reporte.' };
+  } catch {
+    return { success: false, deliveryState:'uncertain', message: 'No se pudo confirmar el envío del reporte al servidor. El texto sigue en el formulario.' };
   }
 }
 
@@ -373,64 +328,49 @@ export async function sendBusinessReport(data: {
   reason: string;
   details?: string;
   comment?: string;
-}): Promise<{ success: boolean; message: string; report?: import('../types').BusinessReport }> {
+}): Promise<{ success: boolean; message: string; deliveryState?: "confirmed" | "rejected" | "uncertain"; report?: import('../types').BusinessReport }> {
   try {
-    const res = await fetch(`${API_BASE}/reports`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await adminFetch(`${API_BASE}/reports`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (err: any) {
-    // Fallback local storage
-    try {
-      const stored = localStorage.getItem('business_reports') || '[]';
-      const parsed = JSON.parse(stored);
-      const newRep: import('../types').BusinessReport = {
-        id: `rep-${Date.now()}`,
-        businessId: data.businessId,
-        businessName: data.businessName,
-        reason: data.reason,
-        details: data.details || data.comment,
-        createdAt: new Date().toISOString(),
-        status: 'pending'
-      };
-      parsed.unshift(newRep);
-      localStorage.setItem('business_reports', JSON.stringify(parsed));
-      return { success: true, message: 'Reporte guardado', report: newRep };
-    } catch {
-      return { success: false, message: 'No se pudo guardar el reporte' };
-    }
+    if (!res.ok) return { success: false, deliveryState: res.status >= 500 || res.status === 408 ? 'uncertain' : 'rejected', message: `No se confirmó el envío del reporte (HTTP ${res.status}).` };
+    const body = await res.json();
+    return body?.success === true ? {...body,deliveryState:'confirmed'} : { success: false, deliveryState:'uncertain', message: 'El servidor no confirmó la recepción del reporte.' };
+  } catch {
+    return { success: false, deliveryState:'uncertain', message: 'No se pudo confirmar el envío del reporte al servidor. El texto sigue en el formulario.' };
   }
 }
 
 export const reportBusinessIssue = sendBusinessReport;
 
-export async function fetchReports(): Promise<{ total: number; reports: import('../types').BusinessReport[] }> {
+export type ReportsQueryResult =
+  | {source:'server';status:'ready';total:number;reports:import('../types').BusinessReport[]}
+  | {source:'unavailable';status:'error';total:null;reports:[];message:string};
+
+export async function fetchReports(): Promise<ReportsQueryResult> {
   try {
-    const res = await fetch(`${API_BASE}/reports`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch {
-    const stored = localStorage.getItem('business_reports') || '[]';
-    try {
-      const parsed = JSON.parse(stored);
-      return { total: parsed.length, reports: parsed };
-    } catch {
-      return { total: 0, reports: [] };
-    }
+    const res = await adminFetch(`${API_BASE}/reports`, {cache:'no-store'});
+    if (!res.ok) throw new Error(`No se pudieron consultar los reportes del servidor (HTTP ${res.status}).`);
+    const data = await res.json();
+    if (!data || (Object.hasOwn(data,'success') && data.success !== true) || !Number.isSafeInteger(data.total) || data.total < 0 || !Array.isArray(data.reports) || data.total !== data.reports.length || data.reports.some((r:any)=>!r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id || typeof r.reason !== 'string' || !['pending','resolved','dismissed'].includes(r.status))) throw new Error('Respuesta de reportes no válida.');
+    return {source:'server',status:'ready',total:data.total,reports:data.reports};
+  } catch (error) {
+    // Historical browser drafts are preserved untouched, never promoted to remote records.
+    return {source:'unavailable',status:'error',total:null,reports:[],message:error instanceof Error ? error.message : 'No se pudieron consultar los reportes del servidor.'};
   }
 }
 
 export async function updateReportStatus(id: string, status: 'resolved' | 'dismissed'): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/reports/${id}`, {
+    const res = await adminFetch(`${API_BASE}/reports/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status })
     });
-    return res.ok;
+    if (!res.ok) return false;
+    const result = await res.json();
+    return result?.success === true && String(result?.report?.id) === String(id) && result.report.status === status;
   } catch {
     return false;
   }
@@ -438,23 +378,29 @@ export async function updateReportStatus(id: string, status: 'resolved' | 'dismi
 
 export async function deleteReport(id: string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/reports/${id}`, {
+    const res = await adminFetch(`${API_BASE}/reports/${id}`, {
       method: 'DELETE'
     });
-    return res.ok;
+    if (!res.ok) return false;
+    const result = await res.json();
+    return result?.success === true;
   } catch {
     return false;
   }
 }
 
-export async function adminUpdateBusiness(id: number, data: Partial<import('../types').Business>): Promise<{ success: boolean; message: string; business?: import('../types').Business }> {
+export async function adminUpdateBusiness(id: number, data: Partial<import('../types').Business> & { clearContacts?: ('phone' | 'whatsapp')[] }): Promise<{ success: boolean; message: string; business?: import('../types').Business }> {
   try {
-    const res = await fetch(`${API_BASE}/businesses/${id}`, {
+    const expectedContacts = prepareContactPatch(data, true).patch;
+    const res = await adminFetch(`${API_BASE}/businesses/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', ...(sessionStorage.getItem('encarmen_admin_session_token') ? { 'X-Encarmen-Admin-Token': sessionStorage.getItem('encarmen_admin_session_token')! } : {}) },
       body: JSON.stringify(data)
     });
-    return await parseJsonResponse(res, 'Error al actualizar negocio');
+    const parsed = await parseJsonResponse<{success:boolean;message:string;business?:Business}>(res, 'Error al actualizar negocio');
+    if (!res.ok) return {success:false, message:parsed.message || `HTTP ${res.status}`};
+    if (parsed.success !== true || !parsed.business || Number(parsed.business.id) !== Number(id) || !Object.hasOwn(parsed.business,'phone') || !Object.hasOwn(parsed.business,'whatsapp') || !contactsMatchReadback(expectedContacts,parsed.business)) return {success:false, message:'El servidor no confirmó el negocio y sus contactos. Recarga antes de reintentar.'};
+    return parsed;
   } catch (err: any) {
     return { success: false, message: err.message || 'Error al actualizar negocio' };
   }
@@ -462,10 +408,11 @@ export async function adminUpdateBusiness(id: number, data: Partial<import('../t
 
 export async function adminDeleteBusiness(id: number): Promise<{ success: boolean; message: string }> {
   try {
-    const res = await fetch(`${API_BASE}/businesses/${id}`, {
+    const res = await adminFetch(`${API_BASE}/businesses/${id}`, {
       method: 'DELETE'
     });
-    return await parseJsonResponse(res, 'Error al dar de baja el negocio');
+    const result=await parseJsonResponse<{success:boolean;message:string}>(res, 'Error al dar de baja el negocio');
+    return res.ok && result.success===true ? result : {success:false,message:result.message||'El servidor no confirmó la baja.'};
   } catch (err: any) {
     return { success: false, message: err.message || 'Error al dar de baja el negocio' };
   }
@@ -494,7 +441,7 @@ export async function trackAnalyticsEvent(params: {
     const info = getVisitorInfo();
     const isAdmin = Boolean(localStorage.getItem('encarmen_admin_auth') || params.isAdmin);
 
-    await fetch(`${API_BASE}/analytics/track`, {
+    await adminFetch(`${API_BASE}/analytics/track`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -518,7 +465,7 @@ export async function trackAnalyticsEvent(params: {
 export async function fetchAnalytics(excludeAdmin = false): Promise<import('../types').SiteAnalytics> {
   try {
     const url = `${API_BASE}/analytics${excludeAdmin ? '?excludeAdmin=true' : ''}`;
-    const res = await fetch(url);
+    const res = await adminFetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -569,7 +516,7 @@ export async function fetchNewestBusinesses(): Promise<{
   }[];
 }> {
   try {
-    const res = await fetch(API_BASE + '/newest-businesses');
+    const res = await adminFetch(API_BASE + '/newest-businesses');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return await res.json();
   } catch (err) {
@@ -596,7 +543,7 @@ export async function fetchClassifieds(params: {
     if (params.priceType) query.set('priceType', params.priceType);
     if (params.allStatus) query.set('allStatus', 'true');
 
-    const res = await fetch(API_BASE + '/classifieds?' + query.toString());
+    const res = await adminFetch(API_BASE + '/classifieds?' + query.toString());
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return await res.json();
   } catch (err) {
@@ -609,7 +556,7 @@ export async function createClassified(ad: Partial<import('../types').Classified
   message: string;
   classified?: import('../types').ClassifiedAd;
 }> {
-  const res = await fetch(API_BASE + '/classifieds', {
+  const res = await adminFetch(API_BASE + '/classifieds', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(ad)
@@ -622,7 +569,7 @@ export async function updateClassified(id: string, updates: Partial<import('../t
   message: string;
   classified?: import('../types').ClassifiedAd;
 }> {
-  const res = await fetch(API_BASE + '/classifieds/' + id, {
+  const res = await adminFetch(API_BASE + '/classifieds/' + id, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates)
@@ -634,7 +581,7 @@ export async function deleteClassified(id: string): Promise<{
   success: boolean;
   message: string;
 }> {
-  const res = await fetch(API_BASE + '/classifieds/' + id, {
+  const res = await adminFetch(API_BASE + '/classifieds/' + id, {
     method: 'DELETE'
   });
   return await res.json();
@@ -655,7 +602,7 @@ export async function searchClassifiedRadarCandidates(
   message?: string;
 }> {
   try {
-    const res = await fetch(API_BASE + '/classifieds/radar-search', {
+    const res = await adminFetch(API_BASE + '/classifieds/radar-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, category, useAi: true, timestamp: Date.now() })
@@ -683,7 +630,7 @@ export async function approveClassifiedCandidate(candidate: Partial<import('../t
   classified?: import('../types').ClassifiedAd;
 }> {
   try {
-    const res = await fetch(API_BASE + '/classifieds/approve-candidate', {
+    const res = await adminFetch(API_BASE + '/classifieds/approve-candidate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ candidate })
@@ -700,7 +647,7 @@ export async function batchApproveClassifiedCandidates(candidates: Partial<impor
   count?: number;
 }> {
   try {
-    const res = await fetch(API_BASE + '/classifieds/batch-approve', {
+    const res = await adminFetch(API_BASE + '/classifieds/batch-approve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ candidates })
@@ -728,7 +675,7 @@ export async function getMaintenanceMode(): Promise<{
   maintenance: MaintenanceModeConfig;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/maintenance?_t=${Date.now()}`, {
+    const res = await adminFetch(`${API_BASE}/maintenance?_t=${Date.now()}`, {
       cache: 'no-store'
     });
     return await parseJsonResponse(res, 'No se pudo obtener el estado de mantenimiento.');
@@ -751,7 +698,7 @@ export async function updateMaintenanceMode(config: Partial<MaintenanceModeConfi
   maintenance?: MaintenanceModeConfig;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/admin/maintenance`, {
+    const res = await adminFetch(`${API_BASE}/admin/maintenance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config)
@@ -791,7 +738,7 @@ export async function fetchImageUrlAsBase64(url: string): Promise<{
   message?: string;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/ai/fetch-image-url`, {
+    const res = await adminFetch(`${API_BASE}/ai/fetch-image-url`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url })
@@ -830,7 +777,7 @@ import seedPromotions from '../data/promotions_seed.json';
 
 export async function getPromotions(): Promise<{ success: boolean; count: number; promotions: import('../types').Promotion[] }> {
   try {
-    const res = await fetch(`${API_BASE}/promotions`);
+    const res = await adminFetch(`${API_BASE}/promotions`);
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.promotions) && data.promotions.length > 0) {
@@ -845,7 +792,7 @@ export async function getPromotions(): Promise<{ success: boolean; count: number
 
 export async function getBusinessPromotion(businessId: number): Promise<{ success: boolean; promotion: import('../types').Promotion | null }> {
   try {
-    const res = await fetch(`${API_BASE}/promotions/business/${businessId}`);
+    const res = await adminFetch(`${API_BASE}/promotions/business/${businessId}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err: any) {
@@ -866,7 +813,7 @@ export async function claimPromotionCoupon(
   error?: string;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/promotions/${encodeURIComponent(promotionId)}/claim`, {
+    const res = await adminFetch(`${API_BASE}/promotions/${encodeURIComponent(promotionId)}/claim`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ customerName, customerPhone })
@@ -895,7 +842,7 @@ export async function getAdminPromotions(): Promise<{
   adminAlertEmails: string[];
 }> {
   try {
-    const res = await fetch(`${API_BASE}/admin/promotions`);
+    const res = await adminFetch(`${API_BASE}/admin/promotions`);
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.promotions) && data.promotions.length > 0) {
@@ -915,7 +862,7 @@ export async function saveAdminPromotion(promoData: any): Promise<{
   error?: string;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/admin/promotions`, {
+    const res = await adminFetch(`${API_BASE}/admin/promotions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(promoData)
@@ -930,7 +877,7 @@ export async function saveAdminPromotion(promoData: any): Promise<{
 
 export async function deleteAdminPromotion(promoId: string): Promise<{ success: boolean; message: string }> {
   try {
-    const res = await fetch(`${API_BASE}/admin/promotions/${encodeURIComponent(promoId)}`, {
+    const res = await adminFetch(`${API_BASE}/admin/promotions/${encodeURIComponent(promoId)}`, {
       method: 'DELETE'
     });
     return await res.json();
@@ -947,7 +894,7 @@ export async function getAdminCoupons(): Promise<{
   adminAlertEmails: string[];
 }> {
   try {
-    const res = await fetch(`${API_BASE}/admin/coupons`);
+    const res = await adminFetch(`${API_BASE}/admin/coupons`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err: any) {
@@ -961,7 +908,7 @@ export async function updateCouponStatus(couponId: string, status: 'active' | 'r
   coupon?: import('../types').ClaimedCoupon;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/admin/coupons/${encodeURIComponent(couponId)}/status`, {
+    const res = await adminFetch(`${API_BASE}/admin/coupons/${encodeURIComponent(couponId)}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status })
@@ -987,7 +934,7 @@ export async function fetchBusinessEditPins(): Promise<{
   pins: Record<number, BusinessEditPinInfo>;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/admin/businesses-edit-pins`);
+    const res = await adminFetch(`${API_BASE}/admin/businesses-edit-pins`,{headers:businessSessionHeaders()});
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err: any) {
@@ -1003,7 +950,7 @@ export async function generateBusinessEditPin(bizId: number): Promise<{
   message?: string;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/admin/businesses/${bizId}/generate-pin`, {
+    const res = await adminFetch(`${API_BASE}/admin/businesses/${bizId}/generate-pin`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
@@ -1025,7 +972,7 @@ export async function verifyBusinessEditPin(bizId: number, pin: string): Promise
   message?: string;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/businesses/${bizId}/verify-edit-pin`, {
+    const res = await adminFetch(`${API_BASE}/businesses/${bizId}/verify-edit-pin`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pin })
@@ -1042,7 +989,7 @@ export async function ownerUpdateBusiness(
   editPin: string
 ): Promise<{ success: boolean; message: string; business?: import('../types').Business }> {
   try {
-    const res = await fetch(`${API_BASE}/businesses/${id}`, {
+    const res = await adminFetch(`${API_BASE}/businesses/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...data, editPin })
@@ -1063,7 +1010,7 @@ export async function fetchAutoBusinessCandidates(
   source?: string
 ): Promise<{ success: boolean; candidates: AutoBusinessCandidate[]; totalFound: number; message?: string }> {
   try {
-    const res = await fetch(`${API_BASE}/businesses/auto-search`, {
+    const res = await adminFetch(`${API_BASE}/businesses/auto-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: query || '', category: category || 'all', source: source || 'all' })
@@ -1088,7 +1035,7 @@ export async function autoSearchBusinessesWithAi(
   category?: string
 ): Promise<{ success: boolean; candidates: AutoBusinessCandidate[]; totalFound: number; message?: string }> {
   try {
-    const res = await fetch(`${API_BASE}/businesses/auto-search-ai`, {
+    const res = await adminFetch(`${API_BASE}/businesses/auto-search-ai`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: query || '', category: category || 'all', count: 30 })
@@ -1114,7 +1061,7 @@ export async function parseWhatsAppGroupBusinesses(
   sourceUrl?: string
 ): Promise<{ success: boolean; count: number; candidates: AutoBusinessCandidate[]; message: string }> {
   try {
-    const res = await fetch(`${API_BASE}/businesses/parse-whatsapp-group`, {
+    const res = await adminFetch(`${API_BASE}/businesses/parse-whatsapp-group`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rawText, groupName, sourceUrl })
@@ -1138,7 +1085,7 @@ export async function approveAutoBusinessCandidate(
   candidate: AutoBusinessCandidate
 ): Promise<{ success: boolean; message: string; business?: Business; wpSynced?: boolean; wpPermalink?: string }> {
   try {
-    const res = await fetch(`${API_BASE}/businesses/approve-candidate`, {
+    const res = await adminFetch(`${API_BASE}/businesses/approve-candidate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ candidate })
@@ -1160,7 +1107,7 @@ export async function approveMultipleAutoBusinessCandidates(
   candidates: AutoBusinessCandidate[]
 ): Promise<{ success: boolean; message: string; count?: number; published?: Business[] }> {
   try {
-    const res = await fetch(`${API_BASE}/businesses/approve-multiple-candidates`, {
+    const res = await adminFetch(`${API_BASE}/businesses/approve-multiple-candidates`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ candidates })
@@ -1217,7 +1164,7 @@ async function ratingResponse(res: Response): Promise<any> {
 }
 
 export async function fetchAllBusinessRatings(): Promise<Record<string, BusinessRatingStats>> {
-  const data = await ratingResponse(await fetch(`${API_BASE}/ratings`, { cache: 'no-store' }));
+  const data = await ratingResponse(await adminFetch(`${API_BASE}/ratings`, { cache: 'no-store' }));
   if (!data.stats || typeof data.stats !== 'object' || Array.isArray(data.stats)) {
     throw new RatingApiError('Respuesta de calificaciones inválida.');
   }
@@ -1231,7 +1178,7 @@ export async function fetchBusinessRating(
   visitorId?: string
 ): Promise<BusinessRatingStats> {
   const q = visitorId ? `?visitorId=${encodeURIComponent(visitorId)}` : '';
-  const data = await ratingResponse(await fetch(`${API_BASE}/ratings/${encodeURIComponent(String(businessId))}${q}`, { cache: 'no-store' }));
+  const data = await ratingResponse(await adminFetch(`${API_BASE}/ratings/${encodeURIComponent(String(businessId))}${q}`, { cache: 'no-store' }));
   const stats = parseRatingStats(data);
   if (typeof data.hasRated !== 'boolean' ||
       (data.hasRated ? stats.count < 1 || !Number.isInteger(data.userRating) || data.userRating < 1 || data.userRating > 5 : data.userRating !== null)) {
@@ -1251,7 +1198,7 @@ export async function submitBusinessRating(params: {
       !/^[A-Za-z0-9_-]{1,100}$/.test(params.visitorId)) {
     throw new RatingApiError('Datos de calificación inválidos.', 400);
   }
-  const data = await ratingResponse(await fetch(`${API_BASE}/ratings`, {
+  const data = await ratingResponse(await adminFetch(`${API_BASE}/ratings`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params)
   }));
   if (data.success !== true) throw new RatingApiError('El servidor no confirmó la calificación.');
@@ -1261,3 +1208,4 @@ export async function submitBusinessRating(params: {
   }
   return { success: true, message: 'Calificación guardada.', rating: stats.average, reviewCount: stats.count, stats };
 }
+

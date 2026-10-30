@@ -1,19 +1,898 @@
+// src/server/adminSecurity.ts
+import express from "express";
+import { createHmac, randomBytes, scrypt as derive, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
+var scrypt = promisify(derive);
+var ADMIN_PERMISSIONS = ["admin:manage", "business:manage", "business:delete", "business:publish", "event:manage", "classified:manage"];
+function environmentAdminProvider(env) {
+  try {
+    const encoded = env.ENC_ADMIN_CREDENTIALS_JSON;
+    if (!encoded || encoded.length > 65536) return;
+    const config = JSON.parse(encoded);
+    const origin = new URL(env.ENC_ADMIN_PUBLIC_ORIGIN || "");
+    if (origin.protocol !== "https:" || origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash) return;
+    if (config.version !== 1 || !Array.isArray(config.accounts) || !config.accounts.length || config.accounts.length > 20) return;
+    const names = /* @__PURE__ */ new Set();
+    const accounts = config.accounts.map((account) => {
+      if (typeof account.username !== "string" || !/^[a-z0-9_.-]{1,64}$/i.test(account.username)) throw Error("CONFIG");
+      const username = account.username.toLowerCase();
+      if (names.has(username)) throw Error("CONFIG");
+      names.add(username);
+      const match = typeof account.passwordHash === "string" && account.passwordHash.match(/^scrypt\$([a-f0-9]{32,64})\$([a-f0-9]{128})$/i);
+      if (!match || !Array.isArray(account.permissions) || !account.permissions.length || account.permissions.some((p) => !ADMIN_PERMISSIONS.includes(p))) throw Error("CONFIG");
+      return { username, permissions: [...new Set(account.permissions)], salt: Buffer.from(match[1], "hex"), hash: Buffer.from(match[2], "hex") };
+    });
+    const dummy = { salt: randomBytes(16), hash: randomBytes(64) };
+    return {
+      accounts: accounts.map((a) => ({ username: a.username, role: "Administrador", initial: a.username.slice(0, 1), avatarColor: "from-sky-500 to-indigo-600" })),
+      async authenticate(username, password) {
+        const account = accounts.find((a) => a.username === username.toLowerCase());
+        const target = account || dummy;
+        const actual = await scrypt(password, target.salt, 64);
+        const valid = timingSafeEqual(actual, target.hash);
+        return valid && account ? { username: account.username, permissions: [...account.permissions] } : null;
+      }
+    };
+  } catch {
+    return;
+  }
+}
+function adminPermission(requestPath, method) {
+  let decoded = requestPath;
+  try {
+    for (let i = 0; i < 4 && decoded.includes("%"); i++) decoded = decodeURIComponent(decoded);
+  } catch {
+    return "admin:manage";
+  }
+  if (decoded.includes("%") || /[\0\r\n]/.test(decoded)) return "admin:manage";
+  const path2 = decoded.replace(/\\/g, "/").replace(/\/{2,}/g, "/").replace(/\/$/, "").toLowerCase();
+  const mutable = !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
+  if (path2 === "/api/submit-business" && mutable) return "business:manage";
+  if (path2 === "/api/upload-logo" && mutable) return "business:manage";
+  if (/^\/(?:api\/)?admin(?:\/|$)/.test(path2)) return "admin:manage";
+  if (/^\/api\/(?:mariadb|database-status)(?:\/|$)/.test(path2) || /^\/api\/(?:sync|webhook)(?:[-/]|$)/.test(path2)) return "admin:manage";
+  if (/^\/api\/businesses\/approve-(?:candidate|multiple-candidates)$/.test(path2)) return "business:publish";
+  if (method.toUpperCase() === "POST" && /^\/api\/businesses\/(?:auto-search|auto-search-ai|parse-whatsapp-group)$/.test(path2)) return null;
+  if (/^\/(?:api\/)?businesses\/[^/]+(?:\/(?:sync-wp|verify-edit-pin))?$/.test(path2) && mutable) return method.toUpperCase() === "DELETE" ? "business:delete" : "business:manage";
+  if (/^\/(?:api\/)?classifieds(?:\/|$)/.test(path2) && mutable && !(method.toUpperCase() === "POST" && path2 === "/api/classifieds/radar-search")) return "classified:manage";
+  if (/^\/api\/events(?:\/|$)/.test(path2) && mutable && !(method.toUpperCase() === "POST" && path2 === "/api/events/radar-search")) return "event:manage";
+  if (/^\/api\/reports(?:\/|$)/.test(path2) && method.toUpperCase() !== "POST") return "admin:manage";
+  if (/^\/api\/emergency(?:\/|$)/.test(path2) && mutable) return "admin:manage";
+  return null;
+}
+function registerAdminSecurity(app2, options = {}) {
+  const sessions = /* @__PURE__ */ new Map();
+  const attempts = /* @__PURE__ */ new Map();
+  const sessionSecret = randomBytes(32);
+  const now = options.now || Date.now;
+  const digest = (value) => createHmac("sha256", sessionSecret).update(value).digest("hex");
+  const fail2 = (res, status, message) => res.status(status).set("Cache-Control", "no-store").json({ success: false, message });
+  const sameOrigin = (req) => {
+    if (!req.get("Origin")) return true;
+    try {
+      const origin = new URL(req.get("Origin"));
+      const expected = options.allowedOrigin || req.protocol + "://" + req.get("host");
+      return origin.origin === new URL(expected).origin && origin.username === "" && origin.password === "";
+    } catch {
+      return false;
+    }
+  };
+  const read = (req) => {
+    const token = req.get("X-Encarmen-Admin-Token") || "";
+    if (!/^[a-f0-9]{64}$/.test(token)) return;
+    const key = digest(token), session = sessions.get(key);
+    if (!session || session.expiresAt <= now()) {
+      sessions.delete(key);
+      return;
+    }
+    return session;
+  };
+  app2.post("/api/admin/login", (req, res, next) => {
+    if (!req.is("application/json")) return fail2(res, 415, "Env\xEDa JSON.");
+    next();
+  }, express.json({ limit: "2kb", strict: true }), async (req, res) => {
+    if (!sameOrigin(req)) return fail2(res, 403, "Origen no permitido.");
+    const time = now(), key = digest(req.ip || req.socket.remoteAddress || "unknown");
+    for (const [k, v] of attempts) if (v.until <= time) attempts.delete(k);
+    if (attempts.size >= 1e3 && !attempts.has(key)) return fail2(res, 429, "Demasiados intentos.");
+    const window = attempts.get(key) || { count: 0, until: time + 6e4 };
+    attempts.set(key, window);
+    if (++window.count > 5) {
+      res.setHeader("Retry-After", "60");
+      return fail2(res, 429, "Demasiados intentos.");
+    }
+    if (!options.provider) return fail2(res, 503, "Acceso administrativo no configurado de forma segura.");
+    const body = req.body;
+    if (!body || Array.isArray(body) || Object.keys(body).some((k) => !["username", "password"].includes(k)) || typeof body.username !== "string" || !/^[a-z0-9_.-]{1,64}$/i.test(body.username) || typeof body.password !== "string" || body.password.length < 12 || body.password.length > 200) return fail2(res, 400, "Datos de acceso inv\xE1lidos.");
+    try {
+      const principal = await options.provider.authenticate(body.username, body.password);
+      if (!principal) return fail2(res, 401, "Usuario o contrase\xF1a incorrectos.");
+      if (typeof principal.username !== "string" || !Array.isArray(principal.permissions) || principal.permissions.some((p) => !ADMIN_PERMISSIONS.includes(p))) return fail2(res, 503, "Proveedor de identidad no disponible.");
+      for (const [k, v] of sessions) if (v.expiresAt <= time) sessions.delete(k);
+      if (sessions.size >= 1e3) return fail2(res, 503, "Sesiones no disponibles.");
+      const token = randomBytes(32).toString("hex"), expiresAt = time + Math.max(1, Math.min(options.sessionMs || 6 * 36e5, 6 * 36e5));
+      sessions.set(digest(token), { principal: { username: principal.username, permissions: [...principal.permissions] }, expiresAt });
+      return res.set("Cache-Control", "no-store").json({ success: true, token });
+    } catch {
+      return fail2(res, 503, "No se pudo verificar la identidad.");
+    }
+  });
+  app2.get("/api/admin/session", (req, res) => {
+    const session = read(req);
+    if (!session) return fail2(res, 401, "Sesi\xF3n ausente o vencida.");
+    return res.set("Cache-Control", "no-store").json({ success: true, user: { username: session.principal.username, role: "Administrador" }, permissions: session.principal.permissions, expiresAt: session.expiresAt });
+  });
+  app2.post("/api/admin/logout", (req, res) => {
+    if (!sameOrigin(req)) return fail2(res, 403, "Origen no permitido.");
+    const token = req.get("X-Encarmen-Admin-Token") || "";
+    sessions.delete(digest(token));
+    return res.set("Cache-Control", "no-store").json({ success: true });
+  });
+  app2.use((req, res, next) => {
+    const required = adminPermission(req.path, req.method);
+    if (!required) return next();
+    if (!sameOrigin(req)) return fail2(res, 403, "Origen no permitido.");
+    const session = read(req);
+    if (!session) return fail2(res, 401, "Sesi\xF3n ausente o vencida.");
+    if (!session.principal.permissions.includes(required)) return fail2(res, 403, "Permisos insuficientes.");
+    if (!["GET", "HEAD", "OPTIONS"].includes(req.method) && !options.writesReady?.(req, required)) return fail2(res, 503, "Operaci\xF3n bloqueada hasta habilitar administraci\xF3n segura.");
+    res.setHeader("Cache-Control", "no-store");
+    next();
+  });
+  app2.all("/api/admin/change-password", (_req, res) => fail2(res, 503, "La rotaci\xF3n de credenciales requiere el procedimiento seguro del servidor."));
+  app2.get("/api/admin/accounts", (_req, res) => res.set("Cache-Control", "no-store").json({ success: true, accounts: options.provider?.accounts || [] }));
+  app2.use("/api/admin/login", (error, _req, res, _next) => fail2(res, error?.status === 413 ? 413 : 400, "Cuerpo de acceso inv\xE1lido o demasiado grande."));
+  return { isAuthorized: (req, permission = "business:manage") => Boolean(read(req)?.principal.permissions.includes(permission)) };
+}
+
+// src/server/consolidatedWritePolicy.ts
+function administrativeWritesReady(req, state) {
+  if (!state.mutationsEnabled || !state.isStaging || !state.businessWrites) return false;
+  return req.method === "POST" && req.path === "/api/submit-business" || req.method === "PATCH" && /^\/(?:api\/)?businesses\/[^/]+$/.test(req.path);
+}
+
+// src/utils/businessContacts.ts
+var CONTACT_FILTERS = ["all", "phone", "no-phone", "whatsapp", "no-whatsapp", "none"];
+function contactDigits(value) {
+  if (typeof value !== "string" && (typeof value !== "number" || !Number.isSafeInteger(value))) return "";
+  const text2 = String(value).trim();
+  if (!/^[+\d\s().-]+$/.test(text2)) return "";
+  const digits = text2.replace(/\D/g, "");
+  if (/^521\d{10}$/.test(digits)) return digits.slice(3);
+  if (/^52\d{10}$/.test(digits)) return digits.slice(2);
+  return /^\d{10}$/.test(digits) ? digits : "";
+}
+function matchesContactFilter(business, filter) {
+  const phone = Boolean(contactDigits(business.phone));
+  const whatsapp = Boolean(contactDigits(business.whatsapp));
+  return filter === "phone" ? phone : filter === "no-phone" ? !phone : filter === "whatsapp" ? whatsapp : filter === "no-whatsapp" ? !whatsapp : filter === "none" ? !phone && !whatsapp : true;
+}
+function contactCounts(list) {
+  return Object.fromEntries(CONTACT_FILTERS.map((filter) => [filter, list.filter((b) => matchesContactFilter(b, filter)).length]));
+}
+var ContactPatchError = class extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+};
+function prepareContactPatch(body, isAdmin) {
+  const requested = body.clearContacts;
+  if (requested !== void 0 && (!Array.isArray(requested) || requested.some((key) => key !== "phone" && key !== "whatsapp"))) {
+    throw new ContactPatchError(400, "clearContacts debe contener \xFAnicamente phone o whatsapp.");
+  }
+  const clear = [...new Set(requested || [])];
+  if (clear.length && !isAdmin) throw new ContactPatchError(403, "La eliminaci\xF3n de contactos requiere una sesi\xF3n administrativa vigente.");
+  const patch = {};
+  for (const key of ["phone", "whatsapp"]) {
+    const value = body[key];
+    if (clear.includes(key)) {
+      if (value != null && String(value).trim() !== "") throw new ContactPatchError(400, "No se puede eliminar y sustituir el mismo contacto.");
+      patch[key] = "";
+    } else if (value != null && String(value).trim() !== "") {
+      const digits = contactDigits(value);
+      if (!digits) throw new ContactPatchError(400, "El contacto debe ser un n\xFAmero mexicano v\xE1lido de diez d\xEDgitos.");
+      patch[key] = digits;
+    }
+  }
+  return { patch, clear };
+}
+function contactsMatchReadback(patch, record) {
+  return Object.keys(patch).every((field) => patch[field] === "" ? String(record[field] ?? "").trim() === "" : contactDigits(record[field]) === patch[field]);
+}
+
+// src/db/stagingBusinessStore.ts
+import { createHash } from "node:crypto";
+
+// src/server/stagingBusinessSecurity.ts
+var STAGING_BUSINESS_DATABASE = "u293982346_encarmentest";
+function stagingBusinessConfiguration(env, productionUser) {
+  const database = (env.DB_NAME || env.MYSQL_DATABASE || env.MARIADB_DATABASE || "").trim();
+  const user = (env.DB_USER || env.MYSQL_USER || env.MARIADB_USER || "").trim();
+  return env.STAGING_READ_ONLY === "false" && env.STAGING_DB_CONFIRMED === "true" && env.STAGING_BUSINESS_WRITES_ENABLED === "true" && database === STAGING_BUSINESS_DATABASE && Boolean(user) && user !== productionUser;
+}
+
+// src/server/stagingIsolationProof.ts
+var PRODUCTION_DATABASE = "u293982346_encarmenapp";
+var PRODUCTION_USER = "u293982346_appuser";
+var STAGING_DATABASE = "u293982346_encarmentest";
+var STAGING_HOSTNAME = "staging.encarmen.org";
+var ENVIRONMENT_MARKER_TABLE = "encarmen_environment_marker";
+var SAFE_PRIVILEGES = /* @__PURE__ */ new Set(["SELECT", "INSERT", "UPDATE", "USAGE"]);
+var HARMLESS_SCHEMAS = /* @__PURE__ */ new Set(["information_schema", "performance_schema"]);
+function newWarnings() {
+  return [];
+}
+function resolve(env, names) {
+  const values2 = names.map((name) => (env[name] || "").trim()).filter(Boolean);
+  return { value: values2[0] || "", conflict: new Set(values2).size > 1 };
+}
+function isMissingTable(error) {
+  return Boolean(error) && (error.code === "ER_NO_SUCH_TABLE" || error.errno === 1146);
+}
+function checkStagingConfiguration(env, options = {}) {
+  const staging = options.stagingDatabase || STAGING_DATABASE;
+  if ((env.APP_ENV || "").trim().toLowerCase() !== "staging") return "ENV_NOT_STAGING";
+  const database = resolve(env, ["DB_NAME", "MYSQL_DATABASE", "MARIADB_DATABASE"]);
+  const host = resolve(env, ["DB_HOST", "MYSQL_HOST", "MARIADB_HOST"]);
+  const user = resolve(env, ["DB_USER", "MYSQL_USER", "MARIADB_USER"]);
+  const password = resolve(env, ["DB_PASSWORD", "MYSQL_PASSWORD", "MARIADB_PASSWORD"]);
+  if (!database.value || !host.value || !user.value || !password.value) return "CONFIG_INCOMPLETE";
+  if (database.conflict || host.conflict || user.conflict) return "CONFIG_AMBIGUOUS";
+  if (database.value !== staging) return "DB_NAME_NOT_STAGING";
+  if (user.value === (options.productionUser || PRODUCTION_USER)) return "DB_USER_IS_PRODUCTION";
+  for (const name of ["APP_URL", "PUBLIC_URL"]) {
+    const raw2 = (env[name] || "").trim();
+    if (!raw2) continue;
+    let hostname = "";
+    try {
+      hostname = new URL(raw2).hostname.toLowerCase();
+    } catch {
+      return "APP_URL_INVALID";
+    }
+    if (hostname !== (options.stagingHostname || STAGING_HOSTNAME)) return "APP_URL_NOT_STAGING";
+  }
+  if (env.ENABLE_WP_SYNC === "true" || env.STAGING_ALLOW_SCHEMA_INIT === "true") return "AUTOMATIC_SYNC_OR_DDL_ENABLED";
+  return "";
+}
+function parseGrant(line) {
+  const match = String(line).match(/^GRANT\s+([\s\S]+?)\s+ON\s+([\s\S]+?)\s+TO\s/i);
+  if (!match) return null;
+  const privileges = match[1].replace(/\([^)]*\)/g, "").split(",").map((item) => item.trim().toUpperCase()).filter(Boolean);
+  const object = match[2].trim();
+  if (/^(PROCEDURE|FUNCTION|PACKAGE)\b/i.test(object)) return null;
+  const cleaned = object.replace(/^TABLE\s+/i, "").replace(/`/g, "");
+  const dot = cleaned.indexOf(".");
+  if (dot <= 0 || dot === cleaned.length - 1) return null;
+  const schemaRaw = cleaned.slice(0, dot);
+  return {
+    privileges,
+    schema: schemaRaw.replace(/\\([_%])/g, "$1"),
+    table: cleaned.slice(dot + 1),
+    grantOption: /\bWITH\s+GRANT\s+OPTION\b/i.test(String(line)),
+    wildcard: /(^|[^\\])%/.test(schemaRaw)
+  };
+}
+function evaluateGrants(lines, staging, production, requireMinimal) {
+  const warnings = newWarnings();
+  if (!Array.isArray(lines) || lines.length === 0) return { code: "GRANTS_UNREADABLE", warnings };
+  let canInsert = false;
+  let canUpdate = false;
+  for (const line of lines) {
+    const grant = parseGrant(line);
+    if (!grant) return { code: "GRANTS_UNPARSEABLE", warnings };
+    if (grant.grantOption) return { code: "GRANT_OPTION_PRESENT", warnings };
+    if (grant.schema === "*") {
+      if (grant.table !== "*" || grant.privileges.some((item) => item !== "USAGE")) return { code: "GLOBAL_PRIVILEGES", warnings };
+      continue;
+    }
+    if (grant.wildcard) return { code: "GRANT_SCHEMA_WILDCARD", warnings };
+    if (grant.schema.toLowerCase() === production.toLowerCase()) return { code: "GRANT_ON_PRODUCTION", warnings };
+    if (grant.schema !== staging) return { code: "GRANT_ON_OTHER_SCHEMA", warnings };
+    const all = grant.privileges.includes("ALL PRIVILEGES") || grant.privileges.includes("ALL");
+    if (grant.table === "*" || grant.table === "businesses") {
+      if (all || grant.privileges.includes("INSERT")) canInsert = true;
+      if (all || grant.privileges.includes("UPDATE")) canUpdate = true;
+    }
+    if (all || grant.privileges.some((item) => !SAFE_PRIVILEGES.has(item))) {
+      if (requireMinimal) return { code: "BROAD_STAGING_PRIVILEGES", warnings };
+      if (!warnings.includes("BROAD_STAGING_PRIVILEGES")) warnings.push("BROAD_STAGING_PRIVILEGES");
+    }
+  }
+  if (!canInsert || !canUpdate) return { code: "NO_WRITE_PRIVILEGE_ON_STAGING", warnings };
+  return { code: "", warnings };
+}
+function evaluateSchemas(names, staging, production) {
+  const visible = (Array.isArray(names) ? names : []).map((name) => String(name).toLowerCase());
+  if (visible.includes(production.toLowerCase())) return "PRODUCTION_SCHEMA_VISIBLE";
+  if (!visible.includes(staging.toLowerCase())) return "STAGING_SCHEMA_NOT_VISIBLE";
+  if (visible.some((name) => name !== staging.toLowerCase() && !HARMLESS_SCHEMAS.has(name))) return "UNEXPECTED_SCHEMA_VISIBLE";
+  return "";
+}
+function evaluateMarker(rows, database) {
+  if (!Array.isArray(rows) || rows.length === 0) return "ENVIRONMENT_MARKER_MISSING";
+  if (rows.some((row) => String(row && row.env_name).toLowerCase() === "production")) return "MARKER_SAYS_PRODUCTION";
+  if (rows.length !== 1) return "ENVIRONMENT_MARKER_AMBIGUOUS";
+  const marker = rows[0] || {};
+  if (String(marker.env_name).toLowerCase() !== "staging" || String(marker.db_name) !== database) return "ENVIRONMENT_MARKER_MISMATCH";
+  return "";
+}
+async function verifyStagingIsolation(conn, env, options = {}) {
+  const staging = options.stagingDatabase || STAGING_DATABASE;
+  const production = options.productionDatabase || PRODUCTION_DATABASE;
+  const warnings = newWarnings();
+  const fail2 = (code) => ({ ok: false, code, warnings });
+  const configuration = checkStagingConfiguration(env, options);
+  if (configuration) return fail2(configuration);
+  try {
+    const [current] = await conn.query("SELECT DATABASE() AS db_name");
+    const database = current && current[0] && current[0].db_name;
+    if (!database) return fail2("DATABASE_UNKNOWN");
+    if (String(database).toLowerCase() === production.toLowerCase()) return fail2("CONNECTED_TO_PRODUCTION");
+    if (database !== staging) return fail2("DATABASE_TARGET_MISMATCH");
+    const [grantRows] = await conn.query("SHOW GRANTS FOR CURRENT_USER()");
+    const lines = (grantRows || []).map((row) => String(Object.values(row || {})[0] || ""));
+    const grants = evaluateGrants(lines, staging, production, env.STAGING_REQUIRE_MINIMAL_GRANTS === "true");
+    for (const warning of grants.warnings) warnings.push(warning);
+    if (grants.code) return fail2(grants.code);
+    const [schemaRows] = await conn.query("SELECT SCHEMA_NAME FROM information_schema.SCHEMATA");
+    const schemas = evaluateSchemas((schemaRows || []).map((row) => row.SCHEMA_NAME ?? row.schema_name), staging, production);
+    if (schemas) return fail2(schemas);
+    let markerRows = [];
+    try {
+      const [rows] = await conn.query("SELECT env_name, db_name FROM " + ENVIRONMENT_MARKER_TABLE);
+      markerRows = rows;
+    } catch (error) {
+      if (isMissingTable(error)) return fail2("ENVIRONMENT_MARKER_MISSING");
+      throw error;
+    }
+    const marker = evaluateMarker(markerRows, staging);
+    if (marker) return fail2(marker);
+    return { ok: true, code: "ISOLATION_PROVEN", warnings };
+  } catch {
+    return fail2("ISOLATION_CHECK_FAILED");
+  }
+}
+
+// src/db/stagingBusinessStore.ts
+var BusinessWriteError = class extends Error {
+  constructor(status, code, message, writeMayHaveSucceeded = false) {
+    super(message);
+    this.status = status;
+    this.code = code;
+    this.writeMayHaveSucceeded = writeMayHaveSucceeded;
+  }
+};
+var columns = ["id", "name", "category", "subcategory", "description", "address", "colonia", "phone", "whatsapp", "email", "website", "facebook", "instagram", "schedule", "image", "rating", "reviews_count", "verified", "featured", "status", "raw_data"];
+var raw = (row) => {
+  try {
+    const data = JSON.parse(row.raw_data || "{}");
+    return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  } catch {
+    return {};
+  }
+};
+var values = (b, metadata = {}) => [String(b.id), b.name || "", b.category || "", b.subcategory || "", b.description || "", b.address || "", b.colonia || "", b.phone || "", b.whatsapp || "", b.email || "", b.website || "", b.facebook || "", b.instagram || "", b.schedule || "", b.image || "", b.rating ?? 0, b.reviews_count ?? 0, b.verified ? 1 : 0, b.featured ? 1 : 0, b.status || "published", JSON.stringify({ ...b, ...metadata })];
+var norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+function createStagingBusinessStore(deps) {
+  const verify = deps.verifyIsolation ?? ((conn) => verifyStagingIsolation(conn, process.env));
+  const assertWrite = () => {
+    if (!deps.canWrite()) throw new BusinessWriteError(403, "STAGING_BUSINESS_READ_ONLY", "Escritura de negocios no habilitada de forma segura.");
+  };
+  async function connection() {
+    assertWrite();
+    const conn = await deps.getConnection();
+    try {
+      const [rows] = await conn.query("SELECT DATABASE() AS db_name");
+      if (rows[0]?.db_name !== STAGING_BUSINESS_DATABASE) throw new BusinessWriteError(403, "DATABASE_TARGET_MISMATCH", "La conexi\xF3n no corresponde a la base autorizada.");
+      const [engine] = await conn.query("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'businesses'");
+      if (String(engine[0]?.ENGINE || "").toLowerCase() !== "innodb") throw new BusinessWriteError(503, "BUSINESS_ENGINE_UNVERIFIED", "Se requiere businesses transaccional InnoDB; no se modific\xF3 el esquema.");
+      const [primary] = await conn.query("SELECT COLUMN_NAME, NON_UNIQUE, SEQ_IN_INDEX FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'businesses' AND INDEX_NAME = 'PRIMARY'");
+      if (primary.length !== 1 || primary[0].COLUMN_NAME !== "id" || Number(primary[0].NON_UNIQUE) !== 0) throw new BusinessWriteError(503, "BUSINESS_PRIMARY_KEY_UNVERIFIED", "Se requiere clave primaria \xFAnica id; no se modific\xF3 el esquema.");
+      const proof = await verify(conn);
+      if (!proof.ok) throw new BusinessWriteError(403, "STAGING_ISOLATION_UNPROVEN", `No se comprob\xF3 el aislamiento de Staging (${proof.code}); escritura bloqueada.`);
+      return conn;
+    } catch (e) {
+      conn.release();
+      throw e;
+    }
+  }
+  async function transaction(conn, action) {
+    let committing = false;
+    try {
+      await conn.beginTransaction();
+      const value = await action();
+      assertWrite();
+      committing = true;
+      await conn.commit();
+      return value;
+    } catch (e) {
+      try {
+        await conn.rollback();
+      } catch {
+      }
+      if (e instanceof BusinessWriteError) throw e;
+      throw new BusinessWriteError(503, "BUSINESS_WRITE_UNCONFIRMED", "No se confirm\xF3 el guardado. Recarga antes de reintentar; conserva la clave de registro.", committing);
+    }
+  }
+  return {
+    async create(draft, requestId) {
+      if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(requestId)) throw new BusinessWriteError(400, "REQUEST_ID_REQUIRED", "Se requiere una clave de registro UUID para reintentos seguros.");
+      const digest = createHash("sha256").update(JSON.stringify(draft)).digest("hex");
+      const conn = await connection();
+      let locked = false;
+      try {
+        const [lock] = await conn.query("SELECT GET_LOCK(?, 5) AS acquired", ["encarmen:staging:business-create"]);
+        if (Number(lock[0]?.acquired) !== 1) throw new BusinessWriteError(409, "REGISTRATION_BUSY", "Otro registro est\xE1 en curso; reintenta con la misma clave.");
+        locked = true;
+        return await transaction(conn, async () => {
+          const [rows] = await conn.query("SELECT * FROM businesses ORDER BY id ASC");
+          const replay = rows.find((r) => raw(r)._stagingRegistrationId === requestId);
+          if (replay) {
+            if (raw(replay)._stagingRegistrationDigest !== digest) throw new BusinessWriteError(409, "IDEMPOTENCY_CONFLICT", "La clave ya corresponde a otros datos.");
+            return { business: deps.serialize(replay), replayed: true };
+          }
+          const digits = [contactDigits(draft.phone), contactDigits(draft.whatsapp)].filter(Boolean);
+          if (rows.some((r) => norm(r.name) === norm(draft.name) || digits.some((n) => n === contactDigits(r.phone) || n === contactDigits(r.whatsapp)))) throw new BusinessWriteError(409, "BUSINESS_DUPLICATE", "Ya existe un negocio con ese nombre o contacto.");
+          const id = Math.max(4e3, ...rows.map((r) => Number(r.id)).filter(Number.isSafeInteger)) + 1;
+          if (!Number.isSafeInteger(id)) throw new BusinessWriteError(409, "ID_EXHAUSTED", "No se pudo asignar un ID seguro.");
+          const base = String(draft.name).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "empresa";
+          let slug = base;
+          let suffix = 0;
+          while (rows.some((r) => {
+            const b = deps.serialize(r);
+            return b.slug === slug || b.previousSlugs?.includes(slug);
+          })) {
+            slug = `${base}-${id}${suffix ? "-" + suffix : ""}`;
+            suffix++;
+          }
+          const business = { ...draft, id, slug, createdAt: (/* @__PURE__ */ new Date()).toISOString(), isTopBusiness: false, isRecommended: false, rating: 0, reviewCount: 0, status: "published" };
+          assertWrite();
+          await conn.query(`INSERT INTO businesses (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`, values(business, { _stagingRegistrationId: requestId, _stagingRegistrationDigest: digest }));
+          const [saved] = await conn.query("SELECT * FROM businesses WHERE id = ?", [String(id)]);
+          if (!saved[0] || !contactsMatchReadback({ phone: business.phone, whatsapp: business.whatsapp }, saved[0])) throw new BusinessWriteError(503, "REGISTRATION_READBACK_FAILED", "No se verific\xF3 el negocio; no se confirm\xF3 el registro.");
+          return { business: deps.serialize(saved[0]), replayed: false };
+        });
+      } finally {
+        if (locked) {
+          try {
+            await conn.query("SELECT RELEASE_LOCK(?)", ["encarmen:staging:business-create"]);
+          } catch {
+          }
+        }
+        conn.release();
+      }
+    },
+    async update(id, patch) {
+      const conn = await connection();
+      try {
+        return await transaction(conn, async () => {
+          const [rows] = await conn.query("SELECT * FROM businesses WHERE id = ? FOR UPDATE", [String(id)]);
+          if (!rows[0]) throw new BusinessWriteError(404, "BUSINESS_NOT_FOUND", "El negocio ya no existe.");
+          const current = deps.serialize(rows[0]);
+          const previous = raw(rows[0]);
+          const merged = { ...current, ...patch, id: current.id, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+          if (Object.hasOwn(patch, "schedule") && !Object.hasOwn(patch, "openingHours")) delete merged.openingHours;
+          if (Object.hasOwn(patch, "payment") && !Object.hasOwn(patch, "paymentMethods")) delete merged.paymentMethods;
+          if (Object.hasOwn(patch, "delivery") && !Object.hasOwn(patch, "deliveryOption")) delete merged.deliveryOption;
+          if (patch.slug && patch.slug !== current.slug) {
+            const [catalog] = await conn.query("SELECT * FROM businesses ORDER BY id ASC");
+            if (catalog.some((r) => {
+              const b = deps.serialize(r);
+              return String(b.id) !== String(current.id) && (b.slug === patch.slug || b.previousSlugs?.includes(patch.slug));
+            })) throw new BusinessWriteError(409, "SLUG_CONFLICT", "Ese enlace ya est\xE1 reservado.");
+            merged.previousSlugs = [...new Set([...current.previousSlugs || [], current.slug].filter(Boolean))];
+          }
+          if (patch.name && patch.name !== current.name) merged.previousNames = [...new Set([...current.previousNames || [], current.name].filter(Boolean))];
+          const metadata = previous._stagingRegistrationId ? { _stagingRegistrationId: previous._stagingRegistrationId, _stagingRegistrationDigest: previous._stagingRegistrationDigest } : {};
+          for (const field of ["rating", "reviews_count", "verified", "featured", "status"]) if (rows[0][field] !== void 0) merged[field] = rows[0][field];
+          const data = values(merged, metadata);
+          const fields = columns.slice(1).filter((field) => field === "raw_data" || Object.hasOwn(patch, field));
+          assertWrite();
+          await conn.query(`UPDATE businesses SET ${fields.map((c) => c + " = ?").join(", ")}, updated_at = NOW() WHERE id = ?`, [...fields.map((field) => data[columns.indexOf(field)]), String(current.id)]);
+          const [saved] = await conn.query("SELECT * FROM businesses WHERE id = ?", [String(current.id)]);
+          const expected = Object.fromEntries(["phone", "whatsapp"].filter((k) => Object.hasOwn(patch, k)).map((k) => [k, patch[k]]));
+          if (!saved[0] || !contactsMatchReadback(expected, saved[0])) throw new BusinessWriteError(409, "CONTACT_READBACK_CONFLICT", "No se pudo confirmar el cambio de contactos.");
+          return { business: deps.serialize(saved[0]) };
+        });
+      } finally {
+        conn.release();
+      }
+    }
+  };
+}
+
+// src/server/stagingBusinessRoutes.ts
+var strings = ["name", "category", "subcategory", "description", "address", "colonia", "postalCode", "city", "schedule", "openingHours", "payment", "delivery", "deliveryOption", "facebook", "instagram", "website", "mapsUrl", "image", "logo_url"];
+var arrays = ["categories", "categorySlugs", "gallery", "paymentMethods"];
+var booleans = ["hasDelivery", "isTopBusiness", "isRecommended"];
+function invalid(message) {
+  throw new BusinessWriteError(400, "INVALID_BUSINESS", message);
+}
+function validateBusinessInput(body, creating = false) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) invalid("Se requiere un objeto de negocio.");
+  const data = body;
+  const patch = {};
+  const allowed = /* @__PURE__ */ new Set([...strings, ...arrays, ...booleans, "phone", "whatsapp", "clearContacts", ...creating ? ["ownerName", "ownerEmail", "allowDuplicate"] : ["slug"]]);
+  for (const key of Object.keys(data)) if (!allowed.has(key)) invalid("El env\xEDo contiene campos no editables.");
+  if (creating && (data.allowDuplicate === true || data.ownerName || data.ownerEmail || Object.hasOwn(data, "isTopBusiness") || Object.hasOwn(data, "isRecommended"))) invalid("La fase controlada no permite duplicados ni datos personales del propietario.");
+  for (const key of strings) if (Object.hasOwn(data, key)) {
+    if (typeof data[key] !== "string" || String(data[key]).length > (key === "name" ? 160 : key === "description" ? 500 : 2048)) invalid("Campo de texto inv\xE1lido o demasiado largo.");
+    patch[key] = String(data[key]).trim();
+  }
+  if ((creating || Object.hasOwn(data, "name")) && (!patch.name || patch.name.length < 2)) invalid("El nombre de empresa es obligatorio.");
+  for (const key of arrays) if (Object.hasOwn(data, key)) {
+    if (!Array.isArray(data[key]) || data[key].length > 20 || data[key].some((v) => typeof v !== "string" || v.length > 2048)) invalid("Lista empresarial inv\xE1lida.");
+    patch[key] = [...data[key]];
+  }
+  for (const key of booleans) if (Object.hasOwn(data, key)) {
+    if (typeof data[key] !== "boolean") invalid("Indicador empresarial inv\xE1lido.");
+    patch[key] = data[key];
+  }
+  if (!creating && Object.hasOwn(data, "slug")) {
+    if (typeof data.slug !== "string" || !/^[a-z0-9][a-z0-9_-]{0,159}$/.test(data.slug)) invalid("Enlace personalizado inv\xE1lido.");
+    patch.slug = data.slug;
+  }
+  const contacts = prepareContactPatch(data, true);
+  Object.assign(patch, contacts.patch);
+  if (creating) {
+    if (data.clearContacts !== void 0) invalid("No se retiran contactos en un alta.");
+    patch.phone = contactDigits(data.phone);
+    patch.whatsapp = contactDigits(data.whatsapp);
+    if (!patch.phone && !patch.whatsapp) invalid("Se requiere tel\xE9fono o WhatsApp mexicano v\xE1lido.");
+  }
+  for (const value of [patch.website, patch.facebook, patch.instagram, patch.mapsUrl, patch.image, patch.logo_url, ...patch.gallery || []]) if (value) {
+    if (typeof value !== "string") invalid("URL inv\xE1lida.");
+    if (value.startsWith("/uploads/") && !value.includes("..")) continue;
+    try {
+      const url = new URL(value);
+      if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) invalid("URL inv\xE1lida.");
+    } catch {
+      invalid("URL inv\xE1lida.");
+    }
+  }
+  if (patch.categories && !patch.category) patch.category = patch.categories[0] || "";
+  if (patch.category && !patch.categories) patch.categories = [patch.category];
+  return patch;
+}
+function registerStagingBusinessRoutes(app2, deps) {
+  const failure = (res, error) => {
+    if (error instanceof ContactPatchError) return res.status(error.status).json({ success: false, message: error.message });
+    if (error instanceof BusinessWriteError) return res.status(error.status).json({ success: false, error: error.code, message: error.message, writeMayHaveSucceeded: error.writeMayHaveSucceeded });
+    return res.status(503).json({ success: false, message: "No se confirm\xF3 el guardado. Reintenta con la misma clave de registro." });
+  };
+  const authorize = (req) => {
+    if (!deps.canWrite()) throw new BusinessWriteError(403, "STAGING_BUSINESS_READ_ONLY", "Las escrituras controladas no est\xE1n habilitadas.");
+    if (!deps.isAdmin(req)) throw new BusinessWriteError(401, "ADMIN_SESSION_REQUIRED", "Se requiere sesi\xF3n administrativa vigente del servidor.");
+  };
+  app2.post("/api/submit-business", async (req, res, next) => {
+    if (!deps.isStaging()) return next();
+    try {
+      authorize(req);
+      const draft = validateBusinessInput(req.body, true);
+      if (draft.categories && deps.categorySlugs) draft.categorySlugs = deps.categorySlugs(draft.categories);
+      const result = await deps.store.create(draft, req.get("Idempotency-Key") || "");
+      deps.saved(result.business);
+      return res.status(result.replayed ? 200 : 201).json({ success: true, business: result.business, replayed: result.replayed, message: "Empresa confirmada en MariaDB de Staging.", publishedToWordPress: false });
+    } catch (error) {
+      return failure(res, error);
+    }
+  });
+  app2.patch(["/api/businesses/:id", "/businesses/:id"], async (req, res, next) => {
+    if (!deps.isStaging()) return next();
+    try {
+      authorize(req);
+      const patch = validateBusinessInput(req.body);
+      if (["isTopBusiness", "isRecommended"].some((key) => Object.hasOwn(patch, key)) && !deps.canPublish?.(req)) throw new BusinessWriteError(403, "PUBLISH_PERMISSION_REQUIRED", "Se requiere permiso de publicaci\xF3n para modificar distintivos.");
+      if (patch.categories && deps.categorySlugs) patch.categorySlugs = deps.categorySlugs(patch.categories);
+      const id = String(req.params.id).toLowerCase();
+      const list = await deps.readAll();
+      const current = list.find((b) => String(b.id) === id || b.slug?.toLowerCase() === id || b.previousSlugs?.includes(id));
+      if (!current) throw new BusinessWriteError(404, "BUSINESS_NOT_FOUND", "Empresa no encontrada.");
+      const result = await deps.store.update(current.id, patch);
+      deps.saved(result.business);
+      return res.json({ success: true, business: result.business, message: "Edici\xF3n confirmada en MariaDB de Staging." });
+    } catch (error) {
+      return failure(res, error);
+    }
+  });
+}
+
+// src/constants/businessOptions.ts
+var STANDARDIZED_DELIVERY_OPTIONS = [
+  "Atenci\xF3n en el Local de la empresa",
+  "Servicio a domicilio con costo",
+  "Servicio a domicilio gratis",
+  "Atenci\xF3n en el lugar del cliente",
+  "Env\xEDos locales / Paqueter\xEDa"
+];
+var STANDARDIZED_PAYMENT_OPTIONS = [
+  "Efectivo",
+  "Tarjetas de D\xE9bito y Cr\xE9dito",
+  "Transferencia Bancaria (SPEI)",
+  "CoDi / QR",
+  "Pago contra entrega"
+];
+
+// src/constants/publicRegistration.ts
+var PUBLIC_REGISTRATION_FIELDS = ["name", "category", "subcategory", "description", "address", "colonia", "postalCode", "phone", "whatsapp", "schedule", "payment", "delivery", "facebook", "instagram", "website", "hp"];
+
+// src/server/publicRegistrationCore.ts
+var RegistrationError = class extends Error {
+  constructor(status, code, message, writeMayHaveSucceeded = false) {
+    super(message);
+    this.status = status;
+    this.code = code;
+    this.writeMayHaveSucceeded = writeMayHaveSucceeded;
+  }
+};
+var PUBLIC_SOURCE = "public-form";
+var UUID_V4 = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+var ALLOWED_FIELDS = new Set(PUBLIC_REGISTRATION_FIELDS);
+function fail(status, code, message, maybeWritten = false) {
+  throw new RegistrationError(status, code, message, maybeWritten);
+}
+function mxDigits(value) {
+  return contactDigits(value);
+}
+function normalizeName(value) {
+  return String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+}
+function text(body, key, max, required = false, multiline = false) {
+  const raw2 = body[key];
+  if (raw2 === void 0 || raw2 === null || raw2 === "") {
+    if (required) fail(400, "INVALID_REGISTRATION", "Falta un campo obligatorio: " + key + ".");
+    return "";
+  }
+  if (typeof raw2 !== "string") fail(400, "INVALID_REGISTRATION", "Campo de texto inv\xE1lido: " + key + ".");
+  const value = raw2.replace(/\r\n/g, "\n").trim();
+  if (value.length > max || required && value.length < 2) fail(400, "INVALID_REGISTRATION", "Longitud inv\xE1lida en " + key + ".");
+  const control = multiline ? /[\u0000-\u0008\u000B-\u001F\u007F]/ : /[\u0000-\u001F\u007F]/;
+  if (control.test(value) || /<\s*[a-z!\/]/i.test(value)) fail(400, "INVALID_REGISTRATION", "Texto con caracteres o marcado no permitido en " + key + ".");
+  return value;
+}
+function link(body, key) {
+  const value = text(body, key, 2048);
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) fail(400, "INVALID_REGISTRATION", "URL inv\xE1lida en " + key + ".");
+  } catch (error) {
+    if (error instanceof RegistrationError) throw error;
+    fail(400, "INVALID_REGISTRATION", "URL inv\xE1lida en " + key + ".");
+  }
+  return value;
+}
+function contact(body, key) {
+  const value = body[key];
+  if (value === void 0 || value === null || value === "") return "";
+  const digits = mxDigits(value);
+  if (!digits) fail(400, "INVALID_REGISTRATION", "N\xFAmero mexicano de 10 d\xEDgitos inv\xE1lido en " + key + ".");
+  return digits;
+}
+function validatePublicRegistration(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) fail(400, "INVALID_REGISTRATION", "Se requiere un objeto de registro.");
+  for (const key of Object.keys(body)) if (!ALLOWED_FIELDS.has(key)) fail(400, "INVALID_REGISTRATION", "El env\xEDo contiene campos no permitidos.");
+  if (body.hp !== void 0 && body.hp !== "") fail(400, "SPAM_REJECTED", "Registro rechazado.");
+  const category = text(body, "category", 100, true);
+  const postalCode = text(body, "postalCode", 5);
+  if (postalCode && !/^\d{5}$/.test(postalCode)) fail(400, "INVALID_REGISTRATION", "C\xF3digo postal inv\xE1lido.");
+  const options = (key, allowed) => {
+    const value = text(body, key, 255);
+    const entries = value ? value.split(",").map((entry) => entry.trim()) : [];
+    if (entries.some((entry) => !allowed.includes(entry))) fail(400, "INVALID_REGISTRATION", "Opci\xF3n no permitida en " + key + ".");
+    return [...new Set(entries)].join(", ");
+  };
+  const payment = options("payment", STANDARDIZED_PAYMENT_OPTIONS);
+  const delivery = options("delivery", [...STANDARDIZED_DELIVERY_OPTIONS, "No Aplica"]);
+  const draft = {
+    name: text(body, "name", 160, true),
+    category,
+    categories: [category],
+    subcategory: text(body, "subcategory", 100),
+    description: text(body, "description", 500, false, true),
+    address: text(body, "address", 255),
+    colonia: text(body, "colonia", 100),
+    postalCode,
+    phone: contact(body, "phone"),
+    whatsapp: contact(body, "whatsapp"),
+    schedule: text(body, "schedule", 255),
+    payment,
+    delivery,
+    deliveryOption: delivery,
+    hasDelivery: delivery.split(", ").some((option) => /domicilio|envíos/i.test(option)),
+    facebook: link(body, "facebook"),
+    instagram: link(body, "instagram"),
+    website: link(body, "website")
+  };
+  if (!draft.phone && !draft.whatsapp) fail(400, "INVALID_REGISTRATION", "Se requiere tel\xE9fono o WhatsApp mexicano v\xE1lido.");
+  return { draft };
+}
+function createAttemptLimiter(max = 20, windowMs = 15 * 60 * 1e3) {
+  const attempts = /* @__PURE__ */ new Map();
+  return (key, now = Date.now()) => {
+    for (const [id, entry] of attempts) if (entry.expires <= now) attempts.delete(id);
+    const current = attempts.get(key);
+    if ((current ? current.count : 0) >= max || !current && attempts.size >= 1e4) return false;
+    attempts.set(key, { count: (current ? current.count : 0) + 1, expires: current ? current.expires : now + windowMs });
+    return true;
+  };
+}
+function createCreationLimiter(max = 3, windowMs = 60 * 60 * 1e3) {
+  const reservations = /* @__PURE__ */ new Map();
+  return (ip, now = Date.now(), requestKey = "") => {
+    if (!UUID_V4.test(requestKey)) return true;
+    for (const [key, entry2] of reservations) if (entry2.expires <= now) reservations.delete(key);
+    const entry = reservations.get(ip);
+    if (entry?.keys.has(requestKey)) return true;
+    if (entry && entry.keys.size >= max || !entry && reservations.size >= 1e4) return false;
+    const current = entry || { keys: /* @__PURE__ */ new Set(), expires: now + windowMs };
+    current.keys.add(requestKey);
+    reservations.set(ip, current);
+    return true;
+  };
+}
+function createPoolReaders(getPool2) {
+  async function run(sql, params) {
+    const pool2 = getPool2();
+    if (!pool2) fail(503, "STORAGE_UNAVAILABLE", "MariaDB no est\xE1 disponible; no se guard\xF3 nada.");
+    try {
+      const [rows] = await pool2.query(sql, params);
+      return rows;
+    } catch {
+      fail(503, "STORAGE_UNAVAILABLE", "No se pudo consultar MariaDB; no se guard\xF3 nada.");
+    }
+  }
+  return {
+    async hasPublicReplay(key) {
+      const rows = await run("SELECT id FROM businesses WHERE raw_data LIKE ? AND raw_data LIKE ? LIMIT 1", ['%"registrationSource":"' + PUBLIC_SOURCE + '"%', '%"_stagingRegistrationId":"' + key + '"%']);
+      return rows.length > 0;
+    },
+    async countRecentPublic() {
+      const rows = await run(
+        "SELECT COALESCE(SUM(created_at > (NOW() - INTERVAL 1 HOUR)), 0) AS hour_total, COUNT(*) AS day_total FROM businesses WHERE created_at > (NOW() - INTERVAL 1 DAY) AND raw_data LIKE ?",
+        ['%"registrationSource":"' + PUBLIC_SOURCE + '"%']
+      );
+      return { hour: Number(rows[0] && rows[0].hour_total) || 0, day: Number(rows[0] && rows[0].day_total) || 0 };
+    },
+    async readBusiness(id) {
+      const rows = await run("SELECT id, name, phone, whatsapp, status FROM businesses WHERE id = ?", [String(id)]);
+      return rows[0] || null;
+    }
+  };
+}
+function createPublicRegistrationService(deps) {
+  if (!deps || typeof deps.canWrite !== "function" || !deps.businessStore || typeof deps.businessStore.create !== "function" || typeof deps.countRecentPublic !== "function" || typeof deps.readBusiness !== "function") {
+    throw new Error("PUBLIC_REGISTRATION_DEPENDENCIES_REQUIRED");
+  }
+  const limits = { perHour: 30, perDay: 200, ...deps.limits || {} };
+  return {
+    async submit(input) {
+      if (!deps.canWrite()) fail(403, "PUBLIC_REGISTRATION_DISABLED", "El registro p\xFAblico no est\xE1 habilitado.");
+      const key = String(input.requestKey || "");
+      if (!UUID_V4.test(key)) fail(400, "REQUEST_KEY_REQUIRED", "Se requiere una clave de registro UUID para reintentos seguros.");
+      const replay = typeof deps.hasPublicReplay === "function" && await deps.hasPublicReplay(key);
+      const recent = replay ? null : await deps.countRecentPublic();
+      if (recent && (recent.hour >= limits.perHour || recent.day >= limits.perDay)) fail(429, "REGISTRATION_CAPACITY", "Se alcanz\xF3 el l\xEDmite temporal de registros; intenta m\xE1s tarde.");
+      const draft = { ...input.validated.draft, registrationSource: PUBLIC_SOURCE };
+      if (typeof deps.categorySlugs === "function") draft.categorySlugs = deps.categorySlugs(draft.categories);
+      let created;
+      try {
+        created = await deps.businessStore.create(draft, key);
+      } catch (error) {
+        if (error && typeof error.status === "number" && typeof error.code === "string") throw error;
+        fail(503, "STORAGE_UNAVAILABLE", "No se confirm\xF3 el guardado en MariaDB; reintenta con la misma clave.", true);
+      }
+      const id = created && created.business && created.business.id;
+      let row = null;
+      try {
+        row = await deps.readBusiness(id);
+      } catch {
+        row = null;
+      }
+      const confirmed = Boolean(row) && String(row.id) === String(id) && normalizeName(row.name) === normalizeName(draft.name) && String(row.phone ?? "") === draft.phone && String(row.whatsapp ?? "") === draft.whatsapp && String(row.status || "") === "published";
+      if (!confirmed) fail(503, "REGISTRATION_READBACK_FAILED", "No se verific\xF3 la empresa en MariaDB; no se confirm\xF3 el registro. Reintenta con la misma clave.", true);
+      let cacheUpdated = true;
+      try {
+        if (typeof deps.onSaved === "function") await deps.onSaved(created.business);
+      } catch {
+        cacheUpdated = false;
+      }
+      let visible = false;
+      try {
+        visible = typeof deps.isVisible === "function" && Boolean(await deps.isVisible(id));
+      } catch {
+      }
+      if (!cacheUpdated || !visible) fail(503, "REGISTRATION_VISIBILITY_UNCONFIRMED", "El guardado puede haberse completado, pero no se confirm\xF3 la publicaci\xF3n. Reintenta con la misma clave.", true);
+      return { business: created.business, replayed: Boolean(created.replayed), directoryVisible: true };
+    }
+  };
+}
+
+// src/server/publicRegistrationRoutes.ts
+var PUBLIC_REGISTRATION_PATH = "/api/public/business-registrations";
+var PUBLIC_BODY_LIMIT_BYTES = 16384;
+function coded(status, code, message) {
+  const error = new Error(message);
+  error.status = status;
+  error.code = code;
+  return error;
+}
+function describe(error) {
+  if (error && typeof error.status === "number" && typeof error.code === "string") {
+    return { status: error.status, body: { success: false, error: error.code, message: error.message, writeMayHaveSucceeded: Boolean(error.writeMayHaveSucceeded) } };
+  }
+  return { status: 503, body: { success: false, error: "STORAGE_UNAVAILABLE", message: "No se pudo completar la operaci\xF3n; no se guard\xF3 nada.", writeMayHaveSucceeded: false } };
+}
+function publicRegistrationBodyLimit(req, res, next) {
+  if (req.method !== "POST") return next();
+  const length = Number(req.headers && req.headers["content-length"]);
+  if (!Number.isFinite(length)) return res.status(411).json({ success: false, error: "LENGTH_REQUIRED", message: "Se requiere Content-Length." });
+  if (length > PUBLIC_BODY_LIMIT_BYTES) return res.status(413).json({ success: false, error: "PAYLOAD_TOO_LARGE", message: "El env\xEDo es demasiado grande." });
+  return next();
+}
+function registerPublicRegistrationRoutes(app2, deps) {
+  app2.post(PUBLIC_REGISTRATION_PATH, async (req, res) => {
+    try {
+      if (!deps.enabled()) throw coded(403, "PUBLIC_REGISTRATION_DISABLED", "El registro p\xFAblico no est\xE1 habilitado.");
+      const ip = String(req.ip || "");
+      if (!deps.attempts(ip)) throw coded(429, "RATE_LIMITED", "Demasiados intentos; intenta m\xE1s tarde.");
+      const validated = deps.validate(req.body);
+      if (!deps.creations(ip, void 0, req.get("Idempotency-Key") || "")) throw coded(429, "RATE_LIMITED", "Demasiados registros desde esta conexi\xF3n; intenta m\xE1s tarde.");
+      const result = await deps.service.submit({ validated, requestKey: req.get("Idempotency-Key") || "" });
+      return res.status(result.replayed ? 200 : 201).json({
+        success: true,
+        replayed: result.replayed,
+        business: result.business,
+        directoryVisible: result.directoryVisible,
+        message: "Empresa registrada y publicada. El guardado se confirm\xF3 con una lectura en MariaDB."
+      });
+    } catch (error) {
+      const failure = describe(error);
+      return res.status(failure.status).json(failure.body);
+    }
+  });
+}
+
+// src/server/publicRegistrationWiring.ts
+function mountPublicRegistration(app2, deps) {
+  if (!deps.isStaging()) return;
+  const readers = createPoolReaders(deps.getPool);
+  const service = createPublicRegistrationService({
+    canWrite: deps.canWrite,
+    businessStore: deps.businessStore,
+    countRecentPublic: readers.countRecentPublic,
+    readBusiness: readers.readBusiness,
+    hasPublicReplay: readers.hasPublicReplay,
+    categorySlugs: deps.categorySlugs,
+    onSaved: deps.saved,
+    isVisible: deps.isVisible
+  });
+  registerPublicRegistrationRoutes(app2, {
+    service,
+    enabled: () => deps.canWrite() && process.env.PUBLIC_REGISTRATION_ENABLED === "true",
+    attempts: createAttemptLimiter(20, 15 * 60 * 1e3),
+    creations: createCreationLimiter(3, 60 * 60 * 1e3),
+    validate: validatePublicRegistration
+  });
+}
+
 // server.ts
 import dotenv from "dotenv";
-import express from "express";
+import express2 from "express";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { execSync } from "child_process";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
 import sharp from "sharp";
 
 // src/db/mariadb.ts
 import mysql from "mysql2/promise";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash as createHash2, randomUUID } from "node:crypto";
 var pool = null;
 var isConnected = false;
+var connectedDatabase = null;
 var lastConnectionError = null;
 var PRODUCTION_DB_NAME = "u293982346_encarmenapp";
 var PRODUCTION_DB_USER = "u293982346_appuser";
@@ -22,21 +901,15 @@ function isStagingEnvironment() {
   const env = (process.env.APP_ENV || process.env.NODE_ENV || "").toLowerCase().trim();
   const isStagingFlag = process.env.STAGING === "true" || process.env.STAGING_SAFE_MODE === "true";
   const isStagingHost = (process.env.APP_URL || process.env.PUBLIC_URL || "").toLowerCase().includes("staging.encarmen.org");
-  return env === "staging" || isStagingFlag || isStagingHost;
+  const businessProfile = process.env.STAGING_BUSINESS_WRITES_ENABLED !== void 0;
+  const configuredDatabase = (process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE || "").trim();
+  return env === "staging" || isStagingFlag || isStagingHost || businessProfile || configuredDatabase === STAGING_BUSINESS_DATABASE;
 }
 function isWritePermitted() {
   if (process.env.STAGING_READ_ONLY === "true") {
     return false;
   }
-  if (isStagingEnvironment()) {
-    const rawDbName = (process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE || "").trim();
-    if (!rawDbName || rawDbName === PRODUCTION_DB_NAME) {
-      return false;
-    }
-    if (process.env.STAGING_DB_CONFIRMED !== "true") {
-      return false;
-    }
-  }
+  if (isStagingEnvironment()) return false;
   return true;
 }
 function guardWrite(operationName) {
@@ -64,21 +937,8 @@ function validateStagingDbConfiguration() {
       error: "En Staging se rechaza el fallback autom\xE1tico a producci\xF3n. Debe definir DB_NAME expl\xEDcitamente (ej. u293982346_encarmentest)."
     };
   }
-  if (rawDbName === PRODUCTION_DB_NAME) {
-    if (!isReadOnly) {
-      return {
-        valid: false,
-        isStaging: true,
-        error: `[PELIGRO DE PRODUCCI\xD3N]: Staging tiene configurada la base de datos de PRODUCCI\xD3N '${PRODUCTION_DB_NAME}' sin STAGING_READ_ONLY=true. Esto est\xE1 estrictamente prohibido para evitar sobreescritura de producci\xF3n.`
-      };
-    }
-    if (rawDbUser === PRODUCTION_DB_USER) {
-      return {
-        valid: false,
-        isStaging: true,
-        error: `[PELIGRO DE PRODUCCI\xD3N]: Staging no puede reutilizar el usuario con permisos de escritura de producci\xF3n '${PRODUCTION_DB_USER}'. Debe utilizar un usuario dedicado con privilegios SELECT exclusivamente.`
-      };
-    }
+  if (rawDbName !== STAGING_BUSINESS_DATABASE || rawDbUser === PRODUCTION_DB_USER && !isReadOnly) {
+    return { valid: false, isStaging: true, error: "Staging requiere su base exacta y una cuenta distinta a producci\xF3n." };
   }
   if (!isReadOnly && !isConfirmed) {
     return {
@@ -145,10 +1005,15 @@ async function initMariaDb() {
         enableKeepAlive: true
       });
       await pool.query("SELECT 1 as test");
+      if (isStaging) {
+        const [context] = await pool.query("SELECT DATABASE() AS db_name");
+        if (context[0]?.db_name !== STAGING_BUSINESS_DATABASE) throw new Error("STAGING_DATABASE_TARGET_MISMATCH");
+        connectedDatabase = context[0].db_name;
+      }
       isConnected = true;
       lastConnectionError = null;
       console.log(`[MariaDB/Hostinger] Conectado exitosamente a ${config.database} en ${candidateHost}`);
-      const canRunDdl = !isStaging ? process.env.STAGING_READ_ONLY !== "true" : process.env.STAGING_ALLOW_SCHEMA_INIT === "true" && config.database !== PRODUCTION_DB_NAME;
+      const canRunDdl = isWritePermitted() && (!isStaging ? process.env.STAGING_READ_ONLY !== "true" : process.env.STAGING_ALLOW_SCHEMA_INIT === "true" && config.database !== PRODUCTION_DB_NAME);
       if (canRunDdl) {
         await createTablesIfNotExist();
       } else {
@@ -165,6 +1030,7 @@ async function initMariaDb() {
         }
       }
       pool = null;
+      connectedDatabase = null;
       isConnected = false;
     }
   }
@@ -172,6 +1038,9 @@ async function initMariaDb() {
 }
 function isMariaDbActive() {
   return isConnected && pool !== null;
+}
+function getPool() {
+  return pool;
 }
 async function createTablesIfNotExist() {
   if (!pool) return;
@@ -356,73 +1225,66 @@ async function dbGetUploadedFile(filename) {
     return null;
   }
 }
-async function dbLoadAllBusinesses() {
-  if (!pool) return [];
+function businessFromRow(r) {
+  let extra = {};
+  if (r.raw_data) {
+    try {
+      const parsed = JSON.parse(r.raw_data);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) extra = parsed;
+    } catch (_) {
+    }
+  }
+  delete extra._stagingRegistrationId;
+  delete extra._stagingRegistrationDigest;
+  return {
+    ...extra,
+    id: isNaN(Number(r.id)) ? r.id : Number(r.id),
+    name: r.name || extra.name || "",
+    category: extra.category || r.category || "",
+    categories: Array.isArray(extra.categories) && extra.categories.length > 0 ? extra.categories : r.category ? [r.category] : ["Servicios"],
+    categorySlugs: Array.isArray(extra.categorySlugs) ? extra.categorySlugs : [],
+    subcategory: extra.subcategory || r.subcategory || "",
+    description: extra.description || r.description || "",
+    address: extra.address || r.address || "",
+    colonia: extra.colonia || r.colonia || "",
+    postalCode: extra.postalCode || "",
+    // Dedicated columns are authoritative, including explicit empty values.
+    phone: String(r.phone ?? ""),
+    whatsapp: String(r.whatsapp ?? ""),
+    email: extra.email || r.email || "",
+    website: extra.website || r.website || "",
+    facebook: extra.facebook || r.facebook || "",
+    instagram: extra.instagram || r.instagram || "",
+    schedule: extra.schedule || r.schedule || "",
+    image: extra.image || r.image || "",
+    gallery: Array.isArray(extra.gallery) ? extra.gallery : [],
+    delivery: extra.delivery || "",
+    hasDelivery: Boolean(extra.hasDelivery),
+    payment: extra.payment || "",
+    rating: Number(extra.rating || r.rating || 5),
+    reviews_count: Number(extra.reviews_count || r.reviews_count || 0),
+    verified: Boolean(extra.verified ?? r.verified ?? true),
+    featured: Boolean(extra.featured ?? r.featured ?? false),
+    isRecommended: Boolean(extra.isRecommended ?? false),
+    isTopBusiness: Boolean(extra.isTopBusiness ?? false),
+    status: extra.status || r.status || "published"
+  };
+}
+async function dbLoadAllBusinesses(strict = true) {
+  if (!pool) {
+    if (strict) throw new Error("BUSINESSES_SOURCE_UNAVAILABLE");
+    return [];
+  }
   try {
     const [rows] = await pool.query("SELECT * FROM businesses ORDER BY id ASC");
-    return rows.map((r) => {
-      let extra = {};
-      if (r.raw_data) {
-        try {
-          extra = JSON.parse(r.raw_data);
-        } catch (_) {
-        }
-      }
-      return {
-        ...extra,
-        id: isNaN(Number(r.id)) ? r.id : Number(r.id),
-        name: r.name || extra.name || "",
-        category: extra.category || r.category || "",
-        categories: Array.isArray(extra.categories) && extra.categories.length > 0 ? extra.categories : r.category ? [r.category] : ["Servicios"],
-        categorySlugs: Array.isArray(extra.categorySlugs) ? extra.categorySlugs : [],
-        subcategory: extra.subcategory || r.subcategory || "",
-        description: extra.description || r.description || "",
-        address: extra.address || r.address || "",
-        colonia: extra.colonia || r.colonia || "",
-        postalCode: extra.postalCode || "",
-        phone: extra.phone || r.phone || "",
-        whatsapp: extra.whatsapp || r.whatsapp || "",
-        email: extra.email || r.email || "",
-        website: extra.website || r.website || "",
-        facebook: extra.facebook || r.facebook || "",
-        instagram: extra.instagram || r.instagram || "",
-        schedule: extra.schedule || r.schedule || "",
-        image: extra.image || r.image || "",
-        gallery: Array.isArray(extra.gallery) ? extra.gallery : [],
-        delivery: extra.delivery || "",
-        hasDelivery: Boolean(extra.hasDelivery),
-        payment: extra.payment || "",
-        rating: Number(extra.rating || r.rating || 5),
-        reviews_count: Number(extra.reviews_count || r.reviews_count || 0),
-        verified: Boolean(extra.verified ?? r.verified ?? true),
-        featured: Boolean(extra.featured ?? r.featured ?? false),
-        isRecommended: Boolean(extra.isRecommended ?? false),
-        isTopBusiness: Boolean(extra.isTopBusiness ?? false),
-        status: extra.status || r.status || "published"
-      };
-    });
+    return rows.map(businessFromRow);
   } catch (err) {
     console.warn("[MariaDB] Error cargando businesses:", err.message);
+    if (strict) throw new Error("BUSINESSES_SOURCE_UNAVAILABLE");
     return [];
   }
 }
-async function dbGetBusinessesSignature() {
-  if (!pool) return null;
-  try {
-    const [rows] = await pool.query("SELECT MAX(updated_at) AS last_update, COUNT(*) AS total FROM businesses");
-    if (rows && rows.length > 0) {
-      const row = rows[0];
-      return {
-        lastUpdate: row.last_update ? String(row.last_update) : null,
-        total: Number(row.total || 0)
-      };
-    }
-    return null;
-  } catch (_) {
-    return null;
-  }
-}
-async function dbSaveBusiness(biz) {
+async function dbSaveBusiness(biz, options = {}) {
   if (!guardWrite("dbSaveBusiness")) return false;
   if (!pool) return false;
   try {
@@ -441,8 +1303,8 @@ async function dbSaveBusiness(biz) {
         description = VALUES(description),
         address = VALUES(address),
         colonia = VALUES(colonia),
-        phone = VALUES(phone),
-        whatsapp = VALUES(whatsapp),
+        phone = IF(?, '', IF(?, COALESCE(NULLIF(TRIM(VALUES(phone)), ''), phone), phone)),
+        whatsapp = IF(?, '', IF(?, COALESCE(NULLIF(TRIM(VALUES(whatsapp)), ''), whatsapp), whatsapp)),
         email = VALUES(email),
         website = VALUES(website),
         facebook = VALUES(facebook),
@@ -478,7 +1340,11 @@ async function dbSaveBusiness(biz) {
       biz.verified ? 1 : 0,
       biz.featured ? 1 : 0,
       biz.status || "published",
-      rawData
+      rawData,
+      options.clearContacts?.includes("phone") ? 1 : 0,
+      options.updateContacts === true ? 1 : 0,
+      options.clearContacts?.includes("whatsapp") ? 1 : 0,
+      options.updateContacts === true ? 1 : 0
     ]);
     return true;
   } catch (err) {
@@ -523,14 +1389,39 @@ async function dbDeleteBusiness(id) {
     return false;
   }
 }
+function reportDetailsForSql(report) {
+  const metadata = { __encReport: 1 };
+  for (const key of ["type", "classifiedId", "classifiedTitle", "requesterName", "requesterContact", "comment", "details", "businessPhone", "businessWhatsapp", "contactEmail"]) {
+    if (typeof report[key] === "string") metadata[key] = report[key];
+  }
+  return JSON.stringify(metadata);
+}
 async function dbLoadAllReports() {
-  if (!pool) return [];
+  if (!pool) throw new Error("REPORTS_UNAVAILABLE");
+  const [rows] = await pool.query("SELECT * FROM reports ORDER BY created_at DESC");
+  if (!Array.isArray(rows)) throw new Error("REPORTS_INVALID_READ");
+  return rows.map((row) => {
+    let metadata = {};
+    try {
+      const parsed = JSON.parse(row.details || "");
+      if (parsed?.__encReport === 1) {
+        metadata.details = typeof parsed.details === "string" ? parsed.details : typeof parsed.comment === "string" ? parsed.comment : "";
+        for (const key of ["type", "classifiedId", "classifiedTitle", "requesterName", "requesterContact", "comment", "details", "businessPhone", "businessWhatsapp", "contactEmail"]) if (typeof parsed[key] === "string") metadata[key] = parsed[key];
+      }
+    } catch {
+    }
+    return { ...row, businessId: row.business_id ? Number(row.business_id) : void 0, businessName: row.business_name || "", createdAt: row.created_at, ...metadata };
+  });
+}
+async function dbUpdateReport(report) {
+  if (!guardWrite("dbUpdateReport") || !pool) return false;
   try {
-    const [rows] = await pool.query("SELECT * FROM reports ORDER BY created_at DESC");
-    return rows;
-  } catch (err) {
-    console.warn("[MariaDB] Error cargando reports:", err.message);
-    return [];
+    const [result] = await pool.query("UPDATE reports SET status = ?, details = ? WHERE id = ?", [report.status, reportDetailsForSql(report), report.id]);
+    if (!(Number(result?.affectedRows || 0) > 0)) return false;
+    const [rows] = await pool.query("SELECT * FROM reports WHERE id = ?", [report.id]);
+    return Array.isArray(rows) && rows.length === 1 && String(rows[0].id) === String(report.id) && rows[0].status === report.status && rows[0].details === reportDetailsForSql(report);
+  } catch {
+    return false;
   }
 }
 async function dbSaveReport(report) {
@@ -542,16 +1433,18 @@ async function dbSaveReport(report) {
       VALUES (?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE status = VALUES(status), details = VALUES(details);
     `;
-    await pool.query(query, [
+    const [result] = await pool.query(query, [
       report.id,
       String(report.business_id || report.businessId || ""),
       report.business_name || report.businessName || "",
       report.reason || "",
-      report.details || "",
+      reportDetailsForSql(report),
       report.reporter_email || report.reporterEmail || "",
       report.status || "pending"
     ]);
-    return true;
+    if (!(Number(result?.affectedRows || 0) > 0)) return false;
+    const [rows] = await pool.query("SELECT * FROM reports WHERE id = ?", [report.id]);
+    return Array.isArray(rows) && rows.length === 1 && String(rows[0].id) === String(report.id) && rows[0].status === report.status && rows[0].details === reportDetailsForSql(report);
   } catch (err) {
     console.warn("[MariaDB] Error guardando reporte:", err.message);
     return false;
@@ -561,8 +1454,10 @@ async function dbDeleteReport(id) {
   if (!guardWrite("dbDeleteReport")) return false;
   if (!pool) return false;
   try {
-    await pool.query("DELETE FROM reports WHERE id = ?", [id]);
-    return true;
+    const [result] = await pool.query("DELETE FROM reports WHERE id = ?", [id]);
+    if (!(Number(result?.affectedRows || 0) > 0)) return false;
+    const [rows] = await pool.query("SELECT id FROM reports WHERE id = ?", [id]);
+    return Array.isArray(rows) && rows.length === 0;
   } catch (err) {
     console.warn("[MariaDB] Error eliminando reporte:", err.message);
     return false;
@@ -1036,9 +1931,9 @@ function createRatingsRepository(db) {
   async function verifySchema(connection) {
     const [tables] = await connection.query("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'business_ratings'");
     if (tables.length !== 1 || tables[0].ENGINE !== "InnoDB") throw ratingsError("RATINGS_SCHEMA_REQUIRED");
-    const [columns] = await connection.query("SHOW FULL COLUMNS FROM business_ratings");
+    const [columns2] = await connection.query("SHOW FULL COLUMNS FROM business_ratings");
     for (const field of ["id", "business_id", "visitor_id", "rating"]) {
-      const column = columns.find((c) => c.Field === field);
+      const column = columns2.find((c) => c.Field === field);
       if (!column || column.Null !== "NO") throw ratingsError("RATINGS_SCHEMA_REQUIRED");
       const type = String(column.Type).toLowerCase();
       if (field === "rating" ? !/^tinyint(?:\(\d+\))?(?: unsigned)?$/.test(type) : !/^(?:var)?char\(\d+\)$/.test(type) || Number(type.match(/\d+/)?.[0]) < 64) throw ratingsError("RATINGS_SCHEMA_REQUIRED");
@@ -1055,14 +1950,14 @@ function createRatingsRepository(db) {
     if (![...keys.values()].some((parts) => parts.length === 2 && parts.every((p) => p.Sub_part == null) && parts.sort((a, b) => a.Seq_in_index - b.Seq_in_index).map((p) => p.Column_name).join(",") === "business_id,visitor_id")) {
       throw ratingsError("RATINGS_UNIQUE_INDEX_REQUIRED");
     }
-    const [invalid] = await connection.query(`SELECT COUNT(*) AS invalid_count FROM business_ratings r
+    const [invalid2] = await connection.query(`SELECT COUNT(*) AS invalid_count FROM business_ratings r
       LEFT JOIN businesses b ON r.business_id = b.id
       WHERE b.id IS NULL OR BINARY r.business_id <> BINARY b.id
         OR r.business_id = '' OR r.visitor_id IS NULL
         OR BINARY r.visitor_id NOT REGEXP '^[0-9a-f]{64}$'
         OR r.rating IS NULL OR r.rating NOT BETWEEN 1 AND 5
         OR (r.comment IS NOT NULL AND CHAR_LENGTH(r.comment) > 200)`);
-    if (Number(invalid[0]?.invalid_count) !== 0) throw ratingsError("RATINGS_DATA_REVIEW_REQUIRED");
+    if (Number(invalid2[0]?.invalid_count) !== 0) throw ratingsError("RATINGS_DATA_REVIEW_REQUIRED");
   }
   async function canonicalId(connection, requestedId) {
     const [rows] = await connection.query("SELECT id FROM businesses WHERE id = ? LIMIT 1", [requestedId]);
@@ -1140,7 +2035,7 @@ function createRatingsRepository(db) {
         const id = await canonicalId(connection, requestedId);
         const [context] = await connection.query("SELECT DATABASE() AS db_name");
         if (!context[0]?.db_name) throw ratingsError("RATINGS_DATABASE_UNAVAILABLE");
-        const name = "enc-ratings:" + createHash("sha256").update(String(context[0].db_name) + "\0" + id).digest("hex").slice(0, 48);
+        const name = "enc-ratings:" + createHash2("sha256").update(String(context[0].db_name) + "\0" + id).digest("hex").slice(0, 48);
         reusable = false;
         const [acquired] = await connection.query("SELECT GET_LOCK(?, 5) AS acquired", [name]);
         if (acquired[0]?.acquired === 0) {
@@ -1204,6 +2099,17 @@ async function dbInsertRating(id, visitorKey, rating, comment) {
   if (!isWritePermitted()) throw ratingsError("RATINGS_DATABASE_READ_ONLY");
   return ratingsRepository().insert(id, visitorKey, rating, comment);
 }
+function isBusinessWritePermitted() {
+  return isStagingEnvironment() && isConnected && pool !== null && connectedDatabase === STAGING_BUSINESS_DATABASE && stagingBusinessConfiguration(process.env, PRODUCTION_DB_USER);
+}
+var stagingBusinessStore = createStagingBusinessStore({
+  canWrite: isBusinessWritePermitted,
+  getConnection: async () => {
+    if (!pool) throw new Error("STAGING_DATABASE_UNAVAILABLE");
+    return pool.getConnection();
+  },
+  serialize: businessFromRow
+});
 
 // server.ts
 dotenv.config({ override: true });
@@ -1217,7 +2123,7 @@ try {
 } catch (_) {
 }
 var __dirname = _dirnameStr || process.cwd();
-var app = express();
+var app = express2();
 var PORT = Number(process.env.PORT || process.env.DEFAULT_APP_PORT) || 3e3;
 function backupDownloadContainment(req, res, next) {
   let requestPath = req.path;
@@ -1270,6 +2176,15 @@ function backupDownloadContainment(req, res, next) {
   return res.status(403).json({ success: false, error: "DOWNLOAD_DISABLED", message: "Descarga no disponible." });
 }
 app.use(backupDownloadContainment);
+var adminSecurity = registerAdminSecurity(app, {
+  provider: environmentAdminProvider(process.env),
+  allowedOrigin: process.env.ENC_ADMIN_PUBLIC_ORIGIN,
+  writesReady: (req) => administrativeWritesReady(req, {
+    mutationsEnabled: process.env.ENC_ADMIN_MUTATIONS_ENABLED === "true",
+    isStaging: isStagingEnvironment(),
+    businessWrites: isBusinessWritePermitted()
+  })
+});
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -1281,9 +2196,17 @@ app.use((req, res, next) => {
   next();
 });
 app.use((req, res, next) => {
+  if (isStagingEnvironment()) {
+    if (["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) return next();
+    if (req.method === "POST" && ["/api/admin/login", "/api/admin/logout"].includes(req.path)) return next();
+    const businessMutation = req.method === "POST" && (req.path === "/api/submit-business" || req.path === "/api/public/business-registrations") || req.method === "PATCH" && /^\/(?:api\/)?businesses\/[^/]+$/.test(req.path);
+    if (businessMutation && isBusinessWritePermitted()) return next();
+    if (req.method.toUpperCase() === "POST" && (req.path === "/api/ratings/get" || req.path === "/api/events/radar-search")) return next();
+    return res.status(403).json({ success: false, error: "STAGING_READ_ONLY", message: "Solo el carril autorizado de registro y edici\xF3n puede escribir negocios. Las dem\xE1s operaciones permanecen bloqueadas." });
+  }
   if (!isWritePermitted()) {
     if (!["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) {
-      if (req.path === "/api/events/radar-search" || req.path === "/api/ratings/get") {
+      if (req.method.toUpperCase() === "POST" && (req.path === "/api/events/radar-search" || req.path === "/api/ratings/get")) {
         return next();
       }
       return res.status(403).json({
@@ -1331,8 +2254,7 @@ app.use((req, res, next) => {
   if (req.path.startsWith("/media/") || req.path.startsWith("/wp-content/") || req.path.startsWith("/uploads/") || req.path.startsWith("/assets/") || /\.(jpg|jpeg|png|webp|svg|gif|ico|css|js|woff2?|ttf|json|map)$/i.test(req.path) || req.path === "/api/version" || req.path === "/api/database-status") {
     return next();
   }
-  const authHeader = req.headers.authorization;
-  if (authHeader || req.headers["x-admin-auth"]) {
+  if (adminSecurity.isAuthorized(req, "admin:manage")) {
     return next();
   }
   const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.ip || "unknown";
@@ -1351,21 +2273,22 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
-app.use("/media", express.static(path.resolve(__dirname, "public/wp-content/uploads"), {
+app.use("/api/public/business-registrations", publicRegistrationBodyLimit);
+app.use(express2.json({ limit: "50mb" }));
+app.use(express2.urlencoded({ extended: true, limit: "50mb" }));
+app.use("/media", express2.static(path.resolve(__dirname, "public/wp-content/uploads"), {
   maxAge: 30 * 24 * 60 * 60 * 1e3,
   setHeaders: (res) => {
     res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
   }
 }));
-app.use("/wp-content", express.static(path.resolve(__dirname, "public/wp-content"), {
+app.use("/wp-content", express2.static(path.resolve(__dirname, "public/wp-content"), {
   maxAge: 7 * 24 * 60 * 60 * 1e3,
   setHeaders: (res) => {
     res.setHeader("Cache-Control", "public, max-age=604800, immutable");
   }
 }));
-app.use("/uploads", express.static(path.resolve(__dirname, "public/uploads"), {
+app.use("/uploads", express2.static(path.resolve(__dirname, "public/uploads"), {
   maxAge: 30 * 24 * 60 * 60 * 1e3,
   setHeaders: (res) => {
     res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
@@ -1681,7 +2604,6 @@ var reportsCache = [];
 var claimedCouponsCache = [];
 var classifiedsCache = [];
 var emergencyServicesCache = [];
-var editPinsCache = {};
 try {
   let bizPath = path.resolve(__dirname, "src/data/businesses_seed.json");
   if (!fs.existsSync(bizPath)) {
@@ -1735,85 +2657,85 @@ var THEMATIC_EVENT_IMAGES_SERVER = {
 };
 function getEventRepresentativeImageServer(event) {
   if (event.image && typeof event.image === "string") {
-    const raw = event.image.trim();
-    if (raw.startsWith("/uploads/") || raw.startsWith("/images/") || raw.startsWith("http") && !raw.includes("unsplash.com")) {
-      return raw;
+    const raw2 = event.image.trim();
+    if (raw2.startsWith("/uploads/") || raw2.startsWith("/images/") || raw2.startsWith("http") && !raw2.includes("unsplash.com")) {
+      return raw2;
     }
   }
-  const text = `${event.title || ""} ${event.description || ""} ${event.category || ""} ${event.location || ""}`.toLowerCase();
-  if (text.includes("muerto") || text.includes("catrina") || text.includes("cempas\xFAchil") || text.includes("cempasuchil") || text.includes("\xE1nima") || text.includes("anima") || text.includes("altar") || text.includes("calaver") || text.includes("hanal pix") || text.includes("hallow")) {
+  const text2 = `${event.title || ""} ${event.description || ""} ${event.category || ""} ${event.location || ""}`.toLowerCase();
+  if (text2.includes("muerto") || text2.includes("catrina") || text2.includes("cempas\xFAchil") || text2.includes("cempasuchil") || text2.includes("\xE1nima") || text2.includes("anima") || text2.includes("altar") || text2.includes("calaver") || text2.includes("hanal pix") || text2.includes("hallow")) {
     return THEMATIC_EVENT_IMAGES_SERVER.diaDeMuertos;
   }
-  if (text.includes("agroindustrial") || text.includes("agro") || text.includes("agr\xEDcol") || text.includes("agricol") || text.includes("campo") || text.includes("siembra") || text.includes("ganader") || text.includes("cosecha") || text.includes("productos de campeche")) {
+  if (text2.includes("agroindustrial") || text2.includes("agro") || text2.includes("agr\xEDcol") || text2.includes("agricol") || text2.includes("campo") || text2.includes("siembra") || text2.includes("ganader") || text2.includes("cosecha") || text2.includes("productos de campeche")) {
     return THEMATIC_EVENT_IMAGES_SERVER.agriculture;
   }
-  if (text.includes("carrera") || text.includes("marat\xF3n") || text.includes("maraton") || text.includes("5k") || text.includes("10k") || text.includes("21k") || text.includes("atlet") || text.includes("corredor") || text.includes("running") || text.includes("octubre rosa") || text.includes("c\xE1ncer de mama")) {
+  if (text2.includes("carrera") || text2.includes("marat\xF3n") || text2.includes("maraton") || text2.includes("5k") || text2.includes("10k") || text2.includes("21k") || text2.includes("atlet") || text2.includes("corredor") || text2.includes("running") || text2.includes("octubre rosa") || text2.includes("c\xE1ncer de mama")) {
     return THEMATIC_EVENT_IMAGES_SERVER.running;
   }
-  if (text.includes("rodada") || text.includes("ciclis") || text.includes("bicicleta") || text.includes("bici")) {
+  if (text2.includes("rodada") || text2.includes("ciclis") || text2.includes("bicicleta") || text2.includes("bici")) {
     return THEMATIC_EVENT_IMAGES_SERVER.cycling;
   }
-  if (text.includes("pesca") || text.includes("s\xE1balo") || text.includes("sabalo") || text.includes("anzuelo") || text.includes("lancha")) {
+  if (text2.includes("pesca") || text2.includes("s\xE1balo") || text2.includes("sabalo") || text2.includes("anzuelo") || text2.includes("lancha")) {
     return THEMATIC_EVENT_IMAGES_SERVER.fishing;
   }
-  if (text.includes("f\xFAtbol") || text.includes("futbol") || text.includes("soccer") || text.includes("gol")) {
+  if (text2.includes("f\xFAtbol") || text2.includes("futbol") || text2.includes("soccer") || text2.includes("gol")) {
     return THEMATIC_EVENT_IMAGES_SERVER.soccer;
   }
-  if (text.includes("b\xE9isbol") || text.includes("beisbol") || text.includes("softbol") || text.includes("pelota") || text.includes("jonr\xF3n") || text.includes("resineros")) {
+  if (text2.includes("b\xE9isbol") || text2.includes("beisbol") || text2.includes("softbol") || text2.includes("pelota") || text2.includes("jonr\xF3n") || text2.includes("resineros")) {
     return THEMATIC_EVENT_IMAGES_SERVER.baseball;
   }
-  if (text.includes("congreso") || text.includes("convenci\xF3n") || text.includes("convencion") || text.includes("carmen xxi") || text.includes("foro") || text.includes("cumbre") || text.includes("simposio") || text.includes("conferencia") || text.includes("panel") || text.includes("empresarial") || text.includes("negocios")) {
+  if (text2.includes("congreso") || text2.includes("convenci\xF3n") || text2.includes("convencion") || text2.includes("carmen xxi") || text2.includes("foro") || text2.includes("cumbre") || text2.includes("simposio") || text2.includes("conferencia") || text2.includes("panel") || text2.includes("empresarial") || text2.includes("negocios")) {
     return THEMATIC_EVENT_IMAGES_SERVER.conference;
   }
-  if (text.includes("teatro") || text.includes("obra") || text.includes("mon\xF3logo") || text.includes("monologo") || text.includes("stand up") || text.includes("comedia") || text.includes("dramat") || text.includes("escena") || text.includes("teatro carmelita")) {
+  if (text2.includes("teatro") || text2.includes("obra") || text2.includes("mon\xF3logo") || text2.includes("monologo") || text2.includes("stand up") || text2.includes("comedia") || text2.includes("dramat") || text2.includes("escena") || text2.includes("teatro carmelita")) {
     return THEMATIC_EVENT_IMAGES_SERVER.theater;
   }
-  if (text.includes("danza") || text.includes("baile") || text.includes("ballet") || text.includes("folclor") || text.includes("jarana") || text.includes("coreograf")) {
+  if (text2.includes("danza") || text2.includes("baile") || text2.includes("ballet") || text2.includes("folclor") || text2.includes("jarana") || text2.includes("coreograf")) {
     return THEMATIC_EVENT_IMAGES_SERVER.dance;
   }
-  if (text.includes("cine") || text.includes("pel\xEDcula") || text.includes("pelicula") || text.includes("cortometraje") || text.includes("film") || text.includes("proyecci\xF3n") || text.includes("proyeccion")) {
+  if (text2.includes("cine") || text2.includes("pel\xEDcula") || text2.includes("pelicula") || text2.includes("cortometraje") || text2.includes("film") || text2.includes("proyecci\xF3n") || text2.includes("proyeccion")) {
     return THEMATIC_EVENT_IMAGES_SERVER.cinema;
   }
-  if (text.includes("exposici\xF3n") || text.includes("exposicion") || text.includes("galer\xEDa") || text.includes("galeria") || text.includes("pintura") || text.includes("escultura") || text.includes("fotograf\xEDa") || text.includes("fotografia") || text.includes("artes pl\xE1sticas")) {
+  if (text2.includes("exposici\xF3n") || text2.includes("exposicion") || text2.includes("galer\xEDa") || text2.includes("galeria") || text2.includes("pintura") || text2.includes("escultura") || text2.includes("fotograf\xEDa") || text2.includes("fotografia") || text2.includes("artes pl\xE1sticas")) {
     return THEMATIC_EVENT_IMAGES_SERVER.artExhibition;
   }
-  if (text.includes("kiosco") || text.includes("zaragoza") || text.includes("parque principal") || text.includes("bolero") || text.includes("danz\xF3n") || text.includes("danzon") || text.includes("marimba") || text.includes("son campechano") || text.includes("trova") || text.includes("campechanidad") || text.includes("desfile cultural")) {
+  if (text2.includes("kiosco") || text2.includes("zaragoza") || text2.includes("parque principal") || text2.includes("bolero") || text2.includes("danz\xF3n") || text2.includes("danzon") || text2.includes("marimba") || text2.includes("son campechano") || text2.includes("trova") || text2.includes("campechanidad") || text2.includes("desfile cultural")) {
     return THEMATIC_EVENT_IMAGES_SERVER.tradicionZaragoza;
   }
-  if (text.includes("camar\xF3n") || text.includes("camaron") || text.includes("marisco") || text.includes("gastronom") || text.includes("culinari") || text.includes("platillo") || text.includes("degustac") || text.includes("chef") || text.includes("ceviche") || text.includes("coctel")) {
+  if (text2.includes("camar\xF3n") || text2.includes("camaron") || text2.includes("marisco") || text2.includes("gastronom") || text2.includes("culinari") || text2.includes("platillo") || text2.includes("degustac") || text2.includes("chef") || text2.includes("ceviche") || text2.includes("coctel")) {
     return THEMATIC_EVENT_IMAGES_SERVER.gastronomiaMariscos;
   }
-  if (text.includes("asado") || text.includes("parrill") || text.includes("bbq") || text.includes("carne")) {
+  if (text2.includes("asado") || text2.includes("parrill") || text2.includes("bbq") || text2.includes("carne")) {
     return THEMATIC_EVENT_IMAGES_SERVER.grill;
   }
-  if (text.includes("caf\xE9") || text.includes("cafe") || text.includes("reposter") || text.includes("postre") || text.includes("panader")) {
+  if (text2.includes("caf\xE9") || text2.includes("cafe") || text2.includes("reposter") || text2.includes("postre") || text2.includes("panader")) {
     return THEMATIC_EVENT_IMAGES_SERVER.bakeryCafe;
   }
-  if (text.includes("concierto") || text.includes("m\xFAsica") || text.includes("musica") || text.includes("en vivo") || text.includes("tributo") || text.includes("rock") || text.includes("banda") || text.includes("guitarra") || text.includes("ac\xFAstic") || text.includes("acustic") || text.includes("recital") || text.includes("jazz") || text.includes("canto") || text.includes("show") || text.includes("blnko") || text.includes("austin") || text.includes("revo") || text.includes("cantautor")) {
+  if (text2.includes("concierto") || text2.includes("m\xFAsica") || text2.includes("musica") || text2.includes("en vivo") || text2.includes("tributo") || text2.includes("rock") || text2.includes("banda") || text2.includes("guitarra") || text2.includes("ac\xFAstic") || text2.includes("acustic") || text2.includes("recital") || text2.includes("jazz") || text2.includes("canto") || text2.includes("show") || text2.includes("blnko") || text2.includes("austin") || text2.includes("revo") || text2.includes("cantautor")) {
     return THEMATIC_EVENT_IMAGES_SERVER.concert;
   }
-  if (text.includes("dj") || text.includes("electr\xF3nica") || text.includes("electronica") || text.includes("fiesta nocturna") || text.includes("antro") || text.includes("club")) {
+  if (text2.includes("dj") || text2.includes("electr\xF3nica") || text2.includes("electronica") || text2.includes("fiesta nocturna") || text2.includes("antro") || text2.includes("club")) {
     return THEMATIC_EVENT_IMAGES_SERVER.partyNight;
   }
-  if (text.includes("bazar") || text.includes("placita") || text.includes("emprended") || text.includes("artesan") || text.includes("mercadito") || text.includes("expo eventia") || text.includes("tianguis") || text.includes("comercial")) {
+  if (text2.includes("bazar") || text2.includes("placita") || text2.includes("emprended") || text2.includes("artesan") || text2.includes("mercadito") || text2.includes("expo eventia") || text2.includes("tianguis") || text2.includes("comercial")) {
     return THEMATIC_EVENT_IMAGES_SERVER.bazar;
   }
-  if (text.includes("virgen del carmen") || text.includes("patronal") || text.includes("procesi\xF3n") || text.includes("procesion") || text.includes("paseo por mar")) {
+  if (text2.includes("virgen del carmen") || text2.includes("patronal") || text2.includes("procesi\xF3n") || text2.includes("procesion") || text2.includes("paseo por mar")) {
     return THEMATIC_EVENT_IMAGES_SERVER.patronalFiesta;
   }
-  if (text.includes("playa norte") || text.includes("playa") || text.includes("malec\xF3n") || text.includes("malecon") || text.includes("costero")) {
+  if (text2.includes("playa norte") || text2.includes("playa") || text2.includes("malec\xF3n") || text2.includes("malecon") || text2.includes("costero")) {
     return THEMATIC_EVENT_IMAGES_SERVER.beach;
   }
-  if (text.includes("infantil") || text.includes("ni\xF1o") || text.includes("ni\xF1a") || text.includes("t\xEDteres") || text.includes("titeres") || text.includes("marioneta") || text.includes("familiar")) {
+  if (text2.includes("infantil") || text2.includes("ni\xF1o") || text2.includes("ni\xF1a") || text2.includes("t\xEDteres") || text2.includes("titeres") || text2.includes("marioneta") || text2.includes("familiar")) {
     return THEMATIC_EVENT_IMAGES_SERVER.kidsFamily;
   }
-  if (text.includes("mascota") || text.includes("canin") || text.includes("perro") || text.includes("adopci")) {
+  if (text2.includes("mascota") || text2.includes("canin") || text2.includes("perro") || text2.includes("adopci")) {
     return THEMATIC_EVENT_IMAGES_SERVER.pets;
   }
-  if (text.includes("yoga") || text.includes("meditac") || text.includes("salud") || text.includes("bienestar")) {
+  if (text2.includes("yoga") || text2.includes("meditac") || text2.includes("salud") || text2.includes("bienestar")) {
     return THEMATIC_EVENT_IMAGES_SERVER.wellness;
   }
-  if (text.includes("deport") || text.includes("torneo") || text.includes("campeonato")) {
+  if (text2.includes("deport") || text2.includes("torneo") || text2.includes("campeonato")) {
     return THEMATIC_EVENT_IMAGES_SERVER.sportsGeneral;
   }
   const cat = (event.categorySlug || event.category || "").toLowerCase();
@@ -1886,37 +2808,6 @@ try {
 } catch (e) {
   emergencyServicesCache = [];
 }
-try {
-  const pinsPath = path.resolve(__dirname, "pins_db.json");
-  if (fs.existsSync(pinsPath)) {
-    editPinsCache = JSON.parse(fs.readFileSync(pinsPath, "utf8"));
-    console.log(`[Cache] C\xF3digos PIN de edici\xF3n cargados.`);
-  } else {
-    editPinsCache = {};
-  }
-} catch (e) {
-  editPinsCache = {};
-}
-var ADMIN_SALT = "carmen_directory_2026_secure_salt";
-function hashPassword(pass) {
-  return crypto.createHash("sha256").update(pass + ADMIN_SALT).digest("hex");
-}
-var adminAccounts = [
-  {
-    username: "Y",
-    passwordHash: hashPassword("Gioyuss"),
-    role: "Administrador",
-    initial: "Y",
-    avatarColor: "from-purple-600 to-indigo-600"
-  },
-  {
-    username: "J",
-    passwordHash: hashPassword("63097"),
-    role: "Administrador",
-    initial: "J",
-    avatarColor: "from-blue-600 to-cyan-600"
-  }
-];
 function getRequestBaseUrl(req) {
   const rawHost = req.get("x-forwarded-host") || req.get("host") || "empresasencarmen.com";
   const hostHeader = rawHost.toLowerCase().split(":")[0];
@@ -2221,36 +3112,18 @@ initMariaDb().then(async (active) => {
     } catch (e) {
       console.warn("[MariaDB] Error al cargar configuraci\xF3n del portal:", e.message);
     }
-    const dbBusinesses = await dbLoadAllBusinesses();
-    if (dbBusinesses.length > 0) {
-      const dbIdSet = new Set(dbBusinesses.map((b) => String(b.id)));
-      const missingInDb = businessesCache.filter((b) => !dbIdSet.has(String(b.id)));
-      if (missingInDb.length > 0 && canSyncStartupWrites) {
-        console.log(`[MariaDB] A\xF1adiendo ${missingInDb.length} empresas del cat\xE1logo local que no exist\xEDan en Hostinger MariaDB...`);
-        for (const b of missingInDb) {
-          await dbSaveBusiness(b);
-        }
-        const reloaded = await dbLoadAllBusinesses();
-        if (reloaded.length > 0) businessesCache = reloaded;
-      } else {
-        businessesCache = dbBusinesses;
-      }
-      console.log(`[MariaDB] ${businessesCache.length} empresas cargadas autoritativamente desde Hostinger MariaDB.`);
-    } else if (canSyncStartupWrites) {
-      console.log(`[MariaDB] Base de datos vac\xEDa. Sincronizando ${businessesCache.length} empresas completas hacia Hostinger MariaDB...`);
-      for (const b of businessesCache) {
-        await dbSaveBusiness(b);
-      }
-      const reloaded = await dbLoadAllBusinesses();
-      if (reloaded.length > 0) businessesCache = reloaded;
-      console.log(`[MariaDB] ${businessesCache.length} empresas aseguradas en Hostinger MariaDB.`);
-    } else {
-      console.log(`[Staging Guard] Base de datos sin empresas en modo seguro/read-only. Cat\xE1logo local preservado en memoria sin mutar MariaDB.`);
+    try {
+      businessesCache = await dbLoadAllBusinesses(true);
+      console.log(`[MariaDB] ${businessesCache.length} empresas cargadas desde la fuente autorizada; sin importaci\xF3n autom\xE1tica.`);
+    } catch {
+      businessesCache = [];
+      console.warn("[MariaDB] Cat\xE1logo no disponible; no se importaron semillas ni se escribieron negocios.");
     }
-    const dbReports = await dbLoadAllReports();
-    if (dbReports.length > 0) {
-      reportsCache = dbReports;
-      console.log(`[MariaDB] ${reportsCache.length} reportes cargados desde Hostinger MariaDB.`);
+    try {
+      reportsCache = await dbLoadAllReports();
+    } catch {
+      reportsCache = [];
+      console.warn("[MariaDB] Reportes no disponibles; sin fallback local.");
     }
     const dbEvents = await dbLoadAllEvents();
     if (dbEvents.length > 0) {
@@ -2329,6 +3202,7 @@ app.get("/api/database-status", (_req, res) => {
   const validation = isStaging ? validateStagingDbConfiguration() : { valid: true };
   res.json({
     success: true,
+    businessWrites: { configured: isStagingEnvironment() && stagingBusinessConfiguration(process.env, PRODUCTION_DB_USER), permitted: isBusinessWritePermitted(), scope: "businesses-only" },
     activeEngine: isMariaDbActive() ? "mariadb_hostinger" : "local_json",
     environment: isStaging ? "staging" : process.env.NODE_ENV || "production",
     stagingIsolation: {
@@ -2401,39 +3275,11 @@ app.post("/api/mariadb/reconnect", async (_req, res) => {
     });
   }
 });
-app.post("/api/mariadb/sync-catalog", async (_req, res) => {
-  try {
-    if (!isMariaDbActive()) {
-      const ok = await initMariaDb();
-      if (!ok) {
-        return res.status(400).json({
-          success: false,
-          message: "Hostinger MariaDB no est\xE1 conectada. Verifique las credenciales.",
-          error: getLastDbError()
-        });
-      }
-    }
-    let saved = 0;
-    for (const b of businessesCache) {
-      try {
-        await dbSaveBusiness(b);
-        saved++;
-      } catch (err) {
-        console.warn(`[MariaDB Sync] Error guardando ${b.id}:`, err.message);
-      }
-    }
-    const reloaded = await dbLoadAllBusinesses();
-    if (reloaded.length > 0) {
-      businessesCache = reloaded;
-    }
-    return res.json({
-      success: true,
-      message: `\xA1${saved} empresas sincronizadas exitosamente en Hostinger MariaDB!`,
-      businessesCount: businessesCache.length
-    });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
+app.post(["/api/sync", "/api/webhook/woocommerce", "/api/businesses/:id/sync-wp"], (_req, res) => {
+  return res.status(410).json({ success: false, message: "Sincronizaci\xF3n WooCommerce retirada. Los contactos se administran en MariaDB." });
+});
+app.post("/api/mariadb/sync-catalog", (_req, res) => {
+  return res.status(410).json({ success: false, message: "La importaci\xF3n de semillas/cach\xE9 est\xE1 retirada. MariaDB es la fuente autorizada; actualiza el directorio mediante su lectura normal." });
 });
 app.get("/api/portal-config", (_req, res) => {
   res.json({
@@ -2480,11 +3326,11 @@ app.get("/api/admin/portal-config/raw", (_req, res) => {
 });
 app.post("/api/admin/portal-config/raw", async (req, res) => {
   try {
-    const { raw } = req.body;
-    if (!raw || typeof raw !== "string") {
+    const { raw: raw2 } = req.body;
+    if (!raw2 || typeof raw2 !== "string") {
       return res.status(400).json({ success: false, message: "Se requiere el contenido raw en JSON." });
     }
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(raw2);
     parsed.lastUpdated = (/* @__PURE__ */ new Date()).toISOString();
     portalConfig = parsed;
     fs.writeFileSync(portalConfigPath, JSON.stringify(portalConfig, null, 2), "utf8");
@@ -2590,23 +3436,23 @@ app.post(["/api/admin/maintenance", "/admin/maintenance"], async (req, res) => {
 var lastDbPollTime = 0;
 var DB_POLL_INTERVAL_MS = 2e4;
 var cachedDbSignature = null;
-async function refreshBusinessesFromDbIfNeeded() {
+async function refreshBusinessesFromDbIfNeeded(requireFresh = false) {
+  if (requireFresh) {
+    if (!isMariaDbActive()) throw new Error("BUSINESSES_SOURCE_UNAVAILABLE");
+    const list = await dbLoadAllBusinesses(true);
+    businessesCache = list;
+    cachedDbSignature = null;
+    return;
+  }
   if (!isMariaDbActive()) return;
   const now = Date.now();
   if (now - lastDbPollTime < DB_POLL_INTERVAL_MS) return;
   lastDbPollTime = now;
   try {
-    const currentSig = await dbGetBusinessesSignature();
-    if (!currentSig) return;
-    if (cachedDbSignature && cachedDbSignature.total === currentSig.total && cachedDbSignature.lastUpdate === currentSig.lastUpdate) {
-      return;
-    }
-    const list = await dbLoadAllBusinesses();
-    if (list && list.length > 0) {
-      businessesCache = list;
-      cachedDbSignature = currentSig;
-    }
-  } catch (err) {
+    const list = await dbLoadAllBusinesses(true);
+    businessesCache = list;
+    cachedDbSignature = null;
+  } catch {
   }
 }
 function registerRatingsRoutes(app2, repository = {
@@ -2667,7 +3513,14 @@ function registerRatingsRoutes(app2, repository = {
 }
 registerRatingsRoutes(app);
 app.get("/api/businesses", async (req, res) => {
-  await refreshBusinessesFromDbIfNeeded();
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    await refreshBusinessesFromDbIfNeeded(true);
+    res.setHeader("X-Encarmen-Business-Source", "mariadb");
+  } catch {
+    res.setHeader("X-Encarmen-Business-Source", "unavailable");
+    return res.status(503).json({ success: false, message: "Los negocios no est\xE1n disponibles desde MariaDB. Reintenta m\xE1s tarde." });
+  }
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
@@ -2701,16 +3554,26 @@ app.get("/api/businesses", async (req, res) => {
     const colLow = colonia.toLowerCase();
     list = list.filter((b) => b.colonia && b.colonia.toLowerCase().includes(colLow));
   }
-  if (hasWhatsapp) list = list.filter((b) => Boolean(b.whatsapp));
+  if (hasWhatsapp) list = list.filter((b) => Boolean(contactDigits(b.whatsapp)));
   if (hasDelivery) list = list.filter((b) => Boolean(b.hasDelivery));
-  if (hasPhone) list = list.filter((b) => Boolean(b.phone));
+  if (hasPhone) list = list.filter((b) => Boolean(contactDigits(b.phone)));
   if (hasAddress) list = list.filter((b) => Boolean(b.address));
+  const contacts = String(req.query.contacts || "all");
+  if (!CONTACT_FILTERS.includes(contacts)) return res.status(400).json({ success: false, message: "Filtro de contactos inv\xE1lido." });
+  const coverage = contactCounts(list);
+  list = list.filter((b) => matchesContactFilter(b, contacts));
+  const parsePage = (value, fallback) => value === void 0 ? fallback : typeof value === "string" && /^\d+$/.test(value) ? Number(value) : NaN;
+  const offset = parsePage(req.query.offset, 0);
+  const limit = parsePage(req.query.limit, list.length);
+  if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || req.query.limit !== void 0 && (limit < 1 || limit > 200)) return res.status(400).json({ success: false, message: "Paginaci\xF3n inv\xE1lida." });
   res.json({
+    source: "mariadb",
     total: list.length,
-    count: list.length,
-    offset: 0,
-    limit: list.length,
-    businesses: list
+    count: list.slice(offset, offset + limit).length,
+    offset,
+    limit,
+    contactCounts: coverage,
+    businesses: list.slice(offset, offset + limit)
   });
 });
 app.get("/api/businesses/:id", async (req, res, next) => {
@@ -2718,7 +3581,14 @@ app.get("/api/businesses/:id", async (req, res, next) => {
   if (idOrSlug === "auto-search" || idOrSlug === "auto-search-ai" || idOrSlug === "parse-whatsapp-group" || idOrSlug === "approve-candidate" || idOrSlug === "approve-multiple-candidates") {
     return next();
   }
-  await refreshBusinessesFromDbIfNeeded();
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    await refreshBusinessesFromDbIfNeeded(true);
+    res.setHeader("X-Encarmen-Business-Source", "mariadb");
+  } catch {
+    res.setHeader("X-Encarmen-Business-Source", "unavailable");
+    return res.status(503).json({ success: false, message: "Los negocios no est\xE1n disponibles desde MariaDB. Reintenta m\xE1s tarde." });
+  }
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
@@ -2751,11 +3621,11 @@ function parseWooCommerceProduct(p) {
   };
   const cleanDescription = (html) => {
     if (!html) return "";
-    let text = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ");
-    text = text.replace(/<div[^>]*class=["'][^"']*fe-wrapper[^"']*["'][\s\S]*?<\/div>\s*<\/div>/gi, " ");
-    text = text.replace(/\.fe-wrapper[\s\S]*?\.fe-content[^}]*\}/gi, " ");
-    text = text.replace(/📞\s*Marcar a la empresa[\s\S]*?(?=(?:<p|$))/i, " ");
-    return text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    let text2 = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ");
+    text2 = text2.replace(/<div[^>]*class=["'][^"']*fe-wrapper[^"']*["'][\s\S]*?<\/div>\s*<\/div>/gi, " ");
+    text2 = text2.replace(/\.fe-wrapper[\s\S]*?\.fe-content[^}]*\}/gi, " ");
+    text2 = text2.replace(/📞\s*Marcar a la empresa[\s\S]*?(?=(?:<p|$))/i, " ");
+    return text2.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   };
   const name = p.name ? p.name.trim() : "Empresa";
   let phone = getMeta("telefono") || getMeta("phone") || "";
@@ -2848,9 +3718,6 @@ function parseWooCommerceProduct(p) {
     isRecommended,
     createdAt: p.date_created || (/* @__PURE__ */ new Date()).toISOString()
   };
-}
-function normalizeBusinessName(name) {
-  return (name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").trim();
 }
 function resolveWooCommerceCategoryIds(biz) {
   const result = [];
@@ -2961,7 +3828,7 @@ function buildWooCommerceImagesPayload(biz) {
   }
   return images;
 }
-var IS_WP_SYNC_ENABLED = process.env.ENABLE_WP_SYNC === "true";
+var IS_WP_SYNC_ENABLED = false;
 async function purgeWordPressCache(slugs = []) {
   if (isStagingEnvironment() || process.env.ENABLE_CACHE_PURGE === "false") {
     console.log("[Staging Guard] Purga de cach\xE9 en producci\xF3n deshabilitada (entorno Staging o ENABLE_CACHE_PURGE=false).");
@@ -3118,274 +3985,7 @@ function getWpAuthHeader() {
   return null;
 }
 async function syncAllWooCommerceProducts() {
-  if (!IS_WP_SYNC_ENABLED) {
-    console.info("[WooCommerce Sync] Modo aut\xF3nomo activo: Sincronizaci\xF3n cruzada con WordPress desactivada.");
-    return { count: businessesCache.length, newCount: 0, pushedToWpCount: 0 };
-  }
-  const authHeader = getWpAuthHeader();
-  if (!authHeader) {
-    return { count: businessesCache.length, newCount: 0, pushedToWpCount: 0 };
-  }
-  try {
-    let page = 1;
-    const allProducts = [];
-    while (true) {
-      const wpRes = await fetch(`https://empresasencarmen.com/wp-json/wc/v3/products?per_page=100&page=${page}`, {
-        headers: { "Authorization": authHeader }
-      });
-      if (!wpRes.ok) break;
-      const batch = await wpRes.json();
-      if (!Array.isArray(batch) || batch.length === 0) break;
-      allProducts.push(...batch);
-      if (batch.length < 100) break;
-      page++;
-    }
-    const existingMap = /* @__PURE__ */ new Map();
-    for (const b of businessesCache) {
-      existingMap.set(Number(b.id), b);
-    }
-    const wpProductIds = /* @__PURE__ */ new Set();
-    const wpProductByName = /* @__PURE__ */ new Map();
-    const wpProductByPhone = /* @__PURE__ */ new Map();
-    const wpProductBySlug = /* @__PURE__ */ new Map();
-    for (const p of allProducts) {
-      const pId = Number(p.id);
-      wpProductIds.add(pId);
-      if (p.name) wpProductByName.set(normalizeBusinessName(p.name), p);
-      if (p.slug) wpProductBySlug.set(p.slug.toLowerCase().trim(), p);
-      if (Array.isArray(p.meta_data)) {
-        const ph = p.meta_data.find((m) => m.key === "telefono" || m.key === "phone" || m.key === "whatsapp")?.value;
-        if (ph) {
-          const clean = String(ph).replace(/\D/g, "").slice(-10);
-          if (clean.length >= 7) wpProductByPhone.set(clean, p);
-        }
-      }
-    }
-    let newCount = 0;
-    for (const p of allProducts) {
-      const parsed = parseWooCommerceProduct(p);
-      if (!existingMap.has(p.id)) {
-        newCount++;
-        existingMap.set(p.id, parsed);
-      } else {
-        const old = existingMap.get(p.id) || {};
-        const isPendingLocalEdit = Boolean(
-          old.isLocallyEdited && old.updatedAt && p.date_modified && new Date(old.updatedAt) > new Date(p.date_modified)
-        );
-        const hasLocalCustomizations = Boolean(
-          isPendingLocalEdit || old.image && old.image.startsWith("/uploads/") || old.gallery && old.gallery.some((img) => img.startsWith("/uploads/")) || Array.isArray(old.previousSlugs) && old.previousSlugs.length > 0 || Array.isArray(old.previousNames) && old.previousNames.length > 0
-        );
-        if (hasLocalCustomizations) {
-          const mergedCategories = old.categories && old.categories.length > 0 ? old.categories : parsed.categories;
-          const mergedCategorySlugs = old.categorySlugs && old.categorySlugs.length > 0 ? old.categorySlugs : parsed.categorySlugs;
-          const mergedCategory = old.category || (mergedCategories[0] || "Comercios y Servicios");
-          existingMap.set(p.id, {
-            ...parsed,
-            ...old,
-            name: old.name || parsed.name,
-            slug: old.slug || parsed.slug,
-            description: old.description || parsed.description,
-            image: old.image || parsed.image,
-            gallery: old.gallery && old.gallery.length > 0 ? old.gallery : parsed.gallery,
-            categories: mergedCategories,
-            categorySlugs: mergedCategorySlugs,
-            category: mergedCategory,
-            colonia: old.colonia || parsed.colonia,
-            phone: old.phone || parsed.phone,
-            whatsapp: old.whatsapp || parsed.whatsapp,
-            address: old.address || parsed.address,
-            schedule: old.schedule || parsed.schedule,
-            payment: old.payment || parsed.payment,
-            delivery: old.delivery || parsed.delivery,
-            facebook: old.facebook || parsed.facebook,
-            instagram: old.instagram || parsed.instagram,
-            website: old.website || parsed.website,
-            previousSlugs: old.previousSlugs || [],
-            previousNames: old.previousNames || [],
-            isLocallyEdited: isPendingLocalEdit,
-            updatedAt: old.updatedAt || (/* @__PURE__ */ new Date()).toISOString()
-          });
-        } else {
-          existingMap.set(p.id, {
-            ...old,
-            ...parsed,
-            isLocallyEdited: false,
-            previousSlugs: old.previousSlugs || [],
-            previousNames: old.previousNames || []
-          });
-        }
-      }
-    }
-    let pushedToWpCount = 0;
-    for (const b of businessesCache) {
-      const bId = Number(b.id);
-      const bNameNorm = normalizeBusinessName(b.name || "");
-      const bSlug = (b.slug || "").toLowerCase().trim();
-      const bPhoneClean = (b.phone || b.whatsapp || "").replace(/\D/g, "").slice(-10);
-      let matchingWp = wpProductIds.has(bId) ? allProducts.find((p) => Number(p.id) === bId) : null;
-      if (!matchingWp && bSlug && wpProductBySlug.has(bSlug)) {
-        matchingWp = wpProductBySlug.get(bSlug);
-      }
-      if (!matchingWp && bNameNorm && wpProductByName.has(bNameNorm)) {
-        matchingWp = wpProductByName.get(bNameNorm);
-      }
-      if (!matchingWp && bPhoneClean && bPhoneClean.length >= 7 && wpProductByPhone.has(bPhoneClean)) {
-        matchingWp = wpProductByPhone.get(bPhoneClean);
-      }
-      if (matchingWp) {
-        const targetWpId = Number(matchingWp.id);
-        if (targetWpId !== bId) {
-          const oldId = b.id;
-          b.oldId = oldId;
-          b.id = targetWpId;
-          if (matchingWp.permalink) b.permalink = matchingWp.permalink;
-          if (matchingWp.slug) b.slug = matchingWp.slug;
-          b.source = "synced";
-          b.isNewSubmission = false;
-          existingMap.delete(Number(oldId));
-          existingMap.set(targetWpId, b);
-          if (isMariaDbActive()) {
-            try {
-              await dbDeleteBusiness(oldId);
-              await dbSaveBusiness(b);
-            } catch (_) {
-            }
-          }
-          console.log(`[WooCommerce Match] Empresa "${b.name}" vinculada con producto en WordPress ID #${targetWpId}.`);
-        }
-        const fullWpProduct = allProducts.find((p) => Number(p.id) === targetWpId) || matchingWp;
-        const wpCatList = Array.isArray(fullWpProduct.categories) ? fullWpProduct.categories : [];
-        const wpValidCats = wpCatList.filter((c) => c.id !== 15 && (c.name || "").toLowerCase() !== "sin categorizar");
-        const wpShortDesc = typeof fullWpProduct.short_description === "string" ? fullWpProduct.short_description : "";
-        const wpHasShortcode = wpShortDesc.includes("ficha_empresa") || wpShortDesc.includes("fe-wrapper");
-        const wpSlugMismatch = Boolean(b.slug && fullWpProduct.slug && b.slug.toLowerCase().trim() !== fullWpProduct.slug.toLowerCase().trim());
-        const decodeHtml = (str) => (str || "").replace(/&amp;/g, "&").replace(/&#8211;/g, "-").replace(/&#8217;/g, "'").replace(/&quot;/g, '"').trim();
-        const wpNameMismatch = Boolean(b.name && fullWpProduct.name && decodeHtml(b.name).toLowerCase() !== decodeHtml(fullWpProduct.name).toLowerCase());
-        const hasRealDifferences = wpValidCats.length === 0 || !wpHasShortcode || wpSlugMismatch || wpNameMismatch;
-        const hasNewerLocalEdits = Boolean(
-          b.isLocallyEdited && b.updatedAt && fullWpProduct.date_modified && new Date(b.updatedAt) > new Date(fullWpProduct.date_modified)
-        );
-        if (!hasRealDifferences && !hasNewerLocalEdits && b.isLocallyEdited) {
-          b.isLocallyEdited = false;
-          if (existingMap.has(targetWpId)) {
-            const it = existingMap.get(targetWpId);
-            if (it) it.isLocallyEdited = false;
-          }
-        }
-        if (hasRealDifferences || hasNewerLocalEdits) {
-          try {
-            const catPayload = resolveWooCommerceCategoryIds(b);
-            const cleanDesc = cleanWooCommerceDescription(b.description || b.name);
-            const fichaShortcode = buildFichaEmpresaShortcode(b);
-            const wpImages = buildWooCommerceImagesPayload(b);
-            const putPayload = {
-              name: b.name,
-              slug: b.slug,
-              categories: catPayload,
-              description: `<p>${cleanDesc}</p>`,
-              short_description: fichaShortcode,
-              meta_data: [
-                { key: "telefono", value: String(b.phone || "") },
-                { key: "phone", value: String(b.phone || "") },
-                { key: "whatsapp", value: String(b.whatsapp || b.phone || "") },
-                { key: "direccion", value: String(b.address || "") },
-                { key: "address", value: String(b.address || "") },
-                { key: "colonia", value: String(b.colonia || "") },
-                { key: "horario", value: String(b.schedule || "") },
-                { key: "pagos", value: String(b.payment || "") },
-                { key: "envio", value: String(b.delivery || "") },
-                { key: "facebook", value: String(b.facebook || "") },
-                { key: "website", value: String(b.website || "") },
-                { key: "mapsUrl", value: String(b.mapsUrl || "") }
-              ]
-            };
-            const existingWpImages = Array.isArray(fullWpProduct.images) ? fullWpProduct.images : [];
-            if (existingWpImages.length === 0 && wpImages.length > 0) {
-              putPayload.images = wpImages;
-            }
-            try {
-              const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 15e3);
-              const wpPutRes = await fetch(`https://empresasencarmen.com/wp-json/wc/v3/products/${targetWpId}`, {
-                method: "PUT",
-                headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": authHeader
-                },
-                body: JSON.stringify(putPayload),
-                signal: controller.signal
-              });
-              clearTimeout(timeout);
-              if (wpPutRes.ok) {
-                b.isLocallyEdited = false;
-                if (existingMap.has(targetWpId)) {
-                  const it = existingMap.get(targetWpId);
-                  if (it) it.isLocallyEdited = false;
-                }
-                purgeWordPressCache([b.slug, ...b.previousSlugs || []]);
-                console.log(`[WooCommerce Sync] Actualizadas categor\xEDas, im\xE1genes y estructura para "${b.name}" en WordPress ID #${targetWpId}.`);
-              } else {
-                console.info(`[WooCommerce Sync] Aviso al actualizar "${b.name}" en WordPress: HTTP ${wpPutRes.status}`);
-              }
-            } catch (err) {
-              console.info(`[WooCommerce Sync] Servidor WordPress empresasencarmen.com en espera temporal para "${b.name}":`, err.message);
-            }
-            await new Promise((resolve) => setTimeout(resolve, 300));
-          } catch (syncErr) {
-            console.info(`[WooCommerce Sync] Aviso procesando "${b.name}":`, syncErr.message);
-          }
-        }
-      } else if (!matchingWp) {
-        console.log(`[WooCommerce Sync] Exportando empresa local "${b.name}" a empresasencarmen.com...`);
-        const exportRes = await exportBusinessToWooCommerce(b, authHeader);
-        if (exportRes.success && exportRes.wpId) {
-          pushedToWpCount++;
-          const oldId = b.id;
-          b.oldId = oldId;
-          b.id = exportRes.wpId;
-          if (exportRes.permalink) b.permalink = exportRes.permalink;
-          if (exportRes.slug) b.slug = exportRes.slug;
-          b.source = "synced";
-          b.isNewSubmission = false;
-          existingMap.delete(Number(oldId));
-          existingMap.set(exportRes.wpId, b);
-          if (isMariaDbActive()) {
-            try {
-              if (oldId !== b.id) await dbDeleteBusiness(oldId);
-              await dbSaveBusiness(b);
-            } catch (_) {
-            }
-          }
-          console.log(`[WooCommerce Sync] \xA1Empresa "${b.name}" exportada y creada exitosamente en WordPress WooCommerce ID #${exportRes.wpId}!`);
-        } else {
-          console.warn(`[WooCommerce Sync] No se pudo exportar "${b.name}" a WooCommerce:`, exportRes.error);
-        }
-      }
-    }
-    businessesCache = Array.from(existingMap.values());
-    console.log(`[WooCommerce Sync] Sincronizaci\xF3n bidireccional exitosa: ${businessesCache.length} comercios totales (${newCount} importados, ${pushedToWpCount} exportados a WordPress).`);
-    try {
-      const bizPath = path.resolve(__dirname, "src/data/businesses_seed.json");
-      fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), "utf8");
-    } catch (_) {
-    }
-    if (isMariaDbActive()) {
-      for (const b of businessesCache) {
-        dbSaveBusiness(b).catch(() => {
-        });
-      }
-    }
-    return { count: businessesCache.length, newCount, pushedToWpCount };
-  } catch (err) {
-    console.info("[WooCommerce Sync] Aviso:", err.message);
-    return { count: businessesCache.length, newCount: 0, pushedToWpCount: 0 };
-  }
-}
-if (!process.env.VERCEL && IS_WP_SYNC_ENABLED) {
-  setTimeout(() => {
-    syncAllWooCommerceProducts().catch(() => {
-    });
-  }, 5e3);
+  throw new Error("Sincronizaci\xF3n WooCommerce retirada. MariaDB es la fuente autorizada.");
 }
 function findDuplicateBusiness(name, phone) {
   const normPhone = (phone || "").replace(/\D/g, "").slice(-10);
@@ -3417,144 +4017,37 @@ app.get("/api/check-duplicate", (req, res) => {
   }
   return res.json({ isDuplicate: false });
 });
-app.post("/api/submit-business", async (req, res) => {
-  try {
-    const data = req.body;
-    if (!data.name || !data.name.trim()) {
-      return res.status(400).json({ success: false, message: "El nombre de la empresa es obligatorio" });
-    }
-    const phone = typeof data.phone === "string" ? data.phone.trim() : "";
-    const whatsapp = typeof data.whatsapp === "string" ? data.whatsapp.trim() : "";
-    if (!phone && !whatsapp) {
-      return res.status(400).json({
-        success: false,
-        message: "Debes proporcionar al menos un medio de contacto: tel\xE9fono o WhatsApp."
-      });
-    }
-    const allowDuplicate = Boolean(data.allowDuplicate);
-    if (!allowDuplicate) {
-      const dup = findDuplicateBusiness(data.name, data.phone);
-      if (dup) {
-        return res.status(409).json({
-          success: false,
-          isDuplicate: true,
-          existingBusiness: dup,
-          message: `Ya existe un negocio registrado con este nombre o tel\xE9fono: "${dup.name}"`
-        });
-      }
-    }
-    const maxId = businessesCache.reduce((max, b) => Math.max(max, Number(b.id) || 0), 4e3);
-    const newId = maxId + 1;
-    const baseSlug = (data.name || "empresa").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || `empresa-${newId}`;
-    let slug = baseSlug;
-    if (businessesCache.some((b) => b.slug === slug)) {
-      slug = `${baseSlug}-${newId}`;
-    }
-    const newBiz = {
-      id: newId,
-      name: data.name.trim(),
-      slug,
-      description: data.description || "",
-      phone: data.phone || "",
-      whatsapp: data.whatsapp || data.phone || "",
-      facebook: data.facebook || "",
-      website: data.website || "",
-      address: data.address || "",
-      colonia: data.colonia || "Ciudad del Carmen Centro",
-      mapsUrl: data.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.name + ", Ciudad del Carmen, Campeche")}`,
-      schedule: data.schedule || "Lunes a S\xE1bado",
-      payment: data.payment || "Efectivo y Transferencia",
-      delivery: data.deliveryOption || "Atenci\xF3n en el Local de la empresa",
-      image: data.image || "",
-      gallery: Array.isArray(data.gallery) ? data.gallery : [],
-      categories: Array.isArray(data.categories) ? data.categories : data.category ? [data.category] : ["Comercios y Servicios"],
-      categorySlugs: Array.isArray(data.categorySlugs) ? data.categorySlugs : [slug],
-      rating: 0,
-      reviewCount: 0,
-      permalink: `https://empresasencarmen.com/empresa/${slug}/`,
-      isTopBusiness: false,
-      isRecommended: false,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    if (!isMariaDbActive()) {
-      return res.status(503).json({ success: false, message: "MariaDB no est\xE1 disponible. No se registr\xF3 la empresa." });
-    }
-    const saved = await dbSaveBusiness(newBiz);
-    if (!saved) {
-      return res.status(503).json({ success: false, message: "No fue posible guardar la empresa en MariaDB." });
-    }
-    businessesCache.unshift(newBiz);
+registerStagingBusinessRoutes(app, {
+  isStaging: isStagingEnvironment,
+  canWrite: isBusinessWritePermitted,
+  categorySlugs: generateCategorySlugs,
+  isAdmin: (req) => isVerifiedAdminSession(req),
+  canPublish: (req) => adminSecurity.isAuthorized(req, "business:publish"),
+  readAll: () => dbLoadAllBusinesses(true),
+  store: stagingBusinessStore,
+  saved: (business) => {
+    businessesCache = [business, ...businessesCache.filter((b) => String(b.id) !== String(business.id))];
     cachedDbSignature = null;
-    try {
-      const bizPath = path.resolve(__dirname, "src/data/businesses_seed.json");
-      fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), "utf8");
-    } catch (e) {
-      console.warn("[Storage] Error actualizando businesses_seed.json:", e);
-    }
-    let publishedToWordPress = false;
-    let wpPermalink = null;
-    let wpProductId = null;
-    const authHeader = getWpAuthHeader();
-    if (authHeader) {
-      try {
-        const exportRes = await exportBusinessToWooCommerce(newBiz, authHeader);
-        if (exportRes.success && exportRes.wpId) {
-          publishedToWordPress = true;
-          wpProductId = exportRes.wpId;
-          wpPermalink = exportRes.permalink || null;
-          newBiz.oldId = newId;
-          newBiz.id = exportRes.wpId;
-          if (exportRes.permalink) newBiz.permalink = exportRes.permalink;
-          if (exportRes.slug) newBiz.slug = exportRes.slug;
-          newBiz.source = "synced";
-          newBiz.isNewSubmission = false;
-          if (isMariaDbActive()) {
-            try {
-              await dbDeleteBusiness(newId);
-              await dbSaveBusiness(newBiz);
-            } catch (_) {
-            }
-          }
-          try {
-            const bizPath = path.resolve(__dirname, "src/data/businesses_seed.json");
-            fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), "utf8");
-          } catch (_) {
-          }
-          console.log(`[WordPress] Empresa "${newBiz.name}" publicada autom\xE1ticamente en WordPress WooCommerce ID #${wpProductId}.`);
-        } else {
-          console.warn("[WordPress] Error al sincronizar con WordPress:", exportRes.error);
-        }
-      } catch (wpErr) {
-        console.warn("[WordPress] Error al sincronizar con WordPress:", wpErr.message);
-      }
-    }
-    return res.status(201).json({
-      success: true,
-      message: publishedToWordPress ? "\xA1Empresa registrada y publicada con \xE9xito en el directorio y en WordPress!" : "\xA1Empresa registrada con \xE9xito en el directorio!",
-      business: newBiz,
-      publishedToWordPress,
-      wpPermalink,
-      wpProductId
-    });
-  } catch (err) {
-    console.error("Error en submit-business:", err);
-    return res.status(500).json({ success: false, message: "Error interno al registrar la empresa" });
   }
 });
-var privilegedAdminSessions = /* @__PURE__ */ new Map();
-var isVerifiedAdminSession = (req) => {
-  const token = req.get("X-Encarmen-Admin-Token") || "";
-  const expires = privilegedAdminSessions.get(token);
-  if (!token || !expires) return false;
-  if (expires <= Date.now()) {
-    privilegedAdminSessions.delete(token);
-    return false;
-  }
-  return true;
-};
+mountPublicRegistration(app, {
+  isStaging: isStagingEnvironment,
+  canWrite: isBusinessWritePermitted,
+  getPool,
+  businessStore: stagingBusinessStore,
+  categorySlugs: generateCategorySlugs,
+  saved: (business) => {
+    businessesCache = [business, ...businessesCache.filter((b) => String(b.id) !== String(business.id))];
+    cachedDbSignature = null;
+  },
+  isVisible: (id) => businessesCache.some((b) => String(b.id) === String(id) && (b.status || "published") === "published")
+});
+app.post("/api/submit-business", (_req, res) => res.status(503).json({ success: false, message: "El alta requiere el almac\xE9n controlado de Staging; no se guard\xF3 en memoria ni en semillas." }));
+var isVerifiedAdminSession = (req) => adminSecurity.isAuthorized(req, "business:manage");
 app.patch(["/api/businesses/:id", "/businesses/:id"], async (req, res) => {
+  let writeMayHaveSucceeded = false;
   try {
-    await refreshBusinessesFromDbIfNeeded();
+    await refreshBusinessesFromDbIfNeeded(true);
     const id = req.params.id;
     const idParam = String(id).toLowerCase().trim();
     const idx = businessesCache.findIndex(
@@ -3564,6 +4057,11 @@ app.patch(["/api/businesses/:id", "/businesses/:id"], async (req, res) => {
       return res.status(404).json({ success: false, message: "Empresa no encontrada" });
     }
     const oldBiz = businessesCache[idx];
+    const contactIntent = prepareContactPatch(req.body || {}, isVerifiedAdminSession(req));
+    const safeBody = { ...req.body };
+    delete safeBody.phone;
+    delete safeBody.whatsapp;
+    delete safeBody.clearContacts;
     const privilegedFields = ["slug", "isTopBusiness", "isRecommended", "previousSlugs", "previousNames"];
     if (!isVerifiedAdminSession(req) && privilegedFields.some((key) => Object.prototype.hasOwnProperty.call(req.body || {}, key) && JSON.stringify(req.body[key]) !== JSON.stringify(oldBiz[key]))) {
       return res.status(403).json({ success: false, message: "Solo un administrador autenticado puede modificar enlaces y distintivos." });
@@ -3589,9 +4087,10 @@ app.patch(["/api/businesses/:id", "/businesses/:id"], async (req, res) => {
     )) {
       return res.status(409).json({ success: false, message: "El enlace personalizado ya pertenece a otra empresa o es una direcci\xF3n hist\xF3rica reservada." });
     }
-    const updated = {
+    let updated = {
       ...oldBiz,
-      ...req.body,
+      ...safeBody,
+      ...contactIntent.patch,
       slug: newSlug,
       categories: finalCategories,
       categorySlugs: req.body.category || req.body.categories ? generateCategorySlugs(finalCategories) : oldBiz.categorySlugs && oldBiz.categorySlugs.length > 0 ? oldBiz.categorySlugs : generateCategorySlugs(finalCategories),
@@ -3604,11 +4103,21 @@ app.patch(["/api/businesses/:id", "/businesses/:id"], async (req, res) => {
     if (!isMariaDbActive()) {
       return res.status(503).json({ success: false, message: "MariaDB no est\xE1 disponible. Los cambios no se guardaron." });
     }
-    const persisted = await dbSaveBusiness(updated);
+    writeMayHaveSucceeded = true;
+    const persisted = await dbSaveBusiness({
+      ...updated,
+      phone: contactIntent.patch.phone,
+      whatsapp: contactIntent.patch.whatsapp
+    }, { clearContacts: contactIntent.clear, updateContacts: true });
     if (!persisted) {
-      return res.status(503).json({ success: false, message: "No fue posible guardar los cambios en MariaDB." });
+      return res.status(503).json({ success: false, writeMayHaveSucceeded: true, message: "No se pudo confirmar el guardado. Recarga antes de reintentar." });
     }
-    businessesCache[idx] = updated;
+    const confirmed = (await dbLoadAllBusinesses(true)).find((b) => String(b.id) === String(oldBiz.id));
+    if (!confirmed) return res.status(503).json({ success: false, writeMayHaveSucceeded: true, message: "No se pudo verificar el resultado del guardado; recarga antes de reintentar." });
+    if (!contactsMatchReadback(contactIntent.patch, confirmed)) return res.status(409).json({ success: false, writeMayHaveSucceeded: true, message: "Los contactos rele\xEDdos no coinciden con el cambio solicitado. Recarga antes de reintentar." });
+    updated = confirmed;
+    if (contactIntent.clear.length) console.info("[Business contacts] Authorized explicit removal", { businessId: String(oldBiz.id), fields: contactIntent.clear });
+    businessesCache = businessesCache.map((b) => String(b.id) === String(oldBiz.id) ? updated : b);
     cachedDbSignature = null;
     try {
       const bizPath = path.resolve(__dirname, "src/data/businesses_seed.json");
@@ -3665,7 +4174,8 @@ app.patch(["/api/businesses/:id", "/businesses/:id"], async (req, res) => {
     }
     return res.json({ success: true, message: "Empresa actualizada con \xE9xito", business: updated });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
+    if (err instanceof ContactPatchError) return res.status(err.status).json({ success: false, message: err.message });
+    return res.status(503).json({ success: false, writeMayHaveSucceeded, message: writeMayHaveSucceeded ? "La escritura fue aceptada, pero no pudo confirmarse. Recarga antes de reintentar." : "No fue posible confirmar el guardado en MariaDB." });
   }
 });
 app.post("/api/businesses/:id/sync-wp", async (req, res) => {
@@ -3735,142 +4245,25 @@ app.post("/api/businesses/:id/sync-wp", async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
-function savePinsToFile() {
-  try {
-    const pinsPath = path.resolve(__dirname, "pins_db.json");
-    fs.writeFileSync(pinsPath, JSON.stringify(editPinsCache, null, 2), "utf8");
-  } catch (_) {
-  }
-}
-app.get("/api/admin/businesses-edit-pins", (_req, res) => {
-  const now = Date.now();
-  const activePins = {};
-  for (const [key, val] of Object.entries(editPinsCache)) {
-    if (val && val.expiresAt > now) {
-      const remainingMinutes = Math.max(0, Math.round((val.expiresAt - now) / 6e4));
-      activePins[Number(key)] = {
-        pin: val.pin,
-        expiresAt: val.expiresAt,
-        remainingMinutes
-      };
-    }
-  }
-  return res.json({ success: true, pins: activePins });
-});
-app.post("/api/admin/businesses/:id/generate-pin", (req, res) => {
-  const rawId = req.params.id;
-  const bizId = Number(rawId);
-  const biz = businessesCache.find(
-    (b) => bizId && Number(b.id) === bizId || bizId && Number(b.oldId) === bizId || String(b.id) === String(rawId) || String(b.oldId) === String(rawId) || b.slug && b.slug === rawId
-  );
-  const targetId = biz ? Number(biz.id) : bizId || Date.now();
-  const bizName = biz?.name || `Empresa #${rawId}`;
-  const pin = Math.floor(1e9 + Math.random() * 9e9).toString();
-  const expiresAt = Date.now() + 12 * 60 * 60 * 1e3;
-  const remainingMinutes = 720;
-  editPinsCache[targetId] = {
-    pin,
-    expiresAt,
-    remainingMinutes
-  };
-  if (biz?.oldId) {
-    editPinsCache[Number(biz.oldId)] = {
-      pin,
-      expiresAt,
-      remainingMinutes
-    };
-  }
-  if (bizId && bizId !== targetId) {
-    editPinsCache[bizId] = {
-      pin,
-      expiresAt,
-      remainingMinutes
-    };
-  }
-  savePinsToFile();
-  console.log(`[Admin PIN] Generado PIN de 10 d\xEDgitos ${pin} para empresa "${bizName}" (ID: ${targetId}) con validez de 12 horas.`);
-  return res.json({
-    success: true,
-    pin,
-    expiresAt,
-    remainingMinutes,
-    message: `PIN de 10 d\xEDgitos generado con \xE9xito para ${bizName}`
-  });
-});
-app.post("/api/businesses/:id/verify-edit-pin", (req, res) => {
-  const rawId = req.params.id;
-  const bizId = Number(rawId);
-  const { pin } = req.body;
-  if (!pin) {
-    return res.status(400).json({ success: false, valid: false, message: "C\xF3digo PIN de 10 d\xEDgitos requerido" });
-  }
-  const cleanPin = String(pin).replace(/\D/g, "").trim();
-  const biz = businessesCache.find(
-    (b) => bizId && Number(b.id) === bizId || bizId && Number(b.oldId) === bizId || String(b.id) === String(rawId) || String(b.oldId) === String(rawId) || b.slug && b.slug === rawId
-  );
-  const targetId = biz ? Number(biz.id) : bizId;
-  const altId = biz?.oldId ? Number(biz.oldId) : null;
-  const stored = editPinsCache[targetId] || (altId ? editPinsCache[altId] : void 0) || (bizId ? editPinsCache[bizId] : void 0);
-  const now = Date.now();
-  const isMaster = cleanPin === "9380001234";
-  if (!isMaster && (!stored || stored.expiresAt < now)) {
-    return res.status(400).json({
-      success: false,
-      valid: false,
-      message: "El c\xF3digo ha expirado o a\xFAn no ha sido generado por el administrador. Solicita tu c\xF3digo por WhatsApp."
-    });
-  }
-  if (!isMaster && stored.pin !== cleanPin) {
-    return res.status(400).json({
-      success: false,
-      valid: false,
-      message: "C\xF3digo incorrecto. Verifica los 10 d\xEDgitos que te fueron proporcionados."
-    });
-  }
-  const remainingMinutes = stored ? Math.max(0, Math.round((stored.expiresAt - now) / 6e4)) : 720;
-  return res.json({
-    success: true,
-    valid: true,
-    expiresAt: stored ? stored.expiresAt : Date.now() + 12 * 3600 * 1e3,
-    remainingMinutes,
-    message: "C\xF3digo verificado con \xE9xito"
-  });
+app.all(["/api/admin/businesses-edit-pins", "/api/admin/businesses/:id/generate-pin", "/api/businesses/:id/verify-edit-pin"], (_req, res) => {
+  return res.status(410).set("Cache-Control", "no-store").json({ success: false, valid: false, message: "El acceso mediante PIN est\xE1 deshabilitado. Utiliza una sesi\xF3n administrativa verificada." });
 });
 app.delete(["/api/businesses/:id", "/businesses/:id"], async (req, res) => {
+  let writeMayHaveSucceeded = false;
   try {
-    const id = req.params.id;
-    const idx = businessesCache.findIndex((b) => String(b.id) === String(id) || Number(b.id) === Number(id));
-    if (idx === -1) {
-      return res.status(404).json({ success: false, message: "Empresa no encontrada" });
-    }
-    const deleted = businessesCache.splice(idx, 1)[0];
-    try {
-      const bizPath = path.resolve(__dirname, "src/data/businesses_seed.json");
-      fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), "utf8");
-    } catch (_) {
-    }
-    if (isMariaDbActive()) {
-      try {
-        await dbDeleteBusiness(id);
-        cachedDbSignature = null;
-      } catch (_) {
-      }
-    } else {
-      cachedDbSignature = null;
-    }
-    const authHeader = getWpAuthHeader();
-    if (authHeader) {
-      try {
-        fetch(`https://empresasencarmen.com/wp-json/wc/v3/products/${id}?force=true`, {
-          method: "DELETE",
-          headers: { "Authorization": authHeader }
-        }).catch((err) => console.warn("[WooCommerce Delete] Error:", err.message));
-      } catch (_) {
-      }
-    }
-    return res.json({ success: true, message: `Negocio "${deleted.name}" dado de baja y eliminado con \xE9xito tanto del directorio como de WordPress.` });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
+    await refreshBusinessesFromDbIfNeeded(true);
+    const current = businessesCache.find((b) => String(b.id) === String(req.params.id));
+    if (!current) return res.status(404).json({ success: false, message: "Empresa no encontrada." });
+    const deleted = await dbDeleteBusiness(current.id);
+    if (!deleted) return res.status(503).json({ success: false, message: "No se confirm\xF3 la baja en MariaDB." });
+    writeMayHaveSucceeded = true;
+    const remaining = await dbLoadAllBusinesses(true);
+    if (remaining.some((b) => String(b.id) === String(current.id))) throw new Error("DELETE_READBACK_FAILED");
+    businessesCache = remaining;
+    cachedDbSignature = null;
+    return res.json({ success: true, message: "Baja confirmada mediante lectura de MariaDB." });
+  } catch {
+    return res.status(503).json({ success: false, writeMayHaveSucceeded, message: "No se pudo confirmar la baja. Recarga antes de reintentar." });
   }
 });
 app.post("/api/sync", async (_req, res) => {
@@ -3913,20 +4306,20 @@ app.post("/api/webhook/woocommerce", async (req, res) => {
       }
       return res.json({ success: true, message: `Producto ${id} eliminado en Hostinger MariaDB` });
     }
-    const norm = parseWooCommerceProduct(body);
-    const existingIdx = businessesCache.findIndex((b) => String(b.id) === String(norm.id));
+    const norm2 = parseWooCommerceProduct(body);
+    const existingIdx = businessesCache.findIndex((b) => String(b.id) === String(norm2.id));
     if (existingIdx !== -1) {
-      businessesCache[existingIdx] = norm;
+      businessesCache[existingIdx] = norm2;
     } else {
-      businessesCache.unshift(norm);
+      businessesCache.unshift(norm2);
     }
     if (isMariaDbActive()) {
-      await dbSaveBusiness(norm);
+      await dbSaveBusiness(norm2);
     }
     return res.json({
       success: true,
-      message: `Producto "${norm.name}" sincronizado en tiempo real a Hostinger MariaDB`,
-      businessId: norm.id
+      message: `Producto "${norm2.name}" sincronizado en tiempo real a Hostinger MariaDB`,
+      businessId: norm2.id
     });
   } catch (err) {
     console.warn("[WooCommerce Webhook] Error:", err.message);
@@ -3966,70 +4359,81 @@ app.get("/api/health-wp", async (_req, res) => {
     });
   }
 });
-app.get("/api/reports", (_req, res) => {
-  res.json({ total: reportsCache.length, reports: reportsCache });
+app.get("/api/reports", async (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    if (!isMariaDbActive()) throw new Error("UNAVAILABLE");
+    const reports = await dbLoadAllReports();
+    reportsCache = reports;
+    return res.json({ success: true, source: "mariadb", total: reports.length, reports });
+  } catch {
+    return res.status(503).json({ success: false, source: "unavailable", message: "No se pudieron consultar los reportes en MariaDB." });
+  }
 });
 app.post("/api/reports", async (req, res) => {
+  if (!isMariaDbActive()) return res.status(503).json({ success: false, writeMayHaveSucceeded: false, message: "La base de datos no est\xE1 disponible para confirmar el reporte." });
+  const reportData = {
+    ...req.body,
+    id: `rep-${Date.now()}-${crypto.randomBytes(6).toString("hex")}`,
+    status: "pending",
+    createdAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
   try {
-    const reportData = {
-      id: `rep-${Date.now()}`,
-      status: "pending",
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      ...req.body
-    };
-    reportsCache.unshift(reportData);
+    const reports = await dbLoadAllReports();
+    if (await dbSaveReport(reportData) !== true) {
+      return res.status(503).json({ success: false, writeMayHaveSucceeded: true, message: "No se pudo confirmar si el reporte qued\xF3 guardado. Evita reenviarlo sin verificar." });
+    }
+    reportsCache = [reportData, ...reports.filter((r) => r.id !== reportData.id)];
     try {
       fs.writeFileSync(path.resolve(__dirname, "reports_db.json"), JSON.stringify(reportsCache, null, 2), "utf8");
-    } catch (_) {
+    } catch (err) {
+      console.warn("No se actualiz\xF3 la copia local de reportes:", err);
     }
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveReport(reportData);
-      } catch (_) {
-      }
-    }
-    res.json({ success: true, message: "Reporte recibido", report: reportData });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return res.json({ success: true, message: "Reporte recibido y guardado en MariaDB.", report: reportData });
+  } catch {
+    return res.status(503).json({ success: false, writeMayHaveSucceeded: true, message: "No se pudo confirmar el resultado de la escritura del reporte." });
   }
 });
 app.patch("/api/reports/:id", async (req, res) => {
   const id = req.params.id;
-  const rep = reportsCache.find((r) => r.id === id);
-  if (rep) {
-    if (req.body.status) rep.status = req.body.status;
+  if (!isMariaDbActive()) return res.status(503).json({ success: false, message: "MariaDB no disponible; cambio no confirmado." });
+  if (!["resolved", "dismissed"].includes(req.body?.status)) {
+    return res.status(400).json({ success: false, message: "Estado de reporte inv\xE1lido." });
+  }
+  try {
+    const reports = await dbLoadAllReports();
+    const existing = reports.find((r) => r.id === id);
+    if (!existing) return res.status(404).json({ success: false, message: "Reporte no encontrado" });
+    const updated = { ...existing, status: req.body.status };
+    if (await dbUpdateReport(updated) !== true) return res.status(503).json({ success: false, writeMayHaveSucceeded: true, message: "No se confirm\xF3 la actualizaci\xF3n del reporte." });
+    reportsCache = reports.map((r) => r.id === id ? updated : r);
     try {
       fs.writeFileSync(path.resolve(__dirname, "reports_db.json"), JSON.stringify(reportsCache, null, 2), "utf8");
-    } catch (_) {
+    } catch (err) {
+      console.warn("No se actualiz\xF3 la copia local de reportes:", err);
     }
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveReport(rep);
-      } catch (_) {
-      }
-    }
-    return res.json({ success: true, report: rep });
+    return res.json({ success: true, report: updated });
+  } catch {
+    return res.status(503).json({ success: false, writeMayHaveSucceeded: true, message: "No se pudo confirmar la actualizaci\xF3n del reporte." });
   }
-  return res.status(404).json({ success: false, message: "Reporte no encontrado" });
 });
 app.delete("/api/reports/:id", async (req, res) => {
   const id = req.params.id;
-  const idx = reportsCache.findIndex((r) => r.id === id);
-  if (idx !== -1) {
-    reportsCache.splice(idx, 1);
+  if (!isMariaDbActive()) return res.status(503).json({ success: false, message: "MariaDB no disponible; baja no confirmada." });
+  try {
+    const reports = await dbLoadAllReports();
+    if (!reports.some((r) => r.id === id)) return res.status(404).json({ success: false, message: "Reporte no encontrado" });
+    if (await dbDeleteReport(id) !== true) return res.status(503).json({ success: false, writeMayHaveSucceeded: true, message: "No se confirm\xF3 la eliminaci\xF3n del reporte." });
+    reportsCache = reports.filter((r) => r.id !== id);
     try {
       fs.writeFileSync(path.resolve(__dirname, "reports_db.json"), JSON.stringify(reportsCache, null, 2), "utf8");
-    } catch (_) {
+    } catch (err) {
+      console.warn("No se actualiz\xF3 la copia local de reportes:", err);
     }
-    if (isMariaDbActive()) {
-      try {
-        await dbDeleteReport(id);
-      } catch (_) {
-      }
-    }
-    return res.json({ success: true, message: "Reporte eliminado" });
+    return res.json({ success: true, message: "Reporte eliminado de MariaDB." });
+  } catch {
+    return res.status(503).json({ success: false, writeMayHaveSucceeded: true, message: "No se pudo confirmar la eliminaci\xF3n del reporte." });
   }
-  return res.status(404).json({ success: false, message: "Reporte no encontrado" });
 });
 app.get("/api/categories", (_req, res) => {
   const parents = categoriesCache.filter((c) => c.parent === 0 && c.id !== 15 && c.slug !== "uncategorized");
@@ -4056,11 +4460,7 @@ app.get("/api/events", async (_req, res) => {
     } catch (_) {
     }
   }
-  try {
-    await pruneExpiredEvents();
-  } catch (_) {
-  }
-  const eventsWithImages = eventsCache.map((e) => ({
+  const eventsWithImages = eventsCache.filter((evt) => !isEventPast(evt.date, evt.time)).map((e) => ({
     ...e,
     image: e.image && typeof e.image === "string" && e.image.trim() ? e.image.trim() : getEventRepresentativeImageServer(e)
   }));
@@ -4102,6 +4502,9 @@ app.post("/api/events", async (req, res) => {
 app.put("/api/events/:id", async (req, res) => {
   try {
     const id = req.params.id;
+    if (["radar-search", "reset", "publish-candidates", "radar-scan", "radar-status"].includes(String(id).toLowerCase())) {
+      return res.status(405).json({ success: false, error: "RESERVED_RESOURCE_ID", message: "Identificador reservado para una operaci\xF3n del servicio." });
+    }
     const idx = eventsCache.findIndex((e) => e.id === id);
     if (idx === -1) {
       return res.status(404).json({ success: false, message: "Evento no encontrado" });
@@ -4129,6 +4532,9 @@ app.put("/api/events/:id", async (req, res) => {
 app.delete("/api/events/:id", async (req, res) => {
   try {
     const id = req.params.id;
+    if (["radar-search", "reset", "publish-candidates", "radar-scan", "radar-status"].includes(String(id).toLowerCase())) {
+      return res.status(405).json({ success: false, error: "RESERVED_RESOURCE_ID", message: "Identificador reservado para una operaci\xF3n del servicio." });
+    }
     eventsCache = eventsCache.filter((e) => e.id !== id);
     fs.writeFileSync(path.resolve(__dirname, "events_db.json"), JSON.stringify(eventsCache, null, 2), "utf8");
     if (isMariaDbActive()) {
@@ -4412,7 +4818,6 @@ setInterval(() => {
 }, 60 * 60 * 1e3);
 app.get("/api/classifieds", (req, res) => {
   try {
-    pruneExpiredClassifieds();
     if (classifiedsCache.length === 0) {
       try {
         const cPath = path.resolve(__dirname, "classifieds_db.json");
@@ -4422,7 +4827,7 @@ app.get("/api/classifieds", (req, res) => {
       } catch (_) {
       }
     }
-    let list = [...classifiedsCache];
+    let list = classifiedsCache.map((ad) => ad.status !== "trash" && Date.now() - new Date(ad.createdAt || Date.now()).getTime() > 7 * 24 * 60 * 60 * 1e3 ? { ...ad, status: "trash" } : ad);
     const { category, subcategory, q, colonia, status, priceType, allStatus } = req.query;
     if (!allStatus) {
       list = list.filter((item) => (item.status || "active") === "active");
@@ -4485,6 +4890,9 @@ app.post("/api/classifieds", async (req, res) => {
 app.patch("/api/classifieds/:id", async (req, res) => {
   try {
     const id = req.params.id;
+    if (["radar-search", "reset", "publish-candidates", "radar-scan", "radar-status"].includes(String(id).toLowerCase())) {
+      return res.status(405).json({ success: false, error: "RESERVED_RESOURCE_ID", message: "Identificador reservado para una operaci\xF3n del servicio." });
+    }
     const idx = classifiedsCache.findIndex((c) => c.id === id);
     if (idx === -1) {
       return res.status(404).json({ success: false, message: "Aviso clasificado no encontrado" });
@@ -4518,6 +4926,9 @@ app.patch("/api/classifieds/:id", async (req, res) => {
 app.delete("/api/classifieds/:id", async (req, res) => {
   try {
     const id = req.params.id;
+    if (["radar-search", "reset", "publish-candidates", "radar-scan", "radar-status"].includes(String(id).toLowerCase())) {
+      return res.status(405).json({ success: false, error: "RESERVED_RESOURCE_ID", message: "Identificador reservado para una operaci\xF3n del servicio." });
+    }
     classifiedsCache = classifiedsCache.filter((c) => c.id !== id);
     try {
       fs.writeFileSync(path.resolve(__dirname, "classifieds_db.json"), JSON.stringify(classifiedsCache, null, 2), "utf8");
@@ -5079,10 +5490,8 @@ app.get(["/api/emergency", "/api/emergency-services"], (_req, res) => {
 });
 app.post("/api/emergency", async (req, res) => {
   try {
-    const authHeader = req.headers.authorization || "";
-    const adminKey = req.headers["x-admin-auth"];
-    const isAdmin = Boolean(adminKey || typeof authHeader === "string" && authHeader.length > 5 || req.body?.isAdmin);
-    if (!isAdmin && process.env.NODE_ENV === "production") {
+    const isAdmin = adminSecurity.isAuthorized(req, "admin:manage");
+    if (!isAdmin) {
       return res.status(403).json({ success: false, message: "Acceso restringido \xFAnicamente a administradores autorizados." });
     }
     const item = req.body;
@@ -5108,10 +5517,8 @@ app.post("/api/emergency", async (req, res) => {
 });
 app.delete("/api/emergency/:id", async (req, res) => {
   try {
-    const authHeader = req.headers.authorization || "";
-    const adminKey = req.headers["x-admin-auth"];
-    const isAdmin = Boolean(adminKey || typeof authHeader === "string" && authHeader.length > 5 || req.query.isAdmin === "true");
-    if (!isAdmin && process.env.NODE_ENV === "production") {
+    const isAdmin = adminSecurity.isAuthorized(req, "admin:manage");
+    if (!isAdmin) {
       return res.status(403).json({ success: false, message: "Acceso restringido \xFAnicamente a administradores autorizados." });
     }
     const id = req.params.id;
@@ -5577,10 +5984,6 @@ function getGeminiClient() {
 }
 app.post("/api/events/radar-search", async (req, res) => {
   try {
-    try {
-      await pruneExpiredEvents();
-    } catch (_) {
-    }
     const userQuery = (req.body?.query || "").toLowerCase().trim();
     const useAi = Boolean(req.body?.useAi);
     console.log(`[B\xFAsqueda Radar de Eventos] Consulta recibida: "${userQuery}", useAi: ${useAi}`);
@@ -5699,26 +6102,26 @@ Devuelve \xDANICAMENTE un array JSON v\xE1lido sin texto adicional ni markdown e
         message: "GEMINI_API_KEY no detectada en el servidor. Se cargaron los eventos del radar local aut\xF3nomo ($0 costo)."
       };
     }
-    let publishedCandidates = eventsCache.map((raw) => {
-      const candidateImg = raw.image && typeof raw.image === "string" && raw.image.trim() ? raw.image.trim() : getEventRepresentativeImageServer(raw);
+    let publishedCandidates = eventsCache.filter((evt) => !isEventPast(evt.date, evt.time)).map((raw2) => {
+      const candidateImg = raw2.image && typeof raw2.image === "string" && raw2.image.trim() ? raw2.image.trim() : getEventRepresentativeImageServer(raw2);
       return {
-        id: raw.id,
-        title: raw.title,
-        category: raw.category || "Cultura & M\xFAsica",
-        categorySlug: raw.categorySlug || "cultura",
-        date: raw.date || "Pr\xF3ximamente",
-        time: raw.time || "Horario por confirmar",
-        location: raw.location || "Ciudad del Carmen, Campeche",
-        cost: raw.cost || "Entrada Libre",
-        description: raw.description || "",
-        organizer: raw.organizer || "Organizador en Carmen",
-        badge: raw.badge || "Cartelera Local",
-        icon: raw.icon || "Calendar",
+        id: raw2.id,
+        title: raw2.title,
+        category: raw2.category || "Cultura & M\xFAsica",
+        categorySlug: raw2.categorySlug || "cultura",
+        date: raw2.date || "Pr\xF3ximamente",
+        time: raw2.time || "Horario por confirmar",
+        location: raw2.location || "Ciudad del Carmen, Campeche",
+        cost: raw2.cost || "Entrada Libre",
+        description: raw2.description || "",
+        organizer: raw2.organizer || "Organizador en Carmen",
+        badge: raw2.badge || "Cartelera Local",
+        icon: raw2.icon || "Calendar",
         image: candidateImg,
-        sourceUrl: raw.sourceUrl || "https://carmen.gob.mx",
+        sourceUrl: raw2.sourceUrl || "https://carmen.gob.mx",
         alreadyPublished: true,
-        publishedEventId: raw.id,
-        aiDetected: Boolean(raw.aiDetected)
+        publishedEventId: raw2.id,
+        aiDetected: Boolean(raw2.aiDetected)
       };
     });
     const discoverableCandidates = CARMEN_RADAR_EVENT_POOL.filter((candidate) => {
@@ -7797,53 +8200,6 @@ app.post("/api/businesses/approve-multiple-candidates", async (req, res) => {
     res.status(500).json({ success: false, message: err.message || "Error en publicaci\xF3n m\xFAltiple" });
   }
 });
-app.get("/api/admin/accounts", (_req, res) => {
-  res.json({
-    success: true,
-    accounts: adminAccounts.map((a) => ({
-      username: a.username,
-      role: a.role,
-      initial: a.initial,
-      avatarColor: a.avatarColor
-    }))
-  });
-});
-var normalizeAdminName = (name) => {
-  const n = (name || "").trim().toLowerCase();
-  if (n === "yuss" || n === "y") return "y";
-  if (n === "jeo" || n === "j") return "j";
-  return n;
-};
-app.post("/api/admin/login", (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ success: false, error: "Usuario y contrase\xF1a requeridos" });
-  }
-  const user = adminAccounts.find((a) => normalizeAdminName(a.username) === normalizeAdminName(username));
-  if (!user) {
-    return res.status(401).json({ success: false, error: "Usuario no encontrado" });
-  }
-  const hash = hashPassword(password.trim());
-  if (hash === user.passwordHash) {
-    const token = crypto.randomBytes(32).toString("hex");
-    privilegedAdminSessions.set(token, Date.now() + 6 * 60 * 60 * 1e3);
-    res.json({ success: true, message: "Autenticaci\xF3n exitosa", username: user.username, token });
-  } else {
-    res.status(401).json({ success: false, error: "Contrase\xF1a incorrecta" });
-  }
-});
-app.post("/api/admin/change-password", async (req, res) => {
-  const { username, newPassword } = req.body;
-  if (!username || !newPassword || newPassword.trim().length < 3) {
-    return res.status(400).json({ success: false, error: "Datos inv\xE1lidos" });
-  }
-  const userIdx = adminAccounts.findIndex((a) => normalizeAdminName(a.username) === normalizeAdminName(username));
-  if (userIdx === -1) {
-    return res.status(404).json({ success: false, error: "Usuario no encontrado" });
-  }
-  adminAccounts[userIdx].passwordHash = hashPassword(newPassword.trim());
-  res.json({ success: true, message: `Contrase\xF1a de ${username} actualizada con \xE9xito` });
-});
 app.post("/api/upload-logo", async (req, res) => {
   try {
     const rawImage = req.body.imageBase64 || req.body.image;
@@ -7887,11 +8243,11 @@ app.post("/api/upload-logo", async (req, res) => {
 });
 app.post("/api/admin/banner-and-logo", async (req, res) => {
   try {
-    const { bannerBase64, logoBase64, commitAndPush } = req.body;
+    const { bannerBase64, logoBase64 } = req.body;
     let bannerUpdated = false;
     let logoUpdated = false;
-    const decodeB64 = (raw) => {
-      const clean = raw.replace(/^data:[^;]+;base64,/, "");
+    const decodeB64 = (raw2) => {
+      const clean = raw2.replace(/^data:[^;]+;base64,/, "");
       return Buffer.from(clean, "base64");
     };
     if (bannerBase64 && typeof bannerBase64 === "string") {
@@ -7951,32 +8307,17 @@ app.post("/api/admin/banner-and-logo", async (req, res) => {
         });
       }
     }
-    let gitPushed = false;
-    let gitOutput = "";
-    if ((bannerUpdated || logoUpdated) && commitAndPush !== false) {
-      try {
-        execSync("node scripts/update_version.cjs 2>&1", { cwd: __dirname });
-        execSync("git add src/constants/version.ts public/images/ public/empresas.png public/uploads/ 2>&1", { cwd: __dirname });
-        execSync('git commit -m "fix(brand): actualizar banner y logo oficial desde panel de administracion" 2>&1', { cwd: __dirname });
-        execSync("git push origin main 2>&1", { cwd: __dirname });
-        gitPushed = true;
-        gitOutput = "Publicado exitosamente en origin/main (Render producci\xF3n)";
-      } catch (gErr) {
-        console.warn("Git push warning:", gErr.message);
-        gitOutput = gErr.message;
-      }
-    }
     res.json({
       success: true,
       bannerUpdated,
       logoUpdated,
-      gitPushed,
-      gitOutput,
+      gitPushed: false,
+      gitOutput: "La publicaci\xF3n autom\xE1tica est\xE1 deshabilitada.",
       bannerUrl: `/images/banner-empresas-en-carmen.png?v=${Date.now()}`,
       logoUrl: `/images/logo-oficial.png?v=${Date.now()}`
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: "No fue posible actualizar las im\xE1genes." });
   }
 });
 app.get("/api/admin/banner-and-logo", (_req, res) => {
@@ -8059,7 +8400,7 @@ app.get("/sitemap.xml", (req, res) => {
 });
 var oneDayMs = 24 * 60 * 60 * 1e3;
 var oneWeekMs = 7 * oneDayMs;
-app.use(express.static(path.resolve(__dirname, "public"), {
+app.use(express2.static(path.resolve(__dirname, "public"), {
   maxAge: oneDayMs,
   setHeaders: (res, filePath) => {
     if (/\.(jpg|jpeg|png|webp|svg|gif|ico|woff2?|ttf)$/i.test(filePath)) {
@@ -8121,7 +8462,7 @@ if (!isProduction && !process.env.VERCEL) {
     next();
   });
 } else {
-  app.use(express.static(path.resolve(__dirname, "dist"), {
+  app.use(express2.static(path.resolve(__dirname, "dist"), {
     maxAge: oneWeekMs,
     index: false,
     setHeaders: (res, filePath) => {

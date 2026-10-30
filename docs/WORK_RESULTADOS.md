@@ -369,3 +369,86 @@ Entregas observadas al cierre: Trabajador1 en2ebe21c6ce2848b5c7c5e69bf1288ddd7f0
 No package/lock/frontend/infraestructura/auth/DB modificados. Copia aislada y dependencias temporales fuera del repositorio; builds con entorno vacío salvo PATH. Frontend generado temporalmente, no se publica dist. No credenciales reales, SQL, backup real, Hostinger, arranque completo, PR, merge, integración ni despliegue. Main/ia-desarrollo preservados.
 Riesgos no resueltos por guard: arranque/semillas/limpieza y conexión productiva, permisos cruzados, estáticos externos/CDN/caché, symlinks/renombrados. Falta autorización y evidencia operativa; Staging NO declarado protegido. Reversión debe mantener contención y artefactos coherentes, sin restaurar BD ni abrir descargas a ciegas.
 
+
+
+## ENC-F008-R2 / ENC-F009 — contactos visibles y protección de recuperación
+
+Fecha: 2026-10-28. Estado: PROBADO_POR_WORK localmente; pendiente revisión operativa. Rama exclusiva `work/enc-f008-contactos-visibilidad`, base ia-desarrollo `0d231cb2779b7a14d8d336fc2f4de3782663c738`.
+
+Diagnóstico público verificado: Staging informa local_json/json_cache, 205 negocios, MariaDB desconectada y aislamiento inválido; base configurada de Staging. ID1081 Yuss Nails Beautiful Hands devuelve contactos vacíos. Producción rechaza GET con403. No acceso a hPanel/SSH ni SQL real. Restauración de174 por base reportada por Coordinación, no repetida.
+
+Implementación: SQL phone/whatsapp autoritativos frente a raw_data; lecturas estrictas frescas con fuente identificable/no-store y503 explícito; sin fallback de contactos semilla en App/servicio; conservación atómica en upsert de campos omitidos/vacíos y cachés antiguas; sustitución explícita mediante PATCH y readback; eliminación por clearContacts con sesión validada en servidor. Arranque de negocios sin seed/upsert; sync-catalog y WooCommerce retirados con410. Validación MX común en tarjetas, Glass y landing sin inferir WhatsApp. Filtros/contadores reales por conjunto de búsqueda antes de paginar y aviso sin contactos; API contacts/offset/limit y paginación local24. Editor/Logotipo/Radar/Comentarios no se mezclan.
+
+Pruebas: nueve grupos PASS con Node24.22.1/esbuild0.28.2/jsdom30.1.3; handlers Express reales con pool simulado, componentes React en DOM jsdom, App error/reintento/ficha actualizada, serialización, PATCH, eliminación403/400, preservación de caché, arranque/fallo/vacío y reinicio simulado, rutas410 sin consultas. TypeScript7.0.2 PASS; Vite8.3.5 PASS1723 módulos, warningchunk>500kB; bundlebackend PASS sin ejecutarlo. No pruebas de MariaDB/persistencia/autenticación reales ni llamadas/envíos físicos. Se documentan iteraciones fallidas y límites en el checkpoint.
+
+Trazabilidad completa, archivos, reproducción y rollback: [docs/work-progress/ENC-F008-R2.md](work-progress/ENC-F008-R2.md). Pruebas reproducibles: `tests/contacts-r2.test.mjs`. Sin main/ia, PR, integración, despliegue, SQL, credenciales ni infraestructura. Candidato apto para revisión de código; NO APTO para despliegue inmediato hasta conexión/aislamiento y verificación independiente del ID1081/API/UI. No activar confirmaciones de escritura sin comprobar permisos y aislamiento. Espera Coordinación.
+
+Implementación ENC-F008-R2 publicada y releída: https://github.com/dJeoMed78/Encarmenorg/commit/053b729bb82f852fa61063802a6a757947cf8b12. Verificación remota13/13 archivos, scope limitado a13 rutas. Editor/CSS/types/semilla/package/bundles heredados intactos. La integración futura exige recompilar server.ts y actualizar/verificar los artefactos de ejecución; no arrancar bundles viejos suponiendo que contienen la corrección. Ver checkpoint para bloqueos, condiciones y reversión. Sin integración/despliegue.
+
+
+## ENC-F008-R3 — recuperación revisada y finalización aislada
+
+Fecha local2026-10-28. EstadoPROBADO_POR_WORK localmente; NO integrado/desplegado/aprobado. Rama exclusiva work/enc-f008-r3-recuperacion, baseR2 d826a17b6f4bd29eaac1ef350111910ab2dfe872; checkpoint d479c0414582919111b78ae93713a0d293f8833a. Se auditaron ambos commitsR2 y sus13 archivos; se conservaron correcciones útiles y retirada de importaciónWooCommerce/semillas (401 líneas eliminadas en server.ts porR2, justificadas en checkpoint), sin reescribir historial ni tocar la rama anterior. Auditoría completa ENC-F008-AUDIT-001 no localizada en GitHub; aplicados los siete hallazgos transmitidos por Coordinación.
+
+Diagnóstico HTTP público actualizado: Staging local_json/json_cache,205 negocios, MariaDB desconectada, aislamiento inválido y mensaje de confirmación; base configurada u293982346_encarmentest. ID1081 coincide en nombre y devuelve ambos contactos vacíos. No consultas a producción, hPanel autenticado ni SQL real.
+
+Correcciones nuevas: DDL condicionado también a isWritePermitted; tel:+52; PIN solo por WhatsApp registrado; tipos de contacto estrictos; PATCH compara contactos de readback y falla409 ante discrepancia; ack perdido/relectura fallida se informa503 con posible escritura y sin éxito falso; cliente rechaza confirmación sin negocio/ID correcto; App descartaGET anterior a guardado y conserva aliasoldId; tarjeta digital y resumen de landing muestran canales independientes. ENC-F009 y protección/lecturaSQL deR2 conservados y probados nuevamente.
+
+Pruebas actuales: node --test tests/contacts-r3.test.mjs =>19 gruposPASS/0FAIL (9 recuperados+10 nuevos, no sumarlos otra vez). Matriz11 configuraciones simuladas; APIHTTPExpress local/poolmocks; continuidad filaSQL sintética1081->serializador->API->DOMGlass/botones; PATCH, sincronizaciones410, arranque/fallos/vacío, cachevieja, concurrencia simulada, filtros/búsqueda/paginación, canales y respuestaatrasada. TypeScriptPASS, frontendVitePASS1723módulos y esbuildservidorPASSsin ejecutar. EntornoNode24.22.1; sin acreditación de SQL/persistencia, permisos/auth reales, layoutCSS en dispositivos ni exportacióncanvas. Advertenciaschunk>500kB y salida temporalexterna.
+
+Delta: server.ts; src/db/mariadb.ts; src/App.tsx; src/services/api.ts; src/utils/businessContacts.ts; BusinessCard.tsx; AdminBusinessesTab.tsx; DigitalCardModal.tsx; ClientBusinessPageView.tsx; tests/contacts-r2.test.mjs; tests/contacts-r3.test.mjs; este registro y dos documentosR3. Editor/CSSGlass/Logotipo/Radar/Comentarios/config/secretos/main/ia no modificados. Bundlesheredados no publicados comoR3: recompilación/coherencia obligatoria antes de ejecución futura autorizada.
+
+Checkpoint y reproducción: docs/work-progress/ENC-F008-R3.md. PlanHostinger para autorización posterior: docs/work-progress/ENC-F008-R3-HOSTINGER.md. Propone lectura/DDLoff con credenciales existentes verificadas, explica precedencia.env y condiciónSTAGING_DB_CONFIRMED sin habilitar escrituras. Ninguna acción aplicada. Pendientesoperativos: conexión/permisos independientes, ID1081/174registros/API/UI reales, revisión de autorización generalPATCH/auditoríadurable y aprobación deCoordinación. Candidato paraREVISIÓN, no para despliegue inmediato. Reversión por commitsnormales exclusivamente deR3; no SQL ni force.
+
+Publicación R3 verificada: https://github.com/dJeoMed78/Encarmenorg/commit/734bfbd4affe5712ab30d68f0a289a27c24b377c. Lectura remota14/14 archivos coincidentes,14 rutas en diff, fuenteR2 e ia-desarrollo intactas. Nuevo delta server.ts limitado a7 adiciones/4 eliminaciones; no se amplió la retirada de código heredada. Resultado final19 gruposPASS, TypeScript/frontend/backendPASS. GuíaHostinger y bloqueos incluidos; sin aprobación, integración o despliegue.
+
+
+## ENC-CONSOLIDATION-001 — consolidación aislada (2026-10-29)
+
+Rama work/enc-consolidation-001; base184874835d9d588e679b201b790643dfd923aff8; checkpointa5fdd2f21a7a75613bf5e5a47e20b5c4ed338b1a; implementación4a2ad4cd56dba7929e975b7d99476f264ff8db9e. Se concilian selectivamente W1 registro, W2 seguridad, mejoras faltantes de PERP y ficha GAS. No se fusionan ramas ni se ejecuta sembrador/parche PERP. Guard administrativo por operación limitado al canal de negocios de Staging, sin escrituras generales; registro público anónimo conservado. PIN/credenciales fijas/Git automático retirados; caché y bajas sin falso éxito; contactos/calificaciones preservados. Bundles recompilados y25/25 blobs remotos verificados.
+
+Pruebas finales:132 PASS/0 FAIL en fuentes,27 PASS/0 FAIL sobre módulos extraídos del backend compilado; TypeScript, Vite(1726 módulos), esbuild y node --check PASS. No son159 escenarios únicos. HTTP real loopback, scrypt/sesiones reales con identidades sintéticas y SQL simulado. MariaDB real:NO. Compatibilidad seguridad/registro:SÍ localmente. Sin Hostinger, secretos, servidores completos, bases reales, integración o despliegue.
+
+Pendientes: inspección W2, MariaDB local desechable, validación visual real y mapa iframe (ensayo jsdom no satisfactorio, Chromium ausente), configuración segura posterior por operador. Cargas públicas siguen deshabilitadas. No aprobar ni desplegar automáticamente. Informe detallado y evidencia:docs/work-progress/ENC-CONSOLIDATION-001.md y ENC-CONSOLIDATION-001-evidence/.
+
+## ENC-SECURITY-RADAR-001 — H01, corrección aislada (2026-10-29)
+
+W1. Base exacta a16ca710449eda3c68f26016b91ce59d55b95b2b; rama work/enc-security-radar-001. Checkpoint funcional cd9aaab19f471d474036a1efafaeb4481177f39c. Estado IMPLEMENTADO/PROBADO LOCALMENTE/PUBLICADO, pendiente revisión independiente; no integrado/desplegado.
+
+Excepciones Radar restringidas a POST y ruta normalizada exacta; guard Staging comprueba POST; handlers mutables rechazan identificadores reservados405. Excepción equivalente de búsquedas empresariales restringida a POST. Consultas públicas de eventos/clasificados ya no ejecutan limpieza persistente: expiración derivada en respuesta. Sin nuevas excepciones de Staging ni habilitación de escrituras generales. Fuentes y bundles recompilados publicados juntos, prueba nueva de pipeline HTTP real con adaptadores sintéticos.
+
+Pruebas finales: npm run lint PASS; npm run build:server PASS; batería101 PASS/0FAIL, incluidos6grupos nuevos (90 solicitudes no autorizadas y32 reservadas con sesión, instantáneas de caché/archivos/contadores SQL intactas). Backend compilado27 PASS/0FAIL, con cobertura compartida respecto de fuentes. Segunda compilación y ambos bundles idénticos SHA256 db448ae4cbb5e52859712f69d54f55e09da1187c64e62f69a3e542e9d15f76ca. Advertencias chunk>500kb/npm http-proxy. Sin MariaDB real, Hostinger, despliegue, PR ni cambios en main/ia. No se afirma servidor completo ni persistencia durable del backend heredado. Detalle, comandos, procedencia, limitaciones y reversión: docs/work-progress/ENC-SECURITY-RADAR-001.md. Revisión e integración reservadas a Coordinación.
+
+## ENC-CONSOLIDATION-FIXES-002 — H02/H03/H04 sobre H01 preservado (2026-10-29)
+
+W1. Rama work/enc-consolidation-fixes-002 desde809dc7c05a8a633fc21379ad2121345b3aae71c7. Checkpoint4dba25fd0b10b14a168e43f042a2fd0f71d41858. Estado IMPLEMENTADO/PROBADO LOCALMENTE/PUBLICADO, pendiente revisión independiente, no integrado/desplegado.
+
+App comparte versión/abort de catálogo, navegación y guardado; invalida respuestas anteriores al cambiar ruta/ficha y tras confirmación, con actualización funcional por ID y URL actual sobre slug inyectado. API clasifica registro incierto ante5xx/red/no JSON/readback fallido, conserva UUID/Idempotency-Key y confirmación de ficha/listado; rechazos4xx contractuales diferenciados. Reportes exigen2xx/success=true, sin fallback local de éxito; deliveryState opcional confirmed/rejected/uncertain. Formulario conserva texto en fallo.
+
+Última batería142 PASS/0FAIL/0skipped, incluidos22 tests nuevos y H01 HTTP6/6. TypeScript y Vite PASS; warningchunk>500kb/npm http-proxy. React/jsdom y HTTP reales con persistencia/adaptadores simulados explícitos; sin MariaDB/Hostinger ni navegador real. H01 server/auth/política/bundles y DB intactos; no compilación de servidor requerida para cambios solo cliente.
+
+Archivos: src/App.tsx, src/services/api.ts; tres suites consolidation-fixes-002; aserción de mensaje en tests/staging-write-001.test.mjs; esta entrada y docs/work-progress/ENC-CONSOLIDATION-FIXES-002.md. Comandos, resultados, errores iniciales corregidos, límites, procedencia y reversión están en el checkpoint. Sin permisos generales, cambios de configuración, SQL, secretos, PR, force, integración o despliegue. Reversión exclusiva de esta tarea sobre baseH01; nunca volver automáticamente a consolidación vulnerable. Dictamen: PREPARADO PARA REVISIÓN DE COORDINACIÓN, aprobación reservada a Jefa3.
+
+## ENC-DATA-INTEGRITY-CLOSURE-003 — consulta de reportes y acuse de contactos (2026-10-29)
+
+W1. Base e60582e971f4f8cb56ea56191d33d91824f3fc5e; rama work/enc-data-integrity-closure-003 reutilizada tras ampliación de orden. Checkpoint fef79327578d60ae2967ceae2a624493c0efbc1a. Estado IMPLEMENTADO Y PREPARADO PARA REVISIÓN, no aprobado/integrado/desplegado.
+
+fetchReports devuelve origen/estado explícitos, total=null ante error, sin fallback ni lectura/borrado de históricos locales. Panel limpia lista/contadores previos, distingue consulta/fallo/vacío confirmado y descarta respuestas antiguas. adminUpdateBusiness exige éxito booleano, negocio/ID completo y readback de contactos solicitados o borrado explícito; reutiliza helpers existentes sin cambiar autorización. DefensasR3 de columnasSQL, upsert, PATCH parcial, caché, enlaces y sincronizaciones410 comprobadas y conservadas; no restauración de174/206contactos ni SQL real.
+
+Última batería147 PASS/0FAIL/0skipped (5 tests nuevos incluidos, cobertura compartida), lint y Vite PASS. React/jsdom, HTTP local y adaptadoresSQL simulados; sin MariaDB/Hostinger/navegador reales. H01-H04 preservados y probados; servidor/DB/App/bundles/configuración intactos. Avisos npm http-proxy/chunk>500kb. Detalle/comandos/errores iniciales corregidos/riesgos/reversión: docs/work-progress/ENC-DATA-INTEGRITY-CLOSURE-003.md.
+
+Comparados diffsJefa3 79757de8cfb07317668553c02a37502de4b64366 y aa5260cf16a08539e04f4225056e152472302c57, sin copiar/integrar cambios ni ejecutar sus suites. Conciliar API/panel por función en futura revisión. Origen HTTP no acredita persistenciaSQL: GET reportes usa caché, queda pendiente evaluación de lectura durable junto a tarea backend separada. Sin main/ia, producción/Staging, secretos, Hostinger, SQL, PR, merge o force. Revisión exclusiva de Coordinación antes de integrar/desplegar.
+
+## ENC-STAGING-CANDIDATE-CLOSURE-004 — candidata conjunta revisable (2026-10-29)
+
+W1. Rama work/enc-staging-candidate-closure-004 desde74e3300fa9ff022153d7e6671c65362203258032. Checkpoint b27d769adc51ea6c1e64f9ec92cf02327cc08369. Paquetes conciliados selectivamente: B79757de8cfb07317668553c02a37502de4b64366, Caa5260cf16a08539e04f4225056e152472302c57 y D73a68214cb326283375a8fe5e5ceeb669cee6d49; no merges de ramas completas.
+
+Lectura de reportes SQL estricta/fresca sin caché confirmada ni vacío ante fallo; startup conserva distinción error/vacío. Mutaciones exigen acuse/readback antes de caché, UPDATE no recrea eliminado, DELETE confirma ausencia. Metadatos de clasificado/comentario se conservan en details existente versionado, sinDDL. Upload/duplicados/acciones cliente honestos; galería y promociones no persisten preview fallida. F007A aplicado al DOM/CSS conservando contactos/widget; incidencia no cerrada.
+
+Última batería176PASS/0FAIL/0skipped, incluye147anteriores y pruebas B/C/D; hay cobertura compartida. Backend compilado27PASS adicionales con cobertura compartida y prueba nueva de móduloSQL incluida en176. TypeScript/Vite/esbuild/sintaxis/cmp PASS; SHA256 de ambos bundles41e165f267041403b6d2aa01b32016de7650f03d93c24ce21c6a6e768b41d197. Pruebas HTTPloopback, ReactDOM/SSR/jsdom y SQLsimulado, NO MariaDB/Hostinger reales. Chromium real falla socketUnixEPERM; sin capturas ni geometría real. Avisoschunk>500kb/npm http-proxy.
+
+Código, suites, backendartefactos y plan en docs/work-progress/ENC-STAGING-CANDIDATE-CLOSURE-004.md. Sin cambios de políticas/permisos/aislamiento; upload/mutaciones bloqueadas no se habilitan. Pendientes: revisión deCoordinación, entorno aislado/permisos/esquema reales por operador autorizado, navegador y aceptaciónF007A, buildfrontend desdeSHAantes de publicar. Sin main/ia, despliegue, Hostinger, SQL real, migración, restauración, secretos, PR, workflows remotos ni force. Reversión exclusiva de tarea conservandoH01-H04; lector de detailsJSONdebe conservarcompatibilidad si posteriormente se generan datos. Dictamen CANDIDATA PUBLICADA PARA REVISIÓN DE COORDINACIÓN; no integrada/no desplegada/no incidencias cerradas.
+
+
+## ENC-STAGING-CANDIDATE-CLOSURE-004-R1
+Correcciones de carreras de imágenes y conservación de base64 histórico. 188 pruebas PASS, TypeScript y Vite PASS. Pendiente revisión; sin integración ni despliegue. Evidencia y comandos: docs/work-progress/ENC-STAGING-CANDIDATE-CLOSURE-004-R1.md.

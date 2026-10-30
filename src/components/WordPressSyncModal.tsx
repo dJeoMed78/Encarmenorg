@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import {adminFetch} from '../utils/adminAuth';
+import { contactDigits } from '../utils/businessContacts';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
   Search,
@@ -59,6 +61,7 @@ import {
 } from 'lucide-react';
 import {
   isSessionAdminAuthenticated,
+  verifyAdminSession,
   saveAdminAuth,
   clearAdminAuth,
   getAdminSessionTimeRemaining,
@@ -95,7 +98,7 @@ import {
   adminUpdateBusiness,
   adminDeleteBusiness,
   fetchAnalytics,
-  submitBusinessRegistration,
+  submitAdministrativeBusinessRegistration,
   uploadBusinessLogo,
   checkBusinessDuplicate,
   getPromotions
@@ -159,6 +162,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => isSessionAdminAuthenticated());
   const [adminAccounts, setAdminAccounts] = useState<AdminAccountInfo[]>(DEFAULT_ADMIN_ACCOUNTS);
+  const [adminUsernameInput,setAdminUsernameInput]=useState('');
   const [selectedAdminUser, setSelectedAdminUser] = useState<AdminAccountInfo | null>(null);
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
@@ -208,11 +212,17 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
         setActiveTab(initialTab);
       }
       setIsAuthenticated(isSessionAdminAuthenticated());
-      fetchAdminAccounts().then(accs => {
-        if (accs && accs.length > 0) setAdminAccounts(accs);
+      void verifyAdminSession().then(valid=>{
+        setIsAuthenticated(valid);
+        if(valid)void fetchAdminAccounts().then(accs=>{if(accs.length)setAdminAccounts(accs);});
       });
     }
   }, [isOpen, initialTab]);
+  useEffect(()=>{
+    const refresh=()=>setIsAuthenticated(isSessionAdminAuthenticated());
+    window.addEventListener('admin-auth-changed',refresh);
+    return ()=>window.removeEventListener('admin-auth-changed',refresh);
+  },[]);
 
   const fullColoniasList = useMemo(() => {
     const set = new Set<string>();
@@ -234,6 +244,9 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
   const [reports, setReports] = useState<BusinessReport[]>([]);
   const [directBizSearch, setDirectBizSearch] = useState('');
   const [loadingReports, setLoadingReports] = useState(false);
+  const [reportsError, setReportsError] = useState<string | null>(null);
+  const reportsRequestVersion = useRef(0);
+
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
   const [businessToDelete, setBusinessToDelete] = useState<{ id: number; name: string; reportId?: string } | null>(null);
 
@@ -269,7 +282,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
   const loadDbStatus = async () => {
     try {
-      const res = await fetch('/api/database-status');
+      const res = await adminFetch('/api/database-status');
       const data = await res.json();
       if (data.success) {
         setDbStatus(data);
@@ -287,7 +300,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
   const loadAiStatus = async () => {
     try {
-      const res = await fetch('/api/ai/status');
+      const res = await adminFetch('/api/ai/status');
       const data = await res.json();
       setAiStatus(data);
     } catch (_) {}
@@ -297,7 +310,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     setIsTestingDb(true);
     setDbTestMessage(null);
     try {
-      const res = await fetch('/api/mariadb/reconnect', { method: 'POST' });
+      const res = await adminFetch('/api/mariadb/reconnect', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         setDbTestMessage('¡Conexión exitosa y activa a Hostinger MariaDB!');
@@ -316,7 +329,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     setIsSyncingDbCatalog(true);
     setDbTestMessage(null);
     try {
-      const res = await fetch('/api/mariadb/sync-catalog', { method: 'POST' });
+      const res = await adminFetch('/api/mariadb/sync-catalog', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         setDbTestMessage(data.message || '¡Catálogo de empresas sincronizado con éxito en Hostinger MariaDB!');
@@ -340,7 +353,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     setAiError(null);
     setAiSuccessMsg(null);
     try {
-      const res = await fetch('/api/ai/parse-business', {
+      const res = await adminFetch('/api/ai/parse-business', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: aiInputText })
@@ -437,6 +450,9 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     ownerEmail: 'admin@empresasencarmen.com'
   });
   const [isSubmittingNewBiz, setIsSubmittingNewBiz] = useState(false);
+  const createRequestId = useRef<string | null>(null);
+  const createBusy = useRef(false);
+  const inlineContactStart = useRef({phone:'',whatsapp:'',address:''});
   const [newBizSuccessMsg, setNewBizSuccessMsg] = useState<string | null>(null);
   const [newBizErrorMsg, setNewBizErrorMsg] = useState<string | null>(null);
   const [newBizLogoPreview, setNewBizLogoPreview] = useState<string | null>(null);
@@ -489,15 +505,15 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
           if (uploadRes.success && uploadRes.url) {
             urls.push(uploadRes.url);
           } else {
-            urls.push(b64);
+            throw new Error(uploadRes.message || 'No se confirmó la carga de la fotografía.');
           }
-        } catch {
-          urls.push(b64);
+        } catch (error) {
+          throw error;
         }
       }
       setNewBizGallery(prev => [...prev, ...urls].slice(0, 10));
     } catch (err: any) {
-      console.error('Error subiendo fotos de galería:', err);
+      setNewBizErrorMsg(err.message || 'No se confirmó la carga de la galería.');
     } finally {
       setIsUploadingNewBizGallery(false);
       e.target.value = '';
@@ -524,9 +540,13 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
         const uploadRes = await uploadBusinessLogo(base64Data, file.name);
         if (uploadRes.success && uploadRes.url) {
           setNewBizForm(prev => ({ ...prev, image: uploadRes.url! }));
+        } else {
+          setNewBizLogoPreview(null);
+          setNewBizErrorMsg(uploadRes.message || 'No se confirmó la carga del logotipo.');
         }
       } catch (err: any) {
-        console.error('Logo upload error:', err);
+        setNewBizLogoPreview(null);
+        setNewBizErrorMsg(err.message || 'No se confirmó la carga del logotipo.');
       } finally {
         setIsUploadingNewBizLogo(false);
       }
@@ -534,8 +554,9 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     reader.readAsDataURL(file);
   };
 
-  const handleAdminCreateBusiness = async (e: React.FormEvent, forceAllowDuplicate = false) => {
+  const handleAdminCreateBusiness = async (e: React.FormEvent) => {
     if (e) e.preventDefault();
+    if(createBusy.current) return;
     setNewBizErrorMsg(null);
     setNewBizSuccessMsg(null);
 
@@ -547,12 +568,15 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
       setNewBizErrorMsg('Por favor selecciona una categoría.');
       return;
     }
-    if (!newBizForm.phone.trim()) {
+    if (!contactDigits(newBizForm.phone) && !contactDigits(newBizForm.whatsapp)) {
       setNewBizErrorMsg('Por favor ingresa un teléfono o WhatsApp.');
       return;
     }
 
-    if (!forceAllowDuplicate) {
+    createBusy.current = true;
+    setIsSubmittingNewBiz(true);
+    try {
+    {
       const dupCheck = await checkBusinessDuplicate(newBizForm.name.trim(), newBizForm.phone.trim());
       if (dupCheck.isDuplicate && dupCheck.existingBusiness) {
         setNewBizDuplicateWarning({
@@ -564,19 +588,19 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
       }
     }
 
-    setIsSubmittingNewBiz(true);
-    try {
-      const cleanP = cleanPhoneNumber(newBizForm.phone);
-      const cleanW = cleanPhoneNumber(newBizForm.whatsapp) || cleanP;
+      const cleanP = contactDigits(newBizForm.phone);
+      const cleanW = contactDigits(newBizForm.whatsapp);
+      if((newBizForm.phone.trim()&&!cleanP)||(newBizForm.whatsapp.trim()&&!cleanW))throw new Error('Contacto mexicano inválido.');
+      createRequestId.current ||= crypto.randomUUID();
+      const {ownerName,ownerEmail,...businessData} = newBizForm;
       const cleanDelivery = normalizeDeliveryOption(newBizForm.delivery);
-      const res = await submitBusinessRegistration({
-        ...newBizForm,
+      const res = await submitAdministrativeBusinessRegistration({
+        ...businessData,
         phone: cleanP,
         whatsapp: cleanW,
         delivery: cleanDelivery,
-        gallery: newBizGallery,
-        allowDuplicate: forceAllowDuplicate
-      });
+        gallery: newBizGallery
+      }, createRequestId.current);
 
       if (res.success) {
         setNewBizDuplicateWarning(null);
@@ -607,6 +631,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
         });
         setNewBizLogoPreview(null);
         setNewBizGallery([]);
+        createRequestId.current = null;
       } else if (res.isDuplicate) {
         setNewBizDuplicateWarning({
           detected: true,
@@ -619,16 +644,17 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     } catch (err: any) {
       setNewBizErrorMsg(err.message || 'Error de conexión.');
     } finally {
+      createBusy.current = false;
       setIsSubmittingNewBiz(false);
     }
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && isOpen) {
       loadReportsData();
       loadAnalyticsData();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated,isOpen]);
 
   const loadAnalyticsData = async () => {
     setLoadingAnalytics(true);
@@ -643,22 +669,31 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
   };
 
   const loadReportsData = async () => {
-    setLoadingReports(true);
+    const version=++reportsRequestVersion.current;
+    setLoadingReports(true);setReports([]);setReportsError(null);
     try {
       const res = await fetchReports();
-      setReports(res.reports);
+      if(version!==reportsRequestVersion.current)return;
+      if(res.status==='ready')setReports(res.reports);
+      else setReportsError(res.message);
     } catch {
-      // Ignorar errores
+      if(version===reportsRequestVersion.current)setReportsError('No se pudieron consultar los reportes del servidor.');
     } finally {
-      setLoadingReports(false);
+      if(version===reportsRequestVersion.current)setLoadingReports(false);
     }
   };
+
+  useEffect(()=>{
+    if(!isAuthenticated || !isOpen){reportsRequestVersion.current++;setReports([]);setLoadingReports(false);setReportsError(null);}
+    return ()=>{reportsRequestVersion.current++;};
+  },[isAuthenticated,isOpen]);
 
   if (!isOpen) return null;
 
   const handleAdminLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAdminUser) return;
+    const username=adminUsernameInput.trim() || selectedAdminUser?.username;
+    if (!username) {setAdminLoginError('Ingresa el usuario configurado en el servidor.');return;}
     if (!adminPasswordInput.trim()) {
       setAdminLoginError('Ingresa la contraseña');
       return;
@@ -667,7 +702,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     try {
       setIsLoggingIn(true);
       setAdminLoginError(null);
-      const res = await loginAdminUser(selectedAdminUser.username, adminPasswordInput);
+      const res = await loginAdminUser(username, adminPasswordInput);
       if (res.success) {
         setIsAuthenticated(true);
         setAdminPasswordInput('');
@@ -705,19 +740,21 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
   const handleStartEdit = (report: BusinessReport) => {
     const biz = businesses.find(b => b.id === report.businessId);
     setEditingBizId(report.businessId !== undefined ? report.businessId : null);
-    setEditWaInput(cleanPhoneNumber(biz?.whatsapp || report.businessWhatsapp || ''));
-    setEditPhoneInput(cleanPhoneNumber(biz?.phone || report.businessPhone || ''));
-    setEditAddressInput(biz?.address || '');
+    const initial={whatsapp:contactDigits(biz?.whatsapp),phone:contactDigits(biz?.phone),address:biz?.address || ''};
+    inlineContactStart.current = initial;
+    setEditWaInput(initial.whatsapp);
+    setEditPhoneInput(initial.phone);
+    setEditAddressInput(initial.address);
   };
 
   const handleSaveBusinessEdits = async (bizId: number, reportId?: string) => {
     setIsSavingBiz(true);
     try {
-      const res = await adminUpdateBusiness(bizId, {
-        whatsapp: cleanPhoneNumber(editWaInput),
-        phone: cleanPhoneNumber(editPhoneInput),
-        address: editAddressInput
-      });
+      const patch: Partial<Business> = {};
+      if(editWaInput!==inlineContactStart.current.whatsapp)patch.whatsapp=editWaInput;
+      if(editPhoneInput!==inlineContactStart.current.phone)patch.phone=editPhoneInput;
+      if(editAddressInput!==inlineContactStart.current.address)patch.address=editAddressInput;
+      const res = await adminUpdateBusiness(bizId, patch);
 
       if (res.success) {
         setActionSuccessMsg('¡Datos del negocio actualizados con éxito en el directorio!');
@@ -768,12 +805,20 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
   // Acción 3: Descartar o eliminar un reporte
   const handleDismissReport = async (reportId: string) => {
-    await updateReportStatus(reportId, 'dismissed');
+    const confirmed = await updateReportStatus(reportId, 'dismissed');
+    if (!confirmed) {
+      window.alert('No se confirmó el cambio de estado del reporte en el servidor.');
+      return;
+    }
     await loadReportsData();
   };
 
   const handleDeleteReport = async (reportId: string) => {
-    await deleteReport(reportId);
+    const confirmed = await deleteReport(reportId);
+    if (!confirmed) {
+      window.alert('No se confirmó la eliminación del reporte en el servidor.');
+      return;
+    }
     await loadReportsData();
   };
 
@@ -871,6 +916,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 }}
                 className="space-y-2.5"
               >
+                <input type="text" autoComplete="username" aria-label="Usuario administrativo" placeholder="Usuario configurado" value={adminUsernameInput} onChange={e=>setAdminUsernameInput(e.target.value)} className="block w-full max-w-xs mx-auto py-2.5 px-4 rounded-full bg-white/85 border border-stone-300 text-sm" />
                 <div className="relative flex items-center max-w-xs mx-auto">
                   <input
                     type={showAdminPassword ? 'text' : 'password'}
@@ -1060,7 +1106,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 {/* MariaDB Live Ping */}
                 <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-[11px] font-mono">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>MariaDB OK</span>
+                  <span>{reportsError ? 'Reportes sin confirmar' : 'Panel administrativo'}</span>
                 </div>
 
                 {/* Quick Refresh Button */}
@@ -1604,6 +1650,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
           {activeTab === 'businesses' ? (
             <AdminBusinessesTab
+              onContactsUpdated={onBusinessUpdated}
               businesses={businesses}
               categories={categories}
               coloniasList={coloniasList}
@@ -1680,7 +1727,11 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 </button>
               </div>
 
-              {reports.length === 0 ? (
+              {loadingReports ? <p role="status">Consultando reportes del servidor…</p> : reportsError ? (
+                <div role="alert" className="text-sm text-amber-800 bg-amber-50 rounded-xl p-3">
+                  {reportsError} El número de reportes pendientes no está disponible. Los históricos locales no se muestran ni se eliminaron.
+                </div>
+              ) : reports.length === 0 ? (
                 <div className="text-center py-10 bg-stone-50 rounded-2xl border border-dashed border-stone-200 space-y-2">
                   <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
                   <p className="font-bold text-stone-800 text-sm">¡Bandeja al día!</p>
@@ -2549,16 +2600,16 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                     <button
                       type="button"
                       disabled={isSubmittingNewBiz}
-                      onClick={(e) => handleAdminCreateBusiness(e, true)}
+                      onClick={() => setNewBizDuplicateWarning(null)}
                       className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs"
                     >
-                      {isSubmittingNewBiz ? 'Guardando...' : 'Guardar de Todos Modos'}
+                      Revisar datos del negocio
                     </button>
                   </div>
                 </div>
               )}
 
-              <form onSubmit={(e) => handleAdminCreateBusiness(e, false)} className="space-y-4">
+              <form onSubmit={handleAdminCreateBusiness} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Name */}
                   <div className="space-y-1">
@@ -2607,7 +2658,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                     <label className="text-xs font-bold text-stone-700">Teléfono Directo *</label>
                     <input
                       type="tel"
-                      required
+                      required={!newBizForm.whatsapp.trim()}
                       value={newBizForm.phone}
                       onChange={e => {
                         const val = e.target.value;
@@ -2894,4 +2945,5 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     </div>
   );
 };
+
 

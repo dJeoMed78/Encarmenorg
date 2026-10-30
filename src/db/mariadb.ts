@@ -1,3 +1,5 @@
+import {STAGING_BUSINESS_DATABASE,stagingBusinessConfiguration} from '../server/stagingBusinessSecurity';
+import {createStagingBusinessStore} from './stagingBusinessStore';
 import mysql from 'mysql2/promise';
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -11,6 +13,7 @@ export interface MariaDbConfig {
 
 let pool: mysql.Pool | null = null;
 let isConnected = false;
+let connectedDatabase: string | null = null;
 let lastConnectionError: string | null = null;
 
 export const PRODUCTION_DB_NAME = 'u293982346_encarmenapp';
@@ -21,22 +24,17 @@ export function isStagingEnvironment(): boolean {
   const env = (process.env.APP_ENV || process.env.NODE_ENV || '').toLowerCase().trim();
   const isStagingFlag = process.env.STAGING === 'true' || process.env.STAGING_SAFE_MODE === 'true';
   const isStagingHost = (process.env.APP_URL || process.env.PUBLIC_URL || '').toLowerCase().includes('staging.encarmen.org');
-  return env === 'staging' || isStagingFlag || isStagingHost;
+  const businessProfile = process.env.STAGING_BUSINESS_WRITES_ENABLED !== undefined;
+  const configuredDatabase = (process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE || '').trim();
+  return env === 'staging' || isStagingFlag || isStagingHost || businessProfile || configuredDatabase === STAGING_BUSINESS_DATABASE;
 }
 
 export function isWritePermitted(): boolean {
   if (process.env.STAGING_READ_ONLY === 'true') {
     return false;
   }
-  if (isStagingEnvironment()) {
-    const rawDbName = (process.env.DB_NAME || process.env.MYSQL_DATABASE || process.env.MARIADB_DATABASE || '').trim();
-    if (!rawDbName || rawDbName === PRODUCTION_DB_NAME) {
-      return false;
-    }
-    if (process.env.STAGING_DB_CONFIRMED !== 'true') {
-      return false;
-    }
-  }
+  // Staging never grants general writes: only the separate businesses capability may write.
+  if (isStagingEnvironment()) return false;
   return true;
 }
 
@@ -77,21 +75,8 @@ export function validateStagingDbConfiguration(): StagingDbValidationResult {
     };
   }
 
-  if (rawDbName === PRODUCTION_DB_NAME) {
-    if (!isReadOnly) {
-      return {
-        valid: false,
-        isStaging: true,
-        error: `[PELIGRO DE PRODUCCIÓN]: Staging tiene configurada la base de datos de PRODUCCIÓN '${PRODUCTION_DB_NAME}' sin STAGING_READ_ONLY=true. Esto está estrictamente prohibido para evitar sobreescritura de producción.`
-      };
-    }
-    if (rawDbUser === PRODUCTION_DB_USER) {
-      return {
-        valid: false,
-        isStaging: true,
-        error: `[PELIGRO DE PRODUCCIÓN]: Staging no puede reutilizar el usuario con permisos de escritura de producción '${PRODUCTION_DB_USER}'. Debe utilizar un usuario dedicado con privilegios SELECT exclusivamente.`
-      };
-    }
+  if (rawDbName !== STAGING_BUSINESS_DATABASE || (rawDbUser === PRODUCTION_DB_USER && !isReadOnly)) {
+    return {valid:false,isStaging:true,error:'Staging requiere su base exacta y una cuenta distinta a producción.'};
   }
 
   if (!isReadOnly && !isConfirmed) {
@@ -173,14 +158,19 @@ export async function initMariaDb(): Promise<boolean> {
       });
 
       await pool.query('SELECT 1 as test');
+      if (isStaging) {
+        const [context]: any = await pool.query('SELECT DATABASE() AS db_name');
+        if (context[0]?.db_name !== STAGING_BUSINESS_DATABASE) throw new Error('STAGING_DATABASE_TARGET_MISMATCH');
+        connectedDatabase = context[0].db_name;
+      }
       isConnected = true;
       lastConnectionError = null;
       console.log(`[MariaDB/Hostinger] Conectado exitosamente a ${config.database} en ${candidateHost}`);
 
       // Staging nunca ejecuta DDL destructivo sobre producción ni en modo read-only
-      const canRunDdl = !isStaging
+      const canRunDdl = isWritePermitted() && (!isStaging
         ? process.env.STAGING_READ_ONLY !== 'true'
-        : (process.env.STAGING_ALLOW_SCHEMA_INIT === 'true' && config.database !== PRODUCTION_DB_NAME);
+        : (process.env.STAGING_ALLOW_SCHEMA_INIT === 'true' && config.database !== PRODUCTION_DB_NAME));
 
       if (canRunDdl) {
         await createTablesIfNotExist();
@@ -196,6 +186,7 @@ export async function initMariaDb(): Promise<boolean> {
         try { await pool.end(); } catch (_) {}
       }
       pool = null;
+      connectedDatabase = null;
       isConnected = false;
     }
   }
@@ -415,15 +406,14 @@ export async function dbGetUploadedFile(filename: string): Promise<{ mimeType: s
 }
 
 // MariaDB CRUD Operations
-export async function dbLoadAllBusinesses(): Promise<any[]> {
-  if (!pool) return [];
-  try {
-    const [rows]: any = await pool.query('SELECT * FROM businesses ORDER BY id ASC');
-    return rows.map((r: any) => {
+export function businessFromRow(r: any): any {
+
       let extra: any = {};
       if (r.raw_data) {
-        try { extra = JSON.parse(r.raw_data); } catch (_) {}
+        try { const parsed=JSON.parse(r.raw_data); if(parsed && typeof parsed==='object' && !Array.isArray(parsed)) extra=parsed; } catch (_) {}
       }
+      delete extra._stagingRegistrationId;
+      delete extra._stagingRegistrationDigest;
       return {
         ...extra,
         id: isNaN(Number(r.id)) ? r.id : Number(r.id),
@@ -438,8 +428,9 @@ export async function dbLoadAllBusinesses(): Promise<any[]> {
         address: extra.address || r.address || '',
         colonia: extra.colonia || r.colonia || '',
         postalCode: extra.postalCode || '',
-        phone: extra.phone || r.phone || '',
-        whatsapp: extra.whatsapp || r.whatsapp || '',
+        // Dedicated columns are authoritative, including explicit empty values.
+        phone: String(r.phone ?? ''),
+        whatsapp: String(r.whatsapp ?? ''),
         email: extra.email || r.email || '',
         website: extra.website || r.website || '',
         facebook: extra.facebook || r.facebook || '',
@@ -458,9 +449,17 @@ export async function dbLoadAllBusinesses(): Promise<any[]> {
         isTopBusiness: Boolean(extra.isTopBusiness ?? false),
         status: extra.status || r.status || 'published'
       };
-    });
+
+}
+
+export async function dbLoadAllBusinesses(strict = true): Promise<any[]> {
+  if (!pool) { if (strict) throw new Error("BUSINESSES_SOURCE_UNAVAILABLE"); return []; }
+  try {
+    const [rows]: any = await pool.query('SELECT * FROM businesses ORDER BY id ASC');
+    return rows.map(businessFromRow);
   } catch (err: any) {
     console.warn('[MariaDB] Error cargando businesses:', err.message);
+    if (strict) throw new Error('BUSINESSES_SOURCE_UNAVAILABLE');
     return [];
   }
 }
@@ -483,7 +482,7 @@ export async function dbGetBusinessesSignature(): Promise<{ lastUpdate: string |
   }
 }
 
-export async function dbSaveBusiness(biz: any): Promise<boolean> {
+export async function dbSaveBusiness(biz: any, options: { clearContacts?: readonly ('phone' | 'whatsapp')[]; updateContacts?: boolean } = {}): Promise<boolean> {
   if (!guardWrite('dbSaveBusiness')) return false;
   if (!pool) return false;
   try {
@@ -502,8 +501,8 @@ export async function dbSaveBusiness(biz: any): Promise<boolean> {
         description = VALUES(description),
         address = VALUES(address),
         colonia = VALUES(colonia),
-        phone = VALUES(phone),
-        whatsapp = VALUES(whatsapp),
+        phone = IF(?, '', IF(?, COALESCE(NULLIF(TRIM(VALUES(phone)), ''), phone), phone)),
+        whatsapp = IF(?, '', IF(?, COALESCE(NULLIF(TRIM(VALUES(whatsapp)), ''), whatsapp), whatsapp)),
         email = VALUES(email),
         website = VALUES(website),
         facebook = VALUES(facebook),
@@ -539,7 +538,11 @@ export async function dbSaveBusiness(biz: any): Promise<boolean> {
       biz.verified ? 1 : 0,
       biz.featured ? 1 : 0,
       biz.status || 'published',
-      rawData
+      rawData,
+      options.clearContacts?.includes('phone') ? 1 : 0,
+      options.updateContacts === true ? 1 : 0,
+      options.clearContacts?.includes('whatsapp') ? 1 : 0,
+      options.updateContacts === true ? 1 : 0
     ]);
     return true;
   } catch (err: any) {
@@ -589,15 +592,34 @@ export async function dbDeleteBusiness(id: string | number): Promise<boolean> {
   }
 }
 
-export async function dbLoadAllReports(): Promise<any[]> {
-  if (!pool) return [];
-  try {
-    const [rows]: any = await pool.query('SELECT * FROM reports ORDER BY created_at DESC');
-    return rows;
-  } catch (err: any) {
-    console.warn('[MariaDB] Error cargando reports:', err.message);
-    return [];
+function reportDetailsForSql(report: any): string {
+  const metadata: Record<string,unknown> = {__encReport:1};
+  for(const key of ['type','classifiedId','classifiedTitle','requesterName','requesterContact','comment','details','businessPhone','businessWhatsapp','contactEmail']) {
+    if(typeof report[key]==='string')metadata[key]=report[key];
   }
+  return JSON.stringify(metadata);
+}
+
+export async function dbLoadAllReports(): Promise<any[]> {
+  if (!pool) throw new Error('REPORTS_UNAVAILABLE');
+  const [rows]: any = await pool.query('SELECT * FROM reports ORDER BY created_at DESC');
+  if (!Array.isArray(rows)) throw new Error('REPORTS_INVALID_READ');
+  return rows.map((row:any)=>{
+    let metadata:Record<string,unknown>={};
+    try {const parsed=JSON.parse(row.details || '');if(parsed?.__encReport===1){metadata.details=typeof parsed.details==='string'?parsed.details:(typeof parsed.comment==='string'?parsed.comment:'');for(const key of ['type','classifiedId','classifiedTitle','requesterName','requesterContact','comment','details','businessPhone','businessWhatsapp','contactEmail'])if(typeof parsed[key]==='string')metadata[key]=parsed[key];}} catch {}
+    return {...row,businessId:row.business_id ? Number(row.business_id) : undefined,businessName:row.business_name || '',createdAt:row.created_at,...metadata};
+  });
+}
+
+// Updates must never recreate a report removed by another operation.
+export async function dbUpdateReport(report: any): Promise<boolean> {
+  if (!guardWrite('dbUpdateReport') || !pool) return false;
+  try {
+    const [result]: any = await pool.query('UPDATE reports SET status = ?, details = ? WHERE id = ?', [report.status,reportDetailsForSql(report),report.id]);
+    if (!(Number(result?.affectedRows || 0) > 0)) return false;
+    const [rows]: any = await pool.query('SELECT * FROM reports WHERE id = ?', [report.id]);
+    return Array.isArray(rows) && rows.length===1 && String(rows[0].id)===String(report.id) && rows[0].status===report.status && rows[0].details===reportDetailsForSql(report);
+  } catch { return false; }
 }
 
 export async function dbSaveReport(report: any): Promise<boolean> {
@@ -609,16 +631,18 @@ export async function dbSaveReport(report: any): Promise<boolean> {
       VALUES (?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE status = VALUES(status), details = VALUES(details);
     `;
-    await pool.query(query, [
+    const [result]: any = await pool.query(query, [
       report.id,
       String(report.business_id || report.businessId || ''),
       report.business_name || report.businessName || '',
       report.reason || '',
-      report.details || '',
+      reportDetailsForSql(report),
       report.reporter_email || report.reporterEmail || '',
       report.status || 'pending'
     ]);
-    return true;
+    if (!(Number(result?.affectedRows || 0) > 0)) return false;
+    const [rows]: any = await pool.query('SELECT * FROM reports WHERE id = ?', [report.id]);
+    return Array.isArray(rows) && rows.length===1 && String(rows[0].id)===String(report.id) && rows[0].status===report.status && rows[0].details===reportDetailsForSql(report);
   } catch (err: any) {
     console.warn('[MariaDB] Error guardando reporte:', err.message);
     return false;
@@ -629,8 +653,10 @@ export async function dbDeleteReport(id: string): Promise<boolean> {
   if (!guardWrite('dbDeleteReport')) return false;
   if (!pool) return false;
   try {
-    await pool.query('DELETE FROM reports WHERE id = ?', [id]);
-    return true;
+    const [result]: any = await pool.query('DELETE FROM reports WHERE id = ?', [id]);
+    if (!(Number(result?.affectedRows || 0) > 0)) return false;
+    const [rows]: any = await pool.query('SELECT id FROM reports WHERE id = ?', [id]);
+    return Array.isArray(rows) && rows.length===0;
   } catch (err: any) {
     console.warn('[MariaDB] Error eliminando reporte:', err.message);
     return false;
@@ -1256,3 +1282,14 @@ export async function dbInsertRating(id: string, visitorKey: string, rating: num
   return ratingsRepository().insert(id, visitorKey, rating, comment);
 }
 // ENC-REVIEWS-006 RATINGS REPOSITORY END
+
+
+
+export function isBusinessWritePermitted(): boolean {
+  return isStagingEnvironment() && isConnected && pool !== null && connectedDatabase === STAGING_BUSINESS_DATABASE && stagingBusinessConfiguration(process.env, PRODUCTION_DB_USER);
+}
+export const stagingBusinessStore = createStagingBusinessStore({
+  canWrite:isBusinessWritePermitted,
+  getConnection:async()=>{if(!pool)throw new Error('STAGING_DATABASE_UNAVAILABLE');return pool.getConnection();},
+  serialize:businessFromRow
+});

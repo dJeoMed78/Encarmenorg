@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { contactDigits, contactCounts, matchesContactFilter, ContactFilter, CONTACT_FILTERS } from '../utils/businessContacts';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search,
   LayoutGrid,
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Business, Category } from '../types';
 import {
+  adminUpdateBusiness,
   fetchBusinessEditPins,
   generateBusinessEditPin,
   BusinessEditPinInfo
@@ -42,6 +44,7 @@ interface AdminBusinessesTabProps {
   onOpenBusiness?: (b: Business) => void;
   onAddNewBusiness?: () => void;
   onBusinessApproved?: (b: Business) => void;
+  onContactsUpdated?: () => Promise<void>;
 }
 
 export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
@@ -54,8 +57,30 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
   onDeleteBusiness,
   onOpenBusiness,
   onAddNewBusiness,
-  onBusinessApproved
+  onBusinessApproved,
+  onContactsUpdated
 }) => {
+  const [confirmedContacts, setConfirmedContacts] = useState<Record<string, Partial<Business>>>({});
+  const contactSource = useMemo(() => businesses.map(b => ({...b, ...confirmedContacts[String(b.id)]})), [businesses, confirmedContacts]);
+  useEffect(() => setConfirmedContacts({}), [businesses]);
+  const [clearingContact, setClearingContact] = useState(false);
+  const clearingContactRef = useRef(false);
+  const clearContact = async (business: Business, field: 'phone' | 'whatsapp') => {
+    if (clearingContactRef.current || !window.confirm(`¿Retirar ${field === 'phone' ? 'el teléfono' : 'WhatsApp'} de ${business.name}? Esta operación requiere autorización del servidor.`)) return;
+    clearingContactRef.current = true;
+    setClearingContact(true);
+    try {
+      const result = await adminUpdateBusiness(business.id, {clearContacts:[field]});
+      if (!result.success || !result.business) throw new Error(result.message || 'No se confirmó el cambio.');
+      setConfirmedContacts(previous => ({...previous, [String(business.id)]: {phone:result.business!.phone, whatsapp:result.business!.whatsapp}}));
+      setSyncNotice({type:'success', text:'Contacto retirado y confirmado por el servidor.'});
+      if (onContactsUpdated) await onContactsUpdated();
+    } catch (error) { setSyncNotice({type:'error', text:error instanceof Error ? error.message : 'No se pudo retirar el contacto.'}); }
+    finally { clearingContactRef.current = false; setClearingContact(false); }
+  };
+  const removalControls = (business: Business) => <div className="flex gap-2 flex-wrap">
+    {(['phone', 'whatsapp'] as const).filter(field => contactDigits(business[field])).map(field => <button key={field} type="button" disabled={clearingContact} onClick={() => void clearContact(business, field)} className="text-[10px] text-rose-700 underline disabled:opacity-40">Retirar {field === 'phone' ? 'teléfono' : 'WhatsApp'}</button>)}
+  </div>;
   const [isAutoSearchModalOpen, setIsAutoSearchModalOpen] = useState(false);
   const [autoModalSource, setAutoModalSource] = useState<'all' | 'official_group' | 'official_page' | 'whatsapp' | 'community' | 'ai'>('all');
   const [autoModalTriggerAi, setAutoModalTriggerAi] = useState(false);
@@ -63,6 +88,11 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
   const [selectedCat, setSelectedCat] = useState('all');
   const [selectedCol, setSelectedCol] = useState('all');
   const [filterType, setFilterType] = useState('all');
+  const [contactFilter, setContactFilter] = useState<ContactFilter>('all');
+  const [page, setPage] = useState(1);
+  const pageSize = 24;
+  const coverage = useMemo(() => contactCounts(contactSource), [contactSource]);
+  const contactLabels: Record<ContactFilter, string> = {all:'Todos', phone:'Con teléfono', 'no-phone':'Sin teléfono', whatsapp:'Con WhatsApp', 'no-whatsapp':'Sin WhatsApp', none:'Sin ninguno'};
   const [sortBy, setSortBy] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('admin_business_sort_by');
@@ -146,8 +176,9 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
   };
 
   const getWaPinUrl = (biz: Business, pin: string) => {
-    const rawNum = (biz.whatsapp || biz.phone || '').replace(/\D/g, '');
-    const num = rawNum.startsWith('52') ? rawNum : `52${rawNum}`;
+    const rawNum = contactDigits(biz.whatsapp);
+    if (!rawNum) return '';
+    const num = `52${rawNum}`;
     const msg = `Hola, este es tu código de edición temporal de 10 dígitos para tu negocio "${biz.name}" en el directorio oficial Empresas en Carmen:\n\n🔑 CÓDIGO: ${pin}\n\n⏱️ Validez: 12 horas.\n\nPuedes ingresar a https://encarmen.org, buscar tu empresa y tocar "Editar mi negocio" para actualizar tus datos, fotos, horarios y teléfonos.`;
     return `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
   };
@@ -161,7 +192,7 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
 
   const filteredBusinesses = useMemo(() => {
     const q = normalizeStr(searchQuery);
-    return businesses.filter(b => {
+    return contactSource.filter(b => {
       if (q) {
         const matchName = normalizeStr(b.name).includes(q);
         const matchPrevNames = Array.isArray(b.previousNames) && b.previousNames.some(pn => normalizeStr(pn).includes(q));
@@ -185,14 +216,18 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
       }
       if (filterType === 'top' && !b.isTopBusiness) return false;
       if (filterType === 'recommended' && !b.isRecommended) return false;
-      if (filterType === 'whatsapp' && !b.whatsapp) return false;
+      if (filterType === 'whatsapp' && !contactDigits(b.whatsapp)) return false;
       if (filterType === 'delivery' && !b.hasDelivery) return false;
       return true;
     });
-  }, [businesses, searchQuery, selectedCat, selectedCol, filterType]);
+  }, [contactSource, searchQuery, selectedCat, selectedCol, filterType]);
+
+  const scopedCoverage = useMemo(() => contactCounts(filteredBusinesses), [filteredBusinesses]);
+  const contactBusinesses = useMemo(() => filteredBusinesses.filter(b => matchesContactFilter(b, contactFilter)), [filteredBusinesses, contactFilter]);
+  useEffect(() => setPage(1), [searchQuery, selectedCat, selectedCol, filterType, contactFilter, businesses]);
 
   const sortedBusinesses = useMemo(() => {
-    const list = [...filteredBusinesses];
+    const list = [...contactBusinesses];
     switch (sortBy) {
       case 'date-desc':
         return list.sort((a, b) => {
@@ -217,7 +252,11 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
       default:
         return list;
     }
-  }, [filteredBusinesses, sortBy]);
+  }, [contactBusinesses, sortBy]);
+
+  const pages = Math.max(1, Math.ceil(sortedBusinesses.length / pageSize));
+  const currentPage = Math.min(page, pages);
+  const pagedBusinesses = sortedBusinesses.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const handleDelete = (biz: Business) => {
     setBusinessToDelete(biz);
@@ -396,6 +435,10 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
             <option value="delivery">Con Servicio a Domicilio</option>
           </select>
 
+          <select aria-label="Filtrar contactos" value={contactFilter} onChange={e => setContactFilter(e.target.value as ContactFilter)} className="p-1.5 rounded-lg bg-stone-50 border border-stone-200 text-xs outline-none">
+            {CONTACT_FILTERS.map(key => <option key={key} value={key}>{contactLabels[key]} ({scopedCoverage[key]})</option>)}
+          </select>
+
           {/* Ordenamiento persistente */}
           <div className="flex items-center gap-1.5 bg-amber-500/15 border border-amber-300 rounded-lg px-2 py-1 text-xs shadow-2xs">
             <ArrowUpDown className="w-3.5 h-3.5 text-amber-800 shrink-0" />
@@ -420,6 +463,16 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
         </div>
       </div>
 
+      <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50/80 p-3 text-xs text-stone-800">
+        Cobertura del conjunto recibido ({coverage.all} negocios): teléfono {coverage.phone}, WhatsApp {coverage.whatsapp}. <strong>{coverage.none} negocios sin contactos válidos.</strong>
+        <span className="block mt-1">Vacíos, nulos y formatos inválidos se contabilizan como ausentes. Los contadores del filtro incluyen la búsqueda, antes de paginar.</span>
+      </div>
+      <nav aria-label="Paginación de negocios" className="flex items-center gap-3 text-xs">
+        <button type="button" disabled={currentPage <= 1} onClick={() => setPage(p => p - 1)} className="rounded-lg border p-2 disabled:opacity-40">Anterior</button>
+        <span>Página {currentPage} de {pages} · {sortedBusinesses.length} resultados</span>
+        <button type="button" disabled={currentPage >= pages} onClick={() => setPage(p => p + 1)} className="rounded-lg border p-2 disabled:opacity-40">Siguiente</button>
+      </nav>
+
       {syncNotice && (
         <div
           className={`p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 shadow-xs transition-all ${
@@ -442,7 +495,7 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
       {/* Grid or List of Businesses */}
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sortedBusinesses.map(biz => {
+          {pagedBusinesses.map(biz => {
             const pinInfo = pinsMap[biz.id];
 
             return (
@@ -482,8 +535,10 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
                   </p>
 
                   <div className="text-xs text-stone-600 space-y-0.5 pt-1 border-t border-stone-100">
-                    {biz.phone && <p>📞 {formatPhoneNumber(biz.phone)}</p>}
-                    {biz.whatsapp && <p>💬 {formatPhoneNumber(biz.whatsapp)}</p>}
+                    {contactDigits(biz.phone) && <p>📞 {formatPhoneNumber(biz.phone)}</p>}
+                    {contactDigits(biz.whatsapp) && <p>💬 {formatPhoneNumber(biz.whatsapp)}</p>}
+                    {matchesContactFilter(biz, "none") && <p className="font-bold text-amber-800">Sin contactos válidos</p>}
+                    {removalControls(biz)}
                   </div>
                 </div>
 
@@ -507,7 +562,7 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
                             <Copy className="w-3.5 h-3.5" />
                           )}
                         </button>
-                        <a
+                        {contactDigits(biz.whatsapp) && <a
                           href={getWaPinUrl(biz, pinInfo.pin)}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -515,7 +570,7 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
                           title="Enviar código al dueño por WhatsApp"
                         >
                           <MessageSquare className="w-3.5 h-3.5" />
-                        </a>
+                        </a>}
                         <button
                           type="button"
                           onClick={() => handleGeneratePin(biz.id)}
@@ -611,7 +666,7 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {sortedBusinesses.map(biz => {
+              {pagedBusinesses.map(biz => {
                 const pinInfo = pinsMap[biz.id];
 
                 return (
@@ -634,7 +689,9 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
                     <td className="p-3 text-stone-600">{biz.categories?.[0] || 'Comercio'}</td>
                     <td className="p-3 text-stone-500">{biz.colonia || 'Carmen'}</td>
                     <td className="p-3 text-stone-600 font-mono">
-                      {formatPhoneNumber(biz.whatsapp || biz.phone)}
+                      <div>Tel: {contactDigits(biz.phone) ? formatPhoneNumber(biz.phone) : "Sin teléfono válido"}</div>
+                      <div>WA: {contactDigits(biz.whatsapp) ? formatPhoneNumber(biz.whatsapp) : "Sin WhatsApp válido"}</div>
+                      {removalControls(biz)}
                     </td>
                     <td className="p-3">
                       {pinInfo ? (
@@ -757,3 +814,4 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
     </div>
   );
 };
+

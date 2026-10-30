@@ -1,0 +1,35 @@
+✔ 25 historical routes denied for GET HEAD POST PUT PATCH DELETE OPTIONS (175 requests) (774.039723ms)
+✔ historical route variants: case, trailing slash and query (75 requests) (88.455743ms)
+✔ direct static ZIP SQL and private files denied in public/dist (20 requests) (18.473477ms)
+✔ encoding traversal and alternate confidential extensions denied (15.937046ms)
+✔ public assets API health and well-known keep working (18 requests) (95.665381ms)
+✔ no dynamic ZIP generator or legacy download handler remains; guard precedes middleware (170.895011ms)
+✔ disabled CLI fails safely in fixture, preserves all existing files, creates no aliases (273.371003ms)
+✔ HTTP checks preserve existing fixture backups and create no files (3.299304ms)
+✔ compiled executable is coherent and installs guard before public middleware (13.474619ms)
+✔ No provider or malformed provider: fail closed without legacy credentials (159.140938ms)
+✔ Real scrypt provider verifies synthetic password, exposes no hash and rejects incorrect password (215.205341ms)
+✔ Client-controlled headers, roles and flags cannot authorize administrative handlers (343.03296ms)
+✔ Case variants, encoded admin path and aliases also require a server session (62.768878ms)
+✔ Positive login/session and accounts return only server-authorized identity (197.040424ms)
+✔ Positive session reaches actual MariaDB handlers; absence never calls initialization (447.09802ms)
+✔ Insufficient permission cannot be expanded with headers or JSON (2007.340205ms)
+✔ Administrative mutation gate defaults closed independently of valid login (318.398624ms)
+✔ Password change is unavailable even with an authorized session (687.483177ms)
+✔ PIN list/generation/verification never return a PIN, including HEAD (269.610501ms)
+✔ Actual banner handler writes only fixtures and cannot execute Git even if requested (191.155227ms)
+✔ Emergency handler requires verified identity in every environment (128.31662ms)
+✔ Cross-origin requests reject; logout revokes and expiration invalidates sessions (441.997855ms)
+✔ Login body validation, wrong password and rate limit reject without leaking details (1382.348051ms)
+✔ Backup containment stays before authentication and denies ZIP/SQL even to valid admin (196.607634ms)
+✔ Legitimate public directory, categories, ratings and registration remain public (42.541758ms)
+✔ Client flags and saved usernames cannot mint authentication or verify passwords locally (28.96237ms)
+✔ Client requires login plus verified server session, and only sends token to same-origin paths (25.466433ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8929.912873
