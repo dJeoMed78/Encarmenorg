@@ -44,7 +44,12 @@ function apply(source, steps) {
   const skipped = [];
   for (const step of steps) {
     // Removal is already complete when the review section exists at its final DOM location.
-    if (step.replace === '' && next.includes(`</aside>\n${TSX_REVIEWS}        </div>`) && count(next, step.find) === 0) {
+    if (step.replace === '' && next.indexOf('className="bpd-reviews"') > next.indexOf('className="bpd-facts"') && count(next, step.find) === 0) {
+      skipped.push(step.name);
+      continue;
+    }
+    if (step.name === 'insertar opiniones tras ubicación/horarios/pagos/entrega'
+      && next.indexOf('className="bpd-reviews"') > next.indexOf('className="bpd-facts"')) {
       skipped.push(step.name);
       continue;
     }
