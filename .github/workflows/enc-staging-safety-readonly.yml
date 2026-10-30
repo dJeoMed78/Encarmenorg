@@ -1,5 +1,6 @@
 name: ENCARMEN Staging safety isolation and backup read-only inspection
 on:
+  workflow_dispatch:
   push:
     branches: [coord/staging-safety-readonly-20261030]
     paths: [.github/workflows/enc-staging-safety-readonly.yml]
@@ -156,4 +157,4 @@ jobs:
           git config user.email encarmen-coordination@users.noreply.github.com
           git add ENC_STAGING_SAFETY_READONLY_RESULT.txt
           git commit -m 'docs: staging safety read-only inspection result' || exit 0
-          git push origin HEAD:coord/staging-http-readonly-diagnostics-20261030
+          git push origin HEAD:coord/staging-safety-readonly-20261030
