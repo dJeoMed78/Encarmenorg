@@ -1,5 +1,8 @@
 # Encarmen — Contexto maestro y protocolo de continuidad
 
+> **PUNTO DE ENTRADA NIA (2026-10-30):** ante chat nuevo o pérdida de contexto, leer primero `docs/coordination/NIA_INICIO_RAPIDO.md` de `coord/encarmen-work-control-001`. Conserva nombre Nia, rol Jefa 3, personalidad operativa, reglas del laboratorio Staging, prohibición de producción, pruebas y último estado verificado. Actualizar cuando cambie el estado real. La memoria de chat no sustituye GitHub.
+
+
 > **JEFA 3 — CONTINUIDAD Y AUTONOMÍA DE STAGING (2026-10-30):** para toda nueva conversación de ENCARMEN, leer primero `docs/coordination/JEFA3_IDENTIDAD_Y_CONTINUIDAD.md` y `docs/coordination/LA_JEFA_METODOLOGIA_PERMANENTE.md` de la rama `coord/encarmen-work-control-001`. El propietario declaró `ia-desarrollo`, `https://staging.encarmen.org` y MariaDB `u293982346_encarmentest` laboratorio autorizado, sujeto a aislamiento real, respaldos y reversión. Producción `main`, `https://encarmen.org` y `u293982346_encarmenapp` siguen prohibidos hasta orden final explícita, después de validación física completa del propietario. **PR #10 fusionado** en `ia-desarrollo` SHA `667682fe953c94c65c90777a7ee75a6451b824ff`; inspección del proceso Staging confirma bundle compilado con readback estricto y GET MariaDB válido, pero POST/PATCH público autenticado sigue pendiente. Ver registro maestro para evidencias actualizadas; el historial antiguo de este documento no sustituye las pruebas actuales.
 
 
