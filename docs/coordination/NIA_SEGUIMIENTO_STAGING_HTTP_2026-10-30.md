@@ -39,3 +39,11 @@
 - `SQL_OR_STAGING_WRITES_EXECUTED=false`; no prueba POST/PATCH, no SQL.
 - **Conclusión:** la versión activa está identificada, pero el fallo de loopback sigue sin causa demostrada. NO afirmar que la validación E2E pública quedó aprobada.
 - Nueva ejecución diagnóstica de precisión para distinguir aislamiento de red, puerto/env y tipo de fallo de loopback publicada en commit `4fb210a176e86afcd396210f5a600e573f6c61be`; su resultado es pendiente hasta verificar un log nuevo.
+
+## Segundo resultado de red interna (UTC 21:29:47)
+- `PROCESS_NETNS_MATCH=true`: el proceso Node activo comparte espacio de red con la sesión de diagnóstico.
+- `PROCESS_PORT_ENV_PRESENT=false`, `PROCESS_VERCEL_ENV_PRESENT=false` en entorno inicial de proceso.
+- `ACTIVE_LOOPBACK_HEALTH_STATUS=unavailable`, `ACTIVE_LOOPBACK_EXCEPTION_CLASS=URLError`, mientras HTTP público responde 200.
+- **El puerto real escuchado no queda identificado por esta prueba.** No inferir que la aplicación no funciona públicamente, ni que el puerto es necesariamente 3000.
+- Publicado diagnóstico adicional **de solo lectura** de descriptores socket/puertos del proceso, commit `ef15d156847fc3b84d49d779758b8ec1c8e28844`; su resultado requiere una ejecución nueva antes de afirmar nada.
+
