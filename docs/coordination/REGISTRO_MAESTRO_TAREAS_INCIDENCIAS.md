@@ -52,6 +52,15 @@
 ## Otros pendientes históricos del propietario por conciliar
 El listado de Jefa 2 incluía además: registro público directo sin aprobación, persistencia en MariaDB, publicación inmediata, edición y reinicio, editor con defectos internos (horarios, WhatsApp, pagos, modalidades de servicio, conservación de contactos, doble guardado y fallback dataURI), enlaces/videos en descripciones, estadísticas de calificaciones, responsividad, seguridad administrativa, radar y tipografía. **No son automáticamente tareas nuevas:** antes de emitirlas, cruzar con las ramas posteriores (consolidación, R3, registro, clasificadas) y agregar IDs adicionales aquí para cualquier defecto concreto que siga abierto o si el propietario vuelve a reportarlo. Ninguna solicitud del propietario debe descartarse por falta de capacidad.
 
+## Revisión de candidata W1 ENC-STAGING-CANDIDATE-CLOSURE-004 — 2026-10-29
+
+- Rama `work/enc-staging-candidate-closure-004`, SHA `c79992a385213b437541cb92954c76a99c2485b1`; comparada con base `74e3300fa9ff022153d7e6671c65362203258032`: **2 commits / 18 archivos**.
+- Entrega **PUBLICADA, NO APROBADA, NO INTEGRADA, NO DESPLEGADA**. W1 reportó 176 pruebas PASS y compilación; Coordinación inspeccionó código real, pero **no ejecutó independientemente** las suites ni tuvo MariaDB/Chromium real.
+- **C4-H01 ALTO:** subida de cartel de promoción fuera de orden puede sobrescribir estado de otra promoción al cambiar formulario; no existe epoch/versión ni invalidación en `AdminPromotionsTab.tsx`.
+- **C4-H02 MEDIO:** carga de promoción histórica con `promoImageData` base64 queda bloqueada como «no confirmada» y guardados envían `promoImageData:null`, con riesgo de eliminación de datos heredados.
+- Evidencia, escenarios de reproducción y corrección complementaria: `docs/coordination/REVIEW_ENC_STAGING_CANDIDATE_CLOSURE_004.md`.
+- Se requiere revisión y subsanación por W1 en rama separada desde SHA C4, más pruebas; no repetir paquetes terminados A/B/C/D ni desplegar. Incidencias del propietario continúan abiertas.
+
 ## Rutina de coordinación
 - Al comenzar conversación/sucesión, leer ESTE documento y `LA_JEFA_METODOLOGIA_PERMANENTE.md`, luego verificar GitHub/ramas/issues y documentos por rama.
 - Al recibir informe/captura/archivo del propietario, actualizar el registro **en la misma intervención**, primero conservando evidencia y estado pendiente.
