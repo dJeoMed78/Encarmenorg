@@ -69,6 +69,11 @@ jobs:
                   o('PROCESS_'+str(index)+'_SERVER_JS_ARG',str(any(a.endswith('/server.js') or a=='server.js' for a in args)).lower())
                   o('PROCESS_'+str(index)+'_API_BUNDLE_ARG',str(any(a.endswith('/api/server.bundle.js') for a in args)).lower())
                   o('PROCESS_'+str(index)+'_HAS_NODE_ARGS',str(len(args)>0).lower())
+                  o('PROCESS_'+str(index)+'_USES_EVAL_OR_INLINE',str(any(a in ('-e','--eval','--import','--require') for a in args)).lower())
+                  o('PROCESS_'+str(index)+'_HAS_PASSENGER_ARG',str(any('passenger' in a.lower() for a in args)).lower())
+                  o('PROCESS_'+str(index)+'_HAS_HOSTINGER_ARG',str(any('hostinger' in a.lower() for a in args)).lower())
+                  o('PROCESS_'+str(index)+'_HAS_APP_JS_ARG',str(any(a.endswith('/app.js') or a=='app.js' for a in args)).lower())
+                  o('PROCESS_'+str(index)+'_HAS_INDEX_JS_ARG',str(any(a.endswith('/index.js') or a=='index.js' for a in args)).lower())
               except Exception:
                   o('PROCESS_'+str(index)+'_CMDLINE_READABLE','false')
           if active_procs:
