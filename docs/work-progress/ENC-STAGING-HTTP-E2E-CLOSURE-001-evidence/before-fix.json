@@ -1,0 +1,456 @@
+{
+  "task": "ENC-STAGING-HTTP-E2E-CLOSURE-001",
+  "run": "c1dfb9d2-712e-4b4f-8aa7-49fe301383a5",
+  "node": "v24.19.0",
+  "probe": true,
+  "passed": true,
+  "evidence": [
+    {
+      "stage": "container",
+      "image": "sha256:1d2b32fbc13a8ed222b073036d268b669ddb1396e6b8f35b41e5b1b08ac15ea1",
+      "ephemeral": true,
+      "loopbackOnly": true
+    },
+    {
+      "stage": "isolation",
+      "database": "u293982346_encarmentest",
+      "minimalGrants": true,
+      "productionVisible": false,
+      "marker": "staging",
+      "engine": "InnoDB"
+    },
+    {
+      "stage": "bundle",
+      "sha256": "41e165f267041403b6d2aa01b32016de7650f03d93c24ce21c6a6e768b41d197",
+      "fullServer": true,
+      "cwdHasEnv": false
+    },
+    {
+      "stage": "health",
+      "status": "ok",
+      "uptime": 0,
+      "timestamp": "2026-10-30T19:38:30.191Z",
+      "environment": "staging",
+      "staging": {
+        "isStaging": true,
+        "readOnly": true,
+        "writesPermitted": false
+      },
+      "businesses": 1,
+      "events": 0,
+      "classifieds": 0,
+      "promotions": 0,
+      "emergencyServices": 0,
+      "database": "mariadb"
+    },
+    {
+      "stage": "POST /api/admin/login",
+      "status": 401
+    },
+    {
+      "stage": "POST /api/admin/login",
+      "status": 403
+    },
+    {
+      "stage": "POST /api/admin/login",
+      "status": 200
+    },
+    {
+      "stage": "POST /api/admin/login",
+      "status": 200
+    },
+    {
+      "stage": "POST /api/submit-business",
+      "status": 401
+    },
+    {
+      "stage": "POST /api/submit-business",
+      "status": 401
+    },
+    {
+      "stage": "POST /api/submit-business",
+      "status": 403
+    },
+    {
+      "stage": "POST /api/submit-business",
+      "status": 403
+    },
+    {
+      "stage": "unrelated-write",
+      "route": "/api/reports",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "stage": "unrelated-write",
+      "route": "/api/mariadb/reconnect",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "stage": "unrelated-write",
+      "route": "/api/upload-logo",
+      "method": "POST",
+      "status": 503
+    },
+    {
+      "stage": "unrelated-write",
+      "route": "/api/events",
+      "method": "POST",
+      "status": 403
+    },
+    {
+      "stage": "unrelated-write",
+      "route": "/api/businesses/3999",
+      "method": "DELETE",
+      "status": 403
+    },
+    {
+      "stage": "unrelated-write",
+      "route": "/businesses/3999",
+      "method": "PUT",
+      "status": 503
+    },
+    {
+      "stage": "POST /api/submit-business",
+      "status": 201
+    },
+    {
+      "stage": "SQL after POST",
+      "query": "SELECT id,name,description,phone,whatsapp,raw_data FROM businesses WHERE id=?",
+      "id": 4001,
+      "description": "W5 before HTTP edit",
+      "phone": "0000000000",
+      "whatsapp": "0000000001"
+    },
+    {
+      "stage": "POST /api/submit-business",
+      "status": 200
+    },
+    {
+      "stage": "idempotency",
+      "sequential": 200,
+      "concurrent": [
+        200,
+        200
+      ],
+      "count": 1,
+      "id": 4001
+    },
+    {
+      "stage": "POST /api/submit-business",
+      "status": 409,
+      "error": "IDEMPOTENCY_CONFLICT"
+    },
+    {
+      "stage": "POST /api/submit-business",
+      "status": 409,
+      "error": "BUSINESS_DUPLICATE"
+    },
+    {
+      "stage": "POST /api/submit-business",
+      "status": 400,
+      "error": "REQUEST_ID_REQUIRED"
+    },
+    {
+      "stage": "PATCH /api/businesses/4001",
+      "status": 400,
+      "error": "INVALID_BUSINESS"
+    },
+    {
+      "stage": "PATCH /api/businesses/4001",
+      "status": 400
+    },
+    {
+      "stage": "PATCH /api/businesses/nonexistent-w5",
+      "status": 404,
+      "error": "BUSINESS_NOT_FOUND"
+    },
+    {
+      "stage": "PATCH /api/businesses/4001",
+      "status": 403,
+      "error": "PUBLISH_PERMISSION_REQUIRED"
+    },
+    {
+      "stage": "PATCH /api/businesses/4001",
+      "status": 401
+    },
+    {
+      "stage": "PATCH /api/businesses/4001",
+      "status": 401
+    },
+    {
+      "stage": "PATCH /api/businesses/4001",
+      "status": 403
+    },
+    {
+      "stage": "PATCH /api/businesses/4001",
+      "status": 403
+    },
+    {
+      "stage": "PATCH /api/businesses/4001",
+      "status": 200
+    },
+    {
+      "stage": "SQL after PATCH",
+      "id": 4001,
+      "description": "W5 after HTTP edit",
+      "phone": "0000000000",
+      "whatsapp": "0000000001"
+    },
+    {
+      "stage": "PATCH /api/businesses/4001",
+      "status": 200
+    },
+    {
+      "stage": "PATCH /businesses/4001",
+      "status": 200
+    },
+    {
+      "stage": "POST /api/submit-business",
+      "status": 503,
+      "error": "BUSINESS_WRITE_UNCONFIRMED"
+    },
+    {
+      "stage": "PATCH /api/businesses/4001",
+      "status": 503,
+      "error": "BUSINESS_WRITE_UNCONFIRMED"
+    },
+    {
+      "stage": "discarded SQL field",
+      "status": 200,
+      "reportedSuccess": true,
+      "sqlDescription": "W5 after HTTP edit"
+    },
+    {
+      "stage": "REPRODUCED_DEFECT",
+      "code": "FALSE_SUCCESS_NONCONTACT_READBACK"
+    },
+    {
+      "stage": "PATCH /api/businesses/4001",
+      "status": 200
+    },
+    {
+      "stage": "health",
+      "status": "ok",
+      "uptime": 0,
+      "timestamp": "2026-10-30T19:38:30.923Z",
+      "environment": "staging",
+      "staging": {
+        "isStaging": true,
+        "readOnly": true,
+        "writesPermitted": false
+      },
+      "businesses": 2,
+      "events": 0,
+      "classifieds": 0,
+      "promotions": 0,
+      "emergencyServices": 0,
+      "database": "mariadb"
+    },
+    {
+      "stage": "POST /api/admin/login",
+      "status": 200
+    },
+    {
+      "stage": "GET /api/businesses",
+      "status": 200
+    },
+    {
+      "stage": "HTTP fresh read after restart",
+      "status": 200,
+      "source": "mariadb",
+      "id": 4001,
+      "description": "W5 after HTTP edit"
+    },
+    {
+      "stage": "GET /api/businesses",
+      "status": 503
+    },
+    {
+      "stage": "POST /api/submit-business",
+      "status": 403,
+      "error": "STAGING_ISOLATION_UNPROVEN"
+    },
+    {
+      "stage": "PATCH /api/businesses/4001",
+      "status": 403,
+      "error": "STAGING_ISOLATION_UNPROVEN"
+    },
+    {
+      "stage": "health",
+      "status": "ok",
+      "uptime": 0,
+      "timestamp": "2026-10-30T19:38:31.374Z",
+      "environment": "staging",
+      "staging": {
+        "isStaging": true,
+        "readOnly": true,
+        "writesPermitted": false
+      },
+      "businesses": 2,
+      "events": 0,
+      "classifieds": 0,
+      "promotions": 0,
+      "emergencyServices": 0,
+      "database": "mariadb"
+    },
+    {
+      "stage": "POST /api/admin/login",
+      "status": 200
+    },
+    {
+      "stage": "flags block",
+      "flag": "STAGING_READ_ONLY",
+      "route": "/api/submit-business",
+      "status": 503
+    },
+    {
+      "stage": "flags block",
+      "flag": "STAGING_READ_ONLY",
+      "route": "/api/businesses/4001",
+      "status": 503
+    },
+    {
+      "stage": "flags block",
+      "flag": "STAGING_READ_ONLY",
+      "route": "/businesses/4001",
+      "status": 503
+    },
+    {
+      "stage": "health",
+      "status": "ok",
+      "uptime": 0,
+      "timestamp": "2026-10-30T19:38:31.810Z",
+      "environment": "staging",
+      "staging": {
+        "isStaging": true,
+        "readOnly": true,
+        "writesPermitted": false
+      },
+      "businesses": 0,
+      "events": 0,
+      "classifieds": 0,
+      "promotions": 0,
+      "emergencyServices": 0,
+      "database": "json_cache"
+    },
+    {
+      "stage": "POST /api/admin/login",
+      "status": 200
+    },
+    {
+      "stage": "flags block",
+      "flag": "STAGING_DB_CONFIRMED",
+      "route": "/api/submit-business",
+      "status": 503
+    },
+    {
+      "stage": "flags block",
+      "flag": "STAGING_DB_CONFIRMED",
+      "route": "/api/businesses/4001",
+      "status": 503
+    },
+    {
+      "stage": "flags block",
+      "flag": "STAGING_DB_CONFIRMED",
+      "route": "/businesses/4001",
+      "status": 503
+    },
+    {
+      "stage": "health",
+      "status": "ok",
+      "uptime": 0,
+      "timestamp": "2026-10-30T19:38:32.250Z",
+      "environment": "staging",
+      "staging": {
+        "isStaging": true,
+        "readOnly": true,
+        "writesPermitted": false
+      },
+      "businesses": 2,
+      "events": 0,
+      "classifieds": 0,
+      "promotions": 0,
+      "emergencyServices": 0,
+      "database": "mariadb"
+    },
+    {
+      "stage": "POST /api/admin/login",
+      "status": 200
+    },
+    {
+      "stage": "flags block",
+      "flag": "STAGING_BUSINESS_WRITES_ENABLED",
+      "route": "/api/submit-business",
+      "status": 503
+    },
+    {
+      "stage": "flags block",
+      "flag": "STAGING_BUSINESS_WRITES_ENABLED",
+      "route": "/api/businesses/4001",
+      "status": 503
+    },
+    {
+      "stage": "flags block",
+      "flag": "STAGING_BUSINESS_WRITES_ENABLED",
+      "route": "/businesses/4001",
+      "status": 503
+    },
+    {
+      "stage": "health",
+      "status": "ok",
+      "uptime": 0,
+      "timestamp": "2026-10-30T19:38:32.686Z",
+      "environment": "staging",
+      "staging": {
+        "isStaging": true,
+        "readOnly": true,
+        "writesPermitted": false
+      },
+      "businesses": 2,
+      "events": 0,
+      "classifieds": 0,
+      "promotions": 0,
+      "emergencyServices": 0,
+      "database": "mariadb"
+    },
+    {
+      "stage": "POST /api/admin/login",
+      "status": 200
+    },
+    {
+      "stage": "flags block",
+      "flag": "ENC_ADMIN_MUTATIONS_ENABLED",
+      "route": "/api/submit-business",
+      "status": 503
+    },
+    {
+      "stage": "flags block",
+      "flag": "ENC_ADMIN_MUTATIONS_ENABLED",
+      "route": "/api/businesses/4001",
+      "status": 503
+    },
+    {
+      "stage": "flags block",
+      "flag": "ENC_ADMIN_MUTATIONS_ENABLED",
+      "route": "/businesses/4001",
+      "status": 503
+    },
+    {
+      "stage": "unrelated rows",
+      "sentinelUnchanged": true
+    },
+    {
+      "stage": "SQL cleanup",
+      "exactIdentity": true,
+      "deleted": 1,
+      "remaining": 0
+    },
+    {
+      "stage": "container cleanup",
+      "removed": true,
+      "tmpfsDestroyed": true
+    }
+  ]
+}

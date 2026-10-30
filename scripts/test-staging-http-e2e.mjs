@@ -41,6 +41,11 @@ const dir=mkdtempSync(path.join(tmpdir(),'enc-w5-http-'));
 const journal=path.join(dir,'cleanup.json');
 writeFileSync(journal,JSON.stringify({task,run,name}),{mode:0o600});
 console.log('RECOVERY_JOURNAL='+journal);
+for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>{
+ child?.kill('SIGTERM');
+ try{removeOwned(journal);console.log('INTERRUPTED_OWNED_CONTAINER_REMOVED');}catch{console.error('RECOVERY_REQUIRED='+journal);}
+ process.exit(signal==='SIGINT'?130:143);
+});
 const evidence=[];
 function record(stage,data){const row={stage,...data};evidence.push(row);console.log(JSON.stringify(row));}
 const password=randomBytes(32).toString('hex'), appPassword=randomBytes(32).toString('hex');
@@ -71,7 +76,7 @@ async function start(flags={}){
  for(const stream of [child.stdout,child.stderr])stream.on('data',data=>{logs=(logs+data).slice(-100000);});
  for(let n=0;n<100;n++){
   assert.equal(child.exitCode,null,'SERVER_EXITED (private logs suppressed)');
-  try{const h=await request('/api/health');if(h.status===200&&h.json.database==='mariadb'){assert.equal(h.json.environment,'staging');assert.equal(h.json.staging.readOnly,true);assert.equal(h.json.staging.writesPermitted,false);record('health',{status:200,...h.json});return;}}catch{}
+  try{const h=await request('/api/health');if(h.status===200&&h.json.database===(flags.STAGING_DB_CONFIRMED==='false'?'json_cache':'mariadb')){assert.equal(h.json.environment,'staging');assert.equal(h.json.staging.readOnly,true);assert.equal(h.json.staging.writesPermitted,false);record('health',{status:200,...h.json});return;}}catch{}
   await delay(100);
  }
  throw Error('SERVER_MARIADB_NOT_READY');
@@ -155,13 +160,14 @@ try{
  if(probe){assert.equal(mismatch.status,200);assert.equal(mismatch.json.success,true);assert.notEqual((await sqlRow()).description,mismatch.json.business.description);record('REPRODUCED_DEFECT',{code:'FALSE_SUCCESS_NONCONTACT_READBACK'});}
  else {assert.equal(mismatch.status,503);assert.equal(mismatch.json.success,false);assert.equal((await sqlRow()).description,'W5 after HTTP edit');}
  await admin.query('DROP TRIGGER w5_discard_description');
+ if(probe)await expect('/api/businesses/'+id,'PATCH',{description:'W5 after HTTP edit'},200);
  // Process restart clears all application caches/sessions, SQL data survives.
  await start();token=await login();
  const listing=await expect('/api/businesses','GET',undefined,200);assert.equal(listing.source,'mariadb');assert.equal(listing.json.source,'mariadb');const found=listing.json.businesses.find(b=>String(b.id)===String(id));assert.equal(found.description,'W5 after HTTP edit');assert.equal(found.phone,draft.phone);record('HTTP fresh read after restart',{status:200,source:listing.source,id:found.id,description:found.description});
  // SQL SELECT failure must produce 503 even with a warm cache.
- await admin.query("REVOKE SELECT ON `"+database+"`.* FROM 'w5_app'@'%'");
+ await admin.query('RENAME TABLE businesses TO w5_temporarily_unavailable');
  await expect('/api/businesses','GET',undefined,503);
- await admin.query("GRANT SELECT ON `"+database+"`.* TO 'w5_app'@'%'");
+ await admin.query('RENAME TABLE w5_temporarily_unavailable TO businesses');
  // Real isolation proof must block missing/incorrect marker before any INSERT.
  await admin.query('DELETE FROM encarmen_environment_marker');
  await expect('/api/submit-business','POST',{...draft,name:'W5 marker absent',phone:'0000000004',whatsapp:''},403,token,{'Idempotency-Key':randomUUID()});

@@ -67,3 +67,31 @@ heredaba sesión), no por bypass de backend. Corregido a null explícito. Espera
 de proceso terminado por señal corregida para revisar signalCode. Recuperación
 manual del contenedor con journal ejecutada: OWNED_EPHEMERAL_CONTAINER_REMOVED.
 No es una prueba completa aprobada. Lint inicial exit 0. Pruebas SQL/HTTP en curso.
+
+## Checkpoint 3 — ejecución real sobre código BASE
+2026-10-30T19:38:30Z: `node scripts/test-staging-http-e2e.mjs --probe-readback`
+exit 0 (modo que EXIGE reproducir el defecto). Store original recuperado con
+`git show 4407e6a:src/db/stagingBusinessStore.ts`; corrección en preparación
+restaurada al finalizar. Bundle base SHA256
+41e165f267041403b6d2aa01b32016de7650f03d93c24ce21c6a6e768b41d197.
+Evidencia íntegra saneada: `ENC-STAGING-HTTP-E2E-CLOSURE-001-evidence/before-fix.json`.
+
+POST 201 → SQL independiente ID4001/contactos; replay 200 y dos concurrentes200,
+COUNT=1; conflicto409; PATCH200 → SQL descripción; reinicio de aplicación → GET
+200 mariadb. SQL SIGNAL INSERT/UPDATE →503; marcador ausente/production→403;
+cuatro flags apagados individualmente bloquean POST/PATCH/alias con503.
+Sentinel intacto, DELETE exacto1/restantes0, contenedor/tmpfs destruido.
+
+DEFECTO CONFIRMADO: trigger BEFORE UPDATE conserva NEW.description=OLD.description.
+PATCH devuelve200/success=true y raw_data descripción nueva, pero columna SQL
+mantiene la anterior. Al serializar se oculta diferencia con alias de raw_data.
+No basta validar contactos. Corrección dirigida: cotejar columnas efectivamente
+escritas y raw_data antes del COMMIT en create/update; discrepancia503+rollback.
+
+Ajustes de harness durante preparación: health json_cache es esperado cuando
+STAGING_DB_CONFIRMED=false impide initMariaDb; no esperar MariaDB en ese caso.
+REVOKE SELECT no invalida privilegios cacheados de conexiones existentes; para
+fallo determinista de GET se renombra temporalmente businesses SOLO en contenedor
+propio y se restaura. Primer probe completo falló por esos supuestos del harness;
+no se cambió código operativo para hacerlos pasar. Proceso/señal y recuperación
+con etiquetas conservados. No scripts remotos, configuración ni datos reales.
