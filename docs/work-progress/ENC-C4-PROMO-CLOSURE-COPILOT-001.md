@@ -6,6 +6,7 @@
 - Rama de trabajo: `work/enc-c4-promo-closure-copilot-001`
 - Alcance: `src/components/AdminPromotionsTab.tsx` y pruebas específicas
 - Commit funcional: `3d43982ed348b9a08ca21e427621413a3eb256fa`
+- SHA final publicado: `e44ffcc8bc4c47bd35b7c79ef890c009450e907e`
 
 ## Cambios realizados
 
@@ -71,4 +72,4 @@ strip-only. Se repitió con el loader del proyecto y pasó.
 - La prueba de componente usa evaluación controlada de los handlers reales,
   porque el repositorio no incluye una infraestructura de montaje React/DOM
   para esta suite específica.
-- Commit documental final: se registrará después de publicar esta bitácora.
+- La rama publicada contiene ambos commits y no está integrada ni desplegada.
