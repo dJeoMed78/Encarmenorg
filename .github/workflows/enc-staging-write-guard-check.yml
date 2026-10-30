@@ -1,0 +1,57 @@
+name: ENCARMEN staging business write guard and contact count
+on:
+  push:
+    branches: [coord/staging-registration-write-safety-20261030]
+    paths: [.github/workflows/enc-staging-write-guard-check.yml]
+permissions:
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Staging public reads and safe rejection of invalid write attempts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > ENC_STAGING_WRITE_GUARD_RESULT.txt
+          import json,urllib.request,urllib.error,datetime
+          base='https://staging.encarmen.org'
+          print('CHECK_UTC='+datetime.datetime.now(datetime.timezone.utc).isoformat())
+          def call(path,method='GET',body=None):
+              payload=json.dumps(body).encode() if body is not None else None
+              req=urllib.request.Request(base+path,data=payload,method=method,headers={'Content-Type':'application/json','Cache-Control':'no-cache','User-Agent':'ENCARMEN-Staging-Guard-Check'})
+              try:
+                  with urllib.request.urlopen(req,timeout=25) as resp:return resp.status,resp.read(2000000)
+              except urllib.error.HTTPError as e:return e.code,e.read(4000)
+              except Exception as e:return type(e).__name__,b''
+          for path in ('/api/health','/api/businesses?hasWhatsapp=true','/api/businesses?hasPhone=true'):
+              status,raw=call(path)
+              print('GET_'+path+'='+str(status))
+              if path.startswith('/api/businesses?') and status==200:
+                  try:
+                      obj=json.loads(raw)
+                      items=obj if isinstance(obj,list) else next((obj[k] for k in ('businesses','data','items') if isinstance(obj.get(k),list)),[])
+                      print('COUNT_'+path+'='+str(len(items)))
+                      if 'hasWhatsapp' in path:print('HAIR_PALACE_WHATSAPP_INCLUDED='+str(any('hair palace' in str(b.get('name','')).lower() for b in items if isinstance(b,dict))))
+                  except Exception:print('COUNT_PARSE_ERROR=yes')
+          # Both requests are empty and invalid. They must not reach any persistence handler in read-only Staging.
+          for method,path in (('POST','/api/public/business-registrations'),('PATCH','/api/businesses/encarmen-preflight-nonexistent-id')):
+              status,raw=call(path,method,{})
+              print(method+'_'+path+'='+str(status))
+              if isinstance(status,int) and status!=403:print('WRITE_GUARD_UNEXPECTED_STATUS=yes')
+          print('COMPLETE=yes')
+          PY
+          cat ENC_STAGING_WRITE_GUARD_RESULT.txt
+      - name: Save redacted test results in isolated branch
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ENC_STAGING_WRITE_GUARD_RESULT.txt || echo 'RESULT=FAILED_NO_OUTPUT' > ENC_STAGING_WRITE_GUARD_RESULT.txt
+          git config user.name encarmen-guard-check
+          git config user.email encarmen-guard-check@users.noreply.github.com
+          git add ENC_STAGING_WRITE_GUARD_RESULT.txt
+          git commit -m 'docs: record staging business guard checks' || exit 0
+          git push origin HEAD:coord/staging-registration-write-safety-20261030
