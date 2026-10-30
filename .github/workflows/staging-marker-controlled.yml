@@ -1,0 +1,47 @@
+name: ENCARMEN - staging marker controlled execution
+on:
+  push:
+    branches:
+      - coord/staging-marker-init-20261030
+    paths:
+      - .github/workflows/staging-marker-controlled.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  marker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run protected staging-only marker setup through pinned SSH
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -uo pipefail
+          {
+            echo 'MARKER_EXECUTION_START=true'
+            if [ -z "$SSHPASS" ]; then echo 'RESULT=BLOCKED_NO_SECRET'; exit 0; fi
+            sudo apt-get update -qq >/dev/null 2>&1
+            sudo apt-get install -y -qq sshpass >/dev/null 2>&1
+            mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"
+            ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+            FP=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 2>/dev/null | awk '{print $2}')
+            if [ "$FP" != 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then echo 'RESULT=BLOCKED_SSH_FINGERPRINT'; exit 0; fi
+            echo 'SSH_PIN=VERIFIED'
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' < ops/coord/staging_marker_setup.py
+            echo "SSH_EXIT=$?"
+          } > ENC_STAGING_MARKER_RESULT.txt 2>&1
+          cat ENC_STAGING_MARKER_RESULT.txt
+      - name: Save nonsecret result in isolated coordination branch
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ENC_STAGING_MARKER_RESULT.txt || echo 'RESULT=NO_REPORT' > ENC_STAGING_MARKER_RESULT.txt
+          git config user.name encarmen-coordination
+          git config user.email encarmen-coordination@users.noreply.github.com
+          git add ENC_STAGING_MARKER_RESULT.txt
+          git commit -m 'docs: staging marker execution evidence' || exit 0
+          git push origin HEAD:coord/staging-marker-init-20261030
