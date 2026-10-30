@@ -28,3 +28,14 @@
 5. No usar `main`, `encarmen.org` ni la MariaDB productiva. No cerrar F001/F003 ni otras incidencias del propietario sin aceptación expresa.
 
 **Criterio anti-duplicidad:** no reconstruir PR #10, no repetir restauración de 174 contactos, no abrir nuevas tareas generales de persistencia mientras este bloqueo concreto pueda diagnosticarse de forma aislada.
+
+## Inspección de solo lectura ejecutada: resultado comprobado
+**UTC del workflow:** 2026-10-30T21:28:23Z. **Archivo de evidencia:** `coord/staging-http-readonly-diagnostics-20261030/ENC_STAGING_HTTP_READONLY_DIAGNOSTICS_RESULT.txt`.
+- SSH pin verificado y salida SSH 0.
+- `ACTIVE_BUILD_CONFIRMED=true`; dos builds disponibles.
+- `LATEST_MTIME_EQUALS_ACTIVE=true`: **descartada la hipótesis** de selección equivocada del build por mtime para ese estado.
+- `ACTIVE_STRICT_READBACK_MARKERS=true`; `ACTIVE_NODE_PROCESSES=2`; `ACTIVE_JS_SYNTAX_OK=true`.
+- `PUBLIC_STAGING_HEALTH_HTTP=200`, pero `ACTIVE_LOOPBACK_HEALTH_STATUS=unavailable`.
+- `SQL_OR_STAGING_WRITES_EXECUTED=false`; no prueba POST/PATCH, no SQL.
+- **Conclusión:** la versión activa está identificada, pero el fallo de loopback sigue sin causa demostrada. NO afirmar que la validación E2E pública quedó aprobada.
+- Nueva ejecución diagnóstica de precisión para distinguir aislamiento de red, puerto/env y tipo de fallo de loopback publicada en commit `4fb210a176e86afcd396210f5a600e573f6c61be`; su resultado es pendiente hasta verificar un log nuevo.
