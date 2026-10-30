@@ -21,6 +21,7 @@ import {
   dbSaveBusiness,
   dbDeleteBusiness,
   dbLoadAllReports,
+  dbUpdateReport,
   dbSaveReport,
   dbDeleteReport,
   dbLoadAllEvents,
@@ -1479,11 +1480,9 @@ initMariaDb().then(async (active) => {
     }
 
     // 2. Reports
-    const dbReports = await dbLoadAllReports();
-    if (dbReports.length > 0) {
-      reportsCache = dbReports;
-      console.log(`[MariaDB] ${reportsCache.length} reportes cargados desde Hostinger MariaDB.`);
-    }
+    // Failed SQL reads are unavailable, not confirmed empty catalogs.
+    try { reportsCache = await dbLoadAllReports(); }
+    catch { reportsCache=[]; console.warn('[MariaDB] Reportes no disponibles; sin fallback local.'); }
 
     // 3. Events
     const dbEvents = await dbLoadAllEvents();
@@ -2976,74 +2975,77 @@ app.get('/api/health-wp', async (_req: Request, res: Response) => {
 });
 
 // Reports endpoints
-app.get('/api/reports', (_req: Request, res: Response) => {
-  res.json({ total: reportsCache.length, reports: reportsCache });
+app.get('/api/reports', async (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control','no-store');
+  try {
+    if (!isMariaDbActive()) throw new Error('UNAVAILABLE');
+    const reports = await dbLoadAllReports();
+    reportsCache = reports;
+    return res.json({success:true,source:'mariadb',total:reports.length,reports});
+  } catch {
+    return res.status(503).json({success:false,source:'unavailable',message:'No se pudieron consultar los reportes en MariaDB.'});
+  }
 });
 
+// Report mutations only report success after MariaDB confirms the operation.
+// Local cache/JSON are secondary copies and cannot establish durable delivery.
 app.post('/api/reports', async (req: Request, res: Response) => {
+  if (!isMariaDbActive()) return res.status(503).json({success:false,writeMayHaveSucceeded:false,message:'La base de datos no está disponible para confirmar el reporte.'});
+  const reportData = {
+    ...req.body,
+    id: `rep-${Date.now()}-${crypto.randomBytes(6).toString('hex')}`,
+    status: 'pending',
+    createdAt: new Date().toISOString()
+  };
   try {
-    const reportData = {
-      id: `rep-${Date.now()}`,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      ...req.body
-    };
-    reportsCache.unshift(reportData);
-
-    try {
-      fs.writeFileSync(path.resolve(__dirname, 'reports_db.json'), JSON.stringify(reportsCache, null, 2), 'utf8');
-    } catch (_) {}
-
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveReport(reportData);
-      } catch (_) {}
+    const reports = await dbLoadAllReports();
+    if ((await dbSaveReport(reportData)) !== true) {
+      return res.status(503).json({success:false,writeMayHaveSucceeded:true,message:'No se pudo confirmar si el reporte quedó guardado. Evita reenviarlo sin verificar.'});
     }
-
-    res.json({ success: true, message: 'Reporte recibido', report: reportData });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    reportsCache = [reportData, ...reports.filter(r => r.id !== reportData.id)];
+    try { fs.writeFileSync(path.resolve(__dirname, 'reports_db.json'), JSON.stringify(reportsCache, null, 2), 'utf8'); }
+    catch (err) { console.warn('No se actualizó la copia local de reportes:', err); }
+    return res.json({success:true,message:'Reporte recibido y guardado en MariaDB.',report:reportData});
+  } catch {
+    return res.status(503).json({success:false,writeMayHaveSucceeded:true,message:'No se pudo confirmar el resultado de la escritura del reporte.'});
   }
 });
 
 app.patch('/api/reports/:id', async (req: Request, res: Response) => {
   const id = req.params.id;
-  const rep = reportsCache.find(r => r.id === id);
-  if (rep) {
-    if (req.body.status) rep.status = req.body.status;
-    try {
-      fs.writeFileSync(path.resolve(__dirname, 'reports_db.json'), JSON.stringify(reportsCache, null, 2), 'utf8');
-    } catch (_) {}
-    
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveReport(rep);
-      } catch (_) {}
-    }
-    return res.json({ success: true, report: rep });
+  if (!isMariaDbActive()) return res.status(503).json({success:false,message:'MariaDB no disponible; cambio no confirmado.'});
+  if (!['resolved','dismissed'].includes(req.body?.status)) {
+    return res.status(400).json({success:false,message:'Estado de reporte inválido.'});
   }
-  return res.status(404).json({ success: false, message: 'Reporte no encontrado' });
+  try {
+    const reports = await dbLoadAllReports();
+    const existing = reports.find(r=>r.id===id);
+    if(!existing)return res.status(404).json({success:false,message:'Reporte no encontrado'});
+    const updated = {...existing,status:req.body.status};
+    if ((await dbUpdateReport(updated)) !== true) return res.status(503).json({success:false,writeMayHaveSucceeded:true,message:'No se confirmó la actualización del reporte.'});
+    reportsCache = reports.map(r => r.id === id ? updated : r);
+    try { fs.writeFileSync(path.resolve(__dirname, 'reports_db.json'), JSON.stringify(reportsCache, null, 2), 'utf8'); }
+    catch (err) { console.warn('No se actualizó la copia local de reportes:', err); }
+    return res.json({success:true,report:updated});
+  } catch {
+    return res.status(503).json({success:false,writeMayHaveSucceeded:true,message:'No se pudo confirmar la actualización del reporte.'});
+  }
 });
 
 app.delete('/api/reports/:id', async (req: Request, res: Response) => {
   const id = req.params.id;
-  const idx = reportsCache.findIndex(r => r.id === id);
-  if (idx !== -1) {
-    reportsCache.splice(idx, 1);
-    try {
-      fs.writeFileSync(path.resolve(__dirname, 'reports_db.json'), JSON.stringify(reportsCache, null, 2), 'utf8');
-    } catch (_) {}
-    
-    if (isMariaDbActive()) {
-      try {
-        await dbDeleteReport(id);
-      } catch (_) {}
-    }
-    return res.json({ success: true, message: 'Reporte eliminado' });
+  if (!isMariaDbActive()) return res.status(503).json({success:false,message:'MariaDB no disponible; baja no confirmada.'});
+  try {
+    const reports = await dbLoadAllReports();
+    if(!reports.some(r=>r.id===id))return res.status(404).json({success:false,message:'Reporte no encontrado'});
+    if ((await dbDeleteReport(id)) !== true) return res.status(503).json({success:false,writeMayHaveSucceeded:true,message:'No se confirmó la eliminación del reporte.'});
+    reportsCache = reports.filter(r => r.id !== id);
+    try { fs.writeFileSync(path.resolve(__dirname, 'reports_db.json'), JSON.stringify(reportsCache, null, 2), 'utf8'); }
+    catch (err) { console.warn('No se actualizó la copia local de reportes:', err); }
+    return res.json({success:true,message:'Reporte eliminado de MariaDB.'});
+  } catch {
+    return res.status(503).json({success:false,writeMayHaveSucceeded:true,message:'No se pudo confirmar la eliminación del reporte.'});
   }
-  return res.status(404).json({ success: false, message: 'Reporte no encontrado' });
 });
 
 // Categories

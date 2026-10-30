@@ -62,6 +62,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
   const [promoOwnerWhatsapp, setPromoOwnerWhatsapp] = useState('');
   const [promoImage, setPromoImage] = useState('');
   const [promoImageData, setPromoImageData] = useState('');
+  const [promoImageUnconfirmed,setPromoImageUnconfirmed] = useState(false);
   const [isUploadingPromoImg, setIsUploadingPromoImg] = useState(false);
   const [promoTerms, setPromoTerms] = useState('Válido para las primeras personas en presentar su código oficial.');
   const [isSaving, setIsSaving] = useState(false);
@@ -113,15 +114,17 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
         return;
       }
       setPromoImageData(compressedDataUrl);
+      setPromoImageUnconfirmed(true);
       try {
         const res = await uploadBusinessLogo(compressedDataUrl, file.name);
         if (res.success && res.url) {
           setPromoImage(res.url);
+          setPromoImageUnconfirmed(false);
         } else {
-          setPromoImage(compressedDataUrl);
+          setErrorMsg(res.message || 'No se confirmó la carga de la imagen.');
         }
       } catch {
-        setPromoImage(compressedDataUrl);
+        setErrorMsg('No se confirmó la carga de la imagen.');
       }
     } catch (err) {
       console.error('Error uploading promo image:', err);
@@ -199,6 +202,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
     setPromoOwnerEmail(promo.ownerEmail || '');
     setPromoOwnerWhatsapp(cleanPhoneNumber(promo.businessWhatsapp || promo.businessPhone || ''));
     setPromoImage(promo.promoImage || promo.promoImageData || '');
+    setPromoImageUnconfirmed(Boolean((promo.promoImage || promo.promoImageData || '').startsWith('data:')));
     setPromoImageData(promo.promoImageData || (promo.promoImage?.startsWith('data:') ? promo.promoImage : ''));
     setPromoTerms(promo.terms || '');
     setActiveSubTab('create');
@@ -217,12 +221,17 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
     setPromoOwnerWhatsapp(extractCleanPhone(firstBiz));
     setPromoImage('');
     setPromoImageData('');
+    setPromoImageUnconfirmed(false);
     setPromoTerms('Válido para las primeras personas en presentar su código oficial.');
     setBizSearchQuery('');
   };
 
   const handleSavePromo = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isUploadingPromoImg || promoImageUnconfirmed || (promoImage && !/^(?:https?:\/\/|\/(?!\/))/.test(promoImage))) {
+      setErrorMsg('La imagen solo está en previsualización; confirma su carga remota antes de guardar.');
+      return;
+    }
     if (!selectedBizId || !promoTitle.trim() || !promoDiscount.trim()) {
       setErrorMsg('Por favor completa el negocio, título y descuento.');
       return;
@@ -247,8 +256,8 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
         validUntil: promoValidUntil.trim(),
         ownerEmail: promoOwnerEmail.trim(),
         ownerWhatsapp: cleanWa,
-        promoImage: promoImage.trim() || promoImageData || null,
-        promoImageData: promoImageData || (promoImage.startsWith('data:') ? promoImage : null),
+        promoImage: promoImage.trim() || null,
+        promoImageData: null,
         terms: promoTerms.trim(),
         isActive: true
       });
@@ -855,10 +864,10 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
                     Sube la imagen publicitaria que te entregó el negocio (ej. estética, taller, restaurante). El usuario verá este cartel en grande para conocer todos los detalles antes de solicitar su cupón.
                   </p>
                 </div>
-                {promoImage && (
+                {(promoImage || promoImageData) && (
                   <button
                     type="button"
-                    onClick={() => setPromoImage('')}
+                    onClick={() => { setPromoImage(''); setPromoImageData(''); setPromoImageUnconfirmed(false); }}
                     className="text-xs text-rose-600 hover:text-rose-800 font-bold underline cursor-pointer"
                   >
                     Quitar cartel
@@ -909,6 +918,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
                         onClick={() => {
                           setPromoImage('');
                           setPromoImageData('');
+    setPromoImageUnconfirmed(false);
                         }}
                         className="px-3 py-2 rounded-xl border border-stone-200 bg-white hover:bg-rose-50 hover:text-rose-600 text-stone-600 text-xs font-bold transition-colors cursor-pointer"
                       >

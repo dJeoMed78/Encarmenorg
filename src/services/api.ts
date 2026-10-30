@@ -174,13 +174,18 @@ export async function uploadBusinessLogo(imageBase64: string, filename?: string)
       const errData = await res.json().catch(() => ({}));
       throw new Error(errData.message || `Error del servidor HTTP ${res.status}`);
     }
-    return await res.json();
+    const result = await res.json();
+    const url = typeof result?.url === 'string' ? result.url.trim() : '';
+    // A data URI or a javascript: URL is not a persisted remote image.
+    if (result?.success !== true || !/^(?:https?:\/\/|\/(?!\/))/.test(url)) {
+      return {success:false,message:result?.message || 'El servidor no confirmó una URL persistente de imagen.'};
+    }
+    return {...result,url};
   } catch (err: any) {
-    // If backend endpoint is unavailable, return dataURI as client-side image so user never gets blocked
+    // A local data URI is not evidence that the remote server stored the image.
     return {
-      success: true,
-      url: imageBase64,
-      message: 'Imagen cargada en el navegador'
+      success: false,
+      message: err?.message || 'No se pudo confirmar el almacenamiento de la imagen en el servidor.'
     };
   }
 }
@@ -207,10 +212,12 @@ export async function checkBusinessDuplicate(name: string, phone?: string): Prom
     if (name) params.append('name', name);
     if (phone) params.append('phone', phone);
     const res = await adminFetch(`${API_BASE}/check-duplicate?${params.toString()}`);
-    if (!res.ok) return { isDuplicate: false };
-    return await res.json();
-  } catch {
-    return { isDuplicate: false };
+    if (!res.ok) throw new Error(`No se pudo comprobar duplicados (HTTP ${res.status}). Intenta de nuevo.`);
+    const result = await res.json();
+    if (typeof result?.isDuplicate !== 'boolean') throw new Error('El servidor no confirmó el resultado de la comprobación de duplicados.');
+    return result;
+  } catch (err: any) {
+    throw new Error(err?.message || 'No se pudo comprobar si la empresa ya existe.');
   }
 }
 
@@ -361,7 +368,9 @@ export async function updateReportStatus(id: string, status: 'resolved' | 'dismi
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status })
     });
-    return res.ok;
+    if (!res.ok) return false;
+    const result = await res.json();
+    return result?.success === true && String(result?.report?.id) === String(id) && result.report.status === status;
   } catch {
     return false;
   }
@@ -372,7 +381,9 @@ export async function deleteReport(id: string): Promise<boolean> {
     const res = await adminFetch(`${API_BASE}/reports/${id}`, {
       method: 'DELETE'
     });
-    return res.ok;
+    if (!res.ok) return false;
+    const result = await res.json();
+    return result?.success === true;
   } catch {
     return false;
   }

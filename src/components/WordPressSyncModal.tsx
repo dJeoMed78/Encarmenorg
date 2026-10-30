@@ -505,15 +505,15 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
           if (uploadRes.success && uploadRes.url) {
             urls.push(uploadRes.url);
           } else {
-            urls.push(b64);
+            throw new Error(uploadRes.message || 'No se confirmó la carga de la fotografía.');
           }
-        } catch {
-          urls.push(b64);
+        } catch (error) {
+          throw error;
         }
       }
       setNewBizGallery(prev => [...prev, ...urls].slice(0, 10));
     } catch (err: any) {
-      console.error('Error subiendo fotos de galería:', err);
+      setNewBizErrorMsg(err.message || 'No se confirmó la carga de la galería.');
     } finally {
       setIsUploadingNewBizGallery(false);
       e.target.value = '';
@@ -540,9 +540,13 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
         const uploadRes = await uploadBusinessLogo(base64Data, file.name);
         if (uploadRes.success && uploadRes.url) {
           setNewBizForm(prev => ({ ...prev, image: uploadRes.url! }));
+        } else {
+          setNewBizLogoPreview(null);
+          setNewBizErrorMsg(uploadRes.message || 'No se confirmó la carga del logotipo.');
         }
       } catch (err: any) {
-        console.error('Logo upload error:', err);
+        setNewBizLogoPreview(null);
+        setNewBizErrorMsg(err.message || 'No se confirmó la carga del logotipo.');
       } finally {
         setIsUploadingNewBizLogo(false);
       }
@@ -801,12 +805,20 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
   // Acción 3: Descartar o eliminar un reporte
   const handleDismissReport = async (reportId: string) => {
-    await updateReportStatus(reportId, 'dismissed');
+    const confirmed = await updateReportStatus(reportId, 'dismissed');
+    if (!confirmed) {
+      window.alert('No se confirmó el cambio de estado del reporte en el servidor.');
+      return;
+    }
     await loadReportsData();
   };
 
   const handleDeleteReport = async (reportId: string) => {
-    await deleteReport(reportId);
+    const confirmed = await deleteReport(reportId);
+    if (!confirmed) {
+      window.alert('No se confirmó la eliminación del reporte en el servidor.');
+      return;
+    }
     await loadReportsData();
   };
 

@@ -592,15 +592,34 @@ export async function dbDeleteBusiness(id: string | number): Promise<boolean> {
   }
 }
 
-export async function dbLoadAllReports(): Promise<any[]> {
-  if (!pool) return [];
-  try {
-    const [rows]: any = await pool.query('SELECT * FROM reports ORDER BY created_at DESC');
-    return rows;
-  } catch (err: any) {
-    console.warn('[MariaDB] Error cargando reports:', err.message);
-    return [];
+function reportDetailsForSql(report: any): string {
+  const metadata: Record<string,unknown> = {__encReport:1};
+  for(const key of ['type','classifiedId','classifiedTitle','requesterName','requesterContact','comment','details','businessPhone','businessWhatsapp','contactEmail']) {
+    if(typeof report[key]==='string')metadata[key]=report[key];
   }
+  return JSON.stringify(metadata);
+}
+
+export async function dbLoadAllReports(): Promise<any[]> {
+  if (!pool) throw new Error('REPORTS_UNAVAILABLE');
+  const [rows]: any = await pool.query('SELECT * FROM reports ORDER BY created_at DESC');
+  if (!Array.isArray(rows)) throw new Error('REPORTS_INVALID_READ');
+  return rows.map((row:any)=>{
+    let metadata:Record<string,unknown>={};
+    try {const parsed=JSON.parse(row.details || '');if(parsed?.__encReport===1){metadata.details=typeof parsed.details==='string'?parsed.details:(typeof parsed.comment==='string'?parsed.comment:'');for(const key of ['type','classifiedId','classifiedTitle','requesterName','requesterContact','comment','details','businessPhone','businessWhatsapp','contactEmail'])if(typeof parsed[key]==='string')metadata[key]=parsed[key];}} catch {}
+    return {...row,businessId:row.business_id ? Number(row.business_id) : undefined,businessName:row.business_name || '',createdAt:row.created_at,...metadata};
+  });
+}
+
+// Updates must never recreate a report removed by another operation.
+export async function dbUpdateReport(report: any): Promise<boolean> {
+  if (!guardWrite('dbUpdateReport') || !pool) return false;
+  try {
+    const [result]: any = await pool.query('UPDATE reports SET status = ?, details = ? WHERE id = ?', [report.status,reportDetailsForSql(report),report.id]);
+    if (!(Number(result?.affectedRows || 0) > 0)) return false;
+    const [rows]: any = await pool.query('SELECT * FROM reports WHERE id = ?', [report.id]);
+    return Array.isArray(rows) && rows.length===1 && String(rows[0].id)===String(report.id) && rows[0].status===report.status && rows[0].details===reportDetailsForSql(report);
+  } catch { return false; }
 }
 
 export async function dbSaveReport(report: any): Promise<boolean> {
@@ -612,16 +631,18 @@ export async function dbSaveReport(report: any): Promise<boolean> {
       VALUES (?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE status = VALUES(status), details = VALUES(details);
     `;
-    await pool.query(query, [
+    const [result]: any = await pool.query(query, [
       report.id,
       String(report.business_id || report.businessId || ''),
       report.business_name || report.businessName || '',
       report.reason || '',
-      report.details || '',
+      reportDetailsForSql(report),
       report.reporter_email || report.reporterEmail || '',
       report.status || 'pending'
     ]);
-    return true;
+    if (!(Number(result?.affectedRows || 0) > 0)) return false;
+    const [rows]: any = await pool.query('SELECT * FROM reports WHERE id = ?', [report.id]);
+    return Array.isArray(rows) && rows.length===1 && String(rows[0].id)===String(report.id) && rows[0].status===report.status && rows[0].details===reportDetailsForSql(report);
   } catch (err: any) {
     console.warn('[MariaDB] Error guardando reporte:', err.message);
     return false;
@@ -632,8 +653,10 @@ export async function dbDeleteReport(id: string): Promise<boolean> {
   if (!guardWrite('dbDeleteReport')) return false;
   if (!pool) return false;
   try {
-    await pool.query('DELETE FROM reports WHERE id = ?', [id]);
-    return true;
+    const [result]: any = await pool.query('DELETE FROM reports WHERE id = ?', [id]);
+    if (!(Number(result?.affectedRows || 0) > 0)) return false;
+    const [rows]: any = await pool.query('SELECT id FROM reports WHERE id = ?', [id]);
+    return Array.isArray(rows) && rows.length===0;
   } catch (err: any) {
     console.warn('[MariaDB] Error eliminando reporte:', err.message);
     return false;
