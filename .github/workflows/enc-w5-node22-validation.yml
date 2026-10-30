@@ -1,4 +1,4 @@
-name: ENCARMEN W5 Node22 lockfile and isolated E2E validation
+name: ENCARMEN W5 Node22 complete regression dependencies verification
 on:
   push:
     branches: [coord/enc-w5-node22-validation-001]
@@ -32,8 +32,12 @@ jobs:
             echo "LINT_EXIT=$?"
             npm run build:server > /tmp/enc-build.log 2>&1
             echo "BUILD_SERVER_EXIT=$?"
+            npm install jsdom --no-save --no-package-lock --ignore-scripts --no-audit --no-fund > /tmp/enc-jsdom-install.log 2>&1
+            echo "JSDOM_INSTALL_EXIT=$?"
             node --import tsx --test tests/staging-write-001.test.mjs tests/staging-isolation-proof.test.mjs tests/staging-store-default-strict.test.mjs tests/public-registration-integration.test.mjs > /tmp/enc-regression.log 2>&1
-            echo "REGRESSIONS_EXIT=$?"
+            rc=$?
+            echo "REGRESSIONS_EXIT=$rc"
+            if [ "$rc" -ne 0 ]; then echo "REGRESSION_FAILURE_SUMMARY_START"; grep -E "^not ok|^# (Error|error|fail|failed|tests|pass)|ERR_MODULE_NOT_FOUND" /tmp/enc-regression.log | tail -25 || true; echo "REGRESSION_FAILURE_SUMMARY_END"; fi
             node scripts/test-staging-http-e2e.mjs > /tmp/enc-http-e2e.log 2>&1
             echo "HTTP_E2E_EXIT=$?"
             node scripts/test-staging-http-e2e.mjs --test-recovery > /tmp/enc-recovery.log 2>&1
