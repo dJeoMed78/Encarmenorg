@@ -1,0 +1,89 @@
+name: ENCARMEN - Preflight aislamiento Staging (solo lectura)
+on:
+  push:
+    branches: [coord/staging-db-preflight-20261030]
+    paths: [.github/workflows/enc-staging-db-preflight.yml]
+permissions:
+  contents: write
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspeccionar aislamiento del entorno Staging sin exponer secretos
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -u
+          REPORT="$RUNNER_TEMP/staging-preflight.txt"
+          {
+            echo 'ENCARMEN STAGING ENVIRONMENT PREFLIGHT (READ ONLY)'
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo 'EXPECTED_STAGING_DB=u293982346_encarmentest'
+            if [ -z "$SSHPASS" ]; then echo 'STATUS=BLOCKED_NO_SSH_SECRET'; exit 0; fi
+            sudo apt-get update -qq >/dev/null 2>&1
+            sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+            mkdir -p "$HOME/.ssh"
+            chmod 700 "$HOME/.ssh"
+            ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+            FP=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 2>/dev/null | awk '{print $2}')
+            if [ "$FP" != 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then echo 'STATUS=BLOCKED_SSH_FINGERPRINT'; exit 0; fi
+            echo 'SSH_FINGERPRINT=VERIFIED'
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' <<'REMOTE'
+          import pathlib, re, os
+          home=pathlib.Path.home()
+          base=home/'domains/staging.encarmen.org'
+          roots=[base/'hbuilds/config/.env',base/'hbuilds/current/nodejs/.env',base/'.env']
+          print('SSH_CONNECTED=yes')
+          print('STAGING_ROOT_PRESENT=' + ('yes' if base.is_dir() else 'no'))
+          found=False
+          for path in roots:
+              if not path.is_file():
+                  continue
+              found=True
+              print('ENV_FILE_LOCATION=' + ('hbuilds/config' if 'config' in path.parts else 'other-staging'))
+              values={}
+              for line in path.read_text(encoding='utf-8',errors='replace').splitlines():
+                  x=line.strip()
+                  if x.startswith('export '):x=x[7:]
+                  if not x or x.startswith('#') or '=' not in x: continue
+                  k,v=x.split('=',1)
+                  values[k.strip()]=v.strip().strip(chr(34)).strip(chr(39))
+              def pick(keys):
+                  nonempty=[values[k] for k in keys if values.get(k)]
+                  return nonempty[0] if len(set(nonempty))==1 and nonempty else ''
+              db=pick(['DB_NAME','MYSQL_DATABASE','MARIADB_DATABASE'])
+              user=pick(['DB_USER','MYSQL_USER','MARIADB_USER'])
+              host=pick(['DB_HOST','MYSQL_HOST','MARIADB_HOST'])
+              env=values.get('APP_ENV','').lower().strip()
+              readonly=values.get('STAGING_READ_ONLY','').lower().strip()
+              prod='u293982346_encarmenapp'
+              print('DB_NAME_IS_STAGING=' + ('yes' if db=='u293982346_encarmentest' else 'no'))
+              print('DB_NAME_IS_PRODUCTION=' + ('yes' if db==prod else 'no'))
+              print('DB_USER_IS_PRODUCTION=' + ('yes' if user=='u293982346_appuser' else 'no'))
+              print('DB_HOST_CONFIGURED=' + ('yes' if bool(host) else 'no'))
+              print('APP_ENV_IS_STAGING=' + ('yes' if env=='staging' else 'no'))
+              print('STAGING_READ_ONLY=' + ('yes' if readonly=='true' else 'no'))
+              print('DB_PASSWORD_PRESENT=' + ('yes' if bool(pick(['DB_PASSWORD','MYSQL_PASSWORD','MARIADB_PASSWORD'])) else 'no'))
+              safe=db=='u293982346_encarmentest' and user not in ('','u293982346_appuser') and bool(host) and env=='staging'
+              print('PREFLIGHT_CONFIG_RESULT='+('PASS' if safe else 'BLOCKED'))
+              break
+          if not found:print('PREFLIGHT_CONFIG_RESULT=UNKNOWN_NO_ENV_FILE')
+          print('INSPECTION_READ_ONLY_COMPLETE=yes')
+          REMOTE
+          } > "$REPORT" 2>&1
+          cp "$REPORT" ENC_STAGING_PREFLIGHT_RESULT.txt
+          cat "$REPORT"
+      - name: Guardar resultado seguro en rama aislada
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f ENC_STAGING_PREFLIGHT_RESULT.txt ]; then echo 'STATUS=NO_REPORT' > ENC_STAGING_PREFLIGHT_RESULT.txt; fi
+          git config user.name 'encarmen-preflight'
+          git config user.email 'encarmen-preflight@users.noreply.github.com'
+          git add ENC_STAGING_PREFLIGHT_RESULT.txt
+          git commit -m 'docs: evidenciar preflight de aislamiento staging' || exit 0
+          git push origin HEAD:coord/staging-db-preflight-20261030
