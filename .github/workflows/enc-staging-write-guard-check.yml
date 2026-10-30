@@ -56,6 +56,17 @@ jobs:
                       print('COUNT_'+path+'='+str(len(items)))
                       if 'hasWhatsapp' in path:print('HAIR_PALACE_WHATSAPP_INCLUDED='+str(any('hair palace' in str(b.get('name','')).lower() for b in items if isinstance(b,dict))))
                   except Exception:print('COUNT_PARSE_ERROR=yes')
+          # Distinguish transient connection loss from persistent cache fallback.
+          import time
+          time.sleep(8)
+          second_status,second_raw=call('/api/health')
+          print('HEALTH_RECHECK_STATUS='+str(second_status))
+          if second_status==200:
+              try:
+                  second=json.loads(second_raw)
+                  print('HEALTH_RECHECK_DB_ENGINE='+str(second.get('database')))
+                  print('HEALTH_RECHECK_ENVIRONMENT='+str(second.get('environment')))
+              except Exception:print('HEALTH_RECHECK_PARSE_ERROR=yes')
           print('READ_ONLY_DIAGNOSTIC_COMPLETE=yes')
 
           PY
