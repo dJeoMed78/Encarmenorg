@@ -23,9 +23,9 @@ const TSX_REMOVE = `            <section className="bpd-card bpd-reviews" id="bp
 const TSX_INSERT_AFTER = `          </aside>\n        </div>\n        <footer className="bpd-footer">`;
 const TSX_REVIEWS = `          <section className="bpd-card bpd-reviews" id="bpd-ratings">\n            <h2>\n              <Star /> Opiniones de la comunidad\n            </h2>\n            <StarRatingWidget businessId={b.id} businessName={b.name} />\n            <div className="bpd-comments">\n              <MessageCircle size={20} />\n              <strong>Comentarios todavía no disponibles</strong>\n              <p>\n                Puedes calificar con estrellas. Aún no se pueden publicar\n                comentarios ni fotografías de reseñas.\n              </p>\n            </div>\n          </section>\n`;
 const CSS_BASE_ANCHOR = `.bpd-reviews {\n  padding: 15px;\n}`;
-const CSS_BASE_ADD = `\n\n/* ENC-F007A: opiniones al final en escritorio; no altera el widget ni los datos. */\n.bpd-reviews {\n  grid-column: 1 / -1;\n  grid-row: 3;\n}`;
+const CSS_BASE_ADD = `\n\n/* ENC-F007A: reviews after business facts on wide screens. */\n.bpd-reviews {\n  grid-column: 1 / -1;\n  grid-row: 3;\n}`;
 const CSS_1100_ANCHOR = `  .bpd-facts {\n    grid-row: 3;\n    grid-column: 1/-1;\n    display: grid;\n    grid-template-columns: repeat(3, minmax(0, 1fr));\n  }`;
-const CSS_1100_ADD = `\n\n  /* ENC-F007A: opiniones después de ubicación, horarios, pagos y entrega. */\n  .bpd-reviews {\n    grid-column: 1 / -1;\n    grid-row: 4;\n  }`;
+const CSS_1100_ADD = `\n\n  /* ENC-F007A: medium screens place reviews below business facts. */\n  .bpd-reviews {\n    grid-column: 1 / -1;\n    grid-row: 4;\n  }`;
 
 const count = (s, part) => (part ? s.split(part).length - 1 : 0);
 
@@ -43,7 +43,12 @@ function apply(source, steps) {
   const applied = [];
   const skipped = [];
   for (const step of steps) {
-    if (count(next, step.replace) === 1) { skipped.push(step.name); continue; }
+    // Removal is already complete when the review section exists at its final DOM location.
+    if (step.replace === '' && next.includes(`</aside>\n${TSX_REVIEWS}        </div>`) && count(next, step.find) === 0) {
+      skipped.push(step.name);
+      continue;
+    }
+    if (step.replace !== '' && count(next, step.replace) === 1) { skipped.push(step.name); continue; }
     const found = count(next, step.find);
     if (found !== 1) throw new Error(`Ancla no válida para "${step.name}": aparece ${found} veces (se esperaba 1). No se modificó nada.`);
     next = next.replace(step.find, () => step.replace);
