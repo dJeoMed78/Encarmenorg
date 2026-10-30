@@ -47,3 +47,17 @@
 - **El puerto real escuchado no queda identificado por esta prueba.** No inferir que la aplicación no funciona públicamente, ni que el puerto es necesariamente 3000.
 - Publicado diagnóstico adicional **de solo lectura** de descriptores socket/puertos del proceso, commit `ef15d156847fc3b84d49d779758b8ec1c8e28844`; su resultado requiere una ejecución nueva antes de afirmar nada.
 
+
+## Resolución técnica del bloqueo interno — 2026-10-30T21:58:52Z
+- Se corrigió el probador aislado (sin alterar la aplicación): rama `coord/staging-unix-http-e2e-fix-20261030`.
+- Commit correctivo: `b003b8d040726b2a4ab3e5c1b7d464aaacdd289e`. La versión de prueba usa la versión activa `hbuilds/current/nodejs`, exporta Express desde `server.js`, inhabilita el listener TCP automático de la instancia temporal mediante `VERCEL=1` y atiende sus solicitudes por un socket Unix privado. Comprueba existencia de respaldo SQL de Staging antes de probar.
+- Workflow aislado: `.github/workflows/enc-staging-unix-http-e2e.yml`, commit `1731733fe9db1e3f6381c124ec34a0701b5dcd18`.
+- Evidencia real en `coord/staging-unix-http-e2e-fix-20261030/ENC_STAGING_UNIX_HTTP_E2E_RESULT.txt`, UTC `2026-10-30T21:58:52Z`:
+  - `STAGING_DB_BACKUP_PRESENT=true`; `SQL_IDENTITY=STAGING_ONLY`; `INPROCESS_HTTP_READY=true`.
+  - `ADMIN_LOGIN_STATUS=200`; `UNRELATED_WRITE_HTTP_STATUS=403`.
+  - `CREATE_HTTP_STATUS=201`; `EDIT_HTTP_STATUS=200`; `HTTP_EDIT_READBACK=true`.
+  - `SQL_COMMITTED_READBACK=PASS`; `RESULT=PASS_INPROCESS_HTTP_CREATE_EDIT_SQL_READBACK`.
+  - `SYNTHETIC_CLEANUP=VERIFIED`, `TEMPORARY_PROCESS=CLOSED`, `PUBLIC_STAGING_CONFIG=UNCHANGED`, `SSH_EXIT=0`.
+- **Dictamen:** E2E HTTP con MariaDB de Staging superado mediante instancia temporal del bundle instalado. **No equivale a haber probado POST/PATCH contra el endpoint público de Hostinger ni el editor de navegador.** Mantener F001/F003 abiertos hasta comprobación pública y aceptación del propietario.
+- La tarea horaria de vigilancia improductiva `6ae4c468d9d881919faeb473047f5e27` fue desactivada por Coordinación; no se necesita monitorear cambios inexistentes.
+- Siguiente acción de valor: habilitar bajo controles y probar la ruta empresarial pública en Staging, comprobar persistencia y funcionamiento del editor visual, conservar reversión y limpieza. Mantener producción cerrada.
