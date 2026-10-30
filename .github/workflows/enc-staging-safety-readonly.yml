@@ -62,6 +62,15 @@ jobs:
                       active_procs.append(entry)
               except (OSError,PermissionError):pass
           o('ACTIVE_NODE_PROCESSES',len(active_procs))
+          for index,p in enumerate(active_procs[:3],1):
+              try:
+                  cmd=(p/'cmdline').read_bytes().split(b'\\x00')
+                  args=[a.decode(errors='ignore') for a in cmd if a]
+                  o('PROCESS_'+str(index)+'_SERVER_JS_ARG',str(any(a.endswith('/server.js') or a=='server.js' for a in args)).lower())
+                  o('PROCESS_'+str(index)+'_API_BUNDLE_ARG',str(any(a.endswith('/api/server.bundle.js') for a in args)).lower())
+                  o('PROCESS_'+str(index)+'_HAS_NODE_ARGS',str(len(args)>0).lower())
+              except Exception:
+                  o('PROCESS_'+str(index)+'_CMDLINE_READABLE','false')
           if active_procs:
               p=active_procs[0]
               try:
