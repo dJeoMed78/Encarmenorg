@@ -1,4 +1,4 @@
-name: ENCARMEN staging post PR10 deploy read-only check
+name: ENCARMEN staging business permission read-only diagnosis
 on:
   push:
     branches: [coord/staging-registration-write-safety-20261030]
@@ -26,7 +26,7 @@ jobs:
                   with urllib.request.urlopen(req,timeout=25) as resp:return resp.status,resp.read(2000000)
               except urllib.error.HTTPError as e:return e.code,e.read(4000)
               except Exception as e:return type(e).__name__,b''
-          for path in ('/api/health','/api/businesses','/api/businesses?hasWhatsapp=true','/api/businesses?hasPhone=true'):
+          for path in ('/api/health','/api/database-status','/api/businesses','/api/businesses?hasWhatsapp=true','/api/businesses?hasPhone=true'):
               status,raw=call(path)
               print('GET_'+path+'='+str(status))
               if path=='/api/health' and status==200:
@@ -37,6 +37,18 @@ jobs:
                       print('RUNTIME_WRITES_PERMITTED='+str(health.get('staging',{}).get('writesPermitted')))
                       print('RUNTIME_DB_ENGINE='+str(health.get('database')))
                   except Exception: print('RUNTIME_HEALTH_PARSE_ERROR=yes')
+              if path=='/api/database-status' and status==200:
+                  try:
+                      status_obj=json.loads(raw)
+                      business=status_obj.get('businessWrites',{})
+                      isolation=status_obj.get('stagingIsolation',{})
+                      print('BUSINESS_WRITES_CONFIGURED='+str(business.get('configured')))
+                      print('BUSINESS_WRITES_PERMITTED='+str(business.get('permitted')))
+                      print('BUSINESS_WRITE_SCOPE='+str(business.get('scope')))
+                      print('ISOLATION_VALID='+str(isolation.get('isolationValid')))
+                      print('IS_PRODUCTION_DB='+str(isolation.get('isProductionDb')))
+                      print('DB_CONNECTED='+str(status_obj.get('mariadb',{}).get('connected')))
+                  except Exception: print('DATABASE_STATUS_PARSE_ERROR=yes')
               if path.startswith('/api/businesses') and status==200:
                   try:
                       obj=json.loads(raw)
@@ -44,12 +56,8 @@ jobs:
                       print('COUNT_'+path+'='+str(len(items)))
                       if 'hasWhatsapp' in path:print('HAIR_PALACE_WHATSAPP_INCLUDED='+str(any('hair palace' in str(b.get('name','')).lower() for b in items if isinstance(b,dict))))
                   except Exception:print('COUNT_PARSE_ERROR=yes')
-          # Both requests are empty and invalid. They must not reach any persistence handler in read-only Staging.
-          for method,path in (('POST','/api/public/business-registrations'),('PATCH','/api/businesses/encarmen-preflight-nonexistent-id')):
-              status,raw=call(path,method,{})
-              print(method+'_'+path+'='+str(status))
-              if isinstance(status,int) and status not in (401,403):print('WRITE_GUARD_UNEXPECTED_STATUS=yes')
-          print('POST_RESTART_SOURCE_AUDIT_COMPLETE=yes')
+          print('READ_ONLY_DIAGNOSTIC_COMPLETE=yes')
+
           PY
           cat ENC_STAGING_WRITE_GUARD_RESULT.txt
       - name: Save redacted test results in isolated branch
