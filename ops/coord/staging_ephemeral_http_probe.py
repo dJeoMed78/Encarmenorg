@@ -19,12 +19,13 @@ def database_query(sql,read=True):
     return r.stdout.strip().splitlines()
 def sql_literal(value):
     return 'CONVERT(0x'+value.encode('utf-8').hex()+' USING utf8mb4)'
+NO_PROXY_OPENER=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 def http(method,url,data=None,headers=None):
     hdr={'Content-Type':'application/json','Origin':'https://staging.encarmen.org','Cache-Control':'no-store'}
     hdr.update(headers or {})
     req=urllib.request.Request(url,method=method,headers=hdr,data=json.dumps(data).encode() if data is not None else None)
     try:
-        with urllib.request.urlopen(req,timeout=12) as r:return r.status,json.loads(r.read(1500000))
+        with NO_PROXY_OPENER.open(req,timeout=12) as r:return r.status,json.loads(r.read(1500000))
     except urllib.error.HTTPError as e:
         try:return e.code,json.loads(e.read(2000))
         except Exception:return e.code,{}
@@ -115,6 +116,10 @@ try:
     if not online:
         emit('EPHEMERAL_PROCESS_RUNNING',str(child.poll() is None).lower())
         emit('LAST_HEALTH_HTTP_STATUS',status)
+        try:
+            sock=socket.create_connection(('127.0.0.1',port),timeout=2)
+            sock.close();emit('LOCAL_SOCKET_CONNECTION','PASS')
+        except Exception:emit('LOCAL_SOCKET_CONNECTION','FAIL')
         raw=(work/'node-private.log').read_text(encoding='utf8',errors='replace')
         emit('PRIVATE_LOG_HAS_CONTENT',str(bool(raw)).lower())
         for label,pattern in [
