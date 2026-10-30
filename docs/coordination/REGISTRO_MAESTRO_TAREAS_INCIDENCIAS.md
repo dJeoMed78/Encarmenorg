@@ -354,3 +354,17 @@ El propietario autorizó continuar autónomamente. Se creó workflow protegido e
 - **Decisión:** NO habilitar escrituras empresariales todavía. Siguiente orden de Coordinación: auditar origen/permiso real de `ENC_ADMIN_CREDENTIALS_JSON`, privilegios SQL mínimos y cliente, implementar restricciones necesarias sobre `ia-desarrollo` en rama controlada, probar aislamiento y guardado sintético, rollback a read-only; proteger producción siempre.
 
 **Evidencia de informe original:** texto proporcionado por propietario en conversación del 2026-10-30. No se publica ninguna credencial ni dato personal.
+
+
+## GAS — AUDITORÍA VISUAL/HTTP RECIBIDA Y EVALUADA (2026-10-30)
+
+**Entrega recibida:** ENC-STAGING-UX-GAS-20261030, auditoría de W3 GAS de lectura HTTP/estática de `ia-desarrollo` SHA `4407e6aeb08b52cc750c952735467a0e04fe19cc`; sin POST, sin preview Node, sin cambio. Auditor declara GET públicos con `/api/health` HTTP 200 (`environment=staging`, `readOnly=true`, `database=mariadb`, 207 negocios); `/api/businesses/1081` 200; redirección `/empresa/1081` 301 a `/empresa/yuss`, esta 200; promociones 1, clasificados públicos 0 y `allStatus=true` 10 en papelera; `/api/admin/verify` 401; interfaz y móvil revisados **estáticamente**, no navegador móvil real. GAS afirma 206 teléfonos y WhatsApp, compatible con prueba independiente GitHub Actions posterior a reparación Hair Palace.
+
+**Evaluación coordinación y precisión:**
+1. Clasificados vacíos: 10 registros en `trash` según GET de GAS, antigüedad superior a 7 días según diagnóstico del auditor. **No restaurar ni reescribir fechas sin política de negocio**; distinguir expiración por lectura derivada frente a mutación SQL real.
+2. Incompatibilidad de assets: GAS informa que Staging sirve `/assets/index-CE3sQWlp.js` y `ia-desarrollo/dist/index.html` rastreado referencia `/assets/index-Ccl-Kv-t.js`; se verificó con GitHub que este último nombre existe en `dist/index.html` fuente en dicha rama. **La diferencia de hashes no prueba por sí misma que despliegue Hostinger PR7 se haya omitido**: puede recompilar Vite y emitir otro hash, y Hostinger ya confirmó despliegue de commit 4407e6ae. Pendiente comparación HTTP de contenido/compilación o versión de release SHA proveniente del servidor, no afirmar servidor antiguo hasta confirmarlo.
+3. Botón `Ayuda en línea` usa posicionamiento flotante que **podría** cubrir acciones móviles pequeñas, sin screenshot ni prueba de superposición real; no clasificar como bug confirmado.
+4. GAS no probó persistencia de alta ni edición y `OPTIONS` solo acredita preflight/CORS, **NO** la capacidad operativa de `POST`.
+5. Recomendación GAS de publicar PR7 está desactualizada: ya fue integrado y Hostinger completó el despliegue en Staging; no repetir deployment ni tocar `main`.
+
+**Decisión:** aceptar como auditoría parcial de GET y revisión estática, conservar clasificados y discrepancia de bundle como elementos abiertos para confirmación, no aplicar restauraciones ni cambios de expiración ni volver a desplegar por inferencia. Para persistencia empresarial, mantener activa verificación de permisos, proveedor `ENC_ADMIN_CREDENTIALS_JSON` y guardas antes de abrir escrituras. Producción inmutable.
