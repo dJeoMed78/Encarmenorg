@@ -174,13 +174,16 @@ export async function uploadBusinessLogo(imageBase64: string, filename?: string)
       const errData = await res.json().catch(() => ({}));
       throw new Error(errData.message || `Error del servidor HTTP ${res.status}`);
     }
-    return await res.json();
+    const result = await res.json();
+    if (result?.success !== true || typeof result.url !== 'string' || !result.url.trim()) {
+      return {success:false,message:result?.message || 'El servidor no confirmó el almacenamiento de la imagen.'};
+    }
+    return result;
   } catch (err: any) {
-    // If backend endpoint is unavailable, return dataURI as client-side image so user never gets blocked
+    // A local data URI is not evidence that the remote server stored the image.
     return {
-      success: true,
-      url: imageBase64,
-      message: 'Imagen cargada en el navegador'
+      success: false,
+      message: err?.message || 'No se pudo confirmar el almacenamiento de la imagen en el servidor.'
     };
   }
 }
