@@ -6,42 +6,58 @@ import {verifyStagingAdmin,createLoginLimiter,stagingBusinessConfiguration} from
 import { prepareContactPatch, contactsMatchReadback, ContactPatchError, contactDigits, contactCounts, matchesContactFilter, CONTACT_FILTERS, type ContactFilter } from './src/utils/businessContacts';
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
-// The running deployment uses Hostinger runtime variables for DB isolation.
-// The private Staging config can supply *only* temporary administrative and
-// business-test gates; never re-import DB credentials or production settings.
-// dotenv.config() previously injected zero values and its strict startup
-// exception prevented the Staging server from booting. Parsing is fail-closed.
+// Hostinger may restart Node without injecting the build's database environment.
+// Bootstrap from the PRIVATE Staging file only when the actual resolved CWD
+// belongs to a Staging release. Never read or import credentials in production.
+// Fail closed: missing/invalid config does not enable database or writes.
 const STAGING_PRIVATE_DB_NAME = 'u293982346_encarmentest';
-if (process.env.APP_ENV === 'staging' &&
-    process.env.DB_NAME === STAGING_PRIVATE_DB_NAME &&
-    process.env.HOME) {
+if (process.env.HOME) {
+  const stagingRoot = path.join(process.env.HOME, 'domains/staging.encarmen.org/hbuilds');
+  let trustedRelease = false;
   try {
-    const privatePath = path.join(process.env.HOME, 'domains/staging.encarmen.org/hbuilds/config/.env');
-    const stat = fs.lstatSync(privatePath);
-    if (stat.isFile() && !stat.isSymbolicLink() && (stat.mode & 0o077) === 0) {
+    const actualCwd = fs.realpathSync(process.cwd());
+    const versions = path.join(stagingRoot, 'versions') + path.sep;
+    trustedRelease = actualCwd.startsWith(versions) &&
+      path.basename(actualCwd) === 'nodejs' &&
+      process.env.DB_NAME !== 'u293982346_encarmenapp' &&
+      process.env.DB_USER !== 'u293982346_appuser';
+  } catch {}
+  if (trustedRelease) {
+    try {
+      const privatePath = path.join(stagingRoot, 'config/.env');
+      const stat = fs.lstatSync(privatePath);
+      if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o077) !== 0)
+        throw new Error('STAGING_PRIVATE_FILE_PERMISSIONS');
       const staged = dotenv.parse(fs.readFileSync(privatePath));
-      if (staged.APP_ENV === 'staging' &&
-          staged.DB_NAME === STAGING_PRIVATE_DB_NAME &&
-          Boolean(staged.DB_USER) &&
-          staged.DB_USER !== 'u293982346_appuser' &&
-          process.env.DB_USER !== 'u293982346_appuser') {
-        const gates = ['STAGING_READ_ONLY','STAGING_DB_CONFIRMED',
-          'STAGING_BUSINESS_WRITES_ENABLED','ENC_ADMIN_MUTATIONS_ENABLED',
-          'ENC_ADMIN_PUBLIC_ORIGIN','ENC_ADMIN_CREDENTIALS_JSON'] as const;
-        for (const key of gates) {
-          if (typeof staged[key] === 'string') process.env[key] = staged[key];
-          else delete process.env[key];
-        }
+      if (staged.APP_ENV !== 'staging' ||
+          staged.DB_NAME !== STAGING_PRIVATE_DB_NAME ||
+          !staged.DB_HOST || !staged.DB_USER || !staged.DB_PASSWORD ||
+          staged.DB_USER === 'u293982346_appuser')
+        throw new Error('STAGING_PRIVATE_DB_IDENTITY');
+      // Only these explicit Staging keys may enter the process environment.
+      // Other values (including production and arbitrary secrets) are excluded.
+      const keys = ['DB_HOST','DB_PORT','DB_USER','DB_NAME','DB_PASSWORD',
+        'STAGING_READ_ONLY','STAGING_DB_CONFIRMED',
+        'STAGING_BUSINESS_WRITES_ENABLED','ENC_ADMIN_MUTATIONS_ENABLED',
+        'ENC_ADMIN_PUBLIC_ORIGIN','ENC_ADMIN_CREDENTIALS_JSON'] as const;
+      process.env.APP_ENV = 'staging';
+      for (const key of keys) {
+        if (typeof staged[key] === 'string') process.env[key] = staged[key];
+        else delete process.env[key];
       }
+    } catch {
+      // Never downgrade to a production DB or allow writes if private Staging
+      // bootstrap cannot be authenticated; public read-only stays available.
+      process.env.APP_ENV = 'staging';
+      process.env.DB_NAME = STAGING_PRIVATE_DB_NAME;
+      delete process.env.DB_USER;
+      delete process.env.DB_PASSWORD;
+      process.env.STAGING_READ_ONLY = 'true';
+      process.env.STAGING_DB_CONFIRMED = 'false';
+      delete process.env.STAGING_BUSINESS_WRITES_ENABLED;
+      delete process.env.ENC_ADMIN_MUTATIONS_ENABLED;
+      delete process.env.ENC_ADMIN_CREDENTIALS_JSON;
     }
-  } catch {
-    // Missing, unsafe, or unreadable optional Staging file must not crash
-    // the server or grant new write permissions.
-    process.env.STAGING_READ_ONLY = 'true';
-    process.env.STAGING_DB_CONFIRMED = 'false';
-    delete process.env.STAGING_BUSINESS_WRITES_ENABLED;
-    delete process.env.ENC_ADMIN_MUTATIONS_ENABLED;
-    delete process.env.ENC_ADMIN_CREDENTIALS_JSON;
   }
 }
 import express from 'express';
