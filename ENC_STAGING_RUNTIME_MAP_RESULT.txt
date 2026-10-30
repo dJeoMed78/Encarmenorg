@@ -1,14 +1,22 @@
 ENCARMEN STAGING RUNTIME MAP
-UTC=2026-10-30T17:57:36Z
+UTC=2026-10-30T17:58:50Z
 STAGING_DIRECTORY_PRESENT=true
 STAGING_CONFIG_PRESENT=true
 PM2_AVAILABLE=false
-Traceback (most recent call last):
-  File "<stdin>", line 6, in <module>
-  File "/usr/lib64/python3.9/subprocess.py", line 505, in run
-    with Popen(*popenargs, **kwargs) as process:
-  File "/usr/lib64/python3.9/subprocess.py", line 951, in __init__
-    self._execute_child(args, executable, preexec_fn, close_fds,
-  File "/usr/lib64/python3.9/subprocess.py", line 1837, in _execute_child
-    raise child_exception_type(errno_num, err_msg, err_filename)
-FileNotFoundError: [Errno 2] No such file or directory: 'pm2'
+PM2_NOT_INSTALLED=true
+BIN_NODE=false
+BIN_NODEJS=false
+BIN_LSNODE=false
+BIN_NPM=false
+BIN_PASSENGER=false
+STAGING_FILE_TMP_RESTART.TXT=false
+STAGING_FILE_.HTACCESS=false
+STAGING_FILE_SERVER.JS=false
+STAGING_FILE_API_SERVER.BUNDLE.JS=false
+STAGING_FILE_PACKAGE.JSON=false
+PROCESS_NODE_COUNT=6
+PROCESS_PASSENGER_COUNT=0
+STAGING_BUILD_SERVER_PRESENT=false
+STAGING_BUILD_API_PRESENT=false
+STAGING_PACKAGE_PRESENT=false
+RESULT=INSPECTED
