@@ -148,6 +148,11 @@ jobs:
                   key,val=line.split('=',1)
                   if key.strip() in ('DB_NAME','APP_ENV','STAGING_READ_ONLY'):
                       config[key.strip()]=val.strip().strip('"').strip("'")
+              admin_lines=[line.strip().split('=',1)[0].strip() for line in private_config.read_text(errors='replace').splitlines() if '=' in line and not line.lstrip().startswith('#')]
+              o('PRIVATE_CONFIG_ADMIN_CREDENTIALS_KEY_PRESENT',str('ENC_ADMIN_CREDENTIALS_JSON' in admin_lines).lower())
+              o('PRIVATE_CONFIG_ADMIN_ORIGIN_KEY_PRESENT',str('ENC_ADMIN_PUBLIC_ORIGIN' in admin_lines).lower())
+              o('PRIVATE_CONFIG_ADMIN_MUTATIONS_KEY_PRESENT',str('ENC_ADMIN_MUTATIONS_ENABLED' in admin_lines).lower())
+              o('PRIVATE_CONFIG_BUSINESS_WRITE_KEY_PRESENT',str('STAGING_BUSINESS_WRITES_ENABLED' in admin_lines).lower())
               o('PRIVATE_CONFIG_ENV_STAGING',str(config.get('APP_ENV')=='staging').lower())
               o('PRIVATE_CONFIG_DB_STAGING',str(config.get('DB_NAME')=='u293982346_encarmentest').lower())
               o('PRIVATE_CONFIG_READONLY',str(config.get('STAGING_READ_ONLY','').lower() in ('true','1')).lower())
