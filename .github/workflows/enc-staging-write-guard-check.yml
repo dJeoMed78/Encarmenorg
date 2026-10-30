@@ -1,4 +1,4 @@
-name: ENCARMEN staging guard post-rollback restart check
+name: ENCARMEN staging source of truth after rollback restart
 on:
   push:
     branches: [coord/staging-registration-write-safety-20261030]
@@ -26,18 +26,18 @@ jobs:
                   with urllib.request.urlopen(req,timeout=25) as resp:return resp.status,resp.read(2000000)
               except urllib.error.HTTPError as e:return e.code,e.read(4000)
               except Exception as e:return type(e).__name__,b''
-          for path in ('/api/health','/api/businesses?hasWhatsapp=true','/api/businesses?hasPhone=true'):
+          for path in ('/api/health','/api/businesses','/api/businesses?hasWhatsapp=true','/api/businesses?hasPhone=true'):
               status,raw=call(path)
               print('GET_'+path+'='+str(status))
               if path=='/api/health' and status==200:
                   try:
                       health=json.loads(raw)
                       print('RUNTIME_ENVIRONMENT='+str(health.get('environment')))
-                      print('RUNTIME_READ_ONLY='+str(health.get('readOnly')))
-                      print('RUNTIME_WRITES_PERMITTED='+str(health.get('writesPermitted')))
+                      print('RUNTIME_READ_ONLY='+str(health.get('staging',{}).get('readOnly')))
+                      print('RUNTIME_WRITES_PERMITTED='+str(health.get('staging',{}).get('writesPermitted')))
                       print('RUNTIME_DB_ENGINE='+str(health.get('database')))
                   except Exception: print('RUNTIME_HEALTH_PARSE_ERROR=yes')
-              if path.startswith('/api/businesses?') and status==200:
+              if path.startswith('/api/businesses') and status==200:
                   try:
                       obj=json.loads(raw)
                       items=obj if isinstance(obj,list) else next((obj[k] for k in ('businesses','data','items') if isinstance(obj.get(k),list)),[])
@@ -49,7 +49,7 @@ jobs:
               status,raw=call(path,method,{})
               print(method+'_'+path+'='+str(status))
               if isinstance(status,int) and status not in (401,403):print('WRITE_GUARD_UNEXPECTED_STATUS=yes')
-          print('POST_RESTART_AUDIT_COMPLETE=yes')
+          print('POST_RESTART_SOURCE_AUDIT_COMPLETE=yes')
           PY
           cat ENC_STAGING_WRITE_GUARD_RESULT.txt
       - name: Save redacted test results in isolated branch
