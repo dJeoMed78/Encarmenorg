@@ -46,14 +46,17 @@ def health():
  status,data=http('GET','/api/health')
  if status!=200 or data.get('environment')!='staging' or data.get('database')!='mariadb':abort('PUBLIC_HEALTH_NOT_STAGING_MARIADB')
  return data
-def wait_health(deadline=65):
- last=None
- for n in range(16):
+def wait_health(desired_readonly,deadline=96):
+ for n in range(24):
   try:
-   x=health();return x
-  except Exception as e:last=type(e).__name__
+   x=health()
+   if x.get('staging',{}).get('readOnly') is desired_readonly:
+    out('PUBLIC_TEST_WINDOW_READONLY',str(desired_readonly).lower())
+    return x
+  except Exception:
+   pass
   time.sleep(4)
- abort('PUBLIC_HEALTH_AFTER_RESTART_UNAVAILABLE')
+ abort('PUBLIC_STAGING_RESTART_STATE_NOT_APPLIED')
 def restart():
  active=(S/'current/nodejs').resolve()
  if (S/'versions').resolve() not in active.parents:abort('ACTIVE_STAGING_RELEASE_PATH')
@@ -127,7 +130,7 @@ try:
  current_binary=(active/'server.js').read_text(errors='replace')
  out('TEST_ADMIN_LOADER_PRESENT',str('ENC_ADMIN_CREDENTIALS_JSON' in current_binary and 'STAGING_PRIVATE_DB_NAME' in current_binary).lower())
  restart()
- wait_health()
+ wait_health(False)
  marker=json.loads((B/'enc-staging-business-window-active.json').read_text())
  credential_path=pathlib.Path(marker['secret'])
  if credential_path.parent!=B or not credential_path.is_file():abort('CREDENTIAL_FILE_UNVERIFIED')
