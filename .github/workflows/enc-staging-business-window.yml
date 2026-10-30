@@ -24,7 +24,7 @@ jobs:
         shell: bash
         env:
           SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
-          WINDOW_OPERATION: ${{ github.event.inputs.operation || 'prepare' }}
+          WINDOW_OPERATION: restore
         run: |
           set -u
           {
