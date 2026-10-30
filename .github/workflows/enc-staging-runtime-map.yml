@@ -47,6 +47,20 @@ jobs:
           print('STAGING_BUILD_SERVER_PRESENT='+str((st/'server.js').is_file()).lower())
           print('STAGING_BUILD_API_PRESENT='+str((st/'api/server.bundle.js').is_file()).lower())
           print('STAGING_PACKAGE_PRESENT='+str((st/'package.json').is_file()).lower())
+          for entry in pathlib.Path('/proc').iterdir():
+           if not entry.name.isdecimal():continue
+           try:
+            raw=(entry/'comm').read_text().strip().lower()
+            if 'node' not in raw:continue
+            cwd=os.readlink(entry/'cwd')
+            cmd=(entry/'cmdline').read_bytes().replace(b'\\x00',b' ').decode('utf8','replace')
+            domain='staging.encarmen.org' if 'staging.encarmen.org' in cwd or 'staging.encarmen.org' in cmd else 'other'
+            basedir='hbuilds' if 'hbuilds' in cwd else 'other'
+            print('NODE_PROCESS='+domain+':'+basedir)
+           except Exception:continue
+          for candidate in (h/'domains/staging.encarmen.org',h/'domains/staging.encarmen.org/public_html',h/'domains/staging.encarmen.org/nodejs',h/'domains/staging.encarmen.org/hbuilds'):
+           if candidate.is_dir():
+            print('STAGING_DIRECTORY='+str(candidate.relative_to(h))+':'+','.join(sorted(x.name for x in candidate.iterdir() if x.name in ('app','api','config','dist','node_modules','public_html','server.js','package.json','server.bundle.js'))))
           print('RESULT=INSPECTED')
           REMOTE
           } > ENC_STAGING_RUNTIME_MAP_RESULT.txt 2>&1
