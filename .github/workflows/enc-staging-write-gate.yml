@@ -1,0 +1,97 @@
+name: ENCARMEN Staging write gate independent read-only verification
+on:
+  push:
+    branches: [coord/staging-write-go-no-go-20261030]
+    paths: [.github/workflows/enc-staging-write-gate.yml]
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify staging isolation and real auth provider configuration
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -u
+          {
+            echo 'ENCARMEN STAGING BUSINESS-WRITE GATE READ ONLY'
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if [ -z "$SSHPASS" ]; then echo 'RESULT=BLOCKED_NO_SSH_SECRET'; exit 0; fi
+            sudo apt-get update -qq >/dev/null 2>&1
+            sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+            mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"
+            ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+            FP=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 2>/dev/null | awk '{print $2}')
+            if [ "$FP" != 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then echo 'RESULT=BLOCKED_SSH_PIN'; exit 0; fi
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' <<'REMOTE'
+          import os, pathlib, tempfile, subprocess, json, sys, re
+          H=pathlib.Path.home()
+          E=H/'domains/staging.encarmen.org/hbuilds/config/.env'
+          B=H/'encarmen-staging-backups'
+          DB='u293982346_encarmentest'
+          def out(k,v):print(f'{k}={v}',flush=True)
+          def abort(reason):out('RESULT','BLOCKED_'+reason);sys.exit(0)
+          if not E.is_file() or E.is_symlink() or not B.is_dir() or B.is_symlink():abort('UNSAFE_PATH')
+          v={}
+          for line in E.read_text(encoding='utf8').splitlines():
+              line=line.strip()
+              if line.startswith('export '):line=line[7:]
+              if not line or line.startswith('#') or '=' not in line:continue
+              k,val=line.split('=',1);v[k.strip()]=val.strip().strip('"').strip("'")
+          if v.get('APP_ENV')!='staging' or v.get('DB_NAME')!=DB or v.get('DB_USER')=='u293982346_appuser':abort('ENV_IDENTITY')
+          for k in ('STAGING_READ_ONLY','STAGING_DB_CONFIRMED','STAGING_BUSINESS_WRITES_ENABLED'):
+              out(k,v.get(k,'absent'))
+          out('ADMIN_ORIGIN_IS_STAGING',str(v.get('ENC_ADMIN_PUBLIC_ORIGIN','').rstrip('/')=='https://staging.encarmen.org').lower())
+          cfg=v.get('ENC_ADMIN_CREDENTIALS_JSON','')
+          provider=False
+          try:
+              x=json.loads(cfg)
+              provider=x.get('version')==1 and any('business:manage' in a.get('permissions',[]) and re.fullmatch(r'scrypt\$[a-f0-9]{32,64}\$[a-f0-9]{128}',a.get('passwordHash','')) for a in x.get('accounts',[]))
+          except Exception:pass
+          out('ACTUAL_ADMIN_PROVIDER_READY',str(provider).lower())
+          if not v.get('DB_PASSWORD') or not v.get('DB_HOST'):abort('CONFIG')
+          fd,tmp=tempfile.mkstemp(dir=B,prefix='.enc-readonly-gate-')
+          try:
+              os.fchmod(fd,0o600)
+              with os.fdopen(fd,'w') as f:
+                  f.write('[client]\n')
+                  for key,var in (('host','DB_HOST'),('user','DB_USER'),('password','DB_PASSWORD')):
+                      f.write(key+'="'+v[var].replace('\\','\\\\').replace('"','\\"')+'"\n')
+              cmd=['mariadb','--defaults-extra-file='+tmp,'-D',DB,'--batch','--skip-column-names','-e']
+              def sql(q):
+                  p=subprocess.run(cmd+[q],capture_output=True,text=True,timeout=35)
+                  return p.stdout.strip().splitlines() if p.returncode==0 else None
+              i=sql('SELECT DATABASE(),SUBSTRING_INDEX(CURRENT_USER(),CHAR(64),1)')
+              if not i or len(i)!=1 or i[0].split('\t')[0]!=DB or 'u293982346_appuser' in i[0]:abort('SQL_IDENTITY')
+              out('SQL_IDENTITY','STAGING_ONLY')
+              mark=sql('SELECT env_name,db_name FROM encarmen_environment_marker')
+              out('STAGING_MARKER_VALID',str(mark==['staging\t'+DB]).lower())
+              grants=sql('SHOW GRANTS FOR CURRENT_USER()') or []
+              out('SHOW_GRANTS_READABLE',str(bool(grants)).lower())
+              out('GRANTS_STAGING_ONLY',str(bool(grants) and not any('encarmenapp' in g.lower() or (' ON *.*' in g.upper() and 'USAGE' not in g.upper()) for g in grants)).lower())
+              out('HAS_STAGING_INSERT',str(any('INSERT' in g.upper() or 'ALL PRIVILEGES' in g.upper() for g in grants)).lower())
+              out('HAS_STAGING_UPDATE',str(any('UPDATE' in g.upper() or 'ALL PRIVILEGES' in g.upper() for g in grants)).lower())
+              out('HAS_STAGING_DELETE',str(any('DELETE' in g.upper() or 'ALL PRIVILEGES' in g.upper() for g in grants)).lower())
+              tab=sql("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='businesses'")
+              out('BUSINESSES_INNODB',str(tab==['InnoDB']).lower())
+              print('INSPECTION_COMPLETE=true')
+          finally:os.unlink(tmp)
+          REMOTE
+            echo "SSH_EXIT=$?"
+          } > ENC_STAGING_WRITE_GATE_RESULT.txt 2>&1
+          cat ENC_STAGING_WRITE_GATE_RESULT.txt
+      - name: Save redacted gate findings
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ENC_STAGING_WRITE_GATE_RESULT.txt || echo 'RESULT=NO_REPORT' > ENC_STAGING_WRITE_GATE_RESULT.txt
+          git config user.name encarmen-coordination
+          git config user.email encarmen-coordination@users.noreply.github.com
+          git add ENC_STAGING_WRITE_GATE_RESULT.txt
+          git commit -m 'docs: Staging actual write prerequisites verified' || exit 0
+          git push origin HEAD:coord/staging-write-go-no-go-20261030
