@@ -9,7 +9,16 @@ data=json.loads(M.read_text())
 backup=pathlib.Path(data.get('backup',''));secret=pathlib.Path(data.get('secret',''))
 if backup.parent!=B or secret.parent!=B or not backup.is_file() or backup.is_symlink() or not E.is_file() or E.is_symlink():stop('PATH')
 old=backup.read_text()
-if 'APP_ENV=staging' not in old.splitlines() or 'DB_NAME=u293982346_encarmentest' not in old.splitlines() or 'STAGING_READ_ONLY=true' not in old.splitlines():stop('BACKUP_NOT_STAGING_READONLY')
+values={}
+for line in old.splitlines():
+ line=line.strip()
+ if line.startswith('export '):line=line[7:]
+ if line.startswith('#') or '=' not in line:continue
+ key,value=line.split('=',1)
+ values.setdefault(key.strip(),[]).append(value.strip().strip('"').strip("'"))
+for key,expected in [('APP_ENV','staging'),('DB_NAME','u293982346_encarmentest'),('STAGING_READ_ONLY','true'),('STAGING_DB_CONFIRMED','false')]:
+ if values.get(key)!=[expected]:stop('BACKUP_INVALID_'+key)
+if any(k in values for k in ('ENC_ADMIN_CREDENTIALS_JSON','ENC_ADMIN_PUBLIC_ORIGIN','ENC_ADMIN_MUTATIONS_ENABLED','STAGING_BUSINESS_WRITES_ENABLED')):stop('BACKUP_CONTAINS_ADMIN_OR_WRITES')
 fd,tmp=tempfile.mkstemp(dir=E.parent,prefix='.enc-readonly-restore-')
 try:
  with os.fdopen(fd,'w') as f:f.write(old);f.flush();os.fsync(f.fileno())
