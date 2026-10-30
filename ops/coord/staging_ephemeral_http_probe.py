@@ -101,86 +101,104 @@ try:
         'ENABLE_CACHE_PURGE':'false'})
     # Never write env variables, tokens or logs to GitHub.
     logfile=(work/'node-private.log').open('wb')
-    child=subprocess.Popen([node_exe,str(stage_root/'server.js')],
-                           cwd=work,env=procenv,stdout=logfile,stderr=subprocess.STDOUT,
-                           start_new_session=True)
+    runner=work/'probe-runner.mjs'
+    runner.write_text(r"""
+import fs from 'node:fs';
+import {pathToFileURL} from 'node:url';
+import {randomUUID} from 'node:crypto';
+const resultFile=process.env.PROBE_RESULT;
+function save(value){fs.writeFileSync(resultFile,JSON.stringify(value),{mode:0o600});}
+async function query(method,route,body,extra={}){
+ const headers={'Content-Type':'application/json','Origin':'https://staging.encarmen.org',...extra};
+ const resp=await fetch('http://127.0.0.1:'+process.env.PORT+route,{
+  method,headers,...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(6000)
+ });
+ let json={};try{json=await resp.json();}catch{}
+ return {status:resp.status,json};
+}
+(async()=>{
+ let state={status:'STARTED'};
+ try{
+  await import(pathToFileURL(process.env.STAGING_SERVER_ENTRY).href);
+  let online=false;
+  for(let n=0;n<35;n++){
+   try{
+    const r=await query('GET','/api/health');
+    if(r.status===200&&r.json.environment==='staging'){online=true;break;}
+   }catch{}
+   await new Promise(resolve=>setTimeout(resolve,300));
+  }
+  if(!online)throw Error('NODE_LOOPBACK_UNAVAILABLE');
+  state.localHttp=true;
+  const login=await query('POST','/api/admin/login',{username:'stagingtest',password:process.env.PROBE_PASSWORD});
+  state.loginStatus=login.status;
+  if(login.status!==200||!login.json.token)throw Error('ADMIN_LOGIN_FAILED');
+  const header={'X-Encarmen-Admin-Token':login.json.token};
+  const blocked=await query('POST','/api/reports',{reason:'synthetic'},header);
+  state.unrelatedWriteStatus=blocked.status;
+  if(blocked.status!==403)throw Error('UNRELATED_MUTATION_GUARD_FAILED');
+  const draft={name:process.env.PROBE_NAME,category:'Servicios',description:'Before controlled staging edit',phone:process.env.PROBE_PHONE};
+  const created=await query('POST','/api/submit-business',draft,{...header,'Idempotency-Key':randomUUID()});
+  state.createStatus=created.status;
+  const id=String(created.json?.business?.id||'');
+  if(id)state.id=id;
+  save(state);
+  if(created.status!==201||!created.json?.success||!/^\d+$/.test(id))throw Error('CREATE_FAILED');
+  const edited=await query('PATCH','/api/businesses/'+id,{description:'After controlled staging edit'},header);
+  state.editStatus=edited.status;
+  save(state);
+  if(edited.status!==200||!edited.json?.success)throw Error('EDIT_FAILED');
+  const listing=await query('GET','/api/businesses');
+  const entries=Array.isArray(listing.json)?listing.json:Array.isArray(listing.json?.businesses)?listing.json.businesses:[];
+  state.httpReadback=listing.status===200&&entries.some(b=>String(b.id)===id&&b.description==='After controlled staging edit');
+  if(!state.httpReadback)throw Error('HTTP_READBACK_FAILED');
+  state.status='PASS';
+  save(state);
+  process.exit(0);
+ }catch(error){
+  state.status='FAILED';
+  state.errorCode=String(error?.message||'NODE_ERROR').replace(/[^A-Z_]/g,'').slice(0,50);
+  save(state);
+  process.exit(2);
+ }
+})();
+""",encoding='utf8')
+    resultPath=work/'inprocess-result.json'
+    procenv.update({
+       'STAGING_SERVER_ENTRY':str(stage_root/'server.js'),
+       'PROBE_RESULT':str(resultPath),
+       'PROBE_PASSWORD':password,
+       'PROBE_NAME':created_name if created_name else 'ENCARMEN STAGING CONTROLLED TEST '+secrets.token_hex(6),
+       'PROBE_PHONE':'9999'+str(secrets.randbelow(1000000)).zfill(6)
+    })
+    created_name=procenv['PROBE_NAME']
+    logfile=(work/'node-private.log').open('wb')
+    child=subprocess.Popen([node_exe,str(runner)],cwd=work,env=procenv,
+                            stdout=logfile,stderr=subprocess.STDOUT,start_new_session=True)
     logfile.close()
-    base='http://127.0.0.1:'+str(port)
-    online=False
-    for _ in range(45):
-        if child.poll() is not None:break
-        status,data=http('GET',base+'/api/health')
-        if status==200 and data.get('environment')=='staging':
-            online=True;break
-        time.sleep(1)
-    if not online:
-        emit('EPHEMERAL_PROCESS_RUNNING',str(child.poll() is None).lower())
-        emit('LAST_HEALTH_HTTP_STATUS',status)
-        try:
-            sock=socket.create_connection(('127.0.0.1',port),timeout=2)
-            sock.close();emit('LOCAL_SOCKET_CONNECTION','PASS')
-        except OSError as err:
-            emit('LOCAL_SOCKET_CONNECTION','FAIL')
-            emit('LOCAL_SOCKET_ERRNO',err.errno)
-        except Exception:emit('LOCAL_SOCKET_CONNECTION','FAIL_UNKNOWN')
-        raw=(work/'node-private.log').read_text(encoding='utf8',errors='replace')
-        emit('PRIVATE_LOG_HAS_CONTENT',str(bool(raw)).lower())
-        ports=re.findall(r'Servidor corriendo exitosamente en http://[^:/\\s]+:(\\d+)',raw)
-        emit('LISTEN_LOG_MATCHES_PROBE_PORT',str(str(port) in ports).lower())
-        emit('CHILD_EXIT_STATUS',str(child.poll() if child.poll() is not None else 'RUNNING'))
-        actual_ports=re.findall(r'http://0[.]0[.]0[.]0:(\d+)',raw)
-        emit('ACTUAL_LISTEN_PORTS',','.join(actual_ports) if actual_ports else 'UNKNOWN')
-        emit('PORT_EXPECTED_EQUALS_ACTUAL',str(str(port) in actual_ports).lower())
-        try:emit('CHILD_SHARED_NETWORK_NAMESPACE',str(os.stat('/proc/self/ns/net').st_ino==os.stat('/proc/'+str(child.pid)+'/ns/net').st_ino).lower())
-        except Exception:emit('CHILD_SHARED_NETWORK_NAMESPACE','UNKNOWN')
-        for label,pattern in [
-            ('MODULE_NOT_FOUND','module not found'),
-            ('ESM_REQUIRE_ERROR','ERR_REQUIRE_ESM'),
-            ('CANNOT_FIND_MODULE','Cannot find module'),
-            ('DB_ERROR','ER_ACCESS_DENIED_ERROR'),
-            ('PORT_BIND_ERROR','EADDRINUSE'),
-            ('LISTEN_SUCCESS','Servidor corriendo exitosamente'),
-            ('IMPORT_ERROR','ERR_MODULE_NOT_FOUND'),
-            ('NODE_UNAVAILABLE','No such file or directory'),
-            ('INVALID_ENV','STAGING_DB'),
-            ('FATAL_EXCEPTION','uncaughtException')]:
-            if pattern.lower() in raw.lower():emit('DIAG_'+label,'true')
-        halt('EPHEMERAL_RUNTIME_UNAVAILABLE')
-    emit('EPHEMERAL_SERVER','STAGING_ONLY_READY')
-    code,auth=http('POST',base+'/api/admin/login',{'username':'stagingtest','password':password})
-    if code!=200 or not isinstance(auth.get('token'),str):halt('TEMP_ADMIN_LOGIN')
-    token=auth['token'];headers={'X-Encarmen-Admin-Token':token}
-    emit('STAGING_TEMP_ADMIN_LOGIN','PASS')
-    # Guardrail: an unrelated write operation must remain blocked.
-    blocked,_=http('POST',base+'/api/reports',{'reason':'probe'},headers)
-    if blocked!=403:halt('UNRELATED_WRITE_NOT_BLOCKED')
-    emit('OTHER_WRITES','BLOCKED')
-    unique=secrets.token_hex(6)
-    created_name='ENCARMEN STAGING CONTROLLED TEST '+unique
-    phone='9999'+str(secrets.randbelow(1000000)).zfill(6)
-    draft={'name':created_name,'category':'Servicios','description':'Staging controlled HTTP test before edit','phone':phone}
-    code,saved=http('POST',base+'/api/submit-business',draft,{**headers,'Idempotency-Key':str(uuid.uuid4())})
-    emit('CREATE_HTTP_STATUS',code)
-    if code!=201 or not saved.get('success'):halt('HTTP_CREATE_FAILED')
-    biz=saved.get('business') or {}
-    created_id=str(biz.get('id',''))
-    if not created_id or not created_id.isdigit():halt('CREATE_ID_INVALID')
-    sql_id=sql_literal(created_id)
-    row=database_query('SELECT HEX(name),HEX(description) FROM businesses WHERE id='+sql_id)
-    if len(row)!=1 or bytes.fromhex(row[0].split('\t')[0]).decode('utf8')!=created_name:halt('SQL_CREATE_READBACK')
-    emit('CREATE_SQL_READBACK','PASS')
-    code,edited=http('PATCH',base+'/api/businesses/'+created_id,{'description':'Staging controlled HTTP edit verified'},headers)
-    emit('EDIT_HTTP_STATUS',code)
-    if code!=200 or not edited.get('success'):halt('HTTP_EDIT_FAILED')
-    r=database_query('SELECT HEX(description) FROM businesses WHERE id='+sql_id)
-    if len(r)!=1 or bytes.fromhex(r[0]).decode('utf8')!='Staging controlled HTTP edit verified':halt('SQL_EDIT_READBACK')
-    emit('EDIT_SQL_READBACK','PASS')
-    # One more read through application, distinct from MariaDB direct read.
-    code,allbiz=http('GET',base+'/api/businesses')
-    records=allbiz if isinstance(allbiz,list) else (allbiz.get('businesses',[]) if isinstance(allbiz,dict) else [])
-    if code!=200 or not any(str(b.get('id'))==created_id and b.get('description')=='Staging controlled HTTP edit verified' for b in records):halt('HTTP_EDIT_READBACK')
-    emit('EDIT_HTTP_READBACK','PASS')
-    emit('RESULT','PASS_HTTP_CREATE_EDIT_READBACK')
+    try:child.wait(timeout=85)
+    except subprocess.TimeoutExpired:halt('NODE_INPROCESS_TIMEOUT')
+    if not resultPath.is_file():halt('NO_INPROCESS_RESULT')
+    state=json.loads(resultPath.read_text(encoding='utf8'))
+    emit('INPROCESS_HTTP_READY',str(state.get('localHttp') is True).lower())
+    emit('ADMIN_LOGIN_STATUS',state.get('loginStatus','missing'))
+    emit('UNRELATED_WRITE_HTTP_STATUS',state.get('unrelatedWriteStatus','missing'))
+    emit('CREATE_HTTP_STATUS',state.get('createStatus','missing'))
+    emit('EDIT_HTTP_STATUS',state.get('editStatus','missing'))
+    emit('HTTP_EDIT_READBACK',str(state.get('httpReadback') is True).lower())
+    created_id=str(state.get('id','')) if str(state.get('id','')).isdigit() else None
+    if state.get('status')!='PASS':
+        emit('INPROCESS_FAILURE_CODE',state.get('errorCode','UNKNOWN'))
+        halt('HTTP_INPROCESS_FAIL')
+    if not created_id:halt('CREATE_ID_MISSING')
+    key=sql_literal(created_id)
+    rows=database_query('SELECT HEX(name),HEX(description) FROM businesses WHERE id='+key)
+    if len(rows)!=1:halt('SQL_READBACK_MISSING')
+    fields=rows[0].split('\t')
+    if bytes.fromhex(fields[0]).decode('utf8')!=created_name:halt('SQL_NAME_MISMATCH')
+    if bytes.fromhex(fields[1]).decode('utf8')!='After controlled staging edit':halt('SQL_EDIT_MISMATCH')
+    emit('SQL_COMMITTED_READBACK','PASS')
+    emit('RESULT','PASS_INPROCESS_HTTP_CREATE_EDIT_SQL_READBACK')
 except Exception as ex:
     if not isinstance(ex,RuntimeError):emit('RESULT','FAILED_EXCEPTION_'+type(ex).__name__)
 finally:
