@@ -6,10 +6,43 @@ import {verifyStagingAdmin,createLoginLimiter,stagingBusinessConfiguration} from
 import { prepareContactPatch, contactsMatchReadback, ContactPatchError, contactDigits, contactCounts, matchesContactFilter, CONTACT_FILTERS, type ContactFilter } from './src/utils/businessContacts';
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
-// Hostinger supplies the running app's environment. Do not re-read an external
-// dotenv file and override verified runtime configuration: it can contain no
-// injected values and previously caused a Staging startup failure.
+// The running deployment uses Hostinger runtime variables for DB isolation.
+// The private Staging config can supply *only* temporary administrative and
+// business-test gates; never re-import DB credentials or production settings.
+// dotenv.config() previously injected zero values and its strict startup
+// exception prevented the Staging server from booting. Parsing is fail-closed.
 const STAGING_PRIVATE_DB_NAME = 'u293982346_encarmentest';
+if (process.env.APP_ENV === 'staging' &&
+    process.env.DB_NAME === STAGING_PRIVATE_DB_NAME &&
+    process.env.HOME) {
+  try {
+    const privatePath = path.join(process.env.HOME, 'domains/staging.encarmen.org/hbuilds/config/.env');
+    const stat = fs.lstatSync(privatePath);
+    if (stat.isFile() && !stat.isSymbolicLink() && (stat.mode & 0o077) === 0) {
+      const staged = dotenv.parse(fs.readFileSync(privatePath));
+      if (staged.APP_ENV === 'staging' &&
+          staged.DB_NAME === STAGING_PRIVATE_DB_NAME &&
+          staged.DB_USER === process.env.DB_USER &&
+          staged.DB_USER !== 'u293982346_appuser') {
+        const gates = ['STAGING_READ_ONLY','STAGING_DB_CONFIRMED',
+          'STAGING_BUSINESS_WRITES_ENABLED','ENC_ADMIN_MUTATIONS_ENABLED',
+          'ENC_ADMIN_PUBLIC_ORIGIN','ENC_ADMIN_CREDENTIALS_JSON'] as const;
+        for (const key of gates) {
+          if (typeof staged[key] === 'string') process.env[key] = staged[key];
+          else delete process.env[key];
+        }
+      }
+    }
+  } catch {
+    // Missing, unsafe, or unreadable optional Staging file must not crash
+    // the server or grant new write permissions.
+    process.env.STAGING_READ_ONLY = 'true';
+    process.env.STAGING_DB_CONFIRMED = 'false';
+    delete process.env.STAGING_BUSINESS_WRITES_ENABLED;
+    delete process.env.ENC_ADMIN_MUTATIONS_ENABLED;
+    delete process.env.ENC_ADMIN_CREDENTIALS_JSON;
+  }
+}
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import path from 'path';
