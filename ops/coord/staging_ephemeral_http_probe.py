@@ -128,6 +128,11 @@ try:
         ports=re.findall(r'Servidor corriendo exitosamente en http://[^:/\\s]+:(\\d+)',raw)
         emit('LISTEN_LOG_MATCHES_PROBE_PORT',str(str(port) in ports).lower())
         emit('CHILD_EXIT_STATUS',str(child.poll() if child.poll() is not None else 'RUNNING'))
+        actual_ports=re.findall(r'http://0[.]0[.]0[.]0:(\d+)',raw)
+        emit('ACTUAL_LISTEN_PORTS',','.join(actual_ports) if actual_ports else 'UNKNOWN')
+        emit('PORT_EXPECTED_EQUALS_ACTUAL',str(str(port) in actual_ports).lower())
+        try:emit('CHILD_SHARED_NETWORK_NAMESPACE',str(os.stat('/proc/self/ns/net').st_ino==os.stat('/proc/'+str(child.pid)+'/ns/net').st_ino).lower())
+        except Exception:emit('CHILD_SHARED_NETWORK_NAMESPACE','UNKNOWN')
         for label,pattern in [
             ('MODULE_NOT_FOUND','module not found'),
             ('ESM_REQUIRE_ERROR','ERR_REQUIRE_ESM'),
