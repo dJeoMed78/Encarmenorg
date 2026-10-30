@@ -16,23 +16,26 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY' > ENC_STAGING_PUBLIC_API_RESULT.txt
-          import urllib.request,urllib.error,json,datetime
+          import urllib.request,urllib.error,json,datetime,time
           base='https://staging.encarmen.org'
           print('UTC='+datetime.datetime.now(datetime.timezone.utc).isoformat())
-          for path in ['/api/health','/api/businesses','/api/admin/session','/']:
+          for path in ['/api/health','/api/businesses?hasWhatsapp=true','/api/admin/session','/']:
+              started=time.monotonic()
               req=urllib.request.Request(base+path,headers={'User-Agent':'ENCARMEN-readonly-staging-api-test','Cache-Control':'no-cache'})
               try:
                   with urllib.request.urlopen(req,timeout=18) as res:
                       status=res.status;data=res.read(4000000)
               except urllib.error.HTTPError as e:status=e.code;data=e.read(10000)
-              except Exception as e:status=0;data=b''
+              except Exception as e:
+                  status=0;data=b'';print('NETWORK_ERROR_TYPE='+type(e).__name__)
               key=path.replace('/','_').strip('_') or 'root'
               print(key+'_HTTP='+str(status))
+              print(key+'_SECONDS='+str(round(time.monotonic()-started,2)))
               if path=='/api/health':
                   try:
                       d=json.loads(data);print('STAGING_ENV='+str(d.get('environment')));print('READ_ONLY='+str(d.get('staging',{}).get('readOnly')));print('DATABASE='+str(d.get('database')))
                   except Exception: print('HEALTH_PARSE=FAILED')
-              if path=='/api/businesses':
+              if path.startswith('/api/businesses'):
                   try:
                       d=json.loads(data);v=d if isinstance(d,list) else d.get('businesses')
                       print('BUSINESS_COUNT='+str(len(v)) if isinstance(v,list) else 'BUSINESSES_NOT_ARRAY=true')
