@@ -61,3 +61,11 @@
 - **Dictamen:** E2E HTTP con MariaDB de Staging superado mediante instancia temporal del bundle instalado. **No equivale a haber probado POST/PATCH contra el endpoint público de Hostinger ni el editor de navegador.** Mantener F001/F003 abiertos hasta comprobación pública y aceptación del propietario.
 - La tarea horaria de vigilancia improductiva `6ae4c468d9d881919faeb473047f5e27` fue desactivada por Coordinación; no se necesita monitorear cambios inexistentes.
 - Siguiente acción de valor: habilitar bajo controles y probar la ruta empresarial pública en Staging, comprobar persistencia y funcionamiento del editor visual, conservar reversión y limpieza. Mantener producción cerrada.
+
+## Validación pública y navegador — ejecución lanzada, resultado por comprobar
+- **Rama:** `coord/staging-public-browser-validation-20261030`.
+- **Workflow y commit:** `.github/workflows/enc-staging-public-browser-validation.yml`, `df6115c3c15a3dc3b92b876c529b9cd1e02d060e`.
+- **Objetivo del workflow:** hacer GET público a `/api/health`, `/api/businesses`, `/api/admin/session` y `/`; comprobar rechazo de POST con cuerpo JSON vacío (sin empresa válida); intentar renderizado móvil con Chromium real y conservar captura como artefacto de GitHub Actions.
+- **Seguridad:** no modifica permisos de Staging, no abre ventana de escrituras, no cambia credenciales, no modifica SQL, no despliega y no toca producción.
+- **Estado verificado en este punto:** GitHub conserva el workflow, pero `ENC_STAGING_PUBLIC_BROWSER_RESULT.txt` todavía **no estaba publicado**. No afirmar éxito de HTTP público ni de Chromium sin ese resultado.
+- **Limitación:** este control anónimo NO prueba la edición del editor autenticado ni un POST/PATCH real en el host público. Para ello se requiere una ventana de escritura cuidadosamente asegurada, un reinicio limitado a Staging y un mecanismo fiable de reversión/reinicio; los scripts históricos de enable/restore **no reinician** el servicio.
