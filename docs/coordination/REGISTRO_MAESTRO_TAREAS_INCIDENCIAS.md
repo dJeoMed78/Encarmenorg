@@ -42,7 +42,7 @@
 ## Tareas de ejecución y validación (estado al crearse; verificar remoto ANTES de actuar)
 | ID | Encargado | Base / rama | Estado de trabajo y siguiente paso |
 |---|---|---|---|
-| ENC-DATA-INTEGRITY-CLOSURE-003 | W1 | `work/enc-consolidation-fixes-002` SHA `e60582e971f4f8cb56ea56191d33d91824f3fc5e`; destino `work/enc-data-integrity-closure-003` | Orden redactada, suspendida por capacidad según propietario. La rama destino ya existía pero estaba idéntica a base al verificarse. Consultar `docs/coordination/PENDIENTE_W1_ENC_DATA_INTEGRITY_CLOSURE_003.md`. No atribuir ejecución sin commits |
+| ENC-DATA-INTEGRITY-CLOSURE-003 | W1 | `work/enc-consolidation-fixes-002` SHA `e60582e971f4f8cb56ea56191d33d91824f3fc5e`; destino `work/enc-data-integrity-closure-003` | Publicada en `74e3300fa9ff022153d7e6671c65362203258032`. Coordinación reprodujo 147/147 pruebas, TypeScript y Vite en copia local disponible; revisión integral y conciliación pendientes. No integrada/desplegada. La nota PENDIENTE_W1 es histórica: no reenviar |
 | ENC-W2-API-VALIDATION-001 | W2 | `coord/enc-upload-honest-result-001` SHA `79757de8cfb07317668553c02a37502de4b64366` | Pruebas TypeScript/Vite/API no ejecutadas por Jefa 3; `docs/coordination/PENDIENTE_W2_VALIDACION_COORD_API_001.md`. Revisar SHA actual antes de asignar |
 | ENC-REPORT-PERSISTENCE-001 | Jefa 3 | `coord/enc-report-persistence-001` SHA `aa5260cf16a08539e04f4225056e152472302c57` | Implementación publicada, revisión y pruebas ejecutables pendientes; no integrada/desplegada |
 | ENC-UPLOAD-HONEST-RESULT-001 | Jefa 3 | `coord/enc-upload-honest-result-001` SHA `79757de8cfb07317668553c02a37502de4b64366` | Implementación publicada, validación pendiente; no integrada/desplegada |
@@ -70,3 +70,22 @@ Inspeccionados diffs funcionales de api.ts y WordPressSyncModal.tsx y las dos su
 ENC-INT-001: implementación publicada y revisión cliente acotada satisfactoria; no integrada ni desplegada, no cerrada. fetchReports ya no lee históricos locales; diferencia error de colección vacía; panel retira listas previas y descarta respuestas atrasadas. Edición exige éxito booleano y acuse de contactos. No se restauraron contactos ni se tocó SQL real.
 
 Pendientes: revisión completa contra orden original y regresiones de base; conciliación por función con ramas de upload y persistencia de Jefa 3; lectura backend GET /api/reports y dbLoadAllReports puede ocultar fallo SQL como vacío y mantiene caché. Origen HTTP no prueba durabilidad MariaDB. Sin validación en navegador real, MariaDB ni Hostinger. Sin autorización de integración/despliegue; incidencias del propietario permanecen abiertas. Evidencia: https://github.com/dJeoMed78/Encarmenorg/commit/74e3300fa9ff022153d7e6671c65362203258032 .
+
+
+## Control de brechas hacia integración — instrucción del propietario, 2026-10-29
+
+El propietario solicita reducir trabajo acumulado sin implementar y preservar trazabilidad. Priorizar completar revisión, conciliación y preparación de candidata sobre abrir encargos equivalentes. No sustituye autorización específica de integración/despliegue ni permite cerrar incidencias sin aceptación del propietario.
+
+### Verificación adicional ejecutada por Coordinación
+En copia local disponible de data-integrity-closure-003 se ejecutó el comando conjunto publicado: **147 PASS / 0 FAIL / 0 skipped**; `npm run lint` PASS; Vite directo con salida temporal PASS. Persisten avisos de chunk >500 KB y npm http-proxy. Los cuatro archivos funcionales/de pruebas nuevas ya contrastados conservaban hashes de la entrega; no se acredita comparación íntegra de todo el árbol local con GitHub ni instalación limpia. SQL/adaptadores simulados, jsdom/HTTP local: no MariaDB, Hostinger ni navegador real. Estas comprobaciones sustituyen la limitación anterior «147/lint/build no reproducidos», sin convertir la revisión parcial en aprobación global.
+
+### Cola única de cierre técnico (sin nuevas asignaciones)
+| Orden | Paquete | Evidencia / siguiente puerta concreta | Estado |
+|---|---|---|---|
+| 1 | Candidata W1 H01–H04 + integridad/contactos | SHA 74e3300fa9ff022153d7e6671c65362203258032. Completar contraste con orden original, integridad del árbol y revisión de contratos backend/cliente | Pruebas locales reproducidas; revisión pendiente |
+| 2 | Upload, duplicados, mutaciones cliente de reportes | SHA 79757de8cfb07317668553c02a37502de4b64366. Ejecutar pruebas existentes y conciliar por función con candidata W1 | Publicado; validación pendiente |
+| 3 | Persistencia de reportes | SHA aa5260cf16a08539e04f4225056e152472302c57. Validar suites y resolver contrato GET/caché/error SQL antes de declarar lectura autoritativa | Publicado; brecha backend abierta |
+| 4 | Comentarios al final en móvil F007A | SHA 73a68214cb326283375a8fe5e5ceeb669cee6d49. Prueba básica y comparación de compatibilidad; validación visual posterior | Publicado; pruebas pendientes |
+| 5 | Candidata conjunta para Staging | Registrar SHA único, paquetes incluidos/excluidos, build, controles críticos, reversión y evidencia de aislamiento adecuada al alcance; solicitar autorización específica de despliegue | No preparada aún |
+
+Cada paquete conserva sus SHA; no reemplazar archivos completos ni repetir restauración de contactos. Clasificados y otras entregas conservan seguimiento, pero no se agregan a la candidata por simple existencia de ramas. La cola es orden operativo, no integración ni despliegue ejecutados. Ninguna incidencia del propietario se cierra por estas pruebas.
