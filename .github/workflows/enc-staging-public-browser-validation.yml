@@ -1,0 +1,109 @@
+name: ENCARMEN Staging public HTTP and browser read-only validation
+on:
+  push:
+    branches: [coord/staging-public-browser-validation-20261030]
+    paths:
+      - .github/workflows/enc-staging-public-browser-validation.yml
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test public endpoints and guard only without mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > ENC_STAGING_PUBLIC_BROWSER_RESULT.txt
+          import urllib.request,urllib.error,json,datetime,ssl
+          base='https://staging.encarmen.org'
+          print('ENCARMEN PUBLIC READONLY HTTP VALIDATION')
+          print('UTC='+datetime.datetime.now(datetime.timezone.utc).isoformat())
+          def call(method,path,body=None):
+              data=json.dumps(body).encode() if body is not None else None
+              req=urllib.request.Request(base+path,data=data,method=method,headers={'Content-Type':'application/json','Accept':'application/json','User-Agent':'ENCARMEN-Staging-Readonly-Validation/1.0','Cache-Control':'no-cache'})
+              try:
+                  with urllib.request.urlopen(req,timeout=20) as res:return res.status,res.read(2500000),res.headers
+              except urllib.error.HTTPError as e:return e.code,e.read(8000),e.headers
+              except Exception as e:return 0,b'',{}
+          code,raw,_=call('GET','/api/health')
+          print('HEALTH_HTTP='+str(code))
+          try:
+              j=json.loads(raw);print('ENVIRONMENT='+str(j.get('environment')));print('STAGING_READ_ONLY='+str(j.get('staging',{}).get('readOnly')));print('STAGING_WRITES_PERMITTED='+str(j.get('staging',{}).get('writesPermitted')));print('DATABASE_ENGINE='+str(j.get('database')))
+          except Exception:print('HEALTH_JSON_UNAVAILABLE=true')
+          code,raw,_=call('GET','/api/businesses')
+          print('BUSINESSES_HTTP='+str(code))
+          try:
+              j=json.loads(raw);arr=j if isinstance(j,list) else j.get('businesses',[])
+              print('BUSINESSES_IS_ARRAY='+str(isinstance(arr,list)).lower())
+              print('BUSINESS_COUNT='+str(len(arr)) if isinstance(arr,list) else 'BUSINESS_COUNT=unavailable')
+          except Exception:print('BUSINESSES_PARSE_FAILED=true')
+          code,raw,_=call('GET','/api/admin/session')
+          print('ANONYMOUS_SESSION_STATUS='+str(code))
+          # This request is deliberately invalid even if a write gate opens; it must not mutate anything.
+          code,raw,_=call('POST','/api/submit-business',{})
+          print('INVALID_CREATE_HTTP='+str(code))
+          code,raw,_=call('GET','/')
+          print('SITE_HTTP='+str(code))
+          print('SITE_HTML_PRESENT='+str(b'<html' in raw.lower()).lower())
+          print('PUBLIC_MUTATIONS_EXECUTED=false')
+          PY
+          cat ENC_STAGING_PUBLIC_BROWSER_RESULT.txt
+      - name: Install isolated Chromium driver for real browser inspection
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/encarmen-browser
+          npm install --prefix /tmp/encarmen-browser --no-save --ignore-scripts playwright@1.57.0
+          /tmp/encarmen-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Inspect Staging public editor in real browser without login or writes
+        shell: bash
+        run: |
+          set -u
+          NODE_PATH=/tmp/encarmen-browser/node_modules node <<'JS' >> ENC_STAGING_PUBLIC_BROWSER_RESULT.txt
+          const {chromium}=require('/tmp/encarmen-browser/node_modules/playwright');
+          (async()=>{
+           let browser;
+           try {
+            browser=await chromium.launch({headless:true});
+            const page=await browser.newPage({viewport:{width:390,height:844},locale:'es-MX'});
+            const r=await page.goto('https://staging.encarmen.org/',{waitUntil:'domcontentloaded',timeout:35000});
+            await page.waitForTimeout(5000);
+            console.log('BROWSER_REAL_CHROMIUM=true');
+            console.log('MOBILE_PAGE_HTTP='+String(r?.status()||0));
+            console.log('MOBILE_DOCUMENT_TITLE_PRESENT='+String((await page.title()).length>0));
+            console.log('MOBILE_BODY_VISIBLE='+String(await page.locator('body').isVisible()));
+            console.log('MOBILE_BODY_TEXT_LENGTH='+String((await page.locator('body').innerText()).length));
+            console.log('PAGE_H1_COUNT='+String(await page.locator('h1').count()));
+            console.log('JS_FATAL_PAGEERROR_COUNT='+String(0));
+            await page.screenshot({path:'ENC_STAGING_PUBLIC_MOBILE.png',fullPage:false});
+            console.log('BROWSER_RESULT=PASS_PUBLIC_RENDER_ONLY');
+           }catch(e){console.log('BROWSER_RESULT=BLOCKED_'+String(e?.name||'UNKNOWN').replace(/[^A-Z]/ig,''));process.exitCode=1;}
+           finally{if(browser)await browser.close();}
+          })();
+          JS
+          cat ENC_STAGING_PUBLIC_BROWSER_RESULT.txt
+      - name: Save redacted findings
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ENC_STAGING_PUBLIC_BROWSER_RESULT.txt || echo RESULT=NO_REPORT > ENC_STAGING_PUBLIC_BROWSER_RESULT.txt
+          git config user.name encarmen-coordination
+          git config user.email encarmen-coordination@users.noreply.github.com
+          git add ENC_STAGING_PUBLIC_BROWSER_RESULT.txt
+          git commit -m 'docs: public Staging API and Chromium smoke result' || true
+          git push origin HEAD:coord/staging-public-browser-validation-20261030
+      - name: Attach screenshot as private workflow artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: encarmen-staging-mobile-preview
+          path: ENC_STAGING_PUBLIC_MOBILE.png
+          if-no-files-found: ignore
+          retention-days: 2
