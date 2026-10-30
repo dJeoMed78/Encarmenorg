@@ -1,0 +1,84 @@
+name: ENCARMEN inspect staging runtime config source safely
+on:
+  push:
+    branches: [coord/staging-env-source-check-20261030]
+    paths: [.github/workflows/staging-config-source-check.yml]
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: "Read only: compare staging runtime flags without secrets"
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        shell: bash
+        run: |
+          set -u
+          {
+            echo 'ENCARMEN STAGING RUNTIME CONFIG SOURCE'
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if [ -z "$SSHPASS" ]; then echo RESULT=BLOCKED_NO_SSH_SECRET; exit 0; fi
+            sudo apt-get update -qq >/dev/null 2>&1
+            sudo apt-get install -y -qq sshpass >/dev/null 2>&1
+            mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"
+            ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+            fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 2>/dev/null | awk '{print $2}')
+            if [ "$fp" != 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then echo RESULT=BLOCKED_HOST_PIN; exit 0; fi
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' <<'REMOTE'
+          import pathlib,os
+          h=pathlib.Path.home();env=h/'domains/staging.encarmen.org/hbuilds/config/.env'
+          if not env.is_file() or env.is_symlink():
+              print('RESULT=BLOCKED_STAGING_CONFIG')
+              raise SystemExit(0)
+          keys=['APP_ENV','APP_URL','STAGING_READ_ONLY','STAGING_DB_CONFIRMED','STAGING_BUSINESS_WRITES_ENABLED','ENC_ADMIN_MUTATIONS_ENABLED','ENC_ADMIN_PUBLIC_ORIGIN','ENC_ADMIN_CREDENTIALS_JSON','DB_NAME','DB_USER']
+          def source(lines):
+              out={}
+              for line in lines:
+                  if '=' not in line or line.lstrip().startswith('#'):continue
+                  k,v=line.split('=',1);out[k.strip()]=v.strip().strip('"').strip("'")
+              return out
+          fileenv=source(env.read_text(encoding='utf8').splitlines())
+          print('PRIVATE_FILE_APP_ENV_STAGING='+str(fileenv.get('APP_ENV')=='staging').lower())
+          print('PRIVATE_FILE_DB_STAGING='+str(fileenv.get('DB_NAME')=='u293982346_encarmentest').lower())
+          print('PRIVATE_FILE_ADMIN_ORIGIN_STAGING='+str(fileenv.get('ENC_ADMIN_PUBLIC_ORIGIN')=='https://staging.encarmen.org').lower())
+          for key in keys:
+              if key.startswith(('DB_','ENC_ADMIN_CREDENTIALS')):continue
+              print('PRIVATE_FILE_HAS_'+key+'='+str(key in fileenv).lower())
+          count=0
+          for entry in pathlib.Path('/proc').iterdir():
+              if not entry.name.isdecimal():continue
+              try:
+                  cwd=os.readlink(entry/'cwd')
+                  if 'domains/staging.encarmen.org/hbuilds/versions/' not in cwd:continue
+                  raw=(entry/'environ').read_bytes()
+                  runtime=source(x.decode('utf8','replace') for x in raw.split(b'\x00') if b'=' in x)
+                  count+=1
+                  print('RUNTIME_PROCESS_ENV_READABLE=true')
+                  print('RUNTIME_APP_ENV_STAGING='+str(runtime.get('APP_ENV')=='staging').lower())
+                  print('RUNTIME_DB_IS_STAGING='+str(runtime.get('DB_NAME')=='u293982346_encarmentest').lower())
+                  print('RUNTIME_ADMIN_ORIGIN_STAGING='+str(runtime.get('ENC_ADMIN_PUBLIC_ORIGIN')=='https://staging.encarmen.org').lower())
+                  for key in ('STAGING_READ_ONLY','STAGING_DB_CONFIRMED','STAGING_BUSINESS_WRITES_ENABLED','ENC_ADMIN_MUTATIONS_ENABLED','ENC_ADMIN_CREDENTIALS_JSON'):
+                      print('RUNTIME_HAS_'+key+'='+str(key in runtime).lower())
+                  print('RUNTIME_ADMIN_PROVIDER_CONFIGURED='+str(bool(runtime.get('ENC_ADMIN_CREDENTIALS_JSON'))).lower())
+              except Exception:
+                  print('STAGING_PROCESS_ENV_NOT_READABLE=true')
+          print('STAGING_RUNTIME_PROCESS_MATCHES='+str(count))
+          print('RESULT=READ_ONLY_COMPLETED')
+          REMOTE
+            echo "SSH_EXIT=$?"
+          } > ENC_STAGING_CONFIG_SOURCE_RESULT.txt 2>&1
+          cat ENC_STAGING_CONFIG_SOURCE_RESULT.txt
+      - name: Commit sanitized audit
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ENC_STAGING_CONFIG_SOURCE_RESULT.txt || echo RESULT=NO_REPORT > ENC_STAGING_CONFIG_SOURCE_RESULT.txt
+          git config user.name encarmen-coordination
+          git config user.email encarmen-coordination@users.noreply.github.com
+          git add ENC_STAGING_CONFIG_SOURCE_RESULT.txt
+          git commit -m 'docs: staging runtime configuration source audit' || exit 0
+          git push origin HEAD:coord/staging-env-source-check-20261030
