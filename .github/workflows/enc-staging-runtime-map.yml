@@ -33,18 +33,17 @@ jobs:
           print('STAGING_DIRECTORY_PRESENT='+str(st.is_dir()).lower())
           print('STAGING_CONFIG_PRESENT='+str((st/'config/.env').is_file()).lower())
           print('PM2_AVAILABLE='+str(subprocess.run(['which','pm2'],capture_output=True).returncode==0).lower())
-          p=subprocess.run(['pm2','jlist'],capture_output=True,text=True,timeout=12)
+          print('PM2_NOT_INSTALLED=true')
+          for app in ('node','nodejs','lsnode','npm','passenger'):
+           p=subprocess.run(['which',app],capture_output=True,text=True)
+           print('BIN_'+app.upper()+'='+str(p.returncode==0).lower())
+          for item in ('tmp/restart.txt','.htaccess','server.js','api/server.bundle.js','package.json'):
+           print('STAGING_FILE_'+item.replace('/','_').upper()+'='+str((st/item).exists()).lower())
+          p=subprocess.run(['ps','-eo','comm='],capture_output=True,text=True)
           if p.returncode==0:
-           try:
-            entries=json.loads(p.stdout)
-            print('PM2_PROCESS_COUNT='+str(len(entries)))
-            for proc in entries:
-             env=proc.get('pm2_env',{})
-             path=str(env.get('pm_cwd',''))
-             label=str(proc.get('name',''))
-             print('PM2_ENTRY='+('STAGING' if 'staging.encarmen.org' in path else 'OTHER')+':'+('encarmen-staging' if label=='encarmen-staging' else 'ANOTHER_NAME')+':'+str(env.get('status','unknown')))
-           except Exception:print('PM2_PARSE_FAILED=true')
-          else:print('PM2_QUERY_UNAVAILABLE=true')
+           names=p.stdout.lower().splitlines()
+           print('PROCESS_NODE_COUNT='+str(sum('node' in name for name in names)))
+           print('PROCESS_PASSENGER_COUNT='+str(sum('passenger' in name for name in names)))
           print('STAGING_BUILD_SERVER_PRESENT='+str((st/'server.js').is_file()).lower())
           print('STAGING_BUILD_API_PRESENT='+str((st/'api/server.bundle.js').is_file()).lower())
           print('STAGING_PACKAGE_PRESENT='+str((st/'package.json').is_file()).lower())
