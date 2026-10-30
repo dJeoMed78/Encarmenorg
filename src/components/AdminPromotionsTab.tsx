@@ -77,11 +77,14 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
 
   const imageUploadGeneration = useRef(0);
   const imageUploadPending = useRef(false);
+  const savePending = useRef(false);
   const imageMode = useRef<'historical'|'new'|'removed'>('removed');
   const historicalImages = useRef<{promoImage?:string|null;promoImageData?:string|null}>({});
+  const confirmedImage = useRef<{mode:'historical'|'new'|'removed';image:string;data:string}>({mode:'removed',image:'',data:''});
   const invalidateImageUpload = () => { imageUploadGeneration.current++;imageUploadPending.current=false;setIsUploadingPromoImg(false); };
   const handleRemovePromoImage = () => {
     invalidateImageUpload();imageMode.current='removed';historicalImages.current={};
+    confirmedImage.current={mode:'removed',image:'',data:''};
     setPromoImage('');setPromoImageData('');setPromoImageUnconfirmed(false);setErrorMsg(null);
   };
   useEffect(()=>()=>{imageUploadGeneration.current++;},[]);
@@ -138,10 +141,14 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
       const res=await uploadBusinessLogo(compressedDataUrl,file.name);
       if(!current())return;
       if(res.success!==true || typeof res.url!=='string' || !remotePromoImage(res.url))throw new Error(res.message || 'No se confirmó una URL remota válida para la imagen.');
-      setPromoImage(res.url);setPromoImageUnconfirmed(false);
+      setPromoImage(res.url);setPromoImageData('');setPromoImageUnconfirmed(false);
+      confirmedImage.current={mode:'new',image:res.url,data:''};
     } catch(error) {
       if(!current())return;
-      setErrorMsg(error instanceof Error ? error.message : 'No se confirmó la carga de la imagen.');
+      const last=confirmedImage.current;
+      imageMode.current=last.mode;
+      setPromoImage(last.image);setPromoImageData(last.data);setPromoImageUnconfirmed(false);
+      setErrorMsg((error instanceof Error ? error.message : 'No se confirmó la carga de la imagen.')+' Se conserva el cartel anterior; puedes guardar los demás cambios.');
     } finally {
       if(current()){imageUploadPending.current=false;setIsUploadingPromoImg(false);input.value='';}
     }
@@ -224,12 +231,14 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
     setPromoImage(promo.promoImage || promo.promoImageData || '');
     setPromoImageUnconfirmed(false);
     setPromoImageData(promo.promoImageData || (promo.promoImage?.startsWith('data:') ? promo.promoImage : ''));
+    confirmedImage.current={mode:'historical',image:promo.promoImage || promo.promoImageData || '',data:promo.promoImageData || (promo.promoImage?.startsWith('data:') ? promo.promoImage : '')};
     setPromoTerms(promo.terms || '');
     setActiveSubTab('create');
   };
 
   const handleResetForm = () => {
     invalidateImageUpload();imageMode.current='removed';historicalImages.current={};
+    confirmedImage.current={mode:'removed',image:'',data:''};
     setFormId(null);
     const firstBiz = businesses[0];
     setSelectedBizId(firstBiz?.id || 0);
@@ -249,6 +258,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
 
   const handleSavePromo = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savePending.current || isSaving) return;
     if (imageUploadPending.current || isUploadingPromoImg || promoImageUnconfirmed || (promoImage && !(remotePromoImage(promoImage) || (imageMode.current==='historical' && historicalRaster(promoImage))))) {
       setErrorMsg('La imagen solo está en previsualización; confirma su carga remota antes de guardar.');
       return;
@@ -259,6 +269,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
     }
 
     const biz = businesses.find(b => b.id === Number(selectedBizId));
+    savePending.current=true;
     setIsSaving(true);
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -294,6 +305,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
     } catch (err: any) {
       setErrorMsg(err.message || 'Error de conexión');
     } finally {
+      savePending.current=false;
       setIsSaving(false);
     }
   };
