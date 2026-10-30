@@ -1,0 +1,45 @@
+name: ENCARMEN transient SQL Staging transaction validation
+on:
+  push:
+    branches: [coord/staging-write-go-no-go-20261030]
+    paths: [.github/workflows/enc-staging-sql-transaction.yml]
+permissions:
+  contents: write
+jobs:
+  transact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run synthetic SQL transaction and rollback in staging only
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        shell: bash
+        run: |
+          set -u
+          {
+            echo 'ENCARMEN STAGING TRANSIENT SQL PROBE'
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if [ -z "$SSHPASS" ]; then echo RESULT=BLOCKED_NO_SSH_SECRET; exit 0; fi
+            sudo apt-get update -qq >/dev/null 2>&1
+            sudo apt-get install -y -qq sshpass >/dev/null 2>&1
+            mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"
+            ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+            fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 2>/dev/null | awk '{print $2}')
+            if [ "$fp" != 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then echo RESULT=BLOCKED_HOST_PIN; exit 0; fi
+            echo SSH_FINGERPRINT=VERIFIED
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' < ops/coord/staging_transaction_probe.py
+            echo "SSH_EXIT=$?"
+          } > ENC_STAGING_SQL_TRANSACTION_RESULT.txt 2>&1
+          cat ENC_STAGING_SQL_TRANSACTION_RESULT.txt
+      - name: Save sanitized result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ENC_STAGING_SQL_TRANSACTION_RESULT.txt || echo RESULT=NO_REPORT > ENC_STAGING_SQL_TRANSACTION_RESULT.txt
+          git config user.name encarmen-coordination
+          git config user.email encarmen-coordination@users.noreply.github.com
+          git add ENC_STAGING_SQL_TRANSACTION_RESULT.txt
+          git commit -m 'docs: staging transient SQL transaction evidence' || exit 0
+          git push origin HEAD:coord/staging-write-go-no-go-20261030
