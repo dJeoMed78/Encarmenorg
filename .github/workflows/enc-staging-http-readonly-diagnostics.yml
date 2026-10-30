@@ -90,6 +90,35 @@ jobs:
               except Exception as ex:
                   o('ACTIVE_LOOPBACK_HEALTH_STATUS','unavailable')
                   o('ACTIVE_LOOPBACK_EXCEPTION_CLASS',type(ex).__name__)
+          if active_procs:
+              sockets=set()
+              for pr in active_procs:
+                  try:
+                      for fd in (pr/'fd').iterdir():
+                          try:
+                              link=os.readlink(fd)
+                              if link.startswith('socket:[') and link.endswith(']'):
+                                  sockets.add(link[8:-1])
+                          except OSError:pass
+                  except (OSError,PermissionError):pass
+              o('ACTIVE_PROCESS_SOCKET_COUNT',len(sockets))
+              listeners=[]
+              for net_file in ('/proc/net/tcp','/proc/net/tcp6'):
+                  try:
+                      for line in pathlib.Path(net_file).read_text().splitlines()[1:]:
+                          cols=line.split()
+                          if len(cols)<10 or cols[3]!='0A' or cols[9] not in sockets:continue
+                          port=int(cols[1].split(':')[1],16)
+                          if 1<=port<=65535:listeners.append(port)
+                  except (OSError,ValueError):pass
+              o('ACTIVE_PROCESS_TCP_LISTENER_COUNT',len(listeners))
+              for number,lp in enumerate(sorted(set(listeners))[:5],1):
+                  o('ACTIVE_LISTEN_PORT_'+str(number),lp)
+                  try:
+                      req=urllib.request.Request('http://127.0.0.1:'+str(lp)+'/api/health',headers={'Host':'127.0.0.1'})
+                      with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req,timeout=4) as response:
+                          o('ACTIVE_LISTEN_HEALTH_'+str(number),response.status)
+                  except Exception as e:o('ACTIVE_LISTEN_HEALTH_'+str(number),type(e).__name__)
           o('SQL_OR_STAGING_WRITES_EXECUTED','false')
           o('RESULT','READONLY_INSPECTION_COMPLETE')
           REMOTE
