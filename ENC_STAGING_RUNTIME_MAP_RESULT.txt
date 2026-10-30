@@ -1,0 +1,14 @@
+ENCARMEN STAGING RUNTIME MAP
+UTC=2026-10-30T17:57:36Z
+STAGING_DIRECTORY_PRESENT=true
+STAGING_CONFIG_PRESENT=true
+PM2_AVAILABLE=false
+Traceback (most recent call last):
+  File "<stdin>", line 6, in <module>
+  File "/usr/lib64/python3.9/subprocess.py", line 505, in run
+    with Popen(*popenargs, **kwargs) as process:
+  File "/usr/lib64/python3.9/subprocess.py", line 951, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/usr/lib64/python3.9/subprocess.py", line 1837, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: 'pm2'
