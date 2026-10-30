@@ -163,7 +163,7 @@ Prueba W1 R1 de URL inválida conciliada con nuevo contrato, tres pruebas React/
 
 ## Presupuesto de ejecución y prioridad de publicación — 2026-10-30
 
-**Datos comunicados por el propietario (no medidos por Coordinación):** GitHub Copilot dispone del **75% de créditos**, con restablecimiento indicado para **2026-10-31**; W1/W2 (Codex y ChatGPT Work, cuota semanal compartida) dispone de **9%** en la captura del panel de uso. También están disponibles GAS/W3 y Perplexity/W4. Las cuotas y fechas son instantáneas y deben actualizarse cuando el propietario comunique cambios; no prometer un restablecimiento sin confirmación del panel.
+**Datos comunicados por el propietario (no medidos por Coordinación):** GitHub Copilot lleva **77% de créditos consumidos (23% restantes)** tras la última instrucción; anteriormente llevaba **75% consumidos (25% restantes)**, con restablecimiento indicado para **2026-10-31**; W1/W2 (Codex y ChatGPT Work, cuota semanal compartida) dispone de **9%** en la captura del panel de uso. También están disponibles GAS/W3 y Perplexity/W4. Las cuotas y fechas son instantáneas y deben actualizarse cuando el propietario comunique cambios; no prometer un restablecimiento sin confirmación del panel.
 
 **Instrucción empresarial:** priorizar **resultados integrados y visibles en Staging** sobre acumulación de código, informes, diagnósticos y ramas. No abrir nuevas tareas funcionales mientras no se agote el backlog de integración salvo bloqueo crítico de seguridad/integridad o instrucción expresa. Minimizar la cuota de W1/W2, usar Copilot para correcciones puntuales y GAS/Perplexity en trabajos acotados si aportan evidencia nueva.
 
