@@ -281,3 +281,21 @@ Decisión expresa del propietario de 2026-10-29, recuperada del PDF `encar.pdf` 
 **Flujo prioritario:** validar controles mínimos y posibilidad de reversión → integrar PR #7 a `ia-desarrollo` cuando su impacto sobre producción sea seguro → observar/desplegar Staging → pruebas reales → corregir sobre el resultado integrado → registrar estados y solicitar aceptación de incidencias al propietario. Evitar preguntas repetitivas sobre permiso de usar Staging, nuevas auditorías generales y acumulación de ramas sin integración. La autorización amplia de Staging no autoriza cambiar `main`, Hostinger de producción o bases compartidas.
 
 **Configuración comunicada por IA Hostinger:** auto-deploy de `staging.encarmen.org` escucha `ia-desarrollo` y producción `encarmen.org` escucha `main`; ambas son aplicaciones Node.js separadas. La existencia de dos BD nominales no demuestra el destino actual de variables de entorno. Incorporar esta información al control de riesgos, no usarla como pretexto para inmovilizar indefinidamente Staging.
+
+
+## Responsabilidad de dirección: contexto completo para cada trabajador — 2026-10-30
+
+**Corrección expresa del propietario:** cuando un trabajador entrega un resultado incorrecto por desconocer el entorno de ENCARMEN, la responsabilidad inicial es de la Coordinación que redactó una orden incompleta. No atribuir de forma automática incompetencia, negligencia o mala intención al ejecutor. La Jefa debe aportar contexto suficiente y dirigir con precisión, sin culpabilizar al trabajador por límites que no fueron comunicados.
+
+Antes de delegar una tarea técnica, dar expresamente:
+1. **Objetivo, resultado verificable y alcance**, ID, prioridad, rama/SHA y archivos permitidos.
+2. **Entorno de ejecución concreto:** computadora/contenedor/vista previa GAS, pruebas locales, Staging real de Hostinger, o producción; diferenciarlos incluso si usan el mismo repositorio.
+3. **Conexiones autorizadas/prohibidas**, en especial GAS y otros previews **sin ninguna conexión a MariaDB de producción**; no cargar ni usar secretos productivos, ni fallbacks de configuración a producción. Si el entorno no puede garantizar aislamiento, detener ejecución y reportar el bloqueo.
+4. **Estado de acceso, permisos y fuente de verdad**: qué datos se pueden leer/escribir, servicios auxiliares y rutas exactas comprobadas; no asumir que las variables de Hostinger se trasladan a vistas previas externas.
+5. **Pasos de seguridad verificables antes de arrancar**: comprobación del objetivo DB y credenciales no productivas, ausencia de tareas automáticas destructivas, respaldo/reversión cuando aplique.
+6. **Operaciones prohibidas** (SQL/DDL/restauración/despliegue/producción) y puntos de autorización; no basta con advertencias genéricas como «no modificar producción».
+7. **Pruebas y evidencia esperadas**, distinguiendo mocks, preview, Staging real y producción.
+
+**Lección del log GAS:** el entorno externo `/app/applet` (preview ejecutado por `tsx server.ts`) alcanzó `u293982346_encarmenapp`; no se infiere por ello que GAS haya modificado datos reales. La orden anterior de preparación de Staging no describía de forma suficientemente explícita cómo ejecutar una vista previa aislada ni cómo prevenir el fallback a credenciales productivas. Corregir el protocolo de dirección y la configuración, y vigilar integridad por seguridad; no calificar negativamente al trabajador.
+
+**Regla de gestión:** una orden es ejecutable solo cuando el trabajador puede saber inequívocamente **dónde trabajar, dónde no, con qué datos, qué operaciones hacer, cómo verificar el resultado y cuándo detenerse**. Evitar poner al propietario a suplir contexto que Coordinación ya posee en GitHub.
