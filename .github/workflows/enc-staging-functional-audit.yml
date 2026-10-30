@@ -28,11 +28,14 @@ jobs:
                   if isinstance(data.get(key),list):return len(data[key])
               return data.get('total',data.get('count','unknown'))
           def valid_mex(value):
+              import re
               if not isinstance(value,(str,int)):return False
-              d=''.join(c for c in str(value) if c.isdigit())
-              if len(d)==13 and d.startswith('521'):d=d[3:]
-              if len(d)==12 and d.startswith('52'):d=d[2:]
-              return len(d)==10
+              raw=str(value).strip()
+              if not re.fullmatch(r'[+\\d\\s().-]+',raw):return False
+              d=re.sub(r'\\D','',raw)
+              if re.fullmatch(r'521\\d{10}',d):d=d[3:]
+              if re.fullmatch(r'52\\d{10}',d):d=d[2:]
+              return bool(re.fullmatch(r'\\d{10}',d))
           for route in routes:
               print('ROUTE='+route)
               try:
@@ -51,6 +54,7 @@ jobs:
                       if route=='/api/businesses' and businesses:
                           print('BUSINESSES_WITH_VALID_PHONE='+str(sum(valid_mex(b.get('phone')) for b in businesses if isinstance(b,dict))))
                           print('BUSINESSES_WITH_VALID_WHATSAPP='+str(sum(valid_mex(b.get('whatsapp')) for b in businesses if isinstance(b,dict))))
+                          print('WHATSAPP_FORMAT_REJECTED_BUT_TEN_DIGITS='+str(sum(not valid_mex(b.get('whatsapp')) and len(''.join(ch for ch in str(b.get('whatsapp') or '') if ch.isdigit())) in (10,12,13) for b in businesses if isinstance(b,dict))))
                           print('BUSINESSES_WITH_NO_CONTACT='+str(sum(not valid_mex(b.get('phone')) and not valid_mex(b.get('whatsapp')) for b in businesses if isinstance(b,dict))))
                           print('DUPLICATE_52_PREFIX_CANDIDATES='+str(sum(str(b.get('whatsapp') or '').replace(' ','').startswith('5252') for b in businesses if isinstance(b,dict))))
                           print('HAIR_PALACE_RECORD_PRESENT='+str(any('hair palace' in str(b.get('name','')).lower() for b in businesses if isinstance(b,dict))))
