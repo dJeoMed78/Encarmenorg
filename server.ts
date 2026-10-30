@@ -2986,7 +2986,7 @@ app.post('/api/reports', async (req: Request, res: Response) => {
   if (!isMariaDbActive()) return res.status(503).json({success:false,writeMayHaveSucceeded:false,message:'La base de datos no está disponible para confirmar el reporte.'});
   const reportData = {
     ...req.body,
-    id: `rep-${Date.now()}-${randomBytes(6).toString('hex')}`,
+    id: `rep-${Date.now()}-${crypto.randomBytes(6).toString('hex')}`,
     status: 'pending',
     createdAt: new Date().toISOString()
   };
