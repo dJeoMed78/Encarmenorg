@@ -121,7 +121,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
       const res = await uploadBusinessLogo(compressedDataUrl, file.name);
       if (uploadId !== promoUploadSeq.current) return;
       const confirmedUrl = typeof res.url === 'string' ? res.url.trim() : '';
-      if (res.success && /^(https?:\\/\\/[^\\s]+|\\/[^\\/\\s][^\\s]*)$/i.test(confirmedUrl)) {
+      if (res.success && /^(https?:\/\/[^\s]+|\/[^\/\s][^\s]*)$/i.test(confirmedUrl)) {
         setPromoImage(confirmedUrl);
         setPromoImageData('');
       } else {
@@ -266,7 +266,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
         validUntil: promoValidUntil.trim(),
         ownerEmail: promoOwnerEmail.trim(),
         ownerWhatsapp: cleanWa,
-        promoImage: /^(https?:\/\/[^\\s]+|\/[^\/\\s][^\\s]*)$/i.test(promoImage.trim()) ? promoImage.trim() : null,
+        promoImage: /^(https?:\/\/[^\s]+|\/[^\/\s][^\s]*)$/i.test(promoImage.trim()) ? promoImage.trim() : null,
         promoImageData: promoImageData || null,
         terms: promoTerms.trim(),
         isActive: true
