@@ -59,3 +59,14 @@ El listado de Jefa 2 incluía además: registro público directo sin aprobación
 - Revisar sistemáticamente todas las entradas ABIERTAS, ordenadas por prioridad y riesgo. Priorizar no significa abandonar las de prioridad menor.
 - No cerrar incidencias comunicadas por propietario por un PASS de un trabajador o una revisión de código. Solo la aceptación expresa del propietario cierra la incidencia.
 - El registro maestro está en la rama documental. Issues de GitHub pueden enlazarse, pero una issue desactualizada jamás reemplaza este registro hasta reconciliarse.
+
+
+## Recepción y revisión acotada de ENC-DATA-INTEGRITY-CLOSURE-003 — 2026-10-29
+
+Entrega W1 recibida. GitHub confirma comparación base `e60582e971f4f8cb56ea56191d33d91824f3fc5e` → `74e3300fa9ff022153d7e6671c65362203258032`: dos commits, seis archivos, sin divergencia respecto de la base. Sustituye el estado histórico «suspendida/no iniciada» de la tabla y del documento PENDIENTE_W1; no reenviar la orden.
+
+Inspeccionados diffs funcionales de api.ts y WordPressSyncModal.tsx y las dos suites nuevas. Coordinación ejecutó independientemente las cinco pruebas nuevas: **5 PASS / 0 FAIL / 0 omitidas** en copia local disponible. Hashes Git de ambos fuentes y ambas suites contrastados con los blobs del SHA entregado. No es checkout Git completo verificado ni instalación limpia. Los **147 PASS, lint y build** permanecen como resultados reportados por W1, no reproducidos por Coordinación en esta intervención.
+
+ENC-INT-001: implementación publicada y revisión cliente acotada satisfactoria; no integrada ni desplegada, no cerrada. fetchReports ya no lee históricos locales; diferencia error de colección vacía; panel retira listas previas y descarta respuestas atrasadas. Edición exige éxito booleano y acuse de contactos. No se restauraron contactos ni se tocó SQL real.
+
+Pendientes: revisión completa contra orden original y regresiones de base; conciliación por función con ramas de upload y persistencia de Jefa 3; lectura backend GET /api/reports y dbLoadAllReports puede ocultar fallo SQL como vacío y mantiene caché. Origen HTTP no prueba durabilidad MariaDB. Sin validación en navegador real, MariaDB ni Hostinger. Sin autorización de integración/despliegue; incidencias del propietario permanecen abiertas. Evidencia: https://github.com/dJeoMed78/Encarmenorg/commit/74e3300fa9ff022153d7e6671c65362203258032 .
