@@ -268,3 +268,16 @@ Decisión expresa del propietario de 2026-10-29, recuperada del PDF `encar.pdf` 
 6. Mantener las incidencias del propietario abiertas hasta su aprobación visual/funcional; **no confundir avance de integración con cierre de una incidencia**.
 
 **Estado de referencia al documentar esta regla:** `ia-desarrollo` antecedía en 27 commits y 88 archivos a `coord/enc-c4-final-001`, rama candidata preparada en **PR #7 en borrador**, aún sin merge ni despliegue. Consultar GitHub en vivo antes de usar estas cifras en futuro.
+
+
+## Mandato operativo del propietario: Staging es laboratorio autónomo — 2026-10-30
+
+**Aclaración expresa del propietario (prevalece sobre reglas previas demasiado conservadoras):** `https://staging.encarmen.org` es **el laboratorio de pruebas de Coordinación Principal**. La Jefa está autorizada a utilizarlo activamente para implementar, integrar, publicar, ensayar, corregir, reiniciar y, si es necesario, dejar temporalmente fuera de línea Staging con el fin de avanzar y cerrar brechas. **No se requiere volver a solicitar autorización por cada operación normal de Staging dentro de este mandato**. La mera posibilidad de activar el despliegue automático de Staging mediante merge a `ia-desarrollo` ya no bloquea por sí sola la integración. Debe registrarse el SHA, el resultado y reversión.
+
+**Responsabilidad innegociable:** `https://encarmen.org` y sus datos/archivos/servicios, incluyendo alias `empresasencarmen.com`, son **producción inamovible**. No autorizar ningún cambio, ejecución o escritura que pueda afectar esos recursos. Aunque los sitios compartan cuenta/servidor, hay que comprobar antes de operaciones de riesgo que Staging no apunta a base de producción, ni comparte credenciales, rutas de escritura, almacenamiento o servicios peligrosos. Mantener los mecanismos de aislamiento que fallan cerrado. Si el aislamiento no está probado, se permite preparar y probar operaciones realmente inocuas, pero **no** activaciones de escritura, SQL, migraciones o operaciones con riesgo para producción.
+
+**Prevención proporcional:** antes de modificaciones de Staging que puedan producir conflicto o pérdida, comprobar y conservar respaldo pertinente y procedimiento de recuperación; no imponer respaldo completo redundante para cada cambio trivial. Un despliegue podría bajar Staging temporalmente: eso es aceptado. En producción no.
+
+**Flujo prioritario:** validar controles mínimos y posibilidad de reversión → integrar PR #7 a `ia-desarrollo` cuando su impacto sobre producción sea seguro → observar/desplegar Staging → pruebas reales → corregir sobre el resultado integrado → registrar estados y solicitar aceptación de incidencias al propietario. Evitar preguntas repetitivas sobre permiso de usar Staging, nuevas auditorías generales y acumulación de ramas sin integración. La autorización amplia de Staging no autoriza cambiar `main`, Hostinger de producción o bases compartidas.
+
+**Configuración comunicada por IA Hostinger:** auto-deploy de `staging.encarmen.org` escucha `ia-desarrollo` y producción `encarmen.org` escucha `main`; ambas son aplicaciones Node.js separadas. La existencia de dos BD nominales no demuestra el destino actual de variables de entorno. Incorporar esta información al control de riesgos, no usarla como pretexto para inmovilizar indefinidamente Staging.
