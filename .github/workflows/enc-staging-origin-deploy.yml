@@ -22,7 +22,8 @@ jobs:
           npx tsc --noEmit >/tmp/enc-tsc.log 2>&1
           npx esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=/tmp/enc-staging-origin-server.js >/tmp/enc-esbuild.log 2>&1
           node --check /tmp/enc-staging-origin-server.js
-          grep -q 'STAGING_PRIVATE_CONFIGURATION_UNAVAILABLE' /tmp/enc-staging-origin-server.js
+          grep -q 'https://staging.encarmen.org' /tmp/enc-staging-origin-server.js
+          if grep -q 'STAGING_PRIVATE_CONFIGURATION_UNAVAILABLE' /tmp/enc-staging-origin-server.js; then echo 'UNSAFE_STARTUP_GUARD_PRESENT'; exit 1; fi
           echo 'BUILD=PASS'
       - name: Public Staging deployment with guarded rollback
         shell: bash
@@ -96,7 +97,7 @@ jobs:
               check((active/'server.js').is_file() and (active/'tmp').is_dir(),'ACTIVE_RELEASE_INVALID')
               check(C.is_file() and C.stat().st_size>10000 and not C.is_symlink(),'CANDIDATE_MISSING')
               candidate=C.read_text(errors='replace')
-              check('STAGING_PRIVATE_CONFIGURATION_UNAVAILABLE' in candidate and 'https://staging.encarmen.org' in candidate,'CANDIDATE_GUARD_MISSING')
+              check('STAGING_PRIVATE_CONFIGURATION_UNAVAILABLE' not in candidate and 'https://staging.encarmen.org' in candidate and 'u293982346_encarmentest' in candidate,'CANDIDATE_GUARD_MISSING')
               old=active/'server.js'
               old_bytes=old.read_bytes()
               check(b'matchesWrittenValues' in old_bytes and b'BUSINESS_READBACK_FAILED' in old_bytes,'ACTIVE_OLD_BUNDLE_NOT_EXPECTED')
