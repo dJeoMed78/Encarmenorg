@@ -1,4 +1,4 @@
-name: ENCARMEN controlled public Staging business HTTP E2E
+name: ENCARMEN controlled public Staging business HTTP E2E login status diagnosis
 on:
   push:
     branches: [coord/staging-public-e2e-20261030]
