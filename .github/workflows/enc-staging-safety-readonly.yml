@@ -133,9 +133,12 @@ jobs:
               o('PRIVATE_CONFIG_DB_STAGING',str(config.get('DB_NAME')=='u293982346_encarmentest').lower())
               o('PRIVATE_CONFIG_READONLY',str(config.get('STAGING_READ_ONLY','').lower() in ('true','1')).lower())
           else:o('PRIVATE_CONFIG_PRESENT','false')
-          backups=list((base/'backups').glob('*')) if (base/'backups').is_dir() else []
-          o('STAGING_BACKUP_DIRECTORY_PRESENT',str((base/'backups').is_dir()).lower())
+          backup_home=H/'encarmen-staging-backups'
+          backups=list((backup_home/'database').glob('staging-db-*.sql.gz')) if (backup_home/'database').is_dir() else []
+          o('STAGING_BACKUP_DIRECTORY_PRESENT',str(backup_home.is_dir()).lower())
           o('STAGING_BACKUP_NONEMPTY_FILES',sum(1 for f in backups if f.is_file() and f.stat().st_size>0))
+          o('STAGING_BACKUP_PRIVATE_PERMISSIONS',str(backup_home.is_dir() and backup_home.stat().st_mode & 0o077==0).lower())
+          o('STAGING_DB_BACKUP_PRESENT',str(any(f.is_file() and f.stat().st_size>0 for f in backups)).lower())
           o('STAGING_CURRENT_SYMLINK',str(current.is_symlink()).lower())
           o('STAGING_PREVIOUS_VERSIONS_AVAILABLE',str(len(candidates)>1).lower())
           o('SSH_READONLY_INSPECTION_ONLY','true')
