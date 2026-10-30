@@ -112,7 +112,24 @@ try:
         if status==200 and data.get('environment')=='staging':
             online=True;break
         time.sleep(1)
-    if not online:halt('EPHEMERAL_RUNTIME_UNAVAILABLE')
+    if not online:
+        emit('EPHEMERAL_PROCESS_RUNNING',str(child.poll() is None).lower())
+        emit('LAST_HEALTH_HTTP_STATUS',status)
+        raw=(work/'node-private.log').read_text(encoding='utf8',errors='replace')
+        emit('PRIVATE_LOG_HAS_CONTENT',str(bool(raw)).lower())
+        for label,pattern in [
+            ('MODULE_NOT_FOUND','module not found'),
+            ('ESM_REQUIRE_ERROR','ERR_REQUIRE_ESM'),
+            ('CANNOT_FIND_MODULE','Cannot find module'),
+            ('DB_ERROR','ER_ACCESS_DENIED_ERROR'),
+            ('PORT_BIND_ERROR','EADDRINUSE'),
+            ('LISTEN_SUCCESS','Servidor corriendo exitosamente'),
+            ('IMPORT_ERROR','ERR_MODULE_NOT_FOUND'),
+            ('NODE_UNAVAILABLE','No such file or directory'),
+            ('INVALID_ENV','STAGING_DB'),
+            ('FATAL_EXCEPTION','uncaughtException')]:
+            if pattern.lower() in raw.lower():emit('DIAG_'+label,'true')
+        halt('EPHEMERAL_RUNTIME_UNAVAILABLE')
     emit('EPHEMERAL_SERVER','STAGING_ONLY_READY')
     code,auth=http('POST',base+'/api/admin/login',{'username':'stagingtest','password':password})
     if code!=200 or not isinstance(auth.get('token'),str):halt('TEMP_ADMIN_LOGIN')
