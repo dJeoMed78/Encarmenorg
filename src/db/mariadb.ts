@@ -632,8 +632,8 @@ export async function dbDeleteReport(id: string): Promise<boolean> {
   if (!guardWrite('dbDeleteReport')) return false;
   if (!pool) return false;
   try {
-    await pool.query('DELETE FROM reports WHERE id = ?', [id]);
-    return true;
+    const [result]: any = await pool.query('DELETE FROM reports WHERE id = ?', [id]);
+    return Number(result?.affectedRows || 0) > 0;
   } catch (err: any) {
     console.warn('[MariaDB] Error eliminando reporte:', err.message);
     return false;
