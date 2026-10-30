@@ -175,10 +175,12 @@ export async function uploadBusinessLogo(imageBase64: string, filename?: string)
       throw new Error(errData.message || `Error del servidor HTTP ${res.status}`);
     }
     const result = await res.json();
-    if (result?.success !== true || typeof result.url !== 'string' || !result.url.trim()) {
-      return {success:false,message:result?.message || 'El servidor no confirmó el almacenamiento de la imagen.'};
+    const url = typeof result?.url === 'string' ? result.url.trim() : '';
+    // A data URI or a javascript: URL is not a persisted remote image.
+    if (result?.success !== true || !/^(?:https?:\/\/|\/(?!\/))/.test(url)) {
+      return {success:false,message:result?.message || 'El servidor no confirmó una URL persistente de imagen.'};
     }
-    return result;
+    return {...result,url};
   } catch (err: any) {
     // A local data URI is not evidence that the remote server stored the image.
     return {
@@ -363,7 +365,9 @@ export async function updateReportStatus(id: string, status: 'resolved' | 'dismi
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status })
     });
-    return res.ok;
+    if (!res.ok) return false;
+    const result = await res.json();
+    return result?.success === true && String(result?.report?.id) === String(id) && result.report.status === status;
   } catch {
     return false;
   }
@@ -374,7 +378,9 @@ export async function deleteReport(id: string): Promise<boolean> {
     const res = await adminFetch(`${API_BASE}/reports/${id}`, {
       method: 'DELETE'
     });
-    return res.ok;
+    if (!res.ok) return false;
+    const result = await res.json();
+    return result?.success === true;
   } catch {
     return false;
   }
