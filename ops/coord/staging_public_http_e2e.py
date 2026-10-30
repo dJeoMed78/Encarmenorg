@@ -120,6 +120,12 @@ try:
  if enabled.get('RESULT')!='READY_FOR_STAGING_ONLY_RESTART':abort('ENABLE_'+enabled.get('RESULT','UNKNOWN'))
  changed=True
  out('WINDOW','ENABLED_CONFIG_BACKED_UP')
+ current_env=parse(E.read_text(encoding='utf8'))
+ out('TEST_ADMIN_CONFIG_PRESENT',str(len(current_env.get('ENC_ADMIN_CREDENTIALS_JSON',[]))==1).lower())
+ out('TEST_ADMIN_ORIGIN_CONFIGURED',str(exact(current_env,'ENC_ADMIN_PUBLIC_ORIGIN',WEB)).lower())
+ out('TEST_ENV_FILE_PRIVATE',str(E.stat().st_mode&0o077==0).lower())
+ current_binary=(active/'server.js').read_text(errors='replace')
+ out('TEST_ADMIN_LOADER_PRESENT',str('ENC_ADMIN_CREDENTIALS_JSON' in current_binary and 'STAGING_PRIVATE_DB_NAME' in current_binary).lower())
  restart()
  wait_health()
  marker=json.loads((B/'enc-staging-business-window-active.json').read_text())
