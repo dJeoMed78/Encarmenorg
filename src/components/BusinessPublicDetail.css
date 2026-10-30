@@ -331,6 +331,12 @@
 .bpd-reviews {
   padding: 15px;
 }
+
+/* ENC-F007A: reviews after business facts on wide screens. */
+.bpd-reviews {
+  grid-column: 1 / -1;
+  grid-row: 3;
+}
 .bpd-reviews > h2 svg {
   color: #ecad09;
   fill: #ffcf4f;
@@ -513,6 +519,12 @@
     grid-column: 1/-1;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* ENC-F007A: medium screens place reviews below business facts. */
+  .bpd-reviews {
+    grid-column: 1 / -1;
+    grid-row: 4;
   }
 
   .bpd-crumb {
