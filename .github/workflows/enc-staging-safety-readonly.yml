@@ -1,4 +1,5 @@
 name: ENCARMEN Staging safety isolation and backup read-only inspection
+# Post-hPanel restart verification of revoked temporary login and read-only guard.
 on:
   workflow_dispatch:
   push:
