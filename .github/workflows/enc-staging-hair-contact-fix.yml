@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 14
     steps:
       - uses: actions/checkout@v4
-      - name: SSH: identidad MariaDB, respaldo, cambio condicional y lectura posterior
+      - name: "SSH: identidad MariaDB, respaldo, cambio condicional y lectura posterior"
         shell: bash
         env:
           SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
