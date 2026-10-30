@@ -69,12 +69,17 @@ jobs:
                   o('ACTIVE_JS_SYNTAX_OK',str(check.returncode==0).lower())
               except Exception:o('ACTIVE_JS_SYNTAX_OK','unverified')
               try:
-                  env=(p/'environ').read_bytes().split(b'\x00')
+                  o('PROCESS_NETNS_MATCH',str(os.readlink(p/'ns/net')==os.readlink('/proc/self/ns/net')).lower())
+              except Exception:o('PROCESS_NETNS_MATCH','unknown')
+              try:
+                  env=(p/'environ').read_bytes().split(b'\\x00')
                   pairs={}
                   for e in env:
                       if b'=' in e:
                           k,v=e.split(b'=',1)
                           if k in (b'PORT',b'DEFAULT_APP_PORT'):pairs[k.decode()]=v.decode(errors='ignore')
+                  o('PROCESS_PORT_ENV_PRESENT',str('PORT' in pairs or 'DEFAULT_APP_PORT' in pairs).lower())
+                  o('PROCESS_VERCEL_ENV_PRESENT',str(any(e.startswith(b'VERCEL=') and e.split(b'=',1)[1] not in (b'',b'0',b'false') for e in env)).lower())
                   port=pairs.get('PORT') or pairs.get('DEFAULT_APP_PORT') or '3000'
                   if not port.isdecimal() or not (1<=int(port)<=65535):port='3000'
                   req=urllib.request.Request('http://127.0.0.1:'+port+'/api/health',headers={'Host':'127.0.0.1'})
@@ -82,7 +87,9 @@ jobs:
                       data=json.load(resp)
                       o('ACTIVE_LOOPBACK_HEALTH_STATUS',resp.status)
                       o('ACTIVE_LOOPBACK_ENV_STAGING',str(data.get('environment')=='staging').lower())
-              except Exception:o('ACTIVE_LOOPBACK_HEALTH_STATUS','unavailable')
+              except Exception as ex:
+                  o('ACTIVE_LOOPBACK_HEALTH_STATUS','unavailable')
+                  o('ACTIVE_LOOPBACK_EXCEPTION_CLASS',type(ex).__name__)
           o('SQL_OR_STAGING_WRITES_EXECUTED','false')
           o('RESULT','READONLY_INSPECTION_COMPLETE')
           REMOTE
