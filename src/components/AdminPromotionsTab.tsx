@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Tag,
   Gift,
@@ -65,6 +65,8 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
   const [isUploadingPromoImg, setIsUploadingPromoImg] = useState(false);
   const [promoTerms, setPromoTerms] = useState('Válido para las primeras personas en presentar su código oficial.');
   const [isSaving, setIsSaving] = useState(false);
+  const [promoImagePreview, setPromoImagePreview] = useState('');
+  const promoUploadSeq = useRef(0);
 
   const compressFlyerImage = (file: File, maxDim = 1200, quality = 0.85): Promise<string> => {
     return new Promise((resolve) => {
@@ -105,28 +107,35 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
   const handlePromoImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const uploadId = ++promoUploadSeq.current;
     setIsUploadingPromoImg(true);
+    setErrorMsg(null);
     try {
       const compressedDataUrl = await compressFlyerImage(file);
-      if (!compressedDataUrl) {
-        setIsUploadingPromoImg(false);
+      if (uploadId !== promoUploadSeq.current) return;
+      if (!compressedDataUrl || !compressedDataUrl.startsWith('data:image/')) {
+        setErrorMsg('No se pudo procesar la imagen seleccionada.');
         return;
       }
-      setPromoImageData(compressedDataUrl);
-      try {
-        const res = await uploadBusinessLogo(compressedDataUrl, file.name);
-        if (res.success && res.url) {
-          setPromoImage(res.url);
-        } else {
-          setPromoImage(compressedDataUrl);
-        }
-      } catch {
-        setPromoImage(compressedDataUrl);
+      setPromoImagePreview(compressedDataUrl);
+      const res = await uploadBusinessLogo(compressedDataUrl, file.name);
+      if (uploadId !== promoUploadSeq.current) return;
+      const confirmedUrl = typeof res.url === 'string' ? res.url.trim() : '';
+      if (res.success && /^(https?:\\/\\/[^\\s]+|\\/[^\\/\\s][^\\s]*)$/i.test(confirmedUrl)) {
+        setPromoImage(confirmedUrl);
+        setPromoImageData('');
+      } else {
+        setErrorMsg(res.error || 'No se confirmó la carga de la imagen. Se conserva el cartel anterior.');
       }
-    } catch (err) {
-      console.error('Error uploading promo image:', err);
+    } catch (err: any) {
+      if (uploadId === promoUploadSeq.current) {
+        setErrorMsg(err?.message || 'No se pudo subir la imagen. Se conserva el cartel anterior.');
+      }
     } finally {
-      setIsUploadingPromoImg(false);
+      if (uploadId === promoUploadSeq.current) {
+        setPromoImagePreview('');
+        setIsUploadingPromoImg(false);
+      }
     }
   };
 
@@ -189,6 +198,9 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
   }, []);
 
   const handleEditPromo = (promo: Promotion) => {
+    promoUploadSeq.current += 1;
+    setIsUploadingPromoImg(false);
+    setPromoImagePreview('');
     setFormId(promo.id);
     setSelectedBizId(promo.businessId);
     setPromoTitle(promo.title);
@@ -198,13 +210,16 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
     setPromoValidUntil(promo.validUntil || '');
     setPromoOwnerEmail(promo.ownerEmail || '');
     setPromoOwnerWhatsapp(cleanPhoneNumber(promo.businessWhatsapp || promo.businessPhone || ''));
-    setPromoImage(promo.promoImage || promo.promoImageData || '');
+    setPromoImage(promo.promoImage && !promo.promoImage.startsWith('data:') ? promo.promoImage : '');
     setPromoImageData(promo.promoImageData || (promo.promoImage?.startsWith('data:') ? promo.promoImage : ''));
     setPromoTerms(promo.terms || '');
     setActiveSubTab('create');
   };
 
   const handleResetForm = () => {
+    promoUploadSeq.current += 1;
+    setIsUploadingPromoImg(false);
+    setPromoImagePreview('');
     setFormId(null);
     const firstBiz = businesses[0];
     setSelectedBizId(firstBiz?.id || 0);
@@ -228,6 +243,10 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
       return;
     }
 
+    if (isUploadingPromoImg) {
+      setErrorMsg('Espera a que termine la subida del cartel.');
+      return;
+    }
     const biz = businesses.find(b => b.id === Number(selectedBizId));
     setIsSaving(true);
     setErrorMsg(null);
@@ -247,8 +266,8 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
         validUntil: promoValidUntil.trim(),
         ownerEmail: promoOwnerEmail.trim(),
         ownerWhatsapp: cleanWa,
-        promoImage: promoImage.trim() || promoImageData || null,
-        promoImageData: promoImageData || (promoImage.startsWith('data:') ? promoImage : null),
+        promoImage: /^(https?:\/\/[^\\s]+|\/[^\/\\s][^\\s]*)$/i.test(promoImage.trim()) ? promoImage.trim() : null,
+        promoImageData: promoImageData || null,
         terms: promoTerms.trim(),
         isActive: true
       });
@@ -858,7 +877,13 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
                 {promoImage && (
                   <button
                     type="button"
-                    onClick={() => setPromoImage('')}
+                    onClick={() => {
+                      promoUploadSeq.current += 1;
+                      setIsUploadingPromoImg(false);
+                      setPromoImagePreview('');
+                      setPromoImage('');
+                      setPromoImageData('');
+                    }}
                     className="text-xs text-rose-600 hover:text-rose-800 font-bold underline cursor-pointer"
                   >
                     Quitar cartel
@@ -867,14 +892,14 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
               </div>
 
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 pt-1">
-                {promoImageData || promoImage ? (
+                {promoImagePreview || promoImage || promoImageData ? (
                   <div className="relative w-32 h-44 rounded-xl border-2 border-amber-400 overflow-hidden bg-black/5 shrink-0 shadow-md group">
                     <img
-                      src={promoImageData || promoImage}
+                      src={promoImagePreview || promoImage || promoImageData}
                       alt="Cartel promocional"
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        if (promoImageData && e.currentTarget.src !== promoImageData) {
+                        if (!promoImagePreview && promoImageData && e.currentTarget.src !== promoImageData) {
                           e.currentTarget.src = promoImageData;
                         }
                       }}
@@ -894,7 +919,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
                   <div className="flex flex-wrap items-center gap-2">
                     <label className="cursor-pointer px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-xs flex items-center gap-1.5 shadow-sm transition-colors">
                       <Upload className={`w-3.5 h-3.5 ${isUploadingPromoImg ? 'animate-bounce' : ''}`} />
-                      <span>{isUploadingPromoImg ? 'Subiendo cartel...' : promoImage || promoImageData ? 'Cambiar cartel por otro' : 'Subir imagen desde mi equipo'}</span>
+                      <span>{isUploadingPromoImg ? 'Subiendo cartel...' : promoImage || promoImageData || promoImagePreview ? 'Cambiar cartel por otro' : 'Subir imagen desde mi equipo'}</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -903,12 +928,15 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
                       />
                     </label>
 
-                    {(promoImage || promoImageData) && (
+                    {(promoImage || promoImageData || promoImagePreview) && (
                       <button
                         type="button"
                         onClick={() => {
+                          promoUploadSeq.current += 1;
+                          setIsUploadingPromoImg(false);
                           setPromoImage('');
                           setPromoImageData('');
+                          setPromoImagePreview('');
                         }}
                         className="px-3 py-2 rounded-xl border border-stone-200 bg-white hover:bg-rose-50 hover:text-rose-600 text-stone-600 text-xs font-bold transition-colors cursor-pointer"
                       >
