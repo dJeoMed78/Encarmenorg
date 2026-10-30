@@ -72,7 +72,7 @@ jobs:
                   o('PROCESS_NETNS_MATCH',str(os.readlink(p/'ns/net')==os.readlink('/proc/self/ns/net')).lower())
               except Exception:o('PROCESS_NETNS_MATCH','unknown')
               try:
-                  env=(p/'environ').read_bytes().split(b'\\x00')
+                  env=(p/'environ').read_bytes().split(b'\x00')
                   pairs={}
                   for e in env:
                       if b'=' in e:
