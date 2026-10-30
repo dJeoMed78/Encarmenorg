@@ -1,4 +1,4 @@
-name: ENCARMEN staging source of truth after final owner restart
+name: ENCARMEN staging read-only DB reconnect recheck
 on:
   push:
     branches: [coord/staging-registration-write-safety-20261030]
