@@ -1,4 +1,5 @@
 name: ENCARMEN controlled Staging origin fix deploy and automatic rollback
+# Validate host DB user aliases against explicitly isolated Staging configuration.
 on:
   push:
     branches: [coord/staging-origin-deploy-20261030]
