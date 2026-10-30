@@ -105,7 +105,14 @@ try:
  if sql('SELECT env_name,db_name FROM encarmen_environment_marker')!=['staging\t'+DB]:abort('STAGING_SQL_MARKER')
  if PROD in sql('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA'):abort('PRODUCTION_SCHEMA_VISIBLE')
  out('SQL_STAGING_ISOLATED','true')
- if not health().get('staging',{}).get('readOnly'):abort('PUBLIC_BASELINE_NOT_READONLY')
+ baseline_ok=False
+ for retry in range(6):
+  try:
+   if health().get('staging',{}).get('readOnly'):baseline_ok=True;break
+  except Exception:pass
+  time.sleep(3)
+ if not baseline_ok:abort('PUBLIC_BASELINE_HEALTH_OR_READONLY_UNSTABLE')
+ out('PUBLIC_BASELINE_HEALTH','STAGING_MARIADB_READONLY')
  active=(S/'current/nodejs').resolve()
  if (S/'versions').resolve() not in active.parents or not (active/'tmp').is_dir():abort('STAGING_RESTART_PRECONDITION')
  if (B/'enc-staging-business-window-active.json').exists():abort('ACTIVE_WINDOW_EXISTS')
