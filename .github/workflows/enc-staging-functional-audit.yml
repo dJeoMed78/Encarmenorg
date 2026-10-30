@@ -55,6 +55,9 @@ jobs:
                           print('BUSINESSES_WITH_VALID_PHONE='+str(sum(valid_mex(b.get('phone')) for b in businesses if isinstance(b,dict))))
                           print('BUSINESSES_WITH_VALID_WHATSAPP='+str(sum(valid_mex(b.get('whatsapp')) for b in businesses if isinstance(b,dict))))
                           print('WHATSAPP_FORMAT_REJECTED_BUT_TEN_DIGITS='+str(sum(not valid_mex(b.get('whatsapp')) and len(''.join(ch for ch in str(b.get('whatsapp') or '') if ch.isdigit())) in (10,12,13) for b in businesses if isinstance(b,dict))))
+                          invalid=[b for b in businesses if isinstance(b,dict) and not valid_mex(b.get('whatsapp')) and len(''.join(ch for ch in str(b.get('whatsapp') or '') if ch.isdigit())) in (10,12,13)]
+                          print('WHATSAPP_FORMAT_AFFECTED_BUSINESS_NAMES='+json.dumps([str(b.get('name',''))[:80] for b in invalid],ensure_ascii=True))
+                          print('WHATSAPP_FORMAT_INVALID_NON_DIGIT_CHARS='+json.dumps([''.join(sorted(set(ch for ch in str(b.get('whatsapp') or '') if not ch.isdigit())))[:24] for b in invalid],ensure_ascii=True))
                           print('BUSINESSES_WITH_NO_CONTACT='+str(sum(not valid_mex(b.get('phone')) and not valid_mex(b.get('whatsapp')) for b in businesses if isinstance(b,dict))))
                           print('DUPLICATE_52_PREFIX_CANDIDATES='+str(sum(str(b.get('whatsapp') or '').replace(' ','').startswith('5252') for b in businesses if isinstance(b,dict))))
                           print('HAIR_PALACE_RECORD_PRESENT='+str(any('hair palace' in str(b.get('name','')).lower() for b in businesses if isinstance(b,dict))))
