@@ -1,0 +1,85 @@
+name: ENCARMEN - auditoria HTTP funcional de Staging solo lectura
+on:
+  push:
+    branches: [coord/staging-functional-audit-20261030]
+    paths: [.github/workflows/enc-staging-functional-audit.yml]
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Consultar endpoints Staging sin mutaciones ni datos sensibles en logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > ENC_STAGING_FUNCTIONAL_AUDIT_RESULT.txt
+          import urllib.request,urllib.parse,json,datetime
+          print('ENCARMEN STAGING LIVE HTTP AUDIT (NO WRITES)')
+          print('UTC='+datetime.datetime.now(datetime.timezone.utc).isoformat())
+          base='https://staging.encarmen.org'
+          routes=['/','/api/health','/api/version','/api/database-status','/api/businesses','/api/businesses?hasPhone=true','/api/businesses?hasWhatsapp=true','/api/promotions','/api/events','/api/reports']
+          def count_records(data):
+              if isinstance(data,list):return len(data)
+              if not isinstance(data,dict):return 'non_json'
+              for key in ('businesses','data','items','promotions','events','reports'):
+                  if isinstance(data.get(key),list):return len(data[key])
+              return data.get('total',data.get('count','unknown'))
+          def valid_mex(value):
+              if not isinstance(value,(str,int)):return False
+              d=''.join(c for c in str(value) if c.isdigit())
+              if len(d)==13 and d.startswith('521'):d=d[3:]
+              if len(d)==12 and d.startswith('52'):d=d[2:]
+              return len(d)==10
+          for route in routes:
+              print('ROUTE='+route)
+              try:
+                  req=urllib.request.Request(base+route,headers={'User-Agent':'EncarmenStagingAudit/1.0','Cache-Control':'no-cache'})
+                  with urllib.request.urlopen(req,timeout=20) as resp:
+                      raw=resp.read(3000000)
+                      print('HTTP='+str(resp.status))
+                      print('BODY_BYTES='+str(len(raw)))
+                      print('MIME='+str(resp.headers.get('Content-Type','').split(';')[0]))
+                      print('BUSINESS_SOURCE_HEADER='+str(resp.headers.get('X-Encarmen-Business-Source','not-present')))
+                  try: data=json.loads(raw)
+                  except Exception: data=None
+                  if route.startswith('/api/businesses') and data is not None:
+                      businesses = data if isinstance(data,list) else next((data[k] for k in ('businesses','data','items') if isinstance(data.get(k),list)),[])
+                      print('BUSINESS_COUNT='+str(len(businesses)))
+                      if route=='/api/businesses' and businesses:
+                          print('BUSINESSES_WITH_VALID_PHONE='+str(sum(valid_mex(b.get('phone')) for b in businesses if isinstance(b,dict))))
+                          print('BUSINESSES_WITH_VALID_WHATSAPP='+str(sum(valid_mex(b.get('whatsapp')) for b in businesses if isinstance(b,dict))))
+                          print('BUSINESSES_WITH_NO_CONTACT='+str(sum(not valid_mex(b.get('phone')) and not valid_mex(b.get('whatsapp')) for b in businesses if isinstance(b,dict))))
+                          print('DUPLICATE_52_PREFIX_CANDIDATES='+str(sum(str(b.get('whatsapp') or '').replace(' ','').startswith('5252') for b in businesses if isinstance(b,dict))))
+                          print('HAIR_PALACE_RECORD_PRESENT='+str(any('hair palace' in str(b.get('name','')).lower() for b in businesses if isinstance(b,dict))))
+                  elif route=='/api/database-status' and isinstance(data,dict):
+                      info=data.get('stagingIsolation') or {}
+                      print('ENVIRONMENT='+str(data.get('environment','missing')))
+                      print('IS_STAGING='+str(info.get('isStaging','missing')))
+                      print('IS_PRODUCTION_DB='+str(info.get('isProductionDb','missing')))
+                      print('STAGING_READ_ONLY='+str(info.get('readOnly','missing')))
+                      print('STAGING_ISOLATION_VALID='+str(info.get('isolationValid','missing')))
+                      print('DATABASE_ACTIVE_ENGINE='+str(data.get('activeEngine','missing')))
+                      print('MARIADB_CONNECTED='+str((data.get('mariadb') or {}).get('connected','missing')))
+                  elif route=='/api/health' and isinstance(data,dict):print('HEALTH_STATUS='+str(data.get('status','missing')))
+                  elif route=='/api/version' and isinstance(data,dict):print('FRONTEND_VERSION_AVAILABLE='+str(data.get('version') not in ('unavailable',None,'')))
+                  elif route.startswith('/api/') and data is not None:print('RESULT_COUNT='+str(count_records(data)))
+              except Exception as e:
+                  if hasattr(e,'code'):print('HTTP='+str(e.code))
+                  else:print('ERROR_CLASS='+type(e).__name__)
+          print('AUDIT_COMPLETE=true')
+          PY
+          cat ENC_STAGING_FUNCTIONAL_AUDIT_RESULT.txt
+      - name: Publicar resultado agregado solo en rama de auditoria
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ENC_STAGING_FUNCTIONAL_AUDIT_RESULT.txt || echo 'AUDIT_NOT_COMPLETED' > ENC_STAGING_FUNCTIONAL_AUDIT_RESULT.txt
+          git config user.name encarmen-staging-audit
+          git config user.email encarmen-staging-audit@users.noreply.github.com
+          git add ENC_STAGING_FUNCTIONAL_AUDIT_RESULT.txt
+          git commit -m 'docs: guardar resultados HTTP audit staging' || exit 0
+          git push origin HEAD:coord/staging-functional-audit-20261030
