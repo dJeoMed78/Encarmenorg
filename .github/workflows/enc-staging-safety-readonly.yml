@@ -1,0 +1,159 @@
+name: ENCARMEN Staging safety isolation and backup read-only inspection
+on:
+  push:
+    branches: [coord/staging-safety-readonly-20261030]
+    paths: [.github/workflows/enc-staging-safety-readonly.yml]
+permissions:
+  contents: write
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Inspect deployed staging runtime without writes
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -u
+          {
+            echo 'ENCARMEN STAGING HTTP RUNTIME READONLY DIAGNOSTICS'
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if [ -z "${SSHPASS:-}" ]; then echo 'RESULT=BLOCKED_SSH_SECRET_UNAVAILABLE'; exit 0; fi
+            sudo apt-get update -qq >/dev/null 2>&1
+            sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+            mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"
+            ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+            fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 2>/dev/null | awk '{print $2}')
+            if [ "$fp" != 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then echo 'RESULT=BLOCKED_SSH_HOST_PIN'; exit 0; fi
+            echo 'SSH_FINGERPRINT=VERIFIED'
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' <<'REMOTE'
+          import os,pathlib,subprocess,urllib.request,urllib.error,json,sys
+          H=pathlib.Path.home()
+          base=H/'domains/staging.encarmen.org/hbuilds'
+          current=base/'current'
+          def o(k,v):print(f'{k}={v}',flush=True)
+          def stop(k):o('RESULT','BLOCKED_'+k);sys.exit(0)
+          if not current.is_symlink():stop('CURRENT_NOT_SYMLINK')
+          active=(current/'nodejs').resolve()
+          versions=(base/'versions').resolve()
+          if versions not in active.parents or not (active/'server.js').is_file():stop('ACTIVE_BUILD_UNVERIFIED')
+          o('ACTIVE_BUILD_CONFIRMED','true')
+          candidates=[]
+          for v in versions.iterdir():
+              root=v/'nodejs'
+              if (root/'server.js').is_file() and (root/'node_modules').is_dir():
+                  candidates.append((root.stat().st_mtime,root.resolve()))
+          if not candidates:stop('NO_NODE_BUILD')
+          latest=max(candidates)[1]
+          o('LATEST_MTIME_EQUALS_ACTIVE',str(latest==active).lower())
+          o('AVAILABLE_BUILDS',len(candidates))
+          source=(active/'server.js').read_text(encoding='utf-8',errors='ignore')
+          o('ACTIVE_STRICT_READBACK_MARKERS',str('matchesWrittenValues' in source and 'BUSINESS_READBACK_FAILED' in source).lower())
+          active_procs=[]
+          for entry in pathlib.Path('/proc').iterdir():
+              if not entry.name.isdecimal():continue
+              try:
+                  if pathlib.Path(os.readlink(entry/'cwd'))==active and 'node' in pathlib.Path(os.readlink(entry/'exe')).name.lower():
+                      active_procs.append(entry)
+              except (OSError,PermissionError):pass
+          o('ACTIVE_NODE_PROCESSES',len(active_procs))
+          if active_procs:
+              p=active_procs[0]
+              try:
+                  exe=os.readlink(p/'exe')
+                  check=subprocess.run([exe,'--check',str(active/'server.js')],capture_output=True,timeout=25)
+                  o('ACTIVE_JS_SYNTAX_OK',str(check.returncode==0).lower())
+              except Exception:o('ACTIVE_JS_SYNTAX_OK','unverified')
+              try:
+                  o('PROCESS_NETNS_MATCH',str(os.readlink(p/'ns/net')==os.readlink('/proc/self/ns/net')).lower())
+              except Exception:o('PROCESS_NETNS_MATCH','unknown')
+              try:
+                  env=(p/'environ').read_bytes().split(b'\x00')
+                  pairs={}
+                  for e in env:
+                      if b'=' in e:
+                          k,v=e.split(b'=',1)
+                          if k in (b'PORT',b'DEFAULT_APP_PORT'):pairs[k.decode()]=v.decode(errors='ignore')
+                  o('PROCESS_PORT_ENV_PRESENT',str('PORT' in pairs or 'DEFAULT_APP_PORT' in pairs).lower())
+                  o('PROCESS_VERCEL_ENV_PRESENT',str(any(e.startswith(b'VERCEL=') and e.split(b'=',1)[1] not in (b'',b'0',b'false') for e in env)).lower())
+                  port=pairs.get('PORT') or pairs.get('DEFAULT_APP_PORT') or '3000'
+                  if not port.isdecimal() or not (1<=int(port)<=65535):port='3000'
+                  req=urllib.request.Request('http://127.0.0.1:'+port+'/api/health',headers={'Host':'127.0.0.1'})
+                  with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req,timeout=6) as resp:
+                      data=json.load(resp)
+                      o('ACTIVE_LOOPBACK_HEALTH_STATUS',resp.status)
+                      o('ACTIVE_LOOPBACK_ENV_STAGING',str(data.get('environment')=='staging').lower())
+              except Exception as ex:
+                  o('ACTIVE_LOOPBACK_HEALTH_STATUS','unavailable')
+                  o('ACTIVE_LOOPBACK_EXCEPTION_CLASS',type(ex).__name__)
+          if active_procs:
+              sockets=set()
+              for pr in active_procs:
+                  try:
+                      for fd in (pr/'fd').iterdir():
+                          try:
+                              link=os.readlink(fd)
+                              if link.startswith('socket:[') and link.endswith(']'):
+                                  sockets.add(link[8:-1])
+                          except OSError:pass
+                  except (OSError,PermissionError):pass
+              o('ACTIVE_PROCESS_SOCKET_COUNT',len(sockets))
+              listeners=[]
+              for net_file in ('/proc/net/tcp','/proc/net/tcp6'):
+                  try:
+                      for line in pathlib.Path(net_file).read_text().splitlines()[1:]:
+                          cols=line.split()
+                          if len(cols)<10 or cols[3]!='0A' or cols[9] not in sockets:continue
+                          port=int(cols[1].split(':')[1],16)
+                          if 1<=port<=65535:listeners.append(port)
+                  except (OSError,ValueError):pass
+              o('ACTIVE_PROCESS_TCP_LISTENER_COUNT',len(listeners))
+              for number,lp in enumerate(sorted(set(listeners))[:5],1):
+                  o('ACTIVE_LISTEN_PORT_'+str(number),lp)
+                  try:
+                      req=urllib.request.Request('http://127.0.0.1:'+str(lp)+'/api/health',headers={'Host':'127.0.0.1'})
+                      with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req,timeout=4) as response:
+                          o('ACTIVE_LISTEN_HEALTH_'+str(number),response.status)
+                  except Exception as e:o('ACTIVE_LISTEN_HEALTH_'+str(number),type(e).__name__)
+          # Check database name only, without connecting or exposing credentials.
+          private_config=base/'config'/'.env'
+          if private_config.is_file():
+              config={}
+              for line in private_config.read_text(errors='replace').splitlines():
+                  if '=' not in line or line.lstrip().startswith('#'):continue
+                  key,val=line.split('=',1)
+                  if key.strip() in ('DB_NAME','APP_ENV','STAGING_READ_ONLY'):
+                      config[key.strip()]=val.strip().strip('"').strip("'")
+              o('PRIVATE_CONFIG_ENV_STAGING',str(config.get('APP_ENV')=='staging').lower())
+              o('PRIVATE_CONFIG_DB_STAGING',str(config.get('DB_NAME')=='u293982346_encarmentest').lower())
+              o('PRIVATE_CONFIG_READONLY',str(config.get('STAGING_READ_ONLY','').lower() in ('true','1')).lower())
+          else:o('PRIVATE_CONFIG_PRESENT','false')
+          backups=list((base/'backups').glob('*')) if (base/'backups').is_dir() else []
+          o('STAGING_BACKUP_DIRECTORY_PRESENT',str((base/'backups').is_dir()).lower())
+          o('STAGING_BACKUP_NONEMPTY_FILES',sum(1 for f in backups if f.is_file() and f.stat().st_size>0))
+          o('STAGING_CURRENT_SYMLINK',str(current.is_symlink()).lower())
+          o('STAGING_PREVIOUS_VERSIONS_AVAILABLE',str(len(candidates)>1).lower())
+          o('SSH_READONLY_INSPECTION_ONLY','true')
+          o('SQL_OR_STAGING_WRITES_EXECUTED','false')
+          o('RESULT','READONLY_INSPECTION_COMPLETE')
+          REMOTE
+            echo "SSH_EXIT=$?"
+            public_code=$(curl -LsS --max-time 12 -o /tmp/enc-staging-health.json -w '%{http_code}' https://staging.encarmen.org/api/health || true)
+            echo "PUBLIC_STAGING_HEALTH_HTTP=$public_code"
+          } > ENC_STAGING_SAFETY_READONLY_RESULT.txt 2>&1
+          cat ENC_STAGING_SAFETY_READONLY_RESULT.txt
+      - name: Record sanitized result on isolated branch only
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ENC_STAGING_SAFETY_READONLY_RESULT.txt || echo RESULT=NO_REPORT > ENC_STAGING_SAFETY_READONLY_RESULT.txt
+          git config user.name encarmen-coordination
+          git config user.email encarmen-coordination@users.noreply.github.com
+          git add ENC_STAGING_SAFETY_READONLY_RESULT.txt
+          git commit -m 'docs: staging safety read-only inspection result' || exit 0
+          git push origin HEAD:coord/staging-http-readonly-diagnostics-20261030
