@@ -1,0 +1,53 @@
+name: ENCARMEN public Staging API immediate smoke (read-only)
+on:
+  push:
+    branches: [coord/staging-public-browser-validation-20261030]
+    paths: [.github/workflows/enc-staging-public-api-smoke.yml]
+permissions:
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check actual public API without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > ENC_STAGING_PUBLIC_API_RESULT.txt
+          import urllib.request,urllib.error,json,datetime
+          base='https://staging.encarmen.org'
+          print('UTC='+datetime.datetime.now(datetime.timezone.utc).isoformat())
+          for path in ['/api/health','/api/businesses','/api/admin/session','/']:
+              req=urllib.request.Request(base+path,headers={'User-Agent':'ENCARMEN-readonly-staging-api-test','Cache-Control':'no-cache'})
+              try:
+                  with urllib.request.urlopen(req,timeout=18) as res:
+                      status=res.status;data=res.read(4000000)
+              except urllib.error.HTTPError as e:status=e.code;data=e.read(10000)
+              except Exception as e:status=0;data=b''
+              key=path.replace('/','_').strip('_') or 'root'
+              print(key+'_HTTP='+str(status))
+              if path=='/api/health':
+                  try:
+                      d=json.loads(data);print('STAGING_ENV='+str(d.get('environment')));print('READ_ONLY='+str(d.get('staging',{}).get('readOnly')));print('DATABASE='+str(d.get('database')))
+                  except Exception: print('HEALTH_PARSE=FAILED')
+              if path=='/api/businesses':
+                  try:
+                      d=json.loads(data);v=d if isinstance(d,list) else d.get('businesses')
+                      print('BUSINESS_COUNT='+str(len(v)) if isinstance(v,list) else 'BUSINESSES_NOT_ARRAY=true')
+                  except Exception:print('BUSINESS_PARSE=FAILED')
+          print('HTTP_MUTATIONS=NONE')
+          PY
+          cat ENC_STAGING_PUBLIC_API_RESULT.txt
+      - name: Commit evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ENC_STAGING_PUBLIC_API_RESULT.txt || echo RESULT=FAILED > ENC_STAGING_PUBLIC_API_RESULT.txt
+          git config user.name encarmen-coordination
+          git config user.email encarmen-coordination@users.noreply.github.com
+          git add ENC_STAGING_PUBLIC_API_RESULT.txt
+          git commit -m 'docs: public staging HTTP API read-only smoke' || exit 0
+          git push origin HEAD:coord/staging-public-browser-validation-20261030
