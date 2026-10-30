@@ -5,6 +5,7 @@
 - Base obligatoria: `c79992a385213b437541cb92954c76a99c2485b1`
 - Rama de trabajo: `work/enc-c4-promo-closure-copilot-001`
 - Alcance: `src/components/AdminPromotionsTab.tsx` y pruebas específicas
+- Commit funcional: `3d43982ed348b9a08ca21e427621413a3eb256fa`
 
 ## Cambios realizados
 
@@ -70,4 +71,4 @@ strip-only. Se repitió con el loader del proyecto y pasó.
 - La prueba de componente usa evaluación controlada de los handlers reales,
   porque el repositorio no incluye una infraestructura de montaje React/DOM
   para esta suite específica.
-- La publicación y el SHA final se completarán al crear los commits.
+- Commit documental final: se registrará después de publicar esta bitácora.
