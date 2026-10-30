@@ -22,8 +22,9 @@ if (process.env.APP_ENV === 'staging' &&
       const staged = dotenv.parse(fs.readFileSync(privatePath));
       if (staged.APP_ENV === 'staging' &&
           staged.DB_NAME === STAGING_PRIVATE_DB_NAME &&
-          staged.DB_USER === process.env.DB_USER &&
-          staged.DB_USER !== 'u293982346_appuser') {
+          Boolean(staged.DB_USER) &&
+          staged.DB_USER !== 'u293982346_appuser' &&
+          process.env.DB_USER !== 'u293982346_appuser') {
         const gates = ['STAGING_READ_ONLY','STAGING_DB_CONFIRMED',
           'STAGING_BUSINESS_WRITES_ENABLED','ENC_ADMIN_MUTATIONS_ENABLED',
           'ENC_ADMIN_PUBLIC_ORIGIN','ENC_ADMIN_CREDENTIALS_JSON'] as const;
