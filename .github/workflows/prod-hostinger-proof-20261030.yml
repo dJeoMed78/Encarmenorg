@@ -1,0 +1,82 @@
+name: ENCARMEN - comprobar release productivo por SSH (solo lectura)
+on:
+  push:
+    branches: [coord/prod-hostinger-proof-20261030]
+    paths: [.github/workflows/prod-hostinger-proof-20261030.yml]
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Verificar HTTP y SSH sin modificar Hostinger
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -u
+          REPORT=/tmp/enc-prod-proof-result.txt
+          {
+            echo 'ENCARMEN producción hotfix WhatsApp - verificación independiente'
+            echo 'EXPECTED_MAIN_SHA=3b4818790a62d4198a19d9b09ca85f08dd927f76'
+            echo "RUN_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            HTTP=$(curl -sSL --max-time 25 -o /tmp/enc-prod-index -w '%{http_code}' https://encarmen.org/ || echo ERROR)
+            echo "PRODUCTION_HTTP=$HTTP"
+            if [ -s /tmp/enc-prod-index ]; then
+              echo "PRODUCTION_HTML_BYTES=$(wc -c < /tmp/enc-prod-index)"
+            fi
+            if [ -z "$SSHPASS" ]; then
+              echo 'SSH_SECRET_AVAILABLE=no'
+            else
+              echo 'SSH_SECRET_AVAILABLE=yes'
+              sudo apt-get update -qq >/dev/null 2>&1 && sudo apt-get install -y -qq sshpass >/dev/null 2>&1
+              mkdir -p "$HOME/.ssh"
+              chmod 700 "$HOME/.ssh"
+              ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+              FP=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 2>/dev/null | awk '{print $2}')
+              if [ "$FP" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then
+                echo 'SSH_HOST_PIN_MATCH=yes'
+                sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=12 u293982346@45.137.159.114 'sh -s' <<'REMOTE'
+                set -eu
+                root="$HOME/domains/encarmen.org/hbuilds"
+                echo 'SSH_CONNECTED=yes'
+                if [ -L "$root/current" ]; then
+                  echo 'PRODUCTION_CURRENT_LINK_PRESENT=yes'
+                  current=$(readlink "$root/current")
+                  case "$current" in versions/*) echo 'PRODUCTION_CURRENT_LINK_IN_VERSIONS=yes' ;; *) echo 'PRODUCTION_CURRENT_LINK_IN_VERSIONS=no' ;; esac
+                else echo 'PRODUCTION_CURRENT_LINK_PRESENT=no'; fi
+                for dir in "$root/current/nodejs" "$root/current" "$HOME/domains/encarmen.org/public_html"; do
+                  if [ -d "$dir" ]; then
+                    echo "CHECKED_DIR=$(basename "$dir")"
+                    if [ -f "$dir/package.json" ]; then
+                      if grep -q '"build:server".*vite build' "$dir/package.json"; then echo 'DEPLOYED_BUILD_SCRIPT_HAS_VITE=yes'; else echo 'DEPLOYED_BUILD_SCRIPT_HAS_VITE=no'; fi
+                    fi
+                    if [ -f "$dir/dist/index.html" ]; then
+                      echo 'FRONTEND_DIST_PRESENT=yes'
+                      echo "FRONTEND_DIST_MTIME_UTC=$(date -u -r "$dir/dist/index.html" +%Y-%m-%dT%H:%M:%SZ)"
+                    fi
+                    if [ -f "$dir/server.js" ]; then echo 'SERVER_BUNDLE_PRESENT=yes'; fi
+                  fi
+                done
+                echo 'SSH_READONLY_FINISHED=yes'
+REMOTE
+                echo "SSH_EXIT_STATUS=$?"
+              else echo 'SSH_HOST_PIN_MATCH=no'; fi
+            fi
+          } > "$REPORT" 2>&1
+          cat "$REPORT"
+      - name: Publicar únicamente resultados no confidenciales en la rama aislada
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp /tmp/enc-prod-proof-result.txt PRODUCTION_WHATSAPP_VERIFY_RESULT.txt
+          git config user.name 'encarmen-verify-bot'
+          git config user.email 'encarmen-verify-bot@users.noreply.github.com'
+          git add PRODUCTION_WHATSAPP_VERIFY_RESULT.txt
+          git commit -m 'docs: registrar verificación HTTP/SSH de hotfix producción' || exit 0
+          git push origin HEAD:coord/prod-hostinger-proof-20261030
