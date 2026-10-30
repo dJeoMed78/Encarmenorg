@@ -51,3 +51,19 @@ manifiestos. Esta instalación no equivale a npm ci exitoso.
 Siguiente: harness de servidor real compilado en directorio temporal sin .env,
 MariaDB efímera sin datos reales, cuenta SQL mínima, pruebas HTTP/SQL y limpieza.
 No integración/despliegue/aprobación.
+
+## Checkpoint 2 — harness preparado
+`scripts/test-staging-http-e2e.mjs`: compila TODO server.ts sin sustituir rutas,
+guards, proveedor, pool ni serializador. Arranca en CWD temporal sin .env ni
+semillas; entorno hijo allowlist, solo SQL 127.0.0.1 y cuenta aleatoria mínima.
+Docker local explícito; MariaDB --rm, datos en tmpfs, puerto solo loopback.
+Marcador y DDL businesses extraído de mariadb.ts; sentinel sintético.
+Limpieza de fila exige ID+nombre exacto+UUID interno. Finalmente destruye solo
+contenedor con etiquetas/identidad verificadas. Journal previo al arranque
+permite --cleanup tras SIGKILL, sin necesitar credenciales; no usa Hostinger.
+
+Primer ensayo de preparación falló por default de token del harness (undefined
+heredaba sesión), no por bypass de backend. Corregido a null explícito. Espera
+de proceso terminado por señal corregida para revisar signalCode. Recuperación
+manual del contenedor con journal ejecutada: OWNED_EPHEMERAL_CONTAINER_REMOVED.
+No es una prueba completa aprobada. Lint inicial exit 0. Pruebas SQL/HTTP en curso.
