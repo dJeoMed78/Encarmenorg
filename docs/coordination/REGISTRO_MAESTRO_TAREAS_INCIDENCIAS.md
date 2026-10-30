@@ -133,3 +133,16 @@ Cada paquete conserva sus SHA; no reemplazar archivos completos ni repetir resta
 - **Observación R1-O02 (verificación pendiente):** después de upload fallido con `imageMode='new'`, se bloquea el guardado de otros campos hasta corregir la imagen; confirmar comportamiento esperado y si es posible recuperar edición histórica preservando cartel anterior sin riesgo de guardar una preview no confirmada.
 - El propietario pidió **comparar W1 contra Copilot** únicamente al recibir el informe de Copilot; su rama `work/enc-c4-promo-closure-copilot-001` ya tiene actividad, pero no se emitirá ganador ni fusión antes de recibir entrega y completar revisión equivalente de ambos.
 - Mantener ambas ramas aisladas; no integrar automáticamente ni desplegar; incidencias del propietario abiertas.
+
+
+## Dictamen comparativo W1 versus Copilot — C4-H01 / C4-H02 (2026-10-29)
+
+**Base común:** `c79992a385213b437541cb92954c76a99c2485b1`. Entregas y HEAD comprobados por GitHub:
+- W1 `work/enc-staging-candidate-closure-004-r1` SHA `797fb5e918c2228721cb099d94c5a2914201a5f5`: 1 commit, 5 archivos.
+- Copilot W6 `work/enc-c4-promo-closure-copilot-001` SHA `e44ffcc8bc4c47bd35b7c79ef890c009450e907e`: 2 commits, 3 archivos.
+
+**Revisión funcional independiente:** leídos componentes completos, pruebas y bitácoras. W1 conserva exactos `promoImage` y `promoImageData` históricos, distinguiendo incluso ausencia y null mediante `Object.hasOwn`, guarda payload según `imageMode` y bloquea carreras tras compresión/upload, al cambiar empresa, edición, reset, quitar y desmontar; añadió pruebas React/jsdom y SQL sintético. Copilot implementa generaciones, preview local separada y 24 pruebas extraídas de handlers, pero transforma ausencia/vacío a `null` mediante `promoImageData.trim() || null`, no distingue ambos campos históricos con igual precisión, conserva fallback a `promotions_seed.json` ante fallo de consulta remota y no invalida subida al cambiar negocio ni desmontar. Copilot incluye defensas ad hoc `typeof ... === 'undefined'` para pruebas de handlers que no son necesarias en componente React real.
+
+**Evaluación provisional con matriz de 100 puntos:** W1 **88/100**; Copilot **75/100**. **Ganador técnico actual: W1** por integridad histórica, mayor cobertura de comportamiento en componente montado y menor riesgo de datos. Los resultados 188 PASS (W1) y 24+5 PASS (Copilot), lint/build son reportados por ejecutores; **no se ejecutaron independientemente** en esta revisión. La comparación se funda en lectura real del código, no en simples conteos de pruebas.
+
+**Defectos/puntos abiertos:** W1 conserva `promoImageData` local en preview aun tras URL confirmada (`src={promoImageData || promoImage}`), UX incorrecta y posible preview de imagen distinta de la enviada. Tras upload fallido, bloquea edición de otros campos hasta resolver la imagen. W1 no agregó guard explícito robusto contra doble envío de guardado. Copilot tampoco supera compatibilidad y fallback mencionados. **No integrar ni mezclar las dos ramas automáticamente.** Corrección adicional pequeña sobre W1 si se autoriza y se pueden probar pruebas relevantes; comprobar durabilidad/promociones en entorno aislado antes de Staging; aceptación del propietario requerida para incidencias abiertas.
