@@ -74,6 +74,9 @@ jobs:
                   o('PROCESS_'+str(index)+'_HAS_HOSTINGER_ARG',str(any('hostinger' in a.lower() for a in args)).lower())
                   o('PROCESS_'+str(index)+'_HAS_APP_JS_ARG',str(any(a.endswith('/app.js') or a=='app.js' for a in args)).lower())
                   o('PROCESS_'+str(index)+'_HAS_INDEX_JS_ARG',str(any(a.endswith('/index.js') or a=='index.js' for a in args)).lower())
+                  entries=[pathlib.Path(a).name for a in args if a.endswith(('.js','.mjs','.cjs')) and len(a)<512]
+                  safe=[e for e in entries if e and all(c.isalnum() or c in '._-' for c in e) and len(e)<70]
+                  o('PROCESS_'+str(index)+'_JS_ENTRY_BASENAMES',','.join(safe[:3]) if safe else 'none')
               except Exception:
                   o('PROCESS_'+str(index)+'_CMDLINE_READABLE','false')
           if active_procs:
