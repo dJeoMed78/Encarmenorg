@@ -1,0 +1,108 @@
+name: ENCARMEN - reparar marcador staging con backup y verificar aislamiento
+on:
+  push:
+    branches: [coord/staging-env-guard-fix-20261030]
+    paths: [.github/workflows/enc-staging-env-guard-fix.yml]
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reparar solo APP_ENV si está ausente tras verificar destino y respaldar archivo
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -u
+          REPORT="$RUNNER_TEMP/staging-env-fix-result.txt"
+          {
+            echo 'ENCARMEN STAGING ENV FIX'
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if [ -z "$SSHPASS" ]; then echo 'STATUS=BLOCKED_NO_SSH_SECRET'; exit 0; fi
+            sudo apt-get update -qq >/dev/null 2>&1
+            sudo apt-get install -y -qq sshpass >/dev/null 2>&1
+            mkdir -p "$HOME/.ssh"
+            chmod 700 "$HOME/.ssh"
+            ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+            FP=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 2>/dev/null | awk '{print $2}')
+            if [ "$FP" != 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then echo 'STATUS=BLOCKED_SSH_FINGERPRINT'; exit 0; fi
+            echo 'SSH_FINGERPRINT=VERIFIED'
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' <<'REMOTE'
+          import os, pathlib, tempfile, datetime, stat, sys
+          root=pathlib.Path.home()
+          stag=root/'domains/staging.encarmen.org/hbuilds'
+          prod=root/'domains/encarmen.org'
+          path=stag/'config/.env'
+          backup=root/'encarmen-staging-backups'
+          def emit(k,v):print(k+'='+str(v),flush=True)
+          def block(reason):emit('STATUS','BLOCKED_'+reason);sys.exit(0)
+          if not stag.is_dir() or not prod.is_dir() or stag.resolve()==prod.resolve():block('ROOTS')
+          if not path.is_file() or path.is_symlink() or not path.resolve().is_relative_to(stag.resolve()):block('ENV_PATH')
+          if not backup.is_dir() or backup.is_symlink() or backup.stat().st_mode&0o077:block('BACKUP_ROOT')
+          value=path.read_text(encoding='utf-8')
+          lines=value.splitlines()
+          env={}
+          for line in lines:
+              txt=line.strip()
+              if txt.startswith('export '):txt=txt[7:]
+              if not txt or txt.startswith('#') or '=' not in txt:continue
+              k,v=txt.split('=',1)
+              k=k.strip()
+              env.setdefault(k,[]).append(v.strip().strip('"').strip("'"))
+          def unique(*keys):
+              vals=[v for key in keys for v in env.get(key,[]) if v]
+              return vals[0] if vals and len(set(vals))==1 else ''
+          if unique('DB_NAME','MYSQL_DATABASE','MARIADB_DATABASE')!='u293982346_encarmentest':block('DB_NAME')
+          if not unique('DB_USER','MYSQL_USER','MARIADB_USER') or unique('DB_USER','MYSQL_USER','MARIADB_USER')=='u293982346_appuser':block('DB_USER')
+          if not unique('DB_HOST','MYSQL_HOST','MARIADB_HOST'):block('DB_HOST')
+          if not unique('DB_PASSWORD','MYSQL_PASSWORD','MARIADB_PASSWORD'):block('DB_PASSWORD')
+          if unique('STAGING_READ_ONLY')!='true':block('NOT_READ_ONLY')
+          current=unique('APP_ENV')
+          if current=='staging':
+              emit('APP_ENV','ALREADY_STAGING')
+              emit('STATUS','PASS')
+              sys.exit(0)
+          if current!='':block('APP_ENV_HAS_NONSTAGING_VALUE')
+          if 'APP_ENV' in env and len(set(env['APP_ENV']))>1:block('APP_ENV_AMBIGUOUS')
+          snapshots=backup/'files'
+          if not snapshots.is_dir():block('NO_FILES_BACKUP_DIR')
+          timestamp=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+          backupname=backup/('staging-env-before-'+timestamp+'.bak')
+          fd=os.open(backupname,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+          with os.fdopen(fd,'w',encoding='utf-8') as out:
+              out.write(value);out.flush();os.fsync(out.fileno())
+          emit('ENV_BACKUP','CREATED_PRIVATE')
+          if 'APP_ENV' in env:
+              newlines=[('APP_ENV=staging' if x.strip().lstrip().startswith('APP_ENV=') else x) for x in lines]
+          else:newlines=lines+['APP_ENV=staging']
+          fd,tmp=tempfile.mkstemp(prefix='.env-stage-',dir=path.parent)
+          try:
+              with os.fdopen(fd,'w',encoding='utf-8') as out:
+                  out.write('\n'.join(newlines)+'\n');out.flush();os.fsync(out.fileno())
+              os.chmod(tmp, stat.S_IMODE(path.stat().st_mode)&0o700)
+              os.replace(tmp,path)
+          finally:
+              if os.path.exists(tmp):os.unlink(tmp)
+          verify=path.read_text(encoding='utf-8')
+          if 'APP_ENV=staging' not in verify.splitlines():block('VERIFY_WRITTEN_ENV')
+          emit('APP_ENV','UPDATED_TO_STAGING')
+          emit('STATUS','PASS')
+          REMOTE
+            echo "SSH_EXIT_STATUS=$?"
+          } > "$REPORT" 2>&1
+          cat "$REPORT"
+          cp "$REPORT" ENC_STAGING_ENV_FIX_RESULT.txt
+      - name: Registrar solo el resultado no confidencial en rama de control aislada
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f ENC_STAGING_ENV_FIX_RESULT.txt ]; then echo 'STATUS=UNKNOWN_NO_REPORT' > ENC_STAGING_ENV_FIX_RESULT.txt; fi
+          git config user.name 'encarmen-staging-preflight'
+          git config user.email 'encarmen-staging-preflight@users.noreply.github.com'
+          git add ENC_STAGING_ENV_FIX_RESULT.txt
+          git commit -m 'docs: resultado de protección APP_ENV staging' || exit 0
+          git push origin HEAD:coord/staging-env-guard-fix-20261030
