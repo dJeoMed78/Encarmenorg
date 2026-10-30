@@ -213,3 +213,14 @@ Según el historial entregado al sucesor, Jefa 2 había desplegado una versión 
 ### 3. Regla de auditoría de memoria al cambiar de Jefa
 
 La sucesora debe iniciar leyendo la metodología, continuidad y transcripciones disponibles de Jefa 2, y cotejarlas contra ramas, SHAs y estado de datos documentado. Antes de cada orden usar el filtro del apartado 1. Una ausencia en la memoria resumida nunca constituye evidencia de que una tarea no se hizo. Documentar expresamente las órdenes anuladas/obsoletas para impedir su reutilización accidental.
+
+
+## REGLA INAMOVIBLE — Todo error del propietario se registra y sigue hasta aceptación expresa
+
+Decisión expresa del propietario de 2026-10-29, recuperada del PDF `encar.pdf` enviado a Jefa 2 y ratificada por Jefa 3: **NINGÚN error, defecto, observación o solicitud de corrección comunicada por el propietario puede perderse, omitirse ni cerrarse sin autorización expresa suya**, aunque falten créditos, el trabajo ya esté codificado o se cambie de coordinadora. Coordinación fija y ajusta la prioridad, pero todo queda pendiente de atención/validación hasta su cierre aprobado.
+
+**FUENTE CANÓNICA DEL ESTADO DE TODAS LAS TAREAS E INCIDENCIAS:** `docs/coordination/REGISTRO_MAESTRO_TAREAS_INCIDENCIAS.md` en la rama `coord/encarmen-work-control-001`. Leerlo **obligatoriamente al iniciar cada conversación de coordinación y sucesión**; buscar primero allí y verificar luego los documentos específicos, issues, ramas, commits, pruebas, integraciones y despliegues. Las instrucciones históricas y los mensajes de sucesión NO contienen estados vigentes y NO reemplazan el registro. El registro incorpora explícitamente los errores F001–F007B del PDF `encar.pdf` (28 de octubre) y los pendientes relacionados.
+
+**Flujo vinculante:** ingreso por texto/voz/PDF/imagen → identificar y deduplicar contra registro → asignar ID estable y conservar fuente/fecha/ambiente/síntoma → asignar prioridad y responsable → enlazar solución con SHA y pruebas → dejar por separado estados implementado/probado/integrado/desplegado → validación real del propietario → cierre únicamente si este confirma. Si el propietario dice «todavía falla», reabrir de inmediato preservando historial. Una falla duplicada se vincula a su ID anterior, pero no se descarta ni se vuelve a desarrollar innecesariamente.
+
+**Controles de sucesión:** ninguna nueva Jefa debe copiar una lista de «tareas activas» congelada a un prompt de arranque; debe limitarse a la ruta del registro maestro, consultar los estados en vivo y corregir contradicciones. **Cada nuevo defecto señalado por el propietario se agrega al registro maestro en la misma intervención**, aunque no pueda corregirse. Mantener entradas cerradas con evidencia, nunca eliminarlas; las incidencias de baja prioridad no desaparecen. También actualizar el registro al completar trabajos de trabajadores o de coordinación y cuando la integración/despliegue/validación cambien el estado.
