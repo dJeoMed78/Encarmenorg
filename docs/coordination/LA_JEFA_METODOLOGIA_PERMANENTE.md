@@ -186,3 +186,30 @@ Evidencia histórica para revisar antes de operar, **no prueba de conexión vige
 ## Punto de continuidad recuperado de Jefa 2 (2026-10-29)
 
 Según el historial entregado al sucesor, Jefa 2 había desplegado una versión en Staging con respaldo y verificación, atendiendo el botón SOS en pantallas de 320 px. Pendientes históricos: automatizar el respaldo de la BD Staging cada 72 horas y comprobar flujos funcionales de la versión desplegada, especialmente registro empresarial, clasificados y móvil. Antes de actuar se debe **verificar estado actual en GitHub y Staging**, evitar duplicar lo ya completado y conservar el control de los contactos empresariales como prioridad de negocio. Este registro no certifica la situación actual del servidor ni autoriza un nuevo despliegue.
+
+
+## PROTOCOLO OBLIGATORIO ANTIDUPLICIDADES — establecido 2026-10-29
+
+**Incidente que origina esta regla:** Coordinación propuso ENC-CONTACTS-RECOVERY-003 para volver a recuperar teléfonos y WhatsApp, a pesar de que Jefa 2 había documentado restauración efectiva en ambas bases, comprobación posterior y visibilidad en ambos portales. La repetición habría consumido cuotas y tiempo, y habría introducido riesgo de sobrescribir datos válidos. **No emitir ni ejecutar esa orden de restauración tal como fue redactada.**
+
+### 1. Puerta de entrada obligatoria ANTES de cualquier nueva tarea
+
+1. **Consultar antecedentes primero:** documentos de Jefa 2, transcripciones y reportes relevantes disponibles en Project/Library, además de este archivo, continuidad, issues, bitácoras, resultados y documentación de la rama correcta. Buscar explícitamente tarea, síntoma, identificadores, entorno, evidencia de solución y decisiones posteriores. **No basta consultar el estado actual de una sola rama.**
+2. **Cruzar con GitHub:** issues, SHA y ramas de trabajos equivalentes, commits recientes, pruebas y dictámenes de coordinación. Comprobar si el trabajo está: realizado, parcialmente realizado, pendiente de integración, integrado, desplegado, verificado en operación o revertido. No equiparar estas categorías.
+3. **Construir matriz mínima de precedentes (internamente o en registro):** objetivo | evidencia anterior | entorno | estado de datos | estado de código | brecha restante | acción propuesta. Señalar fecha y fuente. Distinguir afirmación del propietario, comprobación documentada y verificación actual; si falta acceso, señalarlo sin asumir que todo está pendiente.
+4. **Filtro de no repetición:** si el objetivo ya está cumplido y verificado, CERRAR/SUPRIMIR la nueva tarea. Si solo queda prevención, pruebas, integración o un caso individual, limitar la orden a esa brecha. Una cifra histórica no autoriza restauraciones nuevas. No delegar un diagnóstico integral ya resuelto.
+5. **Verificación de proporcionalidad:** comprobar que Jefa puede ejecutar ella misma el trabajo menor; estimar valor/riesgo/costo de delegar, evitar solapamiento con tareas activas y confirmar la rama base SHA. Preguntar al propietario solo por decisiones de alcance/riesgo verdaderamente nuevas.
+6. **Salida de control:** antes de enviar una instrucción de W1/W2/GAS/PERP, mencionar brevemente: «Ya realizado y no se repetirá», «Pendiente comprobado», «Se delega únicamente…», con evidencia. Si no hay evidencia suficiente, encargar solo una verificación acotada no destructiva, no una reimplementación/restauración completa.
+7. **Registro al cierre:** actualizar matriz/bitácora de estado de tareas para que una futura Jefa no reabra el mismo problema. Las verificaciones repetidas solo se justifican por evidencia de regresión, nueva versión o solicitud expresa del propietario; no por pérdida de contexto del chat.
+
+### 2. Estado canónico de contactos ENC-F008 (documentación histórica de Jefa 2)
+
+- Restauración **ya ejecutada y verificada** por Jefa 2 y el propietario: **174 negocios con teléfono y WhatsApp en MariaDB de Staging y 174 en MariaDB de producción**, mediante verificaciones y capturas de consulta. No volver a ejecutar SQL de restauración ni pedir rehacer recuperación masiva sin evidencia posterior de pérdida y autorización explícita.
+- En Staging se documentó comprobación de **206/207** negocios con ambos contactos. El ID 2822 figuraba sin contactos también en la semilla histórica; no etiquetarlo como dato perdido sin prueba. La coincidencia individual de los 174 y otros casos excluidos no debe inferirse de ese recuento.
+- El propietario informó que los contactos ya estaban visibles en encarmen.org; Jefa 2 registró visibilidad en Staging y producción. Esta es **evidencia histórica**, no una nueva medición de servidor ni prueba de guardados futuros.
+- **Pendiente real:** proteger de borrados futuros por sincronización/actualización, comprobar persistencia duradera de registros y ediciones nuevos, revisar flujos de visualización tras cambios, y evaluar filtros/contadores de contactos ENC-F009 sin duplicar trabajo ya publicado. Vigilar primero si las ramas recientes de contactos R3 y consolidación ya contienen esas defensas.
+- La propuesta ENC-CONTACTS-RECOVERY-003 emitida el 2026-10-29 es **OBSOLETA / NO ENVIAR**. Si se abre una nueva tarea, debe ser de prevención y regresión diferencial desde el SHA actual de la consolidación, no recuperación de datos.
+
+### 3. Regla de auditoría de memoria al cambiar de Jefa
+
+La sucesora debe iniciar leyendo la metodología, continuidad y transcripciones disponibles de Jefa 2, y cotejarlas contra ramas, SHAs y estado de datos documentado. Antes de cada orden usar el filtro del apartado 1. Una ausencia en la memoria resumida nunca constituye evidencia de que una tarea no se hizo. Documentar expresamente las órdenes anuladas/obsoletas para impedir su reutilización accidental.
