@@ -1,4 +1,4 @@
-name: ENCARMEN Staging business-only E2E temporary preparation
+name: ENCARMEN Staging read-only safety restore
 on:
   push:
     branches: [coord/staging-business-enable-20261030]
@@ -24,7 +24,7 @@ jobs:
         shell: bash
         env:
           SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
-          WINDOW_OPERATION: prepare
+          WINDOW_OPERATION: restore
         run: |
           set -u
           {
