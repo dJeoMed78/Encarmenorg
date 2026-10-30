@@ -1,4 +1,4 @@
-name: ENCARMEN controlled Staging business window - restore quoted env
+name: ENCARMEN Staging business-only E2E temporary preparation
 on:
   push:
     branches: [coord/staging-business-enable-20261030]
@@ -24,7 +24,7 @@ jobs:
         shell: bash
         env:
           SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
-          WINDOW_OPERATION: restore
+          WINDOW_OPERATION: prepare
         run: |
           set -u
           {
