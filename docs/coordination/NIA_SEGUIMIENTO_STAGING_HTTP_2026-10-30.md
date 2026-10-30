@@ -69,3 +69,12 @@
 - **Seguridad:** no modifica permisos de Staging, no abre ventana de escrituras, no cambia credenciales, no modifica SQL, no despliega y no toca producción.
 - **Estado verificado en este punto:** GitHub conserva el workflow, pero `ENC_STAGING_PUBLIC_BROWSER_RESULT.txt` todavía **no estaba publicado**. No afirmar éxito de HTTP público ni de Chromium sin ese resultado.
 - **Limitación:** este control anónimo NO prueba la edición del editor autenticado ni un POST/PATCH real en el host público. Para ello se requiere una ventana de escritura cuidadosamente asegurada, un reinicio limitado a Staging y un mecanismo fiable de reversión/reinicio; los scripts históricos de enable/restore **no reinician** el servicio.
+
+## Ejecución parcial de pruebas públicas — 2026-10-30
+- Rama `coord/staging-public-browser-validation-20261030`.
+- Smoke HTTP público original `ENC_STAGING_PUBLIC_API_RESULT.txt` reportó `/api/health` HTTP 200, MariaDB, `READ_ONLY=True`, root HTTP 200, sesión anónima HTTP 401. La consulta general `/api/businesses` falló con código de transporte 0; no afirmar error HTTP de backend sin clasificar excepción.
+- Segundo smoke HTTP real, UTC 2026-10-30T22:22:00Z: `/api/health` HTTP 200 (0.29 s), `/api/businesses?hasWhatsapp=true` HTTP 200 (0.21 s), **206 empresas**, `/api/admin/session` HTTP 401 (0.11 s), sitio raíz HTTP 200 (0.13 s), `HTTP_MUTATIONS=NONE`.
+- Evidencia: `coord/staging-public-browser-validation-20261030/ENC_STAGING_PUBLIC_API_RESULT.txt`.
+- Workflow de Chromium móvil publicado en `.github/workflows/enc-staging-public-browser-validation.yml`, commit `df6115c3c15a3dc3b92b876c529b9cd1e02d060e`; al hacer esta actualización **todavía no se dispone** del archivo `ENC_STAGING_PUBLIC_BROWSER_RESULT.txt`. No declararlo probado.
+- **Sin prueba pública de POST/PATCH:** guard de Staging sigue `READ_ONLY=True`; no se habilitó ventana de escritura ni se reinició el servicio sin validar proceso de restauración. El E2E anterior por socket Unix permanece válido solo como comprobación de backend temporal.
+- F001/F003 siguen abiertas, y navegador/editor visual no aceptados por propietario.
