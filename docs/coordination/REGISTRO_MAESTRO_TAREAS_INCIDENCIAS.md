@@ -106,3 +106,10 @@ En copia local disponible de data-integrity-closure-003 se ejecutó el comando c
 | 5 | Candidata conjunta para Staging | Registrar SHA único, paquetes incluidos/excluidos, build, controles críticos, reversión y evidencia de aislamiento adecuada al alcance; solicitar autorización específica de despliegue | No preparada aún |
 
 Cada paquete conserva sus SHA; no reemplazar archivos completos ni repetir restauración de contactos. Clasificados y otras entregas conservan seguimiento, pero no se agregan a la candidata por simple existencia de ramas. La cola es orden operativo, no integración ni despliegue ejecutados. Ninguna incidencia del propietario se cierra por estas pruebas.
+
+
+## Seguimiento de W1 ENC-STAGING-CANDIDATE-CLOSURE-004-R1 — capacidad agotada
+
+**Reporte del propietario, 2026-10-29:** tras aproximadamente 6 min 18 s de trabajo en la instrucción complementaria `ENC-STAGING-CANDIDATE-CLOSURE-004-R1`, la interfaz W1 mostró «El modelo seleccionado está al límite de su capacidad. Prueba con otro modelo». No existe informe final ni evidencia de pruebas/corrección terminada.
+
+**Verificación directa GitHub:** la rama `work/enc-staging-candidate-closure-004-r1` existe, pero su HEAD es **idéntico** al SHA base `c79992a385213b437541cb92954c76a99c2485b1` (0 commits por delante, 0 archivos de diferencia). **Estado: INTERRUMPIDA / SIN CAMBIOS PUBLICADOS**. Posibles cambios de sesión locales no publicados: desconocidos, no se asumen. Mantener abiertos C4-H01/C4-H02; no aprobar/integrar/desplegar candidata C4. Antes de reencargar, revisar disponibilidad W1 y evaluar Copilot W6 con orden complementaria separada que preserve SHA/base y límites, sin ejecutar duplicaciones simultáneas.
