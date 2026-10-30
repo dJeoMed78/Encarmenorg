@@ -899,7 +899,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
                       alt="Cartel promocional"
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        if (!promoImagePreview && promoImageData && e.currentTarget.src !== promoImageData) {
+                        if (!promoImagePreview && !promoImage && promoImageData && e.currentTarget.src !== promoImageData) {
                           e.currentTarget.src = promoImageData;
                         }
                       }}
