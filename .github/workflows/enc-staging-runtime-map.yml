@@ -1,0 +1,65 @@
+name: ENCARMEN staging runtime mapping read-only
+on:
+  push:
+    branches: [coord/staging-runtime-map-20261030]
+    paths: [.github/workflows/enc-staging-runtime-map.yml]
+permissions:
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect staging processes without secrets
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        shell: bash
+        run: |
+          set -u
+          {
+            echo 'ENCARMEN STAGING RUNTIME MAP'
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if [ -z "$SSHPASS" ]; then echo RESULT=NO_SSH_SECRET; exit 0; fi
+            sudo apt-get update -qq >/dev/null 2>&1
+            sudo apt-get install -y -qq sshpass >/dev/null 2>&1
+            mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"
+            ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+            fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 2>/dev/null | awk '{print $2}')
+            if [ "$fp" != 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then echo RESULT=BAD_PIN; exit 0; fi
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' <<'REMOTE'
+          import pathlib,subprocess,json,os
+          h=pathlib.Path.home(); st=h/'domains/staging.encarmen.org/hbuilds'
+          print('STAGING_DIRECTORY_PRESENT='+str(st.is_dir()).lower())
+          print('STAGING_CONFIG_PRESENT='+str((st/'config/.env').is_file()).lower())
+          print('PM2_AVAILABLE='+str(subprocess.run(['which','pm2'],capture_output=True).returncode==0).lower())
+          p=subprocess.run(['pm2','jlist'],capture_output=True,text=True,timeout=12)
+          if p.returncode==0:
+           try:
+            entries=json.loads(p.stdout)
+            print('PM2_PROCESS_COUNT='+str(len(entries)))
+            for proc in entries:
+             env=proc.get('pm2_env',{})
+             path=str(env.get('pm_cwd',''))
+             label=str(proc.get('name',''))
+             print('PM2_ENTRY='+('STAGING' if 'staging.encarmen.org' in path else 'OTHER')+':'+('encarmen-staging' if label=='encarmen-staging' else 'ANOTHER_NAME')+':'+str(env.get('status','unknown')))
+           except Exception:print('PM2_PARSE_FAILED=true')
+          else:print('PM2_QUERY_UNAVAILABLE=true')
+          print('STAGING_BUILD_SERVER_PRESENT='+str((st/'server.js').is_file()).lower())
+          print('STAGING_BUILD_API_PRESENT='+str((st/'api/server.bundle.js').is_file()).lower())
+          print('STAGING_PACKAGE_PRESENT='+str((st/'package.json').is_file()).lower())
+          print('RESULT=INSPECTED')
+          REMOTE
+          } > ENC_STAGING_RUNTIME_MAP_RESULT.txt 2>&1
+          cat ENC_STAGING_RUNTIME_MAP_RESULT.txt
+      - name: Publish only sanitized result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ENC_STAGING_RUNTIME_MAP_RESULT.txt || echo RESULT=NO_REPORT > ENC_STAGING_RUNTIME_MAP_RESULT.txt
+          git config user.name encarmen-coordination
+          git config user.email encarmen-coordination@users.noreply.github.com
+          git add ENC_STAGING_RUNTIME_MAP_RESULT.txt
+          git commit -m 'docs: staging runtime mapping result' || exit 0
+          git push origin HEAD:coord/staging-runtime-map-20261030
