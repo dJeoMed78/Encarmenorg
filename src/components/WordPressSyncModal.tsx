@@ -790,12 +790,20 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
   // Acción 3: Descartar o eliminar un reporte
   const handleDismissReport = async (reportId: string) => {
-    await updateReportStatus(reportId, 'dismissed');
+    const confirmed = await updateReportStatus(reportId, 'dismissed');
+    if (!confirmed) {
+      window.alert('No se confirmó el cambio de estado del reporte en el servidor.');
+      return;
+    }
     await loadReportsData();
   };
 
   const handleDeleteReport = async (reportId: string) => {
-    await deleteReport(reportId);
+    const confirmed = await deleteReport(reportId);
+    if (!confirmed) {
+      window.alert('No se confirmó la eliminación del reporte en el servidor.');
+      return;
+    }
     await loadReportsData();
   };
 
