@@ -12,9 +12,21 @@ except Exception:fail('MARKER_CONTENT')
 backup=pathlib.Path(cfg.get('backup',''));secret=pathlib.Path(cfg.get('secret',''))
 if backup.parent!=B or secret.parent!=B or not backup.is_file() or backup.is_symlink():fail('BACKUP')
 old=backup.read_text(encoding='utf8')
-if 'STAGING_READ_ONLY=true' not in old.splitlines() or 'STAGING_DB_CONFIRMED=false' not in old.splitlines() or 'DB_NAME=u293982346_encarmentest' not in old.splitlines():fail('BACKUP_SAFETY')
+def parse_env(text):
+ result={}
+ for line in text.splitlines():
+  line=line.strip()
+  if line.startswith('export '):line=line[7:]
+  if not line or line.startswith('#') or '=' not in line:continue
+  key,value=line.split('=',1)
+  result.setdefault(key.strip(),[]).append(value.strip().strip('"').strip("'"))
+ return result
+def exact(env,key,expected):
+ return key in env and len(env[key])==1 and env[key][0]==expected
+prior=parse_env(old)
+if not (exact(prior,'APP_ENV','staging') and exact(prior,'STAGING_READ_ONLY','true') and exact(prior,'STAGING_DB_CONFIRMED','false') and exact(prior,'DB_NAME','u293982346_encarmentest')):fail('BACKUP_SAFETY')
 current=E.read_text(encoding='utf8')
-if 'DB_NAME=u293982346_encarmentest' not in current.splitlines():fail('CURRENT_DB')
+if not exact(parse_env(current),'DB_NAME','u293982346_encarmentest'):fail('CURRENT_DB')
 fd,tmp=tempfile.mkstemp(dir=E.parent,prefix='.env-stage-rollback-')
 try:
  with os.fdopen(fd,'w',encoding='utf8') as f:
