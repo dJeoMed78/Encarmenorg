@@ -1,10 +1,14 @@
-UTC=2026-10-30T22:20:34.020745+00:00
+UTC=2026-10-30T22:22:00.896875+00:00
 api_health_HTTP=200
+api_health_SECONDS=0.29
 STAGING_ENV=staging
 READ_ONLY=True
 DATABASE=mariadb
-api_businesses_HTTP=0
-BUSINESS_PARSE=FAILED
+api_businesses?hasWhatsapp=true_HTTP=200
+api_businesses?hasWhatsapp=true_SECONDS=0.21
+BUSINESS_COUNT=206
 api_admin_session_HTTP=401
+api_admin_session_SECONDS=0.11
 root_HTTP=200
+root_SECONDS=0.13
 HTTP_MUTATIONS=NONE
