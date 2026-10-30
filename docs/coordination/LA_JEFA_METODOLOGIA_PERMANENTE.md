@@ -253,3 +253,18 @@ Decisión expresa del propietario de 2026-10-29, recuperada del PDF `encar.pdf` 
 5. En los informes, Copilot deberá reportar cuántas confirmaciones pidió, de qué tipo, cuáles fueron inevitables y cómo podría reducirlas la siguiente vez sin sacrificar controles. Documentar limitaciones reales del producto, no inventar que el prompt deshabilitó los diálogos.
 
 **Fuentes oficiales consultadas:** GitHub Docs «Working with agent sessions in the GitHub Copilot app», opciones Manual/Assisted/Approve all; VS Code Docs «Manage approvals and permissions», approvals por sesión y advertencias sobre Allow all. La configuración exacta depende de la superficie y versión de Copilot.
+
+
+## Regla de contención del atraso de integración — prioridad de cierre
+
+**Instrucción y preocupación expresa del propietario (2026-10-29):** no acumular continuamente tareas y ramas con trabajo ya implementado mientras `ia-desarrollo` continúa atrasada. La coordinación priorizará **consolidar → verificar lo indispensable → integrar a `ia-desarrollo` → probar en Staging con autorización → validar con el propietario → cerrar** en vez de abrir nuevos encargos que repitan soluciones. Los estados implementado, revisado, integrado, desplegado y aceptado seguirán separados.
+
+**Reglas operativas:**
+1. **Puerta antes de asignar nuevos trabajos:** contrastar el registro maestro, las ramas y el PR consolidado. Si un problema ya tiene solución funcional publicada, no reasignar programación: priorizar su revisión, pruebas de integración o despliegue autorizado. Excepción: defecto nuevo crítico o seguridad, pérdida real de contactos, o bloqueo imprescindible para integrar.
+2. Mantener **una sola candidata activa de integración** con lista de cambios incluidos/excluidos y SHA preciso, sin reabrir ramas antiguas ni perder commits; cuando hay 2 o más soluciones del mismo problema, elegir una y documentar por qué, no fusionarlas a ciegas.
+3. Favorecer un **lote de integración controlado** antes de crear nuevas funcionalidades. Mínimos: pruebas relevantes reproducidas sobre SHA final, TypeScript y frontend build, revisión de protección de contactos/auth/reportes, consistencia de bundles/assets y reversión; no exigencia de perfeccionismo o auditorías redundantes para cambios reversibles en Staging.
+4. El dueño ya autorizó considerar integración a `ia-desarrollo` cuando técnicamente proceda; **NO es permiso para desplegar**. Confirmar si push/merge dispara acciones automáticas antes de fusionar; evitar afectar Staging o recursos de producción por accidente. No asumir aislamiento Staging/producción.
+5. Informar en cada reporte **el número de commits pendientes respecto de `ia-desarrollo`**, los bloques reales, la siguiente decisión concreta y qué trabajo ya no se volverá a programar; no confundir commits con tareas.
+6. Mantener las incidencias del propietario abiertas hasta su aprobación visual/funcional; **no confundir avance de integración con cierre de una incidencia**.
+
+**Estado de referencia al documentar esta regla:** `ia-desarrollo` antecedía en 27 commits y 88 archivos a `coord/enc-c4-final-001`, rama candidata preparada en **PR #7 en borrador**, aún sin merge ni despliegue. Consultar GitHub en vivo antes de usar estas cifras en futuro.
