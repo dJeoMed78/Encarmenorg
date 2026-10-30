@@ -73,4 +73,4 @@ revisada, por lo que no fueron modificados.
 ## Trazabilidad
 
 - SHA base: `e60582e971f4f8cb56ea56191d33d91824f3fc5e`
-- SHA final: se completará después del commit de esta rama.
+- SHA final del cambio implementado: `c76ffc4`
