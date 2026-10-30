@@ -212,10 +212,12 @@ export async function checkBusinessDuplicate(name: string, phone?: string): Prom
     if (name) params.append('name', name);
     if (phone) params.append('phone', phone);
     const res = await adminFetch(`${API_BASE}/check-duplicate?${params.toString()}`);
-    if (!res.ok) return { isDuplicate: false };
-    return await res.json();
-  } catch {
-    return { isDuplicate: false };
+    if (!res.ok) throw new Error(`No se pudo comprobar duplicados (HTTP ${res.status}). Intenta de nuevo.`);
+    const result = await res.json();
+    if (typeof result?.isDuplicate !== 'boolean') throw new Error('El servidor no confirmó el resultado de la comprobación de duplicados.');
+    return result;
+  } catch (err: any) {
+    throw new Error(err?.message || 'No se pudo comprobar si la empresa ya existe.');
   }
 }
 
