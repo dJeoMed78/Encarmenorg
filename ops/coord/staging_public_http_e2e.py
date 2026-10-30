@@ -120,11 +120,17 @@ try:
  if credential_path.parent!=B or not credential_path.is_file():abort('CREDENTIAL_FILE_UNVERIFIED')
  credentials=json.loads(credential_path.read_text())
  token=None
- for _ in range(12):
+ for attempt in range(4):
   try:
    status,login=http('POST','/api/admin/login',{'username':credentials['username'],'password':credentials['password']})
+   if attempt==0:
+    out('PUBLIC_ADMIN_LOGIN_FIRST_STATUS',status)
+    out('PUBLIC_ADMIN_LOGIN_FIRST_ERROR',str(login.get('error') or login.get('message') or 'none').replace(' ','_')[:80])
    if status==200 and isinstance(login.get('token'),str):token=login['token'];break
-  except Exception:pass
+   if status in (400,401,403,429,503):abort('PUBLIC_ADMIN_LOGIN_STATUS_'+str(status))
+  except RuntimeError:raise
+  except Exception as ex:
+   if attempt==0:out('PUBLIC_ADMIN_TRANSPORT_CLASS',type(ex).__name__)
   time.sleep(3)
  if not token:abort('PUBLIC_ADMIN_LOGIN_UNAVAILABLE')
  out('PUBLIC_ADMIN_LOGIN_HTTP',200)
