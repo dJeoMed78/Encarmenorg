@@ -1,0 +1,11 @@
+CHECK_UTC=2026-10-30T16:26:42.273691+00:00
+GET_/api/health=200
+GET_/api/businesses?hasWhatsapp=true=200
+COUNT_/api/businesses?hasWhatsapp=true=206
+HAIR_PALACE_WHATSAPP_INCLUDED=True
+GET_/api/businesses?hasPhone=true=200
+COUNT_/api/businesses?hasPhone=true=206
+POST_/api/public/business-registrations=403
+PATCH_/api/businesses/encarmen-preflight-nonexistent-id=401
+WRITE_GUARD_UNEXPECTED_STATUS=yes
+COMPLETE=yes
