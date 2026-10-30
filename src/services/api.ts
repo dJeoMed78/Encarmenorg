@@ -346,7 +346,7 @@ export async function fetchReports(): Promise<ReportsQueryResult> {
     const res = await adminFetch(`${API_BASE}/reports`, {cache:'no-store'});
     if (!res.ok) throw new Error(`No se pudieron consultar los reportes del servidor (HTTP ${res.status}).`);
     const data = await res.json();
-    if (!data || data.success === false || !Number.isSafeInteger(data.total) || data.total < 0 || !Array.isArray(data.reports) || data.total !== data.reports.length || data.reports.some((r:any)=>!r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id || typeof r.reason !== 'string' || !['pending','resolved','dismissed'].includes(r.status))) throw new Error('Respuesta de reportes no válida.');
+    if (!data || (Object.hasOwn(data,'success') && data.success !== true) || !Number.isSafeInteger(data.total) || data.total < 0 || !Array.isArray(data.reports) || data.total !== data.reports.length || data.reports.some((r:any)=>!r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id || typeof r.reason !== 'string' || !['pending','resolved','dismissed'].includes(r.status))) throw new Error('Respuesta de reportes no válida.');
     return {source:'server',status:'ready',total:data.total,reports:data.reports};
   } catch (error) {
     // Historical browser drafts are preserved untouched, never promoted to remote records.
