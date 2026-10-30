@@ -1,4 +1,4 @@
-name: ENCARMEN staging business writes readiness read-only
+name: ENCARMEN staging business writes readiness read-only (after marker)
 on:
   push:
     branches: [coord/staging-write-readiness-20261030]
