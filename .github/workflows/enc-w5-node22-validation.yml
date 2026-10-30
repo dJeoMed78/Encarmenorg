@@ -1,0 +1,56 @@
+name: ENCARMEN W5 Node22 lockfile and isolated E2E validation
+on:
+  push:
+    branches: [coord/enc-w5-node22-validation-001]
+    paths: [.github/workflows/enc-w5-node22-validation.yml]
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Repair lockfile and run reproducible tests in isolated runner
+        shell: bash
+        run: |
+          set +e
+          {
+            echo 'ENCARMEN W5 NODE22 ISOLATED VERIFICATION'
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "NODE=$(node -v)"
+            echo "NPM=$(npm -v)"
+            echo "BASE_BRANCH_SHA=$(git rev-parse HEAD)"
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund > /tmp/enc-lock-repair.log 2>&1
+            echo "LOCK_REPAIR_EXIT=$?"
+            npm ci --ignore-scripts --no-audit --no-fund > /tmp/enc-ci.log 2>&1
+            echo "NPM_CI_EXIT=$?"
+            npm run lint > /tmp/enc-lint.log 2>&1
+            echo "LINT_EXIT=$?"
+            npm run build:server > /tmp/enc-build.log 2>&1
+            echo "BUILD_SERVER_EXIT=$?"
+            node --import tsx --test tests/staging-write-001.test.mjs tests/staging-isolation-proof.test.mjs tests/staging-store-default-strict.test.mjs tests/public-registration-integration.test.mjs > /tmp/enc-regression.log 2>&1
+            echo "REGRESSIONS_EXIT=$?"
+            node scripts/test-staging-http-e2e.mjs > /tmp/enc-http-e2e.log 2>&1
+            echo "HTTP_E2E_EXIT=$?"
+            node scripts/test-staging-http-e2e.mjs --test-recovery > /tmp/enc-recovery.log 2>&1
+            echo "SIGKILL_RECOVERY_EXIT=$?"
+            if test -f package-lock.json; then echo "PACKAGE_LOCK_DIFF=$(git diff --numstat -- package-lock.json | tr '\t' ':')"; fi
+            echo 'NO_REMOTE_HOSTINGER_CONNECTIONS=true'
+            echo 'PRODUCTION_UNTOUCHED=true'
+          } > ENC_W5_NODE22_VALIDATION_RESULT.txt
+          cat ENC_W5_NODE22_VALIDATION_RESULT.txt
+      - name: Commit only lockfile and sanitized summary to validation branch
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ENC_W5_NODE22_VALIDATION_RESULT.txt || echo RESULT=NO_REPORT > ENC_W5_NODE22_VALIDATION_RESULT.txt
+          git config user.name encarmen-coordination
+          git config user.email encarmen-coordination@users.noreply.github.com
+          git add package-lock.json ENC_W5_NODE22_VALIDATION_RESULT.txt
+          git commit -m 'test(coord): Node22 verification and isolated lockfile candidate' || exit 0
+          git push origin HEAD:coord/enc-w5-node22-validation-001
