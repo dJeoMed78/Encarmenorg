@@ -8,6 +8,7 @@ import { Business } from './BusinessCard';
 import { formatBusinessName, formatAddressText } from '../utils/textUtils';
 import { verifyBusinessEditPin } from '../services/api';
 import { getRealBusinessRating, submitRealBusinessRating } from '../utils/realRatings';
+import { getWhatsAppUrl } from '../utils/phone';
 
 interface DirectBusinessViewProps {
   business: Business;
@@ -359,7 +360,7 @@ export function DirectBusinessView({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {cleanWhatsApp && (
                 <a
-                  href={`https://wa.me/52${cleanWhatsApp}?text=Hola,%20vi%20su%20negocio%20en%20encarmen.org`}
+                  href={getWhatsAppUrl(business.whatsapp || business.phone, 'Hola, vi su negocio en encarmen.org')}
                   target="_blank"
                   rel="noreferrer"
                   className="py-3.5 px-4 rounded-2xl font-black text-sm text-white flex items-center justify-center gap-2 shadow-lg hover:brightness-105 transition active:scale-98"
