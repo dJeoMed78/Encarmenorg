@@ -1,0 +1,70 @@
+name: ENCARMEN - Verificar hotfix WhatsApp en produccion (solo lectura)
+on:
+  push:
+    branches:
+      - coord/prod-whatsapp-verify-readonly-20261030
+    paths:
+      - .github/workflows/enc-prod-whatsapp-verify-readonly.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify live HTTP response and current build without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in https://encarmen.org/ https://encarmen.org/encarmen-release.txt; do
+            code=$(curl -L -sS -m 20 -o /tmp/encarmen-http-body -w '%{http_code}' "$url" || true)
+            echo "PUBLIC_URL=${url} HTTP=${code}"
+            if [[ "$url" == *release.txt && "$code" == 200 ]]; then
+              grep -Eo '^[a-f0-9]{40}$' /tmp/encarmen-http-body | head -n 1 || true
+            fi
+          done
+      - name: Check pinned Hostinger SSH host and inspect production read-only
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SSHPASS" ]; then echo 'SSH_SECRET_MISSING'; exit 2; fi
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -qq -y sshpass >/dev/null
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test -s "$HOME/.ssh/known_hosts"
+          actual=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          test "$actual" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' || { echo 'SSH_HOST_CHANGED_STOP'; exit 3; }
+          echo 'SSH_HOST_PIN_MATCH=yes'
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'sh -s' <<'REMOTE'
+          set -eu
+          echo 'SSH_PRODUCTION_READONLY=CONNECTED'
+          root="$HOME/domains/encarmen.org"
+          test -d "$root" || { echo 'PROD_ROOT_MISSING'; exit 4; }
+          for dir in "$root/hbuilds/current/nodejs" "$root/hbuilds/current" "$root/public_html" "$root"; do
+            if [ -d "$dir" ]; then
+              echo "CHECK_DIR=${dir##*/} EXIST=yes"
+              if [ -f "$dir/dist/index.html" ]; then echo "DIST_INDEX=yes"; fi
+              if [ -f "$dir/encarmen-release.txt" ]; then
+                echo 'RELEASE_FILE_FOUND=yes'
+                grep -E '^[a-f0-9]{40}$' "$dir/encarmen-release.txt" | head -n 1 || true
+              fi
+              if [ -f "$dir/dist/encarmen-release.txt" ]; then
+                echo 'DIST_RELEASE_FILE_FOUND=yes'
+                grep -E '^[a-f0-9]{40}$' "$dir/dist/encarmen-release.txt" | head -n 1 || true
+              fi
+              if [ -f "$dir/src/components/BusinessDetailModal.tsx" ]; then
+                if grep -Fq "href={getWhatsAppUrl(business.whatsapp || business.phone" "$dir/src/components/BusinessDetailModal.tsx"; then echo "SOURCE_HOTFIX_MODAL=yes"; else echo "SOURCE_HOTFIX_MODAL=no"; fi
+              fi
+              if [ -f "$dir/src/components/DirectBusinessView.tsx" ]; then
+                if grep -Fq "href={getWhatsAppUrl(business.whatsapp || business.phone" "$dir/src/components/DirectBusinessView.tsx"; then echo "SOURCE_HOTFIX_DIRECT=yes"; else echo "SOURCE_HOTFIX_DIRECT=no"; fi
+              fi
+            fi
+          done
+          if [ -L "$root/hbuilds/current" ]; then echo 'PROD_SYMLINK_PRESENT=yes'; fi
+          echo 'PROD_READONLY_INSPECTION_COMPLETE=yes'
+REMOTE
