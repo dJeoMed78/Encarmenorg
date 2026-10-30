@@ -54,6 +54,8 @@ jobs:
           o('AVAILABLE_BUILDS',len(candidates))
           source=(active/'server.js').read_text(encoding='utf-8',errors='ignore')
           o('ACTIVE_STRICT_READBACK_MARKERS',str('matchesWrittenValues' in source and 'BUSINESS_READBACK_FAILED' in source).lower())
+          o('ACTIVE_ORIGIN_PATCH_PRESENT',str("'https://staging.encarmen.org'" in source and 'STAGING_PRIVATE_DB_NAME' in source).lower())
+          o('ACTIVE_BROKEN_ENV_GUARD_ABSENT',str('STAGING_PRIVATE_CONFIGURATION_UNAVAILABLE' not in source).lower())
           active_procs=[]
           for entry in pathlib.Path('/proc').iterdir():
               if not entry.name.isdecimal():continue
