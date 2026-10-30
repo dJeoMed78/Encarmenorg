@@ -1,9 +1,11 @@
-CHECK_UTC=2026-10-30T18:53:27.688820+00:00
+CHECK_UTC=2026-10-30T18:54:21.433304+00:00
 GET_/api/health=200
 RUNTIME_ENVIRONMENT=staging
-RUNTIME_READ_ONLY=None
-RUNTIME_WRITES_PERMITTED=None
-RUNTIME_DB_ENGINE=json_cache
+RUNTIME_READ_ONLY=True
+RUNTIME_WRITES_PERMITTED=False
+RUNTIME_DB_ENGINE=mariadb
+GET_/api/businesses=200
+COUNT_/api/businesses=207
 GET_/api/businesses?hasWhatsapp=true=200
 COUNT_/api/businesses?hasWhatsapp=true=206
 HAIR_PALACE_WHATSAPP_INCLUDED=True
@@ -11,4 +13,4 @@ GET_/api/businesses?hasPhone=true=200
 COUNT_/api/businesses?hasPhone=true=206
 POST_/api/public/business-registrations=403
 PATCH_/api/businesses/encarmen-preflight-nonexistent-id=401
-POST_RESTART_AUDIT_COMPLETE=yes
+POST_RESTART_SOURCE_AUDIT_COMPLETE=yes
