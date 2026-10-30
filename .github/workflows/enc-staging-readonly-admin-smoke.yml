@@ -1,0 +1,58 @@
+name: ENCARMEN safe temporary Staging login smoke and restore
+on:
+  push:
+    branches: [coord/staging-admin-login-window-20261030]
+    paths: [.github/workflows/enc-staging-readonly-admin-smoke.yml]
+permissions:
+  contents: write
+concurrency:
+  group: encarmen-staging-admin-login-window
+  cancel-in-progress: false
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check scripts
+        run: |
+          python3 -m py_compile ops/coord/staging_readonly_login_smoke.py
+          python3 -m py_compile ops/coord/staging_readonly_login_restore.py
+      - name: Public Staging login and restore private temporary credentials
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -u
+          {
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if [ -z "${SSHPASS:-}" ]; then echo RESULT=BLOCKED_NO_SSH; exit 0; fi
+            sudo apt-get update -qq >/dev/null 2>&1
+            sudo apt-get install -y -qq sshpass >/dev/null 2>&1
+            umask 077
+            mkdir -p "$HOME/.ssh"
+            ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+            fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 2>/dev/null | awk '{print $2}')
+            if [ "$fp" != 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then echo RESULT=BLOCKED_SSH_PIN; exit 0; fi
+            echo SSH_FINGERPRINT=VERIFIED
+            export SSHPASS
+            HOST=u293982346@45.137.159.114
+            OPT=(-T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no)
+            sshpass -e ssh "${OPT[@]}" "$HOST" 'umask 077; mkdir -p "$HOME/encarmen-staging-backups/enc-admin-smoke"; test ! -L "$HOME/encarmen-staging-backups/enc-admin-smoke"'
+            for name in staging_readonly_login_smoke.py staging_readonly_login_restore.py; do
+              sshpass -e ssh "${OPT[@]}" "$HOST" "umask 077; cat > \"\$HOME/encarmen-staging-backups/enc-admin-smoke/$name\"" < "ops/coord/$name"
+            done
+            sshpass -e ssh "${OPT[@]}" "$HOST" 'python3 "$HOME/encarmen-staging-backups/enc-admin-smoke/staging_readonly_login_smoke.py"'
+            echo "SSH_EXIT=$?"
+          } > ENC_STAGING_READONLY_LOGIN_SMOKE_RESULT.txt 2>&1
+          cat ENC_STAGING_READONLY_LOGIN_SMOKE_RESULT.txt
+      - name: Save redacted smoke report
+        if: always()
+        run: |
+          set -euo pipefail
+          test -s ENC_STAGING_READONLY_LOGIN_SMOKE_RESULT.txt || echo RESULT=NO_REPORT > ENC_STAGING_READONLY_LOGIN_SMOKE_RESULT.txt
+          git config user.name encarmen-coordination
+          git config user.email encarmen-coordination@users.noreply.github.com
+          git add ENC_STAGING_READONLY_LOGIN_SMOKE_RESULT.txt
+          git commit -m 'docs: staging public admin login and safe restore smoke' || exit 0
+          git push origin HEAD:coord/staging-admin-login-window-20261030
