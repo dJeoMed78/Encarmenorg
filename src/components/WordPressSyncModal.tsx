@@ -244,6 +244,9 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
   const [reports, setReports] = useState<BusinessReport[]>([]);
   const [directBizSearch, setDirectBizSearch] = useState('');
   const [loadingReports, setLoadingReports] = useState(false);
+  const [reportsError, setReportsError] = useState<string | null>(null);
+  const reportsRequestVersion = useRef(0);
+
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
   const [businessToDelete, setBusinessToDelete] = useState<{ id: number; name: string; reportId?: string } | null>(null);
 
@@ -643,11 +646,11 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && isOpen) {
       loadReportsData();
       loadAnalyticsData();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated,isOpen]);
 
   const loadAnalyticsData = async () => {
     setLoadingAnalytics(true);
@@ -662,16 +665,24 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
   };
 
   const loadReportsData = async () => {
-    setLoadingReports(true);
+    const version=++reportsRequestVersion.current;
+    setLoadingReports(true);setReports([]);setReportsError(null);
     try {
       const res = await fetchReports();
-      setReports(res.reports);
+      if(version!==reportsRequestVersion.current)return;
+      if(res.status==='ready')setReports(res.reports);
+      else setReportsError(res.message);
     } catch {
-      // Ignorar errores
+      if(version===reportsRequestVersion.current)setReportsError('No se pudieron consultar los reportes del servidor.');
     } finally {
-      setLoadingReports(false);
+      if(version===reportsRequestVersion.current)setLoadingReports(false);
     }
   };
+
+  useEffect(()=>{
+    if(!isAuthenticated || !isOpen){reportsRequestVersion.current++;setReports([]);setLoadingReports(false);setReportsError(null);}
+    return ()=>{reportsRequestVersion.current++;};
+  },[isAuthenticated,isOpen]);
 
   if (!isOpen) return null;
 
@@ -1083,7 +1094,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 {/* MariaDB Live Ping */}
                 <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-[11px] font-mono">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>MariaDB OK</span>
+                  <span>{reportsError ? 'Reportes sin confirmar' : 'Panel administrativo'}</span>
                 </div>
 
                 {/* Quick Refresh Button */}
@@ -1704,7 +1715,11 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 </button>
               </div>
 
-              {reports.length === 0 ? (
+              {loadingReports ? <p role="status">Consultando reportes del servidor…</p> : reportsError ? (
+                <div role="alert" className="text-sm text-amber-800 bg-amber-50 rounded-xl p-3">
+                  {reportsError} El número de reportes pendientes no está disponible. Los históricos locales no se muestran ni se eliminaron.
+                </div>
+              ) : reports.length === 0 ? (
                 <div className="text-center py-10 bg-stone-50 rounded-2xl border border-dashed border-stone-200 space-y-2">
                   <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
                   <p className="font-bold text-stone-800 text-sm">¡Bandeja al día!</p>

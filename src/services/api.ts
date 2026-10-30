@@ -3,7 +3,7 @@ import seedBusinesses from '../data/businesses_seed.json';
 import { Business, Category, DirectoryStats, WpHealth, AutoBusinessCandidate } from '../types';
 import seedCategories from '../data/categories_seed.json';
 import {PUBLIC_REGISTRATION_FIELDS} from '../constants/publicRegistration';
-import {contactDigits} from '../utils/businessContacts';
+import {contactDigits, prepareContactPatch, contactsMatchReadback} from '../utils/businessContacts';
 
 const API_BASE = '/api';
 function businessSessionHeaders(): Record<string,string> {
@@ -337,19 +337,20 @@ export async function sendBusinessReport(data: {
 
 export const reportBusinessIssue = sendBusinessReport;
 
-export async function fetchReports(): Promise<{ total: number; reports: import('../types').BusinessReport[] }> {
+export type ReportsQueryResult =
+  | {source:'server';status:'ready';total:number;reports:import('../types').BusinessReport[]}
+  | {source:'unavailable';status:'error';total:null;reports:[];message:string};
+
+export async function fetchReports(): Promise<ReportsQueryResult> {
   try {
-    const res = await adminFetch(`${API_BASE}/reports`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch {
-    const stored = localStorage.getItem('business_reports') || '[]';
-    try {
-      const parsed = JSON.parse(stored);
-      return { total: parsed.length, reports: parsed };
-    } catch {
-      return { total: 0, reports: [] };
-    }
+    const res = await adminFetch(`${API_BASE}/reports`, {cache:'no-store'});
+    if (!res.ok) throw new Error(`No se pudieron consultar los reportes del servidor (HTTP ${res.status}).`);
+    const data = await res.json();
+    if (!data || data.success === false || !Number.isSafeInteger(data.total) || data.total < 0 || !Array.isArray(data.reports) || data.total !== data.reports.length || data.reports.some((r:any)=>!r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id || typeof r.reason !== 'string' || !['pending','resolved','dismissed'].includes(r.status))) throw new Error('Respuesta de reportes no válida.');
+    return {source:'server',status:'ready',total:data.total,reports:data.reports};
+  } catch (error) {
+    // Historical browser drafts are preserved untouched, never promoted to remote records.
+    return {source:'unavailable',status:'error',total:null,reports:[],message:error instanceof Error ? error.message : 'No se pudieron consultar los reportes del servidor.'};
   }
 }
 
@@ -379,6 +380,7 @@ export async function deleteReport(id: string): Promise<boolean> {
 
 export async function adminUpdateBusiness(id: number, data: Partial<import('../types').Business> & { clearContacts?: ('phone' | 'whatsapp')[] }): Promise<{ success: boolean; message: string; business?: import('../types').Business }> {
   try {
+    const expectedContacts = prepareContactPatch(data, true).patch;
     const res = await adminFetch(`${API_BASE}/businesses/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', ...(sessionStorage.getItem('encarmen_admin_session_token') ? { 'X-Encarmen-Admin-Token': sessionStorage.getItem('encarmen_admin_session_token')! } : {}) },
@@ -386,7 +388,7 @@ export async function adminUpdateBusiness(id: number, data: Partial<import('../t
     });
     const parsed = await parseJsonResponse<{success:boolean;message:string;business?:Business}>(res, 'Error al actualizar negocio');
     if (!res.ok) return {success:false, message:parsed.message || `HTTP ${res.status}`};
-    if (parsed.success && (!parsed.business || Number(parsed.business.id) !== Number(id))) return {success:false, message:'El servidor no confirmó el negocio actualizado. Recarga antes de reintentar.'};
+    if (parsed.success !== true || !parsed.business || Number(parsed.business.id) !== Number(id) || !Object.hasOwn(parsed.business,'phone') || !Object.hasOwn(parsed.business,'whatsapp') || !contactsMatchReadback(expectedContacts,parsed.business)) return {success:false, message:'El servidor no confirmó el negocio y sus contactos. Recarga antes de reintentar.'};
     return parsed;
   } catch (err: any) {
     return { success: false, message: err.message || 'Error al actualizar negocio' };
