@@ -487,20 +487,6 @@ export function BusinessPublicDetail({
                 </button>
               </section>
             )}
-            <section className="bpd-card bpd-reviews" id="bpd-ratings">
-              <h2>
-                <Star /> Opiniones de la comunidad
-              </h2>
-              <StarRatingWidget businessId={b.id} businessName={b.name} />
-              <div className="bpd-comments">
-                <MessageCircle size={20} />
-                <strong>Comentarios todavía no disponibles</strong>
-                <p>
-                  Puedes calificar con estrellas. Aún no se pueden publicar
-                  comentarios ni fotografías de reseñas.
-                </p>
-              </div>
-            </section>
           </main>
           <div className="bpd-card bpd-identity">
             {registeredLogo && !logoFailed ? (
@@ -598,6 +584,20 @@ export function BusinessPublicDetail({
               <p>{delivery || "Modalidades de entrega no registradas"}</p>
             </section>
           </aside>
+          <section className="bpd-card bpd-reviews" id="bpd-ratings">
+              <h2>
+                <Star /> Opiniones de la comunidad
+              </h2>
+              <StarRatingWidget businessId={b.id} businessName={b.name} />
+              <div className="bpd-comments">
+                <MessageCircle size={20} />
+                <strong>Comentarios todavía no disponibles</strong>
+                <p>
+                  Puedes calificar con estrellas. Aún no se pueden publicar
+                  comentarios ni fotografías de reseñas.
+                </p>
+              </div>
+            </section>
         </div>
         <footer className="bpd-footer">
           <button ref={adminButton} onClick={() => setAdmin(true)}>
