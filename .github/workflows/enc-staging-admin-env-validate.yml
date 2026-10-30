@@ -1,0 +1,57 @@
+name: ENCARMEN verify Staging-only origin config patch
+on:
+  push:
+    branches: [coord/staging-admin-env-origin-fix-20261030]
+    paths: [.github/workflows/enc-staging-admin-env-validate.yml]
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Compile and validate Staging-only patch
+        shell: bash
+        run: |
+          set -u
+          {
+            echo 'ENCARMEN STAGING ADMIN ENV ORIGIN FIX VALIDATION'
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            npm ci --ignore-scripts >/tmp/enc-npm-install.log 2>&1
+            echo "NPM_CI_EXIT=$?"
+            npx tsc --noEmit >/tmp/enc-tsc.log 2>&1
+            echo "TSC_EXIT=$?"
+            npx esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=/tmp/enc-staging-admin-server.js >/tmp/enc-bundle.log 2>&1
+            echo "ESBUILD_EXIT=$?"
+            node --check /tmp/enc-staging-admin-server.js >/tmp/enc-check.log 2>&1
+            echo "NODE_CHECK_EXIT=$?"
+            node --input-type=module - <<'JS'
+            import fs from 'node:fs';
+            const source=fs.readFileSync('server.ts','utf8');
+            const bundle=fs.readFileSync('/tmp/enc-staging-admin-server.js','utf8');
+            console.log('STAGING_PRIVATE_CONFIG_GUARD='+String(source.includes("process.env.APP_ENV === 'staging' && process.env.DB_NAME === STAGING_PRIVATE_DB_NAME")));
+            console.log('PINNED_ADMIN_ORIGIN='+String(source.includes("'https://staging.encarmen.org'")));
+            console.log('BUNDLE_STAGING_GUARD='+String(bundle.includes('STAGING_PRIVATE_CONFIGURATION_UNAVAILABLE')));
+            JS
+          } > ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt 2>&1
+          cat ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt
+          grep -q '^NPM_CI_EXIT=0$' ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt
+          grep -q '^TSC_EXIT=0$' ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt
+          grep -q '^ESBUILD_EXIT=0$' ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt
+          grep -q '^NODE_CHECK_EXIT=0$' ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt
+      - name: Save validation results
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt || echo RESULT=NO_REPORT > ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt
+          git config user.name encarmen-coordination
+          git config user.email encarmen-coordination@users.noreply.github.com
+          git add ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt
+          git commit -m 'docs: Staging-only admin origin fix validation result' || exit 0
+          git push origin HEAD:coord/staging-admin-env-origin-fix-20261030
