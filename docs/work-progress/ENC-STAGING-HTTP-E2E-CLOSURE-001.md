@@ -95,3 +95,72 @@ fallo determinista de GET se renombra temporalmente businesses SOLO en contenedo
 propio y se restaura. Primer probe completo falló por esos supuestos del harness;
 no se cambió código operativo para hacerlos pasar. Proceso/señal y recuperación
 con etiquetas conservados. No scripts remotos, configuración ni datos reales.
+
+## Checkpoint 4 — corrección y regresiones
+`src/db/stagingBusinessStore.ts`: helper matchesWrittenValues coteja ID,
+columnas escritas y objeto raw_data completo (comparación profunda), antes de
+COMMIT. create conserva error REGISTRATION_READBACK_FAILED503; update mantiene
+CONTACT_READBACK_CONFLICT409 y añade BUSINESS_READBACK_FAILED503 para los otros
+campos. No cambia rutas, autenticación, permisos, flags, DDL o catálogo real.
+
+Prueba final real `node scripts/test-staging-http-e2e.mjs`: exit0, evidencia
+http-sql-results.json. Servidor completo compilado desde fuente; SQL real
+MariaDB11.4, cuenta SELECT/INSERT/UPDATE sin DELETE/DDL ni acceso a otros esquemas.
+POST201, SQL ID4001, replay/concurrencia200 COUNT1, PATCH200, SQL independiente,
+GET200 fuente mariadb después de reiniciar proceso. Trigger descarta descripción:
+ahora503/success=false y rollback. Trigger descarta raw_data:503+rollback.
+Trigger descarta descripción del INSERT:503 y COUNT0. SIGNAL SQL:503 sin éxito.
+Fallo SELECT con caché caliente:503. Marcador ausente/production:403.
+Flags apagados individualmente:POST/PATCH y alias503. Sentinel idéntico.
+Limpieza exacta affectedRows1, restantes0, solo sentinel antes de destruir tmpfs.
+
+`node scripts/test-staging-http-e2e.mjs --test-recovery`: exit0; hijo de prueba
+recibe SIGKILL después de POST confirmado por SQL. Journal permite verificar
+etiquetas/identidad, detener servidor por PID+CWD+cmdline exactos y destruir solo
+contenedor efímero propio; cero contenedores restantes y servidor detenido.
+SIGTERM/SIGINT también limpian. Tras caída completa del entorno, usar --cleanup
+con journal registrado; la recuperación de SIGKILL requiere ejecutar ese comando,
+no se promete finally ante SIGKILL. Ningún volumen persistente de BD.
+
+Regresión: `node --import tsx --test tests/staging-write-001.test.mjs
+ tests/staging-isolation-proof.test.mjs tests/staging-store-default-strict.test.mjs
+ tests/public-registration-integration.test.mjs`:43/43,0fallos,0omitidas,exit0.
+Incluye SQL simulado/error commit ambiguo como COMPLEMENTO a la prueba real.
+Intento inicial sin loader:38PASS+1archivo fallido por import TS sin extensión;
+corregida invocación con tsx, sin modificar fuentes ajenas.
+`npm run lint`:exit0. `npm --prefix /tmp/enc-w5-build run build`:exit0,
+1726 módulos; copia de1271 entradas rastreadas necesarias, store modificado,
+node_modules enlazado, sin.env; cambios de versión/dist/bundles solo temporales.
+Aviso chunk>500kB. npm ci continúa FALLIDO por lockfile previo, no reparado fuera
+de alcance. Instalación auxiliar jsdom --no-save para suites existentes.
+Logs completos saneados y versiones: carpeta de evidencia. git diff --check:0.
+
+### Reproducción por Coordinación
+Requisitos: Linux, Node24 probado (Node22 Hostinger no ensayado), Docker local
+Unix socket, imagen fijada por digest, dependencias de package.json y esbuild.
+1. Checkout de esta rama en entorno sin secretos. No arrancar servidor en CWD
+   del despliegue ni ejecutar scripts ops/coord históricos.
+2. Intentar npm ci; si persiste EUSAGE del lockfile, conservar fallo y utilizar
+   npm install --no-package-lock --ignore-scripts en copia aislada. Instalar
+   jsdom con --no-save --no-package-lock para las regresiones preexistentes.
+3. docker pull mariadb:11.4@sha256:d1891ede5a559f1086f55053bb8cc1569b0298338c4d72d71725a7f74f6ba620
+4. node scripts/test-staging-http-e2e.mjs
+5. node scripts/test-staging-http-e2e.mjs --test-recovery
+6. Si proceso fue interrumpido externamente: node scripts/test-staging-http-e2e.mjs
+   --cleanup /tmp/enc-w5-http-<valor-real>/cleanup.json (ruta impresa al inicio).
+El harness NO acepta host, base, usuario o claves externos; siempre crea su
+propia MariaDB temporal. Credenciales aleatorias solo en memoria/entorno hijo.
+--probe-readback exige reproducir el defecto y SOLO corresponde al store BASE;
+no es el comando de aceptación del código corregido. before-fix.json conserva
+la corrida base; diff del commit correctivo muestra antes/después.
+
+### Límites y pendientes
+No probar ni habilitar escritura pública; no modificar .env remoto, reiniciar
+Hostinger, ejecutar workflow, integrar, aprobar o desplegar. Fuente corregida
+requiere build posterior por Coordinación; server.js/api/server.bundle.js y dist
+rastreados NO fueron actualizados en esta rama. El harness siempre recompila.
+No confundir bundles heredados con corrección desplegada.
+No certificamos SHA del proceso Hostinger con endpoint de versión sin SHA.
+Revisar lockfile como tarea independiente; no se afirma instalación limpia.
+Revisión independiente, integración autorizada y prueba pública de POST/PATCH
+siguen pendientes. Los criterios HTTP/SQL quedan demostrados EN ENTORNO AISLADO.

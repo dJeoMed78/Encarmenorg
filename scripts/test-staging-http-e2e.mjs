@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import {randomUUID,randomBytes,scryptSync,createHash} from 'node:crypto';
-import {mkdtempSync,writeFileSync,readFileSync,symlinkSync,rmSync,mkdirSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,readFileSync,readlinkSync,symlinkSync,rmSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -16,6 +16,7 @@ import mysql from 'mysql2/promise';
 import {build} from 'esbuild';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const task='ENC-STAGING-HTTP-E2E-CLOSURE-001', database='u293982346_encarmentest';
+const image='mariadb:11.4@sha256:d1891ede5a559f1086f55053bb8cc1569b0298338c4d72d71725a7f74f6ba620';
 const dockerEnv={...process.env};
 for(const k of ['DOCKER_HOST','DOCKER_CONTEXT','DOCKER_TLS','DOCKER_TLS_VERIFY','DOCKER_CERT_PATH'])delete dockerEnv[k];
 function docker(args){
@@ -26,6 +27,17 @@ function docker(args){
 function removeOwned(journal){
  const j=JSON.parse(readFileSync(journal,'utf8'));
  assert.equal(j.task,task);assert.match(j.run,/^[a-f0-9-]{36}$/);assert.match(j.name,/^enc-w5-[a-f0-9-]{36}$/);
+ assert.equal(j.name,'enc-w5-'+j.run);
+ // PID reuse is safe: only stop our exact bundle in its exact temporary CWD.
+ if(Number.isSafeInteger(j.serverPid)&&j.serverPid>1){
+  const expected=path.dirname(path.resolve(journal));
+  assert.ok(expected.startsWith(path.join(tmpdir(),'enc-w5-http-')));
+  try{
+   if(readlinkSync('/proc/'+j.serverPid+'/cwd')===expected &&
+      readFileSync('/proc/'+j.serverPid+'/cmdline','utf8').split('\0').includes(path.join(expected,'server.mjs')))
+    process.kill(j.serverPid,'SIGTERM');
+  }catch(error){if(!['ENOENT','ESRCH'].includes(error.code))throw error;}
+ }
  let info;
  try{info=JSON.parse(docker(['inspect',j.name]))[0];}catch{return;}
  assert.equal(info.Config.Labels['encarmen.task'],task);assert.equal(info.Config.Labels['encarmen.run'],j.run);
@@ -34,7 +46,27 @@ function removeOwned(journal){
  docker(['rm','-f',info.Id]);
 }
 if(process.argv[2]==='--cleanup'){removeOwned(process.argv[3]);console.log('OWNED_EPHEMERAL_CONTAINER_REMOVED');process.exit(0);}
-assert.ok(process.argv.slice(2).every(a=>a==='--probe-readback'),'Unknown option');
+if(process.argv[2]==='--test-recovery'){
+ const interrupted=spawnSync(process.execPath,[fileURLToPath(import.meta.url),'--kill-after-post'],{cwd:root,env:process.env,encoding:'utf8',timeout:120000,maxBuffer:2e6});
+ assert.equal(interrupted.signal,'SIGKILL');
+ const lines=interrupted.stdout.split('\n');
+ const recoveryJournal=lines.find(l=>l.startsWith('RECOVERY_JOURNAL='))?.slice('RECOVERY_JOURNAL='.length);
+ assert.ok(recoveryJournal);assert.ok(lines.some(l=>l.includes('intentional SIGKILL')));
+ const j=JSON.parse(readFileSync(recoveryJournal,'utf8'));
+ removeOwned(recoveryJournal);
+ assert.equal(docker(['container','ls','-a','--filter','label=encarmen.run='+j.run,'--format','{{.ID}}']),'');
+ let running=true;
+ for(let n=0;n<30;n++){
+  try{running=readlinkSync('/proc/'+j.serverPid+'/cwd')===path.dirname(recoveryJournal);}catch(error){if(error.code==='ENOENT')running=false;else throw error;}
+  if(!running)break;await new Promise(r=>setTimeout(r,100));
+ }
+ assert.equal(running,false,'Recovered server process must be stopped');
+ const result={stage:'SIGKILL after SQL-confirmed HTTP POST',runnerSignal:interrupted.signal,committedPostVerified:true,ownedContainersRemaining:0,verifiedServerStopped:true,recovery:'owned container and tmpfs destroyed'};
+ const output=path.join(root,'docs/work-progress/'+task+'-evidence');mkdirSync(output,{recursive:true});
+ writeFileSync(path.join(output,'interruption-recovery.json'),JSON.stringify(result,null,2)+'\n');
+ console.log(JSON.stringify(result));rmSync(path.dirname(recoveryJournal),{recursive:true,force:true});process.exit(0);
+}
+assert.ok(process.argv.slice(2).every(a=>['--probe-readback','--kill-after-post'].includes(a)),'Unknown option');
 const probe=process.argv.includes('--probe-readback');
 const run=randomUUID(), name='enc-w5-'+run;
 const dir=mkdtempSync(path.join(tmpdir(),'enc-w5-http-'));
@@ -73,6 +105,7 @@ async function start(flags={}){
   ENC_ADMIN_CREDENTIALS_JSON:JSON.stringify({version:1,accounts:[{username:'w5',passwordHash:hash(),permissions:['business:manage']},{username:'limited',passwordHash:hash(),permissions:['event:manage']}]}),
   PUBLIC_REGISTRATION_ENABLED:'false',...flags};
  child=spawn(process.execPath,[path.join(dir,'server.mjs')],{cwd:dir,env,stdio:['ignore','pipe','pipe']});
+ writeFileSync(journal,JSON.stringify({task,run,name,serverPid:child.pid}),{mode:0o600});
  for(const stream of [child.stdout,child.stderr])stream.on('data',data=>{logs=(logs+data).slice(-100000);});
  for(let n=0;n<100;n++){
   assert.equal(child.exitCode,null,'SERVER_EXITED (private logs suppressed)');
@@ -90,7 +123,7 @@ try{
  docker(['info','--format','{{.ServerVersion}}']);
  docker(['run','--detach','--rm','--name',name,'--label','encarmen.task='+task,'--label','encarmen.run='+run,
   '--tmpfs','/var/lib/mysql:rw,noexec,nosuid,size=512m','--publish','127.0.0.1::3306',
-  '--env','MARIADB_ROOT_PASSWORD='+password,'--env','MARIADB_ROOT_HOST=%','mariadb:11.4']);
+  '--env','MARIADB_ROOT_PASSWORD='+password,'--env','MARIADB_ROOT_HOST=%',image]);
  const info=JSON.parse(docker(['inspect',name]))[0];
  const binding=info.NetworkSettings.Ports['3306/tcp'][0];assert.equal(binding.HostIp,'127.0.0.1');dbPort=Number(binding.HostPort);
  record('container',{image:info.Image,ephemeral:true,loopbackOnly:true});
@@ -110,6 +143,7 @@ try{
  const [identity]=await reader.query('SELECT DATABASE() AS db_name');assert.equal(identity[0].db_name,database);
  const [grants]=await reader.query('SHOW GRANTS');assert.ok(grants.some(r=>/SELECT, INSERT, UPDATE/.test(Object.values(r)[0])));
  const [schemas]=await reader.query('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA');assert.ok(schemas.every(r=>[database,'information_schema','performance_schema'].includes(r.SCHEMA_NAME)));
+ const [version]=await reader.query('SELECT VERSION() AS version');record('SQL engine version',{version:version[0].version});
  record('isolation',{database:identity[0].db_name,minimalGrants:true,productionVisible:false,marker:'staging',engine:'InnoDB'});
  await admin.query('INSERT INTO businesses (id,name,description,phone,whatsapp,raw_data) VALUES (?,?,?,?,?,?)',['3999','W5 isolated sentinel','must remain unchanged','0000000002','',JSON.stringify({slug:'w5-sentinel'})]);
  const [sentinelBefore]=await reader.query("SELECT * FROM businesses WHERE id='3999'");
@@ -128,6 +162,7 @@ try{
  const created=await expect('/api/submit-business','POST',draft,201,token,{'Idempotency-Key':key});assert.equal(created.json.success,true);id=created.json.business.id;assert.ok(id);assert.equal(created.json.replayed,false);
  const afterCreate=await sqlRow();assert.equal(afterCreate.description,draft.description);assert.equal(afterCreate.phone,draft.phone);assert.equal(afterCreate.whatsapp,draft.whatsapp);assert.equal(JSON.parse(afterCreate.raw_data)._stagingRegistrationId,key);
  record('SQL after POST',{query:'SELECT id,name,description,phone,whatsapp,raw_data FROM businesses WHERE id=?',id,description:afterCreate.description,phone:afterCreate.phone,whatsapp:afterCreate.whatsapp});
+ if(process.argv.includes('--kill-after-post')){record('intentional SIGKILL',{committedId:id,journal});process.kill(process.pid,'SIGKILL');await delay(10000);}
  const replay=await expect('/api/submit-business','POST',draft,200,token,{'Idempotency-Key':key});assert.equal(replay.json.replayed,true);assert.equal(replay.json.business.id,id);
  const parallel=await Promise.all([request('/api/submit-business','POST',draft,token,{'Idempotency-Key':key}),request('/api/submit-business','POST',draft,token,{'Idempotency-Key':key})]);assert.ok(parallel.every(r=>r.status===200&&r.json.replayed&&r.json.business.id===id));
  const [count]=await reader.query('SELECT COUNT(*) AS n FROM businesses WHERE JSON_UNQUOTE(JSON_EXTRACT(raw_data,\'$._stagingRegistrationId\'))=?',[key]);assert.equal(Number(count[0].n),1);record('idempotency',{sequential:200,concurrent:[200,200],count:Number(count[0].n),id});
@@ -150,6 +185,12 @@ try{
  await admin.query("CREATE TRIGGER w5_insert_failure BEFORE INSERT ON businesses FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='W5 isolated failure'");
  await expect('/api/submit-business','POST',{...draft,name:'W5 failed '+run,phone:'0000000003',whatsapp:''},503,token,{'Idempotency-Key':randomUUID()});
  await admin.query('DROP TRIGGER w5_insert_failure');
+ if(!probe){
+  await admin.query("CREATE TRIGGER w5_discard_insert BEFORE INSERT ON businesses FOR EACH ROW SET NEW.description='W5 discarded insert'");
+  await expect('/api/submit-business','POST',{...draft,name:'W5 discarded insert '+run,phone:'0000000003',whatsapp:''},503,token,{'Idempotency-Key':randomUUID()});
+  const [absent]=await reader.query('SELECT COUNT(*) AS n FROM businesses WHERE name=?',['W5 discarded insert '+run]);assert.equal(Number(absent[0].n),0);record('INSERT mismatch rollback',{remaining:Number(absent[0].n)});
+  await admin.query('DROP TRIGGER w5_discard_insert');
+ }
  await admin.query("CREATE TRIGGER w5_update_failure BEFORE UPDATE ON businesses FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='W5 isolated failure'");
  await expect('/api/businesses/'+id,'PATCH',{description:'must roll back'},503);assert.equal((await sqlRow()).description,'W5 after HTTP edit');
  await admin.query('DROP TRIGGER w5_update_failure');
@@ -160,6 +201,12 @@ try{
  if(probe){assert.equal(mismatch.status,200);assert.equal(mismatch.json.success,true);assert.notEqual((await sqlRow()).description,mismatch.json.business.description);record('REPRODUCED_DEFECT',{code:'FALSE_SUCCESS_NONCONTACT_READBACK'});}
  else {assert.equal(mismatch.status,503);assert.equal(mismatch.json.success,false);assert.equal((await sqlRow()).description,'W5 after HTTP edit');}
  await admin.query('DROP TRIGGER w5_discard_description');
+ if(!probe){
+  await admin.query('CREATE TRIGGER w5_discard_raw BEFORE UPDATE ON businesses FOR EACH ROW SET NEW.raw_data=OLD.raw_data');
+  await expect('/api/businesses/'+id,'PATCH',{description:'must rollback raw mismatch'},503);
+  assert.equal((await sqlRow()).description,'W5 after HTTP edit');
+  await admin.query('DROP TRIGGER w5_discard_raw');
+ }
  if(probe)await expect('/api/businesses/'+id,'PATCH',{description:'W5 after HTTP edit'},200);
  // Process restart clears all application caches/sessions, SQL data survives.
  await start();token=await login();
@@ -185,7 +232,8 @@ finally{
  try{
   if(admin&&reader&&id){const row=await sqlRow();assert.equal(row.name,draft.name);assert.equal(JSON.parse(row.raw_data)._stagingRegistrationId,key);
    const [deleted]=await admin.query('DELETE FROM businesses WHERE id=? AND BINARY name=BINARY ? AND JSON_UNQUOTE(JSON_EXTRACT(raw_data,\'$._stagingRegistrationId\'))=?',[String(id),draft.name,key]);assert.equal(deleted.affectedRows,1);
-   const [left]=await reader.query('SELECT id FROM businesses WHERE id=? OR name=?',[String(id),draft.name]);assert.equal(left.length,0);record('SQL cleanup',{exactIdentity:true,deleted:deleted.affectedRows,remaining:left.length});}
+   const [left]=await reader.query('SELECT id FROM businesses WHERE id=? OR name=?',[String(id),draft.name]);assert.equal(left.length,0);record('SQL cleanup',{exactIdentity:true,deleted:deleted.affectedRows,remaining:left.length});
+   const [allRemaining]=await reader.query('SELECT id FROM businesses');assert.deepEqual(allRemaining.map(r=>r.id),['3999']);record('all synthetic writes cleaned',{businessRows:allRemaining.length,onlySentinel:true});}
  }catch{failed=true;record('SQL cleanup',{verified:false});}
  await reader?.end().catch(()=>{});await admin?.end().catch(()=>{});
  try{removeOwned(journal);record('container cleanup',{removed:true,tmpfsDestroyed:true});}catch{failed=true;record('container cleanup',{removed:false,journal});}
