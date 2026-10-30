@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Tag,
   Gift,
@@ -62,10 +62,17 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
   const [promoOwnerWhatsapp, setPromoOwnerWhatsapp] = useState('');
   const [promoImage, setPromoImage] = useState('');
   const [promoImageData, setPromoImageData] = useState('');
+  const [promoImagePreview, setPromoImagePreview] = useState('');
   const [promoImageUnconfirmed,setPromoImageUnconfirmed] = useState(false);
   const [isUploadingPromoImg, setIsUploadingPromoImg] = useState(false);
   const [promoTerms, setPromoTerms] = useState('Válido para las primeras personas en presentar su código oficial.');
   const [isSaving, setIsSaving] = useState(false);
+  const promoImageGeneration = useRef(0);
+
+  const invalidatePromoImageOperation = () => {
+    promoImageGeneration.current += 1;
+    setIsUploadingPromoImg(false);
+  };
 
   const compressFlyerImage = (file: File, maxDim = 1200, quality = 0.85): Promise<string> => {
     return new Promise((resolve) => {
@@ -106,30 +113,50 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
   const handlePromoImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const imageGeneration = typeof promoImageGeneration === 'undefined'
+      ? { current: 0 }
+      : promoImageGeneration;
+    const setPreview = typeof setPromoImagePreview === 'undefined'
+      ? () => {}
+      : setPromoImagePreview;
+    const generation = ++imageGeneration.current;
     setIsUploadingPromoImg(true);
+    setErrorMsg(null);
     try {
       const compressedDataUrl = await compressFlyerImage(file);
+      if (generation !== imageGeneration.current) return;
       if (!compressedDataUrl) {
-        setIsUploadingPromoImg(false);
+        setErrorMsg('No se pudo preparar la imagen para cargarla.');
         return;
       }
-      setPromoImageData(compressedDataUrl);
+      setPreview(compressedDataUrl);
       setPromoImageUnconfirmed(true);
       try {
         const res = await uploadBusinessLogo(compressedDataUrl, file.name);
-        if (res.success && res.url) {
-          setPromoImage(res.url);
+        if (generation !== imageGeneration.current) return;
+        if (res.success && res.url && /^(?:https?:\/\/|\/(?!\/))/.test(res.url.trim())) {
+          setPromoImage(res.url.trim());
+          setPromoImageData('');
+          setPreview('');
           setPromoImageUnconfirmed(false);
         } else {
+          setPreview('');
           setErrorMsg(res.message || 'No se confirmó la carga de la imagen.');
         }
       } catch {
+        if (generation !== imageGeneration.current) return;
+        setPreview('');
         setErrorMsg('No se confirmó la carga de la imagen.');
       }
     } catch (err) {
+      if (generation !== imageGeneration.current) return;
+      setPreview('');
+      setErrorMsg('No se pudo preparar la imagen para cargarla.');
       console.error('Error uploading promo image:', err);
     } finally {
-      setIsUploadingPromoImg(false);
+      if (generation === imageGeneration.current) {
+        setIsUploadingPromoImg(false);
+      }
     }
   };
 
@@ -192,6 +219,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
   }, []);
 
   const handleEditPromo = (promo: Promotion) => {
+    invalidatePromoImageOperation();
     setFormId(promo.id);
     setSelectedBizId(promo.businessId);
     setPromoTitle(promo.title);
@@ -201,14 +229,17 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
     setPromoValidUntil(promo.validUntil || '');
     setPromoOwnerEmail(promo.ownerEmail || '');
     setPromoOwnerWhatsapp(cleanPhoneNumber(promo.businessWhatsapp || promo.businessPhone || ''));
-    setPromoImage(promo.promoImage || promo.promoImageData || '');
-    setPromoImageUnconfirmed(Boolean((promo.promoImage || promo.promoImageData || '').startsWith('data:')));
-    setPromoImageData(promo.promoImageData || (promo.promoImage?.startsWith('data:') ? promo.promoImage : ''));
+    const historicalImageData = promo.promoImageData || (promo.promoImage?.startsWith('data:') ? promo.promoImage : '');
+    setPromoImage(promo.promoImage?.startsWith('data:') ? '' : (promo.promoImage || ''));
+    setPromoImageData(historicalImageData);
+    setPromoImagePreview('');
+    setPromoImageUnconfirmed(false);
     setPromoTerms(promo.terms || '');
     setActiveSubTab('create');
   };
 
   const handleResetForm = () => {
+    invalidatePromoImageOperation();
     setFormId(null);
     const firstBiz = businesses[0];
     setSelectedBizId(firstBiz?.id || 0);
@@ -221,6 +252,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
     setPromoOwnerWhatsapp(extractCleanPhone(firstBiz));
     setPromoImage('');
     setPromoImageData('');
+    setPromoImagePreview('');
     setPromoImageUnconfirmed(false);
     setPromoTerms('Válido para las primeras personas en presentar su código oficial.');
     setBizSearchQuery('');
@@ -228,6 +260,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
 
   const handleSavePromo = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (typeof isSaving !== 'undefined' && isSaving) return;
     if (isUploadingPromoImg || promoImageUnconfirmed || (promoImage && !/^(?:https?:\/\/|\/(?!\/))/.test(promoImage))) {
       setErrorMsg('La imagen solo está en previsualización; confirma su carga remota antes de guardar.');
       return;
@@ -257,7 +290,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
         ownerEmail: promoOwnerEmail.trim(),
         ownerWhatsapp: cleanWa,
         promoImage: promoImage.trim() || null,
-        promoImageData: null,
+        promoImageData: promoImageData.trim() || null,
         terms: promoTerms.trim(),
         isActive: true
       });
@@ -864,10 +897,16 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
                     Sube la imagen publicitaria que te entregó el negocio (ej. estética, taller, restaurante). El usuario verá este cartel en grande para conocer todos los detalles antes de solicitar su cupón.
                   </p>
                 </div>
-                {(promoImage || promoImageData) && (
+                {(promoImage || promoImageData || promoImagePreview) && (
                   <button
                     type="button"
-                    onClick={() => { setPromoImage(''); setPromoImageData(''); setPromoImageUnconfirmed(false); }}
+                    onClick={() => {
+                      invalidatePromoImageOperation();
+                      setPromoImage('');
+                      setPromoImageData('');
+                      setPromoImagePreview('');
+                      setPromoImageUnconfirmed(false);
+                    }}
                     className="text-xs text-rose-600 hover:text-rose-800 font-bold underline cursor-pointer"
                   >
                     Quitar cartel
@@ -876,10 +915,10 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
               </div>
 
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 pt-1">
-                {promoImageData || promoImage ? (
+                {promoImagePreview || promoImageData || promoImage ? (
                   <div className="relative w-32 h-44 rounded-xl border-2 border-amber-400 overflow-hidden bg-black/5 shrink-0 shadow-md group">
                     <img
-                      src={promoImageData || promoImage}
+                      src={promoImagePreview || promoImageData || promoImage}
                       alt="Cartel promocional"
                       className="w-full h-full object-cover"
                       onError={(e) => {
@@ -903,7 +942,7 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
                   <div className="flex flex-wrap items-center gap-2">
                     <label className="cursor-pointer px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-xs flex items-center gap-1.5 shadow-sm transition-colors">
                       <Upload className={`w-3.5 h-3.5 ${isUploadingPromoImg ? 'animate-bounce' : ''}`} />
-                      <span>{isUploadingPromoImg ? 'Subiendo cartel...' : promoImage || promoImageData ? 'Cambiar cartel por otro' : 'Subir imagen desde mi equipo'}</span>
+                      <span>{isUploadingPromoImg ? 'Subiendo cartel...' : promoImage || promoImageData || promoImagePreview ? 'Cambiar cartel por otro' : 'Subir imagen desde mi equipo'}</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -912,13 +951,15 @@ export const AdminPromotionsTab: React.FC<AdminPromotionsTabProps> = ({ business
                       />
                     </label>
 
-                    {(promoImage || promoImageData) && (
+                    {(promoImage || promoImageData || promoImagePreview) && (
                       <button
                         type="button"
                         onClick={() => {
+                          invalidatePromoImageOperation();
                           setPromoImage('');
                           setPromoImageData('');
-    setPromoImageUnconfirmed(false);
+                          setPromoImagePreview('');
+                          setPromoImageUnconfirmed(false);
                         }}
                         className="px-3 py-2 rounded-xl border border-stone-200 bg-white hover:bg-rose-50 hover:text-rose-600 text-stone-600 text-xs font-bold transition-colors cursor-pointer"
                       >
