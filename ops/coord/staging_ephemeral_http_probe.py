@@ -119,9 +119,15 @@ try:
         try:
             sock=socket.create_connection(('127.0.0.1',port),timeout=2)
             sock.close();emit('LOCAL_SOCKET_CONNECTION','PASS')
-        except Exception:emit('LOCAL_SOCKET_CONNECTION','FAIL')
+        except OSError as err:
+            emit('LOCAL_SOCKET_CONNECTION','FAIL')
+            emit('LOCAL_SOCKET_ERRNO',err.errno)
+        except Exception:emit('LOCAL_SOCKET_CONNECTION','FAIL_UNKNOWN')
         raw=(work/'node-private.log').read_text(encoding='utf8',errors='replace')
         emit('PRIVATE_LOG_HAS_CONTENT',str(bool(raw)).lower())
+        ports=re.findall(r'Servidor corriendo exitosamente en http://[^:/\\s]+:(\\d+)',raw)
+        emit('LISTEN_LOG_MATCHES_PROBE_PORT',str(str(port) in ports).lower())
+        emit('CHILD_EXIT_STATUS',str(child.poll() if child.poll() is not None else 'RUNNING'))
         for label,pattern in [
             ('MODULE_NOT_FOUND','module not found'),
             ('ESM_REQUIRE_ERROR','ERR_REQUIRE_ESM'),
