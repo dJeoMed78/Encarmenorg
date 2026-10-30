@@ -1,0 +1,88 @@
+name: ENCARMEN - verificar version publicada en Staging SSH
+on:
+  push:
+    branches: [coord/staging-env-guard-fix-20261030]
+    paths: [.github/workflows/enc-staging-release-check.yml]
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspección HTTP + SSH estrictamente de lectura
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -u
+          REPORT="$RUNNER_TEMP/enc-staging-release-check.txt"
+          {
+            echo 'ENCARMEN STAGING RELEASE VALIDATION'
+            echo 'INTEGRATION_SHA=4407e6aeb08b52cc750c952735467a0e04fe19cc'
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            for url in https://staging.encarmen.org/ https://staging.encarmen.org/encarmen-release.txt; do
+              code=$(curl -sSL --max-time 25 -o "$RUNNER_TEMP/staging-http" -w '%{http_code}' "$url" || echo ERROR)
+              if [[ "$url" == */encarmen-release.txt ]]; then
+                echo "STAGING_RELEASE_HTTP=$code"
+                if [[ "$code" = 200 ]]; then
+                  v=$(grep -m 1 -E '^[a-f0-9]{40}$' "$RUNNER_TEMP/staging-http" || true)
+                  if [[ -n "$v" ]]; then echo "PUBLIC_RELEASE_MARKER=$v"; else echo 'PUBLIC_RELEASE_MARKER=UNKNOWN'; fi
+                fi
+              else echo "STAGING_HOME_HTTP=$code"; fi
+            done
+            if [ -z "$SSHPASS" ]; then echo 'STATUS=BLOCKED_NO_SSH_SECRET'; exit 0; fi
+            sudo apt-get update -qq >/dev/null 2>&1
+            sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+            mkdir -p "$HOME/.ssh"
+            chmod 700 "$HOME/.ssh"
+            ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+            FP=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 2>/dev/null | awk '{print $2}')
+            if [ "$FP" != 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then echo 'STATUS=BLOCKED_SSH_FINGERPRINT'; exit 0; fi
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'sh -s' <<'REMOTE'
+            set -eu
+            root="$HOME/domains/staging.encarmen.org/hbuilds"
+            echo 'STAGING_SSH_CONNECTED=yes'
+            if [ -L "$root/current" ]; then
+              case "$(readlink "$root/current")" in versions/*) echo 'STAGING_CURRENT_LINK_SAFE=yes';;*) echo 'STAGING_CURRENT_LINK_SAFE=no';;esac
+            else echo 'STAGING_CURRENT_LINK_SAFE=no'; fi
+            for dir in "$root/current/nodejs" "$root/current" "$HOME/domains/staging.encarmen.org/public_html"; do
+              if [ -d "$dir" ]; then
+                if [ -f "$dir/dist/index.html" ]; then
+                  echo 'FRONTEND_DIST_PRESENT=yes'
+                  echo "FRONTEND_DIST_MODIFIED_UTC=$(date -u -r "$dir/dist/index.html" +%Y-%m-%dT%H:%M:%SZ)"
+                fi
+                if [ -f "$dir/server.js" ]; then echo 'SERVER_BUNDLE_PRESENT=yes'; fi
+                if [ -f "$dir/package.json" ]; then
+                  if grep -q '"build:server".*vite build' "$dir/package.json"; then echo 'FRONTEND_BUILD_SCRIPT_PRESENT=yes'; else echo 'FRONTEND_BUILD_SCRIPT_PRESENT=no'; fi
+                fi
+                if [ -f "$dir/dist/encarmen-release.txt" ]; then
+                  echo 'DIST_RELEASE_MARKER_FOUND=yes'
+                  grep -E '^[a-f0-9]{40}$' "$dir/dist/encarmen-release.txt" | head -n 1 || true
+                fi
+              fi
+            done
+            cfg="$root/config/.env"
+            if [ -f "$cfg" ] && grep -Eq '^APP_ENV=staging$' "$cfg"; then echo 'APP_ENV_IS_STAGING=yes'; else echo 'APP_ENV_IS_STAGING=no'; fi
+            if [ -d "$HOME/encarmen-staging-backups/database" ]; then
+              b=$(find "$HOME/encarmen-staging-backups/database" -maxdepth 1 -type f -name 'staging-db-*.sql.gz' | wc -l)
+              if [ "$b" -gt 0 ]; then echo 'STAGING_SQL_BACKUP_PRESENT=yes'; else echo 'STAGING_SQL_BACKUP_PRESENT=no'; fi
+            else echo 'STAGING_SQL_BACKUP_PRESENT=no'; fi
+            echo 'STAGING_INSPECTION_COMPLETE=yes'
+REMOTE
+            echo "SSH_COMMAND_EXIT=$?"
+          } > "$REPORT" 2>&1
+          cat "$REPORT"
+          cp "$REPORT" ENC_STAGING_RELEASE_CHECK_RESULT.txt
+      - name: Registrar comprobación sin secretos en rama aislada
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f ENC_STAGING_RELEASE_CHECK_RESULT.txt ]; then echo 'STATUS=UNKNOWN_NO_REPORT' > ENC_STAGING_RELEASE_CHECK_RESULT.txt; fi
+          git config user.name 'encarmen-staging-validator'
+          git config user.email 'encarmen-staging-validator@users.noreply.github.com'
+          git add ENC_STAGING_RELEASE_CHECK_RESULT.txt
+          git commit -m 'docs: resultado de version y healthcheck staging' || exit 0
+          git push origin HEAD:coord/staging-env-guard-fix-20261030
