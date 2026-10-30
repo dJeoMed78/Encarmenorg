@@ -1,0 +1,95 @@
+name: ENCARMEN staging business writes readiness read-only
+on:
+  push:
+    branches: [coord/staging-write-readiness-20261030]
+    paths: [.github/workflows/enc-staging-write-readiness.yml]
+permissions:
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check DB identity grants marker and config without changes
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -u
+          REPORT="$RUNNER_TEMP/enc-readiness.txt"
+          {
+            echo 'ENCARMEN BUSINESS WRITES READINESS READ-ONLY'
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if [ -z "$SSHPASS" ]; then echo 'RESULT=NO_SSH_SECRET'; exit 0; fi
+            sudo apt-get update -qq >/dev/null 2>&1
+            sudo apt-get install -y -qq sshpass >/dev/null 2>&1
+            mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"
+            ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+            FP=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 2>/dev/null | awk '{print $2}')
+            if [ "$FP" != 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then echo 'RESULT=HOST_PIN_FAILED'; exit 0; fi
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' <<'REMOTE'
+          import pathlib,os,tempfile,subprocess,sys
+          home=pathlib.Path.home();root=home/'encarmen-staging-backups'
+          envpath=home/'domains/staging.encarmen.org/hbuilds/config/.env'
+          def out(k,v):print(f'{k}={v}',flush=True)
+          def stop(s):out('RESULT','BLOCKED_'+s);sys.exit(0)
+          if not envpath.is_file() or envpath.is_symlink():stop('ENV')
+          vals={}
+          for line in envpath.read_text(encoding='utf-8').splitlines():
+              line=line.strip()
+              if line.startswith('export '):line=line[7:]
+              if not line or line.startswith('#') or '=' not in line:continue
+              k,v=line.split('=',1);vals.setdefault(k.strip(),[]).append(v.strip().strip('"').strip("'"))
+          def read(*keys):
+              found=[v for k in keys for v in vals.get(k,[]) if v]
+              return found[0] if found and len(set(found))==1 else ''
+          for k in ['APP_ENV','STAGING_READ_ONLY','STAGING_DB_CONFIRMED','STAGING_BUSINESS_WRITES_ENABLED','STAGING_ALLOW_SCHEMA_INIT','ENABLE_WP_SYNC','STAGING_REQUIRE_MINIMAL_GRANTS']:
+              out(k+'_IS_'+('STAGING' if k=='APP_ENV' else 'TRUE'),str(read(k)==('staging' if k=='APP_ENV' else 'true')).lower())
+          out('STAGING_ADMIN_HASH_CONFIGURED',str(bool(read('STAGING_ADMIN_Y_SCRYPT') or read('STAGING_ADMIN_J_SCRYPT'))).lower())
+          if read('APP_ENV')!='staging' or read('DB_NAME','MYSQL_DATABASE','MARIADB_DATABASE')!='u293982346_encarmentest':stop('WRONG_ENV')
+          user=read('DB_USER','MYSQL_USER','MARIADB_USER');password=read('DB_PASSWORD','MYSQL_PASSWORD','MARIADB_PASSWORD')
+          host=read('DB_HOST','MYSQL_HOST','MARIADB_HOST');port=read('DB_PORT','MYSQL_PORT','MARIADB_PORT') or '3306'
+          if not user or user=='u293982346_appuser' or not password or not host or not port.isdigit():stop('DB_CONFIG')
+          if not root.is_dir() or root.is_symlink() or root.stat().st_mode&0o077:stop('PRIVATE_ROOT')
+          cfg=None
+          try:
+              with tempfile.NamedTemporaryFile(mode='w',dir=root,prefix='.readiness-',delete=False,encoding='utf-8') as f:
+                  cfg=pathlib.Path(f.name);cfg.chmod(0o600);f.write('[client]\n')
+                  for k,v in [('host',host),('port',port),('user',user),('password',password)]:
+                      f.write(k+'="'+v.replace('\\','\\\\').replace('"','\\"').replace(chr(10),'')+'"\n')
+              cmd=['mariadb','--defaults-extra-file='+str(cfg),'--batch','--skip-column-names','-D','u293982346_encarmentest']
+              def sql(stmt):
+                  x=subprocess.run(cmd+['-e',stmt],capture_output=True,text=True,timeout=30)
+                  return x.stdout.strip().splitlines() if x.returncode==0 else None
+              target=sql('SELECT DATABASE(), SUBSTRING_INDEX(CURRENT_USER(),CHAR(64),1)')
+              good=target is not None and len(target)==1 and target[0].split('\t')[0]=='u293982346_encarmentest' and target[0].split('\t')[1]!='u293982346_appuser'
+              out('CONNECTED_TO_STAGING_ONLY',str(good).lower())
+              if not good:stop('SQL_IDENTITY')
+              mark=sql('SELECT env_name,db_name FROM encarmen_environment_marker')
+              out('MARKER_TABLE_READABLE',str(mark is not None).lower())
+              out('MARKER_STAGING_EXACT',str(mark==['staging\tu293982346_encarmentest']).lower())
+              grants=sql('SHOW GRANTS FOR CURRENT_USER()') or []
+              risky=any('encarmenapp' in g.lower() or 'GRANT ALL PRIVILEGES ON *.*' in g.upper() for g in grants)
+              out('GRANT_HAS_OBVIOUS_PRODUCTION_OR_GLOBAL_SCOPE',str(risky).lower())
+              schemas=sql('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA') or []
+              out('PRODUCTION_SCHEMA_VISIBLE',str('u293982346_encarmenapp' in schemas).lower())
+              out('INSPECTION_COMPLETE','true')
+          finally:
+              if cfg and cfg.exists():cfg.unlink()
+          REMOTE
+            echo "SSH_COMMAND_EXIT=$?"
+          } > "$REPORT" 2>&1
+          cat "$REPORT"
+          cp "$REPORT" ENC_STAGING_WRITE_READINESS_RESULT.txt
+      - name: Commit only nonsecret readiness evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ENC_STAGING_WRITE_READINESS_RESULT.txt || echo 'RESULT=NO_REPORT' > ENC_STAGING_WRITE_READINESS_RESULT.txt
+          git config user.name encarmen-readiness-bot
+          git config user.email encarmen-readiness-bot@users.noreply.github.com
+          git add ENC_STAGING_WRITE_READINESS_RESULT.txt
+          git commit -m 'docs: inspect staging writes readiness' || exit 0
+          git push origin HEAD:coord/staging-write-readiness-20261030
