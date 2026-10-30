@@ -20,7 +20,7 @@
 | ENC-F004 | Sustituir botón grande «Gestión del negocio» por símbolo π pequeño y discreto | Media | ABIERTA | Comprobar diseño publicado y validación visual del propietario |
 | ENC-F005 | Administrador debe poder elegir como logotipo una imagen que ya esté en galería | Alta | ABIERTA | Comprobar selector, persistencia del logotipo y visualización |
 | ENC-F006 | Google Maps no se visualiza incrustado en ficha empresarial | Alta | ABIERTA | Tarea GAS ENC-F006-MAPS-001 cancelada por cuota: NO ejecutada; inspeccionar otras ramas antes de encomendar |
-| ENC-F007A | En móvil comentarios aparecen antes que ubicación, horarios, pagos y tipos de servicio; deben ir al final | Alta | ABIERTA | Validación visual móvil, ficha empresarial |
+| ENC-F007A | En móvil comentarios aparecen antes que ubicación, horarios, pagos y tipos de servicio; deben ir al final | Alta | ABIERTA | Perplexity entregó SHA `18668778` con parche **sin aplicar** y pruebas no ejecutadas; Jefa 3 detectó incumplimiento y aplicó corrección directa en `coord/enc-f007a-completion-001` SHA `73a68214cb326283375a8fe5e5ceeb669cee6d49`. **Implementada y publicada, NO probada/NO integrada/NO desplegada; requiere pruebas y validación visual del propietario** |
 | ENC-F007B | Errores de calificaciones y comentarios; consulta/publicación no funciona correctamente | Alta | ABIERTA | Verificar base real, API, permisos, moderación y pruebas sin comentarios ficticios |
 
 **Referencia documental:** La primera incidencia F007 comprendía diseño y funcionamiento; se separó en A y B para que corregir una no cierre la otra. El propietario ordenó explícitamente «nada se cierra hasta que yo te diga que ya quedó solucionada».
