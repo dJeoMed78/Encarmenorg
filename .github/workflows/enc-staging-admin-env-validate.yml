@@ -1,5 +1,6 @@
 name: ENCARMEN verify Staging-only origin config patch
 on:
+  workflow_dispatch:
   push:
     branches: [coord/staging-admin-env-origin-fix-20261030]
     paths: [.github/workflows/enc-staging-admin-env-validate.yml]
@@ -17,30 +18,37 @@ jobs:
           set -u
           {
             echo 'ENCARMEN STAGING ADMIN ENV ORIGIN FIX VALIDATION'
-            echo "NODE_VERSION=$(node --version)"
             echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "NODE_VERSION=$(node --version)"
             npm ci --ignore-scripts >/tmp/enc-npm-install.log 2>&1
             echo "NPM_CI_EXIT=$?"
             npx tsc --noEmit >/tmp/enc-tsc.log 2>&1
             echo "TSC_EXIT=$?"
             npx esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=/tmp/enc-staging-admin-server.js >/tmp/enc-bundle.log 2>&1
             echo "ESBUILD_EXIT=$?"
-            node --check /tmp/enc-staging-admin-server.js >/tmp/enc-check.log 2>&1
-            echo "NODE_CHECK_EXIT=$?"
+            if test -s /tmp/enc-staging-admin-server.js; then
+              node --check /tmp/enc-staging-admin-server.js >/tmp/enc-check.log 2>&1
+              echo "NODE_CHECK_EXIT=$?"
+            else
+              echo "NODE_CHECK_EXIT=NOT_RUN"
+            fi
             node --input-type=module - <<'JS'
-            import fs from 'node:fs';
-            const source=fs.readFileSync('server.ts','utf8');
-            const bundle=fs.readFileSync('/tmp/enc-staging-admin-server.js','utf8');
-            console.log('STAGING_PRIVATE_CONFIG_GUARD='+String(source.includes("process.env.APP_ENV === 'staging' && process.env.DB_NAME === STAGING_PRIVATE_DB_NAME")));
-            console.log('PINNED_ADMIN_ORIGIN='+String(source.includes("'https://staging.encarmen.org'")));
-            console.log('BUNDLE_STAGING_GUARD='+String(bundle.includes('STAGING_PRIVATE_CONFIGURATION_UNAVAILABLE')));
-            JS
+          import fs from 'node:fs';
+          const source=fs.readFileSync('server.ts','utf8');
+          const bundle=fs.existsSync('/tmp/enc-staging-admin-server.js') ? fs.readFileSync('/tmp/enc-staging-admin-server.js','utf8') : '';
+          console.log('STAGING_PRIVATE_CONFIG_GUARD='+String(source.includes("process.env.APP_ENV === 'staging' && process.env.DB_NAME === STAGING_PRIVATE_DB_NAME")));
+          console.log('PINNED_ADMIN_ORIGIN='+String(source.includes("'https://staging.encarmen.org'")));
+          console.log('BUNDLE_STAGING_GUARD='+String(bundle.includes('STAGING_PRIVATE_CONFIGURATION_UNAVAILABLE')));
+          JS
           } > ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt 2>&1
           cat ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt
           grep -q '^NPM_CI_EXIT=0$' ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt
           grep -q '^TSC_EXIT=0$' ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt
           grep -q '^ESBUILD_EXIT=0$' ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt
           grep -q '^NODE_CHECK_EXIT=0$' ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt
+          grep -q '^STAGING_PRIVATE_CONFIG_GUARD=true$' ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt
+          grep -q '^PINNED_ADMIN_ORIGIN=true$' ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt
+          grep -q '^BUNDLE_STAGING_GUARD=true$' ENC_STAGING_ADMIN_ENV_VALIDATE_RESULT.txt
       - name: Save validation results
         if: always()
         shell: bash
