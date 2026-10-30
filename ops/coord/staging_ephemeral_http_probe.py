@@ -49,6 +49,9 @@ try:
         for k,n in [('host','DB_HOST'),('port','DB_PORT'),('user','DB_USER'),('password','DB_PASSWORD')]:
             v=vars.get(n,'3306' if k=='port' else '')
             f.write(k+'="'+v.replace('\\','\\\\').replace('"','\\"')+'"\n')
+    dumps=list((BACKUP/'database').glob('staging-db-*.sql.gz')) if (BACKUP/'database').is_dir() else []
+    if not any(p.is_file() and p.stat().st_size>0 for p in dumps):halt('SQL_BACKUP_NOT_VERIFIED')
+    emit('STAGING_DB_BACKUP_PRESENT','true')
     identity=database_query('SELECT DATABASE(),SUBSTRING_INDEX(CURRENT_USER(),CHAR(64),1)')
     if len(identity)!=1 or identity[0].split('\t')[0]!=DATABASE or identity[0].split('\t')[1]=='u293982346_appuser':halt('SQL_IDENTITY')
     if database_query('SELECT env_name,db_name FROM encarmen_environment_marker')!=['staging\t'+DATABASE]:halt('STAGING_MARKER')
@@ -63,7 +66,8 @@ try:
         if root.is_dir() and (root/'server.js').is_file() and (root/'node_modules').is_dir():
             candidates.append((root.stat().st_mtime,root))
     if not candidates:halt('NO_STAGING_NODE_BUILD')
-    stage_root=max(candidates)[1]
+    stage_root=(STAGING/'current/nodejs').resolve()
+    if not (stage_root/'server.js').is_file() or not (stage_root/'node_modules').is_dir():halt('CURRENT_BUILD_UNVERIFIED')
     # Only reuse a Node executable from a process rooted in exactly this staging tree.
     node_exe=None
     for entry in pathlib.Path('/proc').iterdir():
@@ -104,22 +108,33 @@ try:
     runner=work/'probe-runner.mjs'
     runner.write_text(r"""
 import fs from 'node:fs';
+import http from 'node:http';
 import {pathToFileURL} from 'node:url';
 import {randomUUID} from 'node:crypto';
 const resultFile=process.env.PROBE_RESULT;
 function save(value){fs.writeFileSync(resultFile,JSON.stringify(value),{mode:0o600});}
 async function query(method,route,body,extra={}){
  const headers={'Content-Type':'application/json','Origin':'https://staging.encarmen.org',...extra};
- const resp=await fetch('http://127.0.0.1:'+process.env.PORT+route,{
-  method,headers,...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(6000)
+ return new Promise((resolve,reject)=>{
+  const req=http.request({socketPath:process.env.PROBE_UNIX_SOCKET,path:route,method,headers,timeout:6000},res=>{
+   const chunks=[];let bytes=0;
+   res.on('data',chunk=>{bytes+=chunk.length;if(bytes>1500000){req.destroy(Error('BODY_TOO_LARGE'));return;}chunks.push(chunk);});
+   res.on('end',()=>{let json={};try{json=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{}resolve({status:res.statusCode,json});});
+  });
+  req.on('timeout',()=>req.destroy(Error('HTTP_TIMEOUT')));
+  req.on('error',reject);
+  if(body!==undefined)req.write(JSON.stringify(body));
+  req.end();
  });
- let json={};try{json=await resp.json();}catch{}
- return {status:resp.status,json};
 }
+
 (async()=>{
  let state={status:'STARTED'};
  try{
-  await import(pathToFileURL(process.env.STAGING_SERVER_ENTRY).href);
+  const mod=await import(pathToFileURL(process.env.STAGING_SERVER_ENTRY).href);
+  if(typeof mod.default!=='function')throw Error('EXPRESS_EXPORT_MISSING');
+  const appServer=http.createServer(mod.default);
+  await new Promise((resolve,reject)=>{appServer.once('error',reject);appServer.listen(process.env.PROBE_UNIX_SOCKET,()=>{appServer.removeListener('error',reject);resolve();});});
   let online=false;
   for(let n=0;n<35;n++){
    try{
@@ -165,6 +180,8 @@ async function query(method,route,body,extra={}){
 """,encoding='utf8')
     resultPath=work/'inprocess-result.json'
     procenv.update({
+       'VERCEL':'1',
+       'PROBE_UNIX_SOCKET':str(work/'http.sock'),
        'STAGING_SERVER_ENTRY':str(stage_root/'server.js'),
        'PROBE_RESULT':str(resultPath),
        'PROBE_PASSWORD':password,
