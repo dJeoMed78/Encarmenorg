@@ -100,7 +100,15 @@ jobs:
               old=active/'server.js'
               old_bytes=old.read_bytes()
               check(b'matchesWrittenValues' in old_bytes and b'BUSINESS_READBACK_FAILED' in old_bytes,'ACTIVE_OLD_BUNDLE_NOT_EXPECTED')
-              node=subprocess.run(['node','--check',str(C)],capture_output=True,timeout=25)
+              node_exe=None
+              for entry in pathlib.Path('/proc').iterdir():
+                  if not entry.name.isdigit():continue
+                  try:
+                      if pathlib.Path(os.readlink(entry/'cwd'))==active and 'node' in pathlib.Path(os.readlink(entry/'exe')).name.lower():
+                          node_exe=os.readlink(entry/'exe');break
+                  except (OSError,PermissionError):pass
+              check(node_exe is not None,'ACTIVE_NODE_EXECUTABLE_UNAVAILABLE')
+              node=subprocess.run([node_exe,'--check',str(C)],capture_output=True,timeout=25)
               check(node.returncode==0,'STAGING_NODE_SYNTAX')
               stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
               original=B/('enc-origin-server-pre-'+stamp+'.js')
