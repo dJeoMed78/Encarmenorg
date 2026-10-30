@@ -1,6 +1,7 @@
 name: ENCARMEN controlled public Staging business HTTP E2E stable DB gate
 # Re-run after 2026-10-30 staging-only credential gate loader deployment.
 # Diagnose test-only admin config presence without disclosing secret values.
+# Require public-health proof of the temporary test-write state before authentication.
 on:
   push:
     branches: [coord/staging-public-e2e-20261030]
