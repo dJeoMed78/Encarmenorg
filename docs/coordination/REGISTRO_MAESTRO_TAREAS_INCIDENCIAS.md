@@ -61,6 +61,14 @@ El listado de Jefa 2 incluía además: registro público directo sin aprobación
 - Evidencia, escenarios de reproducción y corrección complementaria: `docs/coordination/REVIEW_ENC_STAGING_CANDIDATE_CLOSURE_004.md`.
 - Se requiere revisión y subsanación por W1 en rama separada desde SHA C4, más pruebas; no repetir paquetes terminados A/B/C/D ni desplegar. Incidencias del propietario continúan abiertas.
 
+## Evaluación controlada GitHub Copilot — ENC-COPILOT-EVAL-001 (2026-10-29)
+
+- Rama experimental `experiment/copilot-eval-001`, SHA `75e16936f990846de7177b55d2f059fb49417714`; base `e60582e971f4f8cb56ea56191d33d91824f3fc5e`. GitHub: 2 commits, **únicamente tres archivos nuevos** bajo `experiments/copilot-eval-001/`, ningún archivo operativo ni rama protegida modificados.
+- Módulo `classifyOperationResult` y tests importando el código real: implementación cumple el contrato inspeccionado. Copilot informa **24/24 pruebas ejecutadas en Node 26.12.1**, logs originales no inspeccionados en esta revisión.
+- Coordinación ejecutó **49 comprobaciones independientes PASS, 0 FAIL** invocando la función del texto EXACTO recuperado por conector GitHub (blob `f1b37a6a4b33393d897dc0f12199691f888bb653`) en runtime JavaScript aislado. Este control **no equivale a correr la suite node:test en checkout completo**.
+- Observaciones menores: README consigna SHA anterior `c76ffc4` como «SHA final», aunque el HEAD real es `75e16936...`; Copilot dijo que documentos coordinación no estaban en rama base, aunque la instrucción pedía leerlos desde la rama documental distinta. Documentación y trazabilidad deben afinarse.
+- **Calificación provisional: 94/100. Dictamen: APTO para tareas aisladas bajo supervisión de Coordinación, no aprobado para producción ni autonomía sobre infraestructura.** Evaluar con trabajo real antes de permitir mayor alcance. No es incidencia funcional del propietario, solo registro de evaluación de herramienta. No integrar el experimento ficticio.
+
 ## Rutina de coordinación
 - Al comenzar conversación/sucesión, leer ESTE documento y `LA_JEFA_METODOLOGIA_PERMANENTE.md`, luego verificar GitHub/ramas/issues y documentos por rama.
 - Al recibir informe/captura/archivo del propietario, actualizar el registro **en la misma intervención**, primero conservando evidencia y estado pendiente.
