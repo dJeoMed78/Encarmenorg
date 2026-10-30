@@ -11,16 +11,13 @@ jobs:
     timeout-minutes: 14
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
       - name: Compile and validate Staging-only patch
         shell: bash
         run: |
           set -u
           {
             echo 'ENCARMEN STAGING ADMIN ENV ORIGIN FIX VALIDATION'
+            echo "NODE_VERSION=$(node --version)"
             echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             npm ci --ignore-scripts >/tmp/enc-npm-install.log 2>&1
             echo "NPM_CI_EXIT=$?"
