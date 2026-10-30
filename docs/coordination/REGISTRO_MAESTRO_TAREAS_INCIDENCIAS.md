@@ -202,3 +202,18 @@ W4/Perplexity entregó informe **exclusivamente de lectura**: GitHub Actions vis
 **Decisión técnica de coordinación:** mantener PR #7 sin fusionar hasta **autorizar y confirmar** suspensión/desconexión temporal del auto-deploy de la aplicación Staging exclusivamente, sin alterar `main` o la integración de producción; documentar previamente el estado/reconexión de Staging y recuperar configuración. Un cambio de código a `ia-desarrollo` antes de suspender auto-deploy haría implícito un despliegue no autorizado. Después, verificar SHAs, pruebas y protecciones; fusionar PR #7 en `ia-desarrollo`, confirmar árbol integrado; preparar publicación explícita de Staging con SHA fijo, frontend regenerado, respaldo selectivo, verificación de entorno aislado y rollback; autorización de despliegue específica. El workflow antiguo de deploy `encarmen-staging-deploy-authorized.yml` está fijado a un SHA anterior, **no reutilizar sin actualizar y revisar**. Distinguir evidencia de IA Hostinger (declaración de consulta real) de inspección independiente directa de Coordinación.
 
 **Verificación GitHub en esta intervención:** candidata `coord/enc-c4-final-001` continúa 28 commits ahead / 0 behind respecto de `ia-desarrollo`, 88 archivos. Próxima acción requiere autorización expresa del propietario para suspender SOLO integración GitHub de Staging o gestión equivalente. No tocar producción.
+
+
+## Revisión independiente W3 ENC-STAGING-RELEASE-PREP-007 (2026-10-30)
+
+W3/GAS entregó procedimiento para SHA `9b73f3366a14e34c9200c2f8f6aa0afcb6251c81`; dictamen declarado **sí con condiciones**. La Coordinación comparó directamente informe con `ops/staging-backups/deploy_staging_candidate.sh`, `run_hostinger_backup.py`, `backup_staging_db.py` en rama `coord/encarmen-work-control-001` y con `package.json` en candidata.
+
+**Diferencias que impiden ejecutar literalmente el informe W3**:
+1. Propone `npm run build` como inocuo, pero `package.json` contiene `prebuild` y `build` que invocan `scripts/update_version.cjs`; evitar mutaciones: usar Vite/Esbuild explícitos de workflow histórico.
+2. Supone `hbuilds/current -> versions/<ID>/nodejs`, pero script real exige `current -> versions/<ID>` y `OLD=$ACTIVE/nodejs`. Cambiar symlink como W3 indica rompería contratos.
+3. Supone `metadata.json` y `staging-current-release.json` como archivos contractuales, pero script real usa `$NEW/.metadata.json` y manifiesto en carpeta de backup; rollback propuesto de W3 no corresponde.
+4. Sugiere `run_hostinger_backup.py` en `$HOME/domains/staging.encarmen.org/hbuilds/ops/...`, ubicación **no acreditada**; la ejecución previa vía Actions transfirió scripts a directorio privado separado. `backup_staging_db.py` puede **SKIP** si existe respaldo menor a 72 h; no garantiza copia inmediata.
+5. Propone endpoints `/api/health`, `/api/database-status`, `/api/version` sin prueba de rutas activas. Verificación anterior usó HTTP 200 + `/encarmen-release.txt`.
+6. Reporte W3 no acredita análisis de conflicto entre despliegue GitHub auto-deploy de Hostinger (rama `ia-desarrollo`) y despliegue SSH atomizado. Hostinger confirmó que el primero se activa por cambios en rama, por lo que no invocar ambos sin verificar efecto sobre releases/runtime.
+
+**Decisión:** PROCEDIMIENTO W3 NO APROBADO PARA EJECUCIÓN TAL CUAL. Mantener candidata PR #7 y autorización general del propietario para operaciones ordinarias de Staging, con producción inamovible. Siguiente paso: comprobación segura del destino DB/variables y compatibilidad mecanismo Hostinger de auto-deploy antes de integrar a `ia-desarrollo` y publicar; preparar build con comandos `npx vite build` y `npx esbuild...` que no disparen actualización de versión. No reabrir desarrollo funcional por estas observaciones.
