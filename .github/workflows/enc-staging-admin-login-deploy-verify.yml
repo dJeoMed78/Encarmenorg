@@ -1,0 +1,114 @@
+name: ENCARMEN staging admin login public deployment attestation
+on:
+  push:
+    branches: [coord/enc-staging-005-diagnostic-20261030]
+    paths: [.github/workflows/enc-staging-admin-login-deploy-verify.yml]
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-staging-runtime-deploy
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Confirm public Staging JS and HTTP 10-char login release without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request,urllib.error,json,time,re
+          BASE='https://staging.encarmen.org'
+          release='ENC_ADMIN_10CHAR_UI_20261030'
+          def get(path,headers=None):
+              request=urllib.request.Request(BASE+path,headers={'Cache-Control':'no-cache','User-Agent':'ENC-Staging-Public-Release-Audit/1.0',**(headers or {})})
+              try:
+                  with urllib.request.urlopen(request,timeout=13) as response:
+                      return response.status,dict(response.headers.items()),response.read(900000)
+              except urllib.error.HTTPError as err:return err.code,dict(err.headers.items()),err.read(100000)
+          ready=False
+          for attempt in range(36):
+              status,headers,body=get('/api/health?admin_login_release='+str(attempt))
+              try: data=json.loads(body)
+              except Exception:data={}
+              marker=next((v for k,v in headers.items() if k.lower()=='x-encarmen-admin-login-release'),'')
+              if status==200 and marker==release and data.get('environment')=='staging' and data.get('database')=='mariadb':
+                  ready=True;break
+              if attempt in (0,12,24,35): print('PUBLIC_RELEASE_POLL='+str(attempt)+' STATUS='+str(status)+' NEW_MARKER='+str(marker==release)+' MARIADB='+str(data.get('database')=='mariadb'),flush=True)
+              time.sleep(6)
+          if not ready:raise SystemExit('BLOCKED_PUBLIC_RELEASE_NOT_ACTIVE')
+          print('PUBLIC_NODE_RELEASE=VERIFIED',flush=True)
+          page_status,_,html=get('/')
+          if page_status!=200:raise SystemExit('BLOCKED_PUBLIC_HTML_NOT_200')
+          text=html.decode('utf-8',errors='replace')
+          scripts=re.findall(r'<script[^>]+src=["\\x27]([^"\\x27]+)',text,re.I)
+          scripts=[p for p in scripts if p.startswith('/assets/') and p.endswith('.js')]
+          if not scripts:raise SystemExit('BLOCKED_PUBLIC_FRONTEND_ASSETS_MISSING')
+          found=False
+          for script in scripts[:8]:
+              status,_,js=get(script)
+              if status==200 and all(t in js for t in ('Mostrar contraseña','Ocultar contraseña','Contraseña de administrador','Usuario administrativo')):
+                  found=True;break
+          if not found:raise SystemExit('BLOCKED_FRONTEND_LOGIN_PATCH_NOT_LIVE')
+          print('PUBLIC_LOGIN_UI_SHOW_HIDE_AND_USERNAME=VERIFIED',flush=True)
+          # Test request shape only. No real account password used.
+          def testlogin(p):
+              body=json.dumps({'username':'enc_staging_probe_nobody','password':p}).encode('utf8')
+              req=urllib.request.Request(BASE+'/api/admin/login',method='POST',data=body,
+                  headers={'Origin':BASE,'Content-Type':'application/json','Cache-Control':'no-store','User-Agent':'ENC-Staging-Public-Release-Audit/1.0'})
+              try:
+                  with urllib.request.urlopen(req,timeout=12) as rsp:return rsp.status
+              except urllib.error.HTTPError as err:return err.code
+          short=testlogin('NinePwd!9')
+          validshape=testlogin('TenChars!9')
+          print('PUBLIC_INVALID_NINE_CHAR_STATUS='+str(short),flush=True)
+          print('PUBLIC_UNKNOWN_USER_TEN_CHAR_STATUS='+str(validshape),flush=True)
+          if short!=400 or validshape!=401:raise SystemExit('BLOCKED_PUBLIC_LOGIN_VALIDATION_MISMATCH')
+          print('PUBLIC_TEN_CHARACTER_INPUT_ACCEPTED_BY_VALIDATOR=VERIFIED',flush=True)
+          print('PUBLIC_REAL_ADMIN_CREDENTIAL_NOT_TESTED=true',flush=True)
+          print('RESULT=PUBLIC_STAGING_ADMIN_LOGIN_PATCH_DEPLOYED_VERIFIED',flush=True)
+          PY
+      - name: Verify active Hostinger node release and Staging-only DB identity without disclosure
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          sudo apt-get update -qq >/dev/null 2>&1
+          sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          test "$fp" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          export SSHPASS
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 -' <<'PY'
+          import pathlib,os,stat
+          H=pathlib.Path.home();S=H/'domains/staging.encarmen.org/hbuilds';E=S/'config/.env';D='u293982346_encarmentest'
+          if not E.is_file() or E.is_symlink() or E.stat().st_mode&0o077:raise SystemExit('BLOCKED_PRIVATE_CONFIG')
+          cfg={}
+          for row in E.read_text().splitlines():
+              row=row.strip().removeprefix('export ').strip()
+              if not row or row.startswith('#') or '=' not in row:continue
+              k,v=row.split('=',1);cfg.setdefault(k.strip(),[]).append(v.strip().strip("'").strip('"'))
+          expected={'APP_ENV':'staging','DB_NAME':D,'STAGING_READ_ONLY':'false','STAGING_DB_CONFIRMED':'true','STAGING_BUSINESS_WRITES_ENABLED':'true','ENC_ADMIN_MUTATIONS_ENABLED':'true'}
+          for k,v in expected.items():
+              if cfg.get(k)!=[v]:raise SystemExit('BLOCKED_STAGING_CONFIG_'+k)
+          print('STAGING_BUSINESS_WRITE_FLAGS_PRESERVED=VERIFIED',flush=True)
+          active=(S/'current/nodejs').resolve()
+          if (S/'versions').resolve() not in active.parents:raise SystemExit('BLOCKED_RELEASE_PATH')
+          bundle=active/'server.js'
+          if not bundle.is_file() or b'ENC_ADMIN_10CHAR_UI_20261030' not in bundle.read_bytes():raise SystemExit('BLOCKED_STAGING_SERVER_BINARY_OLD')
+          print('STAGING_RELEASE_BINARY=VERIFIED',flush=True)
+          count=0
+          for p in pathlib.Path('/proc').iterdir():
+              if not p.name.isdigit():continue
+              try:
+                  if pathlib.Path(os.readlink(p/'cwd'))==active and 'node' in pathlib.Path(os.readlink(p/'exe')).name.lower():count+=1
+              except (OSError,PermissionError):pass
+          if count<1:raise SystemExit('BLOCKED_STAGING_NODE_NOT_RUNNING')
+          print('STAGING_NODE_ACTIVE_IN_MANAGED_RELEASE=VERIFIED',flush=True)
+          print('RESULT=HOSTINGER_STAGING_ISOLATED_RELEASE_VERIFIED',flush=True)
+          PY
