@@ -65,7 +65,7 @@ test('SW explicit configuration, selected database and production account guards
  const prefix=source.slice(source.indexOf('export interface MariaDbConfig'),source.indexOf('export function isMariaDbActive'));
  const permission=source.slice(source.indexOf('export function isBusinessWritePermitted'),source.indexOf('export const stagingBusinessStore'));
  for(const target of [STAGING_BUSINESS_DATABASE,'u293982346_encarmenapp']){
-  const queries=[];const api=execute(prefix+permission,{...modules,process:{env},console:{log(){},warn(){},error(){}},mysql:{createPool:()=>({query:async sql=>{queries.push(sql);return sql.includes('DATABASE()')?[[{db_name:target}]]:[[{test:1}]];},end:async()=>{}})},createTablesIfNotExist:()=>{throw new Error('DDL forbidden');}});
+  const queries=[];const api=execute(prefix+permission,{...modules,process:{env},console:{log(){},warn(){},error(){}},mysql:{createPool:()=>({query:async sql=>{queries.push(sql);return sql.includes('DATABASE()')?[[{db_name:target}]]:[[{test:1}]];},end:async()=>{}})},createTablesIfNotExist:()=>{throw new Error('DDL forbidden');},getPrivateStagingSnapshot:()=>env,privateStagingBusinessWindowOpen:()=>true});
   assert.equal(await api.initMariaDb(),target===STAGING_BUSINESS_DATABASE);assert.equal(api.isWritePermitted(),false);assert.equal(api.isBusinessWritePermitted(),target===STAGING_BUSINESS_DATABASE);
   assert.ok(queries.every(q=>q.startsWith('SELECT')));
  }
@@ -156,7 +156,7 @@ async function httpHarness(){
  const effectiveEnv={...env,ENC_ADMIN_MUTATIONS_ENABLED:'true',ENC_ADMIN_PUBLIC_ORIGIN:'https://fixture.invalid',ENC_ADMIN_CREDENTIALS_JSON:JSON.stringify({version:1,accounts:[{username:'Y',passwordHash:derived(),permissions:security.ADMIN_PERMISSIONS}]})};
  let now=Date.now();
  const auth=execute(`${registration}\n${globalGuard}\nexport const isVerifiedAdminSession=(req:any)=>adminSecurity.isAuthorized(req,'business:manage');`,{
-  app,...security,administrativeWritesReady,registerAdminSecurity:(app,options)=>security.registerAdminSecurity(app,{...options,now:()=>now}),process:{env:effectiveEnv},isStagingEnvironment:()=>true,isBusinessWritePermitted:()=>db.state.canWrite,isWritePermitted:()=>false,console:{log(){},warn(){},error(){}}
+  app,...security,administrativeWritesReady,registerAdminSecurity:(app,options)=>security.registerAdminSecurity(app,{...options,now:()=>now}),process:{env:effectiveEnv},isStagingEnvironment:()=>true,isBusinessWritePermitted:()=>db.state.canWrite,isWritePermitted:()=>false,stagingDynamicIdentity:false,getPrivateStagingSnapshot:()=>effectiveEnv,console:{log(){},warn(){},error(){}}
  });
  auth.expire=()=>{now+=7*3600000;};
  registerStagingBusinessRoutes(app,{isStaging:()=>true,canWrite:()=>db.state.canWrite,isAdmin:auth.isVerifiedAdminSession,canPublish:auth.isVerifiedAdminSession,store:db.store,readAll:async()=>db.state.rows.map(serialize),saved:()=>{}});
