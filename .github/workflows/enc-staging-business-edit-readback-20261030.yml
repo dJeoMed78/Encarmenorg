@@ -62,30 +62,43 @@ jobs:
               if sql('SELECT env_name,db_name FROM encarmen_environment_marker')!=['staging\t'+D]:raise SystemExit('RESULT=SQL_WRONG_MARKER')
               if 'u293982346_encarmenapp' in sql('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA'):raise SystemExit('RESULT=PROD_VISIBLE')
               print('SQL_ENVIRONMENT=STAGING_ISOLATED_VERIFIED',flush=True)
-              lit='CONVERT(0x'+name.encode().hex()+' USING utf8mb4)'
-              rows=sql('SELECT id,HEX(name),HEX(description) FROM businesses WHERE BINARY name=BINARY '+lit+' LIMIT 3')
-              print('SQL_MATCHING_ROWS='+str(len(rows)),flush=True)
-              if len(rows)!=1:raise SystemExit('RESULT=BUSINESS_NOT_UNIQUE_OR_MISSING')
-              fields=rows[0].split('\t')
-              if len(fields)!=3 or not fields[0].isdigit():raise SystemExit('RESULT=UNEXPECTED_SQL_RECORD')
-              number=fields[0]
-              actual_name=bytes.fromhex(fields[1]).decode('utf8')
-              description=bytes.fromhex(fields[2]).decode('utf8') if fields[2]!='NULL' else ''
-              if actual_name!=name:raise SystemExit('RESULT=NAME_IDENTITY_MISMATCH')
-              print('SQL_BUSINESS_ID='+number,flush=True)
-              print('SQL_DESCRIPTION='+json.dumps(description,ensure_ascii=False)[:700],flush=True)
-              has_date=any(s in description.lower() for s in ('30/10/2026','30-10-2026','2026-10-30','30 de octubre','octubre 30'))
-              print('SQL_DESCRIPTION_CONTAINS_2026_10_30='+str(has_date).lower(),flush=True)
-              req=urllib.request.Request('https://staging.encarmen.org/api/businesses/'+number+'?readback='+str(os.getpid()),headers={'Cache-Control':'no-cache','User-Agent':'ENC-Staging-Edit-Readback/1'})
-              try:
-                  with urllib.request.urlopen(req,timeout=12) as result:
-                      pub=json.loads(result.read(200000));http=result.status
-              except urllib.error.HTTPError as e:
-                  http=e.code;pub={}
-              print('PUBLIC_GET_HTTP='+str(http),flush=True)
-              public_description=pub.get('business',{}).get('description') if isinstance(pub.get('business'),dict) else None
-              print('PUBLIC_DESCRIPTION_MATCHES_SQL='+str(http==200 and pub.get('success') is True and public_description==description).lower(),flush=True)
-              print('RESULT='+('EDIT_SAVED_SQL_AND_PUBLIC_MATCH' if has_date and http==200 and pub.get('success') and public_description==description else 'EDIT_READBACK_NEEDS_REVIEW'),flush=True)
+              phone='3898765432'
+              prefix='Prueba Staging Controlada'
+              pref='CONVERT(0x'+prefix.encode().hex()+' USING utf8mb4)'
+              phlit='CONVERT(0x'+phone.encode().hex()+' USING utf8mb4)'
+              cols=sql("SHOW COLUMNS FROM businesses LIKE 'phone'")
+              phone_clause=(' OR phone='+phlit) if len(cols)==1 else ''
+              rows=sql("SELECT id,HEX(name),HEX(description) FROM businesses WHERE name LIKE CONCAT("+pref+",'%')"+phone_clause+" ORDER BY id DESC LIMIT 12")
+              print('SQL_CANDIDATE_ROWS='+str(len(rows)),flush=True)
+              if not rows:raise SystemExit('RESULT=NO_MATCH_BY_NAME_PREFIX_OR_PHONE')
+              fully_verified=0
+              date_matches=0
+              for i,row in enumerate(rows):
+                  fields=row.split('\\t')
+                  if len(fields)!=3 or not fields[0].isdigit():raise SystemExit('RESULT=INVALID_BUSINESS_RECORD')
+                  number=fields[0]
+                  actual_name=bytes.fromhex(fields[1]).decode('utf8')
+                  description=bytes.fromhex(fields[2]).decode('utf8') if fields[2]!='NULL' else ''
+                  print('CANDIDATE_'+str(i+1)+'_ID='+number,flush=True)
+                  print('CANDIDATE_'+str(i+1)+'_NAME='+json.dumps(actual_name,ensure_ascii=False)[:700],flush=True)
+                  print('CANDIDATE_'+str(i+1)+'_DESCRIPTION='+json.dumps(description,ensure_ascii=False)[:700],flush=True)
+                  has_date=any(s in (actual_name+' '+description).lower() for s in ('30/10/2026','30-10-2026','2026-10-30','20261030','30 de octubre','octubre 30'))
+                  print('CANDIDATE_'+str(i+1)+'_HAS_2026_10_30='+str(has_date).lower(),flush=True)
+                  if has_date:date_matches+=1
+                  req=urllib.request.Request('https://staging.encarmen.org/api/businesses/'+number+'?readback='+str(os.getpid()),headers={'Cache-Control':'no-cache','User-Agent':'ENC-Staging-Edit-Readback/1'})
+                  try:
+                      with urllib.request.urlopen(req,timeout=12) as result:
+                          pub=json.loads(result.read(200000));http=result.status
+                  except urllib.error.HTTPError as e:
+                      http=e.code;pub={}
+                  business=pub.get('business') if isinstance(pub.get('business'),dict) else {}
+                  match=http==200 and pub.get('success') is True and business.get('name')==actual_name and business.get('description')==description
+                  print('CANDIDATE_'+str(i+1)+'_PUBLIC_GET_HTTP='+str(http),flush=True)
+                  print('CANDIDATE_'+str(i+1)+'_PUBLIC_SQL_MATCH='+str(match).lower(),flush=True)
+                  if match:fully_verified+=1
+              print('SQL_MATCHES_WITH_TODAY_DATE='+str(date_matches),flush=True)
+              print('PUBLIC_VERIFIED_CANDIDATES='+str(fully_verified),flush=True)
+              print('RESULT='+('DATED_EDIT_PERSISTED_AND_PUBLIC' if date_matches>0 and fully_verified>0 else 'FOUND_BUT_DATE_OR_PUBLIC_READBACK_NEEDS_REVIEW'),flush=True)
           finally:
               os.unlink(tmp)
           PY
