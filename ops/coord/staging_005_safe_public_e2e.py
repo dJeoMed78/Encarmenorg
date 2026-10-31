@@ -79,7 +79,7 @@ try:
  private_write(backup,old)
  pwd=secrets.token_urlsafe(36);salt=secrets.token_bytes(16)
  ph='scrypt$'+salt.hex()+'$'+hashlib.scrypt(pwd.encode(),salt=salt,n=16384,r=8,p=1,dklen=64).hex()
- test_account={'username':'enc_e2e_temp','passwordHash':ph,'permissions':['business:manage']}
+ test_account={'username':'enc_e2e_temp','passwordHash':ph,'permissions':['business:manage','admin:manage']}
  newrecord={'version':1,'accounts':[record['accounts'][0],test_account]}
  private_write(secret,json.dumps({'username':'enc_e2e_temp','password':pwd}))
  private_write(MARK,json.dumps({'backup':str(backup),'secret':str(secret),'created':stamp,'synthetic_name':synth_name}))
