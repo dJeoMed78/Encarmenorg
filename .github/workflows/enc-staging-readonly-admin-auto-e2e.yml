@@ -1,5 +1,5 @@
 name: ENCARMEN staged admin automatic readonly login and revocation
-# Nonsecret live Node environment comparison to identify admin-provider 503 condition.
+# Verify dynamic admin provider after Hostinger HOME-independent canonical release patch deployed 2026-10-31T00:15:48Z.
 on:
   push:
     branches: [coord/staging-admin-login-window-20261030]
