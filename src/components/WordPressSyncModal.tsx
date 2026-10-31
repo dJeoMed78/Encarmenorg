@@ -786,7 +786,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     try {
       const res = await adminDeleteBusiness(bizId);
       if (res.success) {
-        setActionSuccessMsg(`Negocio "${bizName}" eliminado definitivamente del directorio y de WordPress.`);
+        setActionSuccessMsg(`Negocio "${bizName}" eliminado de MariaDB y del directorio.`);
         if (reportId) {
           await updateReportStatus(reportId, 'resolved');
           await loadReportsData();
@@ -797,6 +797,8 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
           if (found) onDeleteBusiness(found);
         }
         setTimeout(() => setActionSuccessMsg(null), 3000);
+      } else {
+        setActionSuccessMsg('No se confirmó la eliminación: ' + (res.message || 'El servidor rechazó la operación.'));
       }
     } catch (err: any) {
       setActionSuccessMsg('Error al dar de baja el negocio: ' + (err.message || 'Error'));
