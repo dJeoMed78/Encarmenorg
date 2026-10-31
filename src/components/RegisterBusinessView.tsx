@@ -988,16 +988,16 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
                   <span className="text-[10px] mt-1 font-bold text-stone-700">Subir</span>
                   <input
                     type="file"
-                    disabled
-                    accept="image/*"
+                    disabled={isUploadingLogo || isUploadingGallery || isSubmitting}
+                    accept="image/jpeg,image/png,image/webp"
                     onChange={handleLogoUpload}
                     className="hidden"
                   />
                 </label>
               )}
               <div className="text-xs text-stone-600 leading-relaxed">
-                <p className="font-bold text-stone-800">Formato JPG, PNG o WebP (máx. 5MB).</p>
-                <p>Carga pública de logotipo y galería no disponible todavía; no se enviarán imágenes.</p>
+                <p className="font-bold text-stone-800">Formato JPG, PNG o WebP (máx. 3 MB por archivo; se comprimen fotografías grandes).</p>
+                <p>El logotipo se guardará en MariaDB antes de publicar el negocio.</p>
                 {isUploadingLogo && (
                   <span className="text-amber-700 font-bold flex items-center gap-1 mt-1">
                     <RefreshCw className="w-3 h-3 animate-spin" /> Subiendo logo...
@@ -1021,7 +1021,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
                   <span>Fotos de Productos, Servicios o Menú (Hasta 10 fotos)</span>
                 </label>
                 <p className="text-[11px] sm:text-xs text-stone-600 mt-0.5">
-                  La galería está deshabilitada hasta disponer de una carga pública segura. Puedes registrar los datos del negocio.
+                  Puedes añadir hasta 10 fotografías JPG, PNG o WebP; se guardarán en MariaDB.
                 </p>
               </div>
               <span
@@ -1086,7 +1086,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
                     multiple
                     accept="image/*"
                     onChange={handleGalleryUpload}
-                    disabled={true}
+                    disabled={isUploadingLogo || isUploadingGallery || isSubmitting}
                     className="hidden"
                   />
                 </label>
