@@ -1,0 +1,214 @@
+name: ENCARMEN Staging real anonymous public registration MariaDB E2E and cleanup
+on:
+  push:
+    branches: [coord/enc-staging-005-diagnostic-20261030]
+    paths: [.github/workflows/enc-staging-public-registration-real-e2e-20261030.yml]
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-staging-runtime-deploy
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Pin Hostinger staging server key
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          sudo apt-get update -qq >/dev/null 2>&1
+          sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          test "$fp" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          chmod 600 "$HOME/.ssh/known_hosts"
+      - name: Public POST replay SQL readback public GET and remove synthetic
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SSHPASS
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ServerAliveInterval=15 -o ServerAliveCountMax=4 u293982346@45.137.159.114 'python3 -u -' <<'PY'
+          import os,pathlib,stat,json,subprocess,tempfile,time,datetime,uuid,secrets,gzip,urllib.request,urllib.error
+          H=pathlib.Path.home();S=H/'domains/staging.encarmen.org/hbuilds';E=S/'config/.env';B=H/'encarmen-staging-backups';D='u293982346_encarmentest';BASE='https://staging.encarmen.org'
+          MARK=B/'enc-public-registration-real-e2e-active.json'
+          NAME='ENCARMEN REG PUBLIC CONTROL '+secrets.token_hex(9).upper()
+          DESCRIPTION='Registro temporal sintetico para comprobar MariaDB en Staging'
+          PHONE='938'+str(secrets.randbelow(10000000)).zfill(7)
+          ID=None;RESULT='BLOCKED_NOT_STARTED';sqlcfg=None;marker=False
+          def out(key,val):print(key+'='+str(val),flush=True)
+          def check(ok,reason):
+              if not ok:raise RuntimeError(reason)
+          def req(method,path,data=None,key=None):
+              raw=json.dumps(data,separators=(',',':')).encode() if data is not None else None
+              h={'Cache-Control':'no-store','User-Agent':'ENCARMEN-PUBLIC-E2E/1.0','Origin':BASE,'Content-Type':'application/json'}
+              if key:h['Idempotency-Key']=key
+              request=urllib.request.Request(BASE+path,data=raw,headers=h,method=method)
+              try:
+                  with urllib.request.urlopen(request,timeout=18) as response:return response.status,json.loads(response.read(1500000))
+              except urllib.error.HTTPError as err:
+                  try:return err.code,json.loads(err.read(50000))
+                  except:return err.code,{}
+          def sql(query):
+              p=subprocess.run(['mariadb','--defaults-extra-file='+str(sqlcfg),'-D',D,'--batch','--skip-column-names','-e',query],capture_output=True,text=True,timeout=25)
+              if p.returncode:raise RuntimeError('SQL_QUERY_FAILED')
+              return p.stdout.strip().splitlines()
+          def lit(text):return 'CONVERT(0x'+text.encode('utf8').hex()+' USING utf8mb4)'
+          try:
+              check(E.is_file() and not E.is_symlink() and E.stat().st_mode&0o077==0,'CONFIG_UNSAFE')
+              check(B.is_dir() and not B.is_symlink() and B.stat().st_mode&0o077==0,'BACKUP_DIR_UNSAFE')
+              check(not MARK.exists(),'PREVIOUS_SYNTHETIC_ACTIVE')
+              cfg={};duplicates=[]
+              for line in E.read_text().splitlines():
+                  line=line.strip().removeprefix('export ').strip()
+                  if not line or line.startswith('#') or '=' not in line:continue
+                  k,v=line.split('=',1);k=k.strip()
+                  if k in cfg:duplicates.append(k)
+                  cfg[k]=v.strip().strip("'").strip('"')
+              check(not duplicates,'CONFIG_DUPLICATED')
+              expected={'APP_ENV':'staging','DB_NAME':D,'STAGING_READ_ONLY':'false','STAGING_DB_CONFIRMED':'true',
+                  'STAGING_BUSINESS_WRITES_ENABLED':'true','ENC_ADMIN_MUTATIONS_ENABLED':'true','PUBLIC_REGISTRATION_ENABLED':'true',
+                  'STAGING_ALLOW_SCHEMA_INIT':'false','ENABLE_WP_SYNC':'false','ENC_ADMIN_PUBLIC_ORIGIN':BASE}
+              for k,v in expected.items():check(cfg.get(k)==v,'CONFIG_'+k)
+              check(cfg.get('DB_USER') and cfg['DB_USER']!='u293982346_appuser' and cfg.get('DB_PASSWORD'),'DB_CONFIG_UNSAFE')
+              active=(S/'current/nodejs').resolve();check((S/'versions').resolve() in active.parents,'UNMANAGED_RELEASE')
+              bundle=active/'server.js';check(bundle.is_file() and b'ENC_PUBLIC_PRIVATE_GATE_20261030' in bundle.read_bytes(),'RELEASE_MISMATCH')
+              status,health=req('GET','/api/health?e2e_public='+str(os.getpid()))
+              check(status==200 and health.get('environment')=='staging' and health.get('database')=='mariadb','HEALTH_NOT_STAGING_MARIADB')
+              out('PUBLIC_RELEASE_AND_MARIADB','VERIFIED')
+              fd,path=tempfile.mkstemp(dir=B,prefix='.enc-public-live-sql-',suffix='.cnf');sqlcfg=pathlib.Path(path)
+              os.fchmod(fd,0o600)
+              with os.fdopen(fd,'w') as f:
+                  f.write('[client]\n')
+                  for sqlkey,key in [('host','DB_HOST'),('user','DB_USER'),('password','DB_PASSWORD')]:
+                      value=cfg.get(key,'').replace('\\','\\\\').replace('"','\\"')
+                      f.write(sqlkey+'="'+value+'"\n')
+              check(sql("SELECT DATABASE(),SUBSTRING_INDEX(CURRENT_USER(),'@',1)")==[D+'\t'+cfg['DB_USER']],'SQL_IDENTITY_MISMATCH')
+              check(sql('SELECT env_name,db_name FROM encarmen_environment_marker')==['staging\t'+D],'SQL_MARKER_MISMATCH')
+              check('u293982346_encarmenapp' not in sql('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA'),'PRODUCTION_VISIBLE')
+              grants=sql('SHOW GRANTS FOR CURRENT_USER()')
+              for priv in ('INSERT','UPDATE','DELETE'):check(any((priv in g or 'ALL PRIVILEGES' in g) and D in g for g in grants),'NO_PRIVILEGE_'+priv)
+              before=sql('SELECT COUNT(*) FROM businesses')
+              check(len(before)==1 and before[0].isdigit(),'SQL_COUNT_MISSING')
+              out('BEFORE_BUSINESS_COUNT',before[0]);out('STAGING_SQL_IDENTITY_MARKER_GRANTS','VERIFIED')
+              backupfolder=B/'database';check(backupfolder.is_dir() and not backupfolder.is_symlink(),'NO_DATABASE_BACKUP_DIR')
+              stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+              archive=backupfolder/('staging-public-reg-pre-e2e-'+stamp+'.sql.gz')
+              fd,dumpfile=tempfile.mkstemp(dir=backupfolder,prefix='.enc-public-e2e-dump-',suffix='.gz')
+              try:
+                  with os.fdopen(fd,'wb') as stream:
+                      data=subprocess.run(['mariadb-dump','--defaults-extra-file='+str(sqlcfg),'--single-transaction','--quick','--skip-lock-tables','--no-tablespaces','--databases',D],capture_output=True,timeout=120)
+                      check(data.returncode==0 and len(data.stdout)>1000,'DUMP_FAILED')
+                      with gzip.GzipFile(fileobj=stream,mode='wb') as gz:gz.write(data.stdout)
+                  with gzip.open(dumpfile,'rb') as gz:check(b'CREATE TABLE' in gz.read(5000000),'BACKUP_DUMP_INVALID')
+                  os.replace(dumpfile,archive);os.chmod(archive,0o600)
+              finally:
+                  if os.path.exists(dumpfile):os.unlink(dumpfile)
+              out('FRESH_DB_BACKUP','VERIFIED')
+              fd,m=tempfile.mkstemp(dir=B,prefix='.enc-public-marker-')
+              with os.fdopen(fd,'w') as fp:
+                  json.dump({'name':NAME,'created':stamp},fp);fp.flush();os.fsync(fp.fileno())
+              os.chmod(m,0o600);os.replace(m,MARK);marker=True
+              payload={'name':NAME,'category':'Servicios','description':DESCRIPTION,
+                       'colonia':'Centro','postalCode':'24100','phone':PHONE,'whatsapp':PHONE,'hp':''}
+              requestKey=str(uuid.uuid4())
+              status,data=req('POST','/api/public/business-registrations',payload,requestKey)
+              out('PUBLIC_CREATE_HTTP',status)
+              if status!=201:
+                  out('PUBLIC_CREATE_ERROR_CODE',str(data.get('error','unknown'))[:80])
+                  raise RuntimeError('PUBLIC_CREATE_NOT_201')
+              check(data.get('success') is True and data.get('directoryVisible') is True and data.get('business',{}).get('status')=='published','PUBLIC_CREATE_NOT_CONFIRMED')
+              ID=str(data.get('business',{}).get('id',''))
+              check(ID.isdigit(),'PUBLIC_CREATE_ID_INVALID')
+              out('PUBLIC_INSERT_ID',ID)
+              rows=sql('SELECT HEX(name),HEX(description),status FROM businesses WHERE id='+ID)
+              check(len(rows)==1,'SQL_READBACK_MISSING')
+              parts=rows[0].split('\t')
+              check(len(parts)==3 and bytes.fromhex(parts[0]).decode()==NAME and bytes.fromhex(parts[1]).decode()==DESCRIPTION and parts[2]=='published','SQL_READBACK_MISMATCH')
+              out('PUBLIC_SQL_READBACK','VERIFIED')
+              status,detail=req('GET','/api/businesses/'+ID+'?e2e='+str(os.getpid()))
+              check(status==200 and detail.get('success') is True and detail.get('business',{}).get('name')==NAME and detail.get('business',{}).get('description')==DESCRIPTION,'PUBLIC_GET_READBACK_MISMATCH')
+              out('PUBLIC_GET_READBACK','VERIFIED')
+              status,listdata=req('GET','/api/businesses?e2e='+str(os.getpid()))
+              check(status==200 and isinstance(listdata.get('businesses'),list) and any(str(b.get('id'))==ID and b.get('name')==NAME for b in listdata['businesses']),'PUBLIC_LIST_READBACK_MISMATCH')
+              out('PUBLIC_DIRECTORY_READBACK','VERIFIED')
+              status,replay=req('POST','/api/public/business-registrations',payload,requestKey)
+              out('PUBLIC_IDEMPOTENT_REPLAY_HTTP',status)
+              check(status==200 and replay.get('replayed') is True and str(replay.get('business',{}).get('id'))==ID,'PUBLIC_IDEMPOTENCY_FAILED')
+              out('PUBLIC_REPLAY','VERIFIED')
+              RESULT='PASS_PUBLIC_REGISTRATION_REAL_SQL'
+          except Exception as e:
+              RESULT='BLOCKED_'+str(e)[:110]
+          finally:
+              if sqlcfg is not None:
+                  try:
+                      found=sql('SELECT id FROM businesses WHERE BINARY name=BINARY '+lit(NAME)+' LIMIT 2')
+                      check(len(found)<2,'SYNTHETIC_MULTIPLE_ROWS')
+                      if found:
+                          check(found[0].isdigit(),'SYNTHETIC_ID_INVALID')
+                          sql('DELETE FROM businesses WHERE id='+found[0]+' AND BINARY name=BINARY '+lit(NAME))
+                          check(sql('SELECT COUNT(*) FROM businesses WHERE id='+found[0])==['0'],'CLEANUP_FAILED')
+                          out('SYNTHETIC_DELETED_SQL','VERIFIED')
+                      else:out('SYNTHETIC_DELETED_SQL','NOT_NEEDED')
+                      after=sql('SELECT COUNT(*) FROM businesses')
+                      out('AFTER_BUSINESS_COUNT',after[0] if after else 'unknown')
+                      if 'before' in locals() and after!=before:RESULT='BLOCKED_COUNT_NOT_RESTORED'
+                      if marker and MARK.exists():MARK.unlink()
+                  except Exception as err:
+                      RESULT='BLOCKED_SYNTHETIC_CLEANUP_NEEDS_REVIEW'
+                      out('SYNTHETIC_CLEANUP_ERROR','CHECK_REQUIRED')
+                  sqlcfg.unlink(missing_ok=True)
+              out('FINAL_RESULT',RESULT)
+              if RESULT!='PASS_PUBLIC_REGISTRATION_REAL_SQL':raise SystemExit(1)
+          PY
+      - name: Recover exact synthetic after interrupted execution
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          export SSHPASS
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 -' <<'PY'
+          import pathlib,os,json,stat,tempfile,subprocess,re
+          H=pathlib.Path.home();B=H/'encarmen-staging-backups';E=H/'domains/staging.encarmen.org/hbuilds/config/.env';M=B/'enc-public-registration-real-e2e-active.json';D='u293982346_encarmentest'
+          if not M.exists():
+              print('RECOVERY_MARKER=ABSENT',flush=True)
+              raise SystemExit(0)
+          if not M.is_file() or M.is_symlink() or M.stat().st_mode&0o077:raise SystemExit('RECOVERY_MARKER_UNSAFE')
+          mark=json.loads(M.read_text());name=mark.get('name','')
+          if not re.fullmatch(r'ENCARMEN REG PUBLIC CONTROL [0-9A-F]{18}',name):raise SystemExit('RECOVERY_NAME_UNSAFE')
+          cfg={}
+          for l in E.read_text().splitlines():
+              l=l.strip().removeprefix('export ').strip()
+              if l and not l.startswith('#') and '=' in l:
+                  k,v=l.split('=',1);cfg[k.strip()]=v.strip().strip("'").strip('"')
+          if cfg.get('APP_ENV')!='staging' or cfg.get('DB_NAME')!=D or cfg.get('PUBLIC_REGISTRATION_ENABLED')!='true' or cfg.get('DB_USER')=='u293982346_appuser':raise SystemExit('RECOVERY_CONFIG_UNSAFE')
+          fd,tmp=tempfile.mkstemp(dir=B,prefix='.enc-public-recovery-',suffix='.cnf')
+          try:
+              os.fchmod(fd,0o600)
+              with os.fdopen(fd,'w') as fp:
+                  fp.write('[client]\n')
+                  for k,source in [('host','DB_HOST'),('user','DB_USER'),('password','DB_PASSWORD')]:
+                      v=cfg.get(source,'').replace('\\','\\\\').replace('"','\\"');fp.write(k+'="'+v+'"\n')
+              def sql(q):
+                  p=subprocess.run(['mariadb','--defaults-extra-file='+tmp,'-D',D,'--batch','--skip-column-names','-e',q],capture_output=True,text=True,timeout=20)
+                  if p.returncode:raise RuntimeError('RECOVERY_SQL_ERROR')
+                  return p.stdout.strip().splitlines()
+              if sql("SELECT DATABASE(),SUBSTRING_INDEX(CURRENT_USER(),'@',1)")!=[D+'\t'+cfg['DB_USER']]:raise SystemExit('RECOVERY_DB_IDENTITY')
+              if sql('SELECT env_name,db_name FROM encarmen_environment_marker')!=['staging\t'+D]:raise SystemExit('RECOVERY_DB_MARKER')
+              if 'u293982346_encarmenapp' in sql('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA'):raise SystemExit('RECOVERY_PROD_VISIBLE')
+              lit='CONVERT(0x'+name.encode().hex()+' USING utf8mb4)'
+              ids=sql('SELECT id FROM businesses WHERE BINARY name=BINARY '+lit+' LIMIT 2')
+              if len(ids)>1:raise SystemExit('RECOVERY_MULTI_MATCH')
+              if ids:
+                  if not ids[0].isdigit():raise SystemExit('RECOVERY_ID_INVALID')
+                  sql('DELETE FROM businesses WHERE id='+ids[0]+' AND BINARY name=BINARY '+lit)
+                  if sql('SELECT COUNT(*) FROM businesses WHERE id='+ids[0])!=['0']:raise SystemExit('RECOVERY_DELETE_UNCONFIRMED')
+              M.unlink()
+              print('RECOVERY_SYNTHETIC_CLEANUP=VERIFIED',flush=True)
+          finally:os.unlink(tmp)
+          PY
