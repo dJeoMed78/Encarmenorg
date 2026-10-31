@@ -517,3 +517,7 @@ Tras autorización del propietario para finalizar pruebas empresariales, Coordin
 - **Incidencias funcionales aún pendientes de validación del propietario:** Issue #21 acceso administrativo; Issue #12 eliminación visual no persistida en MariaDB (ID 20272); Issue #19 logo y 10 fotos. Mantener resultados específicos y no atribuir causa raíz no comprobada.
 
 **Auditoría de continuidad:** el propietario preguntó expresamente si Nia estaba usando GitHub como memoria y qué ocurriría cuando termine el chat. Confirmación operativa: la sucesión se hace desde estos cuatro documentos y el estado vivo de GitHub; ningún chat o instancia de modelo garantiza por sí mismo continuidad automática, pero el registro permite reconstruir decisiones y trabajo sin perder rastreabilidad.
+
+
+### Decisión de memoria dual Nia — 2026-10-31
+El propietario autorizó Google Drive como memoria narrativa más frecuente de Coordinación Principal, sin abandonar GitHub como registro técnico. Carpeta privada NIA: https://drive.google.com/drive/folders/1M7DpHsFCatAg7YXcBWxZt4KeUHVKSfdX . Documento creado, escrito, leído y colocado en esa carpeta: https://docs.google.com/document/d/1aNJblt-eoTyAlzj03FXblZnhIvQ-MDLsbFWQ87valGg/edit . Prioridad para nuevos chats: leer el último checkpoint de Drive; luego contrastar documentación canónica, Issues, commits y pruebas reales en GitHub. No existe aún automatización de cinco minutos: registrar avances activos sin simular periodicidad. No almacenar secretos ni modificar producción.
