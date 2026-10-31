@@ -46,15 +46,16 @@ jobs:
           import os from 'node:os';
           import path from 'node:path';
           import {execFileSync} from 'node:child_process';
-          import archiver from 'archiver';
+          import {ZipArchive} from 'archiver';
+          import {once} from 'node:events';
           const dir=fs.mkdtempSync(path.join(os.tmpdir(),'encarmen-zip-smoke-'));
           try{
             const src=path.join(dir,'source');fs.mkdirSync(path.join(src,'nested'),{recursive:true});
             fs.writeFileSync(path.join(src,'nested','hello.txt'),'ENCARMEN-ZIP-PATCH-OK');
-            const out=fs.createWriteStream(path.join(dir,'smoke.zip'));const zip=archiver('zip',{zlib:{level:5}});
+            const out=fs.createWriteStream(path.join(dir,'smoke.zip'));const zip=new ZipArchive({zlib:{level:5}});
             zip.on('error',e=>{throw e;});zip.pipe(out);
             zip.directory(src,'source');
-            await zip.finalize();await new Promise((resolve,reject)=>{out.on('close',resolve);out.on('error',reject);});
+            const closed=once(out,'close');await zip.finalize();await closed;
             const listing=execFileSync('unzip',['-Z','-1',path.join(dir,'smoke.zip')],{encoding:'utf8'});
             if(!listing.includes('source/nested/hello.txt'))throw Error('ZIP directory entry missing');
             const content=execFileSync('unzip',['-p',path.join(dir,'smoke.zip'),'source/nested/hello.txt'],{encoding:'utf8'});
