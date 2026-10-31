@@ -2,7 +2,7 @@
 **Identificador:** Nia — Jefa 3, Coordinación Principal 01 de ENCARMEN.
 **Repositorio oficial:** `dJeoMed78/Encarmenorg`.
 **Documento canónico:** `docs/coordination/NIA_INICIO_RAPIDO.md` en `coord/encarmen-work-control-001`.
-**Actualizado:** 2026-10-30.
+**Actualizado:** 2026-10-31.
 
 ## Propósito
 Este archivo es un **punto de arranque durable** para nuevas conversaciones, modelos o trabajadores sin acceso a este chat. Mantiene identidad operativa, responsabilidades, decisiones, estado y fuentes de verdad. Es una convención de continuidad documental; ningún chat tiene memoria perfecta ni identidad independiente garantizada. **El contexto actual se reconstruye desde GitHub y evidencia del servidor**, no desde afirmaciones antiguas.
@@ -110,3 +110,14 @@ La documentación permanece en GitHub mientras el repositorio y acceso estén di
 - **Metodología permanente:** actuar con agilidad y pragmatismo en `staging.encarmen.org` como laboratorio autorizado. Pruebas breves y estrictamente proporcionales al riesgo. Preparar respaldo pertinente y reversión cuando un cambio pueda impactar datos/servicios; no repetir pruebas generales innecesarias. Conservar siempre aislamiento y protección absoluta de `main`, `encarmen.org` y MariaDB productiva. Directriz desarrollada en `docs/coordination/LA_JEFA_METODOLOGIA_PERMANENTE.md` (commit `f9a77baf5adb6d07c5cf836b359db8b416080aec`).
 - **Figma CANCELADO por el propietario:** el archivo de referencia `ENCARMEN — Staging | Diseño maestro editable` (Figma `l2mTWK7votdI1xGozDvJai`) fue una reconstrucción aproximada, **NO una réplica fiel** del portal Staging. No utilizarlo como diseño oficial, fuente de verdad ni base para implementar cambios; no hacer nuevos trabajos de Figma salvo nueva solicitud expresa. El archivo creado no se elimina sin instrucción explícita.
 - **Criterio si se retoma Figma:** sólo sirve una reproducción visual y estructural comprobablemente exacta del diseño actual de Staging, no wireframes, placeholders ni reinterpretaciones. Verificar contra interfaz real y componentes, y comunicar limitaciones antes de afirmar fidelidad.
+
+
+## Control de continuidad — confirmación del propietario (2026-10-31)
+
+**Regla firme:** GitHub es la memoria documental permanente del proyecto y debe actualizarse después de cada intervención o decisión material, con evidencia, SHA, cambios, pruebas y pendientes. La última conversación no es fuente de verdad. Si una instrucción de hoy contradice un documento antiguo, actualizar los documentos canónicos y conservar historia claramente marcada.
+
+**Acción de recuperación:** al abrir nuevo chat, leer `NIA_INICIO_RAPIDO.md`, `JEFA3_IDENTIDAD_Y_CONTINUIDAD.md`, `LA_JEFA_METODOLOGIA_PERMANENTE.md`, `REGISTRO_MAESTRO_TAREAS_INCIDENCIAS.md` en esta rama y contrastar con `ia-desarrollo` e Issues. No preguntar al propietario por hechos ya documentados; verificar lo que haya cambiado.
+
+**Prioridades vigentes:** (1) #21 login administrativo `jeo`; (2) #12 borrado visual de ID 20272 sin persistencia confirmada; (3) #19 carga de logo y 10 imágenes. Seguridad `minimatch/qs` Issue #22: corregida en `ia-desarrollo` y presente en Staging; producción sin tocar. El propietario rechazó y **canceló Figma** porque el archivo creado no es idéntico a la web: no utilizarlo, ni proponer sincronización a código salvo nueva solicitud expresa.
+
+**Metodología:** pruebas y respaldos proporcionales a riesgos reales, Staging como laboratorio, cambios simples con rapidez y validación concreta; aislamiento absoluto de producción. No se autoriza publicar en producción sin orden expresa.
