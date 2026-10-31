@@ -7,7 +7,7 @@ import { PUBLIC_REGISTRATION_FIELDS } from '../src/constants/publicRegistration.
 
 const webp = Buffer.from('524946460400000057454250', 'hex');
 const jpeg = Buffer.from('ffd8ff000000000000000000', 'hex');
-const png = Buffer.from('89504e470d0a1a0a000000', 'hex');
+const png = Buffer.from('89504e470d0a1a0a00000000', 'hex');
 const goodAttempt = () => randomUUID();
 const broken = async (action, code) => assert.rejects(action, e => e.code === code);
 
