@@ -1,0 +1,31 @@
+name: ENCARMEN 005 narrow integration independent validation
+on:
+  push:
+    branches: [coord/enc-staging-005-integration-20261030]
+    paths:
+      - .github/workflows/enc-staging-005-integration-ci.yml
+      - server.ts
+      - src/db/mariadb.ts
+      - src/server/adminSecurity.ts
+      - src/server/consolidatedWritePolicy.ts
+      - src/server/stagingBusinessSecurity.ts
+      - src/server/stagingIsolationProof.ts
+      - tests/enc-staging-write-gate-005-http.test.mjs
+      - tests/enc-staging-write-gate-005-unit.test.mjs
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: node --import tsx --test tests/enc-staging-write-gate-005-unit.test.mjs tests/enc-staging-write-gate-005-http.test.mjs
+      - run: node --import tsx --test tests/staging-isolation-proof.test.mjs tests/security-containment-003.test.mjs
+      - run: npm run build
