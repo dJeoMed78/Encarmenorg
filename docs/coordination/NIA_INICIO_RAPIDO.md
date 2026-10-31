@@ -98,6 +98,8 @@ La documentación permanece en GitHub mientras el repositorio y acceso estén di
 ## Prioridad P1 de seguridad — 2026-10-31
 
 - [Issue #22](https://github.com/dJeoMed78/Encarmenorg/issues/22): `ENC-SEC-DEPS-20261031-001`, remediar dos CVE **moderados** reportados por escáner: `minimatch 10.2.6` → `11.0.1+`, `qs 6.16.0` → `6.16.1+`. Versiones vulnerables verificadas en `package-lock.json` de `ia-desarrollo`.
-- **Prioridad operativa alta (P1), pendiente, no implementado ni desplegado.** Revisar dependencias transitivas, compatibilidad del salto mayor minimatch, `npm audit`, `npm ci`, pruebas de regresión y CI antes de cualquier integración a Staging.
+- **Estado:** corregido, CI PASS, integrado a `ia-desarrollo` y versiones reales detectadas en Hostinger Staging. Producción pendiente de autorización; no se ha modificado `main`.
 - Coordinación debe secuenciar con incidentes #21/#12/#19, sin modificar `main` o producción sin autorización específica.
 
+
+- PR #23, merge `6eefb0209e402b0f78b0c3a3045085c1e6b70fe3` a `ia-desarrollo`; CI `41213892619` PASS (audit 0 hallazgos moderados+, pruebas auth/MariaDB/seguridad, ZIP y compilación). Hostinger Staging read-only `41214176745`: `minimatch=11.0.1`, `qs=6.16.1` instalados, health HTTP 200; producción sin cambios. Issue #22 permanece abierto hasta decisión de promoción productiva.
