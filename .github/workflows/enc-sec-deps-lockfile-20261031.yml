@@ -1,0 +1,48 @@
+name: ENCARMEN security dependencies generate pinned lockfile
+on:
+  push:
+    branches: [coord/enc-sec-deps-20261031-001]
+    paths:
+      - .github/workflows/enc-sec-deps-lockfile-20261031.yml
+permissions:
+  contents: write
+jobs:
+  generate-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Generate lockfile using npm published integrity metadata
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Validate exact patched resolutions and limited scope
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const manifest=JSON.parse(fs.readFileSync('package.json','utf8'));
+          const lock=JSON.parse(fs.readFileSync('package-lock.json','utf8'));
+          if(manifest.overrides['readdir-glob']?.minimatch!=='11.0.1')throw Error('Unexpected minimatch override');
+          if(manifest.overrides.qs!=='6.16.1')throw Error('Unexpected qs override');
+          for(const [name,expected] of [['minimatch','11.0.1'],['qs','6.16.1']]){
+            const entries=Object.entries(lock.packages).filter(([p])=>p==='node_modules/'+name||p.endsWith('/node_modules/'+name));
+            if(!entries.length||entries.some(([,p])=>p.version!==expected||!p.integrity||!p.resolved?.startsWith('https://registry.npmjs.org/')))throw Error('Locked '+name+' version or integrity invalid');
+            console.log(name+'='+expected+' entries='+entries.length);
+          }
+          JS
+          git diff --check
+          git status --short
+      - name: Commit generated lockfile only to isolated branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          if git diff --cached --quiet; then echo "Lockfile was already correct"; exit 0; fi
+          git diff --cached --name-only | grep -x package-lock.json
+          git commit -m "fix(deps): resolve patched minimatch 11.0.1 and qs 6.16.1 lockfile"
+          git push origin HEAD:coord/enc-sec-deps-20261031-001
