@@ -169,6 +169,7 @@ async function httpHarness(){
  auth.expire=()=>{now+=7*3600000;};
  registerStagingBusinessRoutes(app,{isStaging:()=>true,canWrite:()=>db.state.canWrite,isAdmin:auth.isVerifiedAdminSession,canPublish:auth.isVerifiedAdminSession,store:db.store,readAll:async()=>db.state.rows.map(serialize),saved:()=>{}});
  app.post('/api/submit-business',(_req,res)=>{legacy++;res.json({success:true,legacy:true});});app.patch(['/api/businesses/:id','/businesses/:id'],(_req,res)=>{legacy++;res.json({legacy:true});});
+ app.delete('/api/businesses/:id',(_req,res)=>res.json({success:true,deleted:true}));
  app.post('/api/admin/change-password',(_req,res)=>res.json({unsafe:true}));
  const server=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});const base=`http://127.0.0.1:${server.address().port}`;
  const request=async(path,method='GET',body,token,requestId)=>{const r=await fetch(base+path,{method,headers:{'Content-Type':'application/json',...(token?{'X-Encarmen-Admin-Token':token}:{}),...(requestId?{'Idempotency-Key':requestId}:{})},...(body?{body:JSON.stringify(body)}:{})});return {status:r.status,body:await r.json()};};
@@ -186,7 +187,13 @@ test('SW real HTTP guard/login/routes enforce authorization and controlled scope
   for(const body of [{name:'Cambio de nombre'},{phone:'',whatsapp:null}]){const result=await api.request('/api/businesses/1081','PATCH',body,token);assert.equal(result.status,200);assert.equal(result.body.business.phone,fixture.phone);assert.equal(result.body.business.whatsapp,fixture.whatsapp);}
   const removed=await api.request('/api/businesses/1081','PATCH',{clearContacts:['phone']},token);assert.equal(removed.status,200);assert.equal(removed.body.business.phone,'');assert.equal(removed.body.business.whatsapp,fixture.whatsapp);
   for(const body of [{DB_NAME:'u293982346_encarmenapp'},{id:99999},{isAdmin:true},{phone:'invalid'},{name:'A'}])assert.equal((await api.request('/api/businesses/1081','PATCH',body,token)).status,400);
-  for(const [path,method] of [['/api/mariadb/sync-catalog','POST'],['/api/mariadb/reconnect','POST'],['/api/sync','POST'],['/api/webhook/woocommerce','POST'],['/api/admin/change-password','POST'],['/api/upload-logo','POST'],['/api/businesses/1081/generate-pin','POST'],['/api/businesses/1081/verify-edit-pin','POST'],['/api/businesses/1081','DELETE']])assert.ok([403,503].includes((await api.request(path,method,{},token)).status),path);
+  for(const [path,method] of [['/api/mariadb/sync-catalog','POST'],['/api/mariadb/reconnect','POST'],['/api/sync','POST'],['/api/webhook/woocommerce','POST'],['/api/admin/change-password','POST'],['/api/upload-logo','POST'],['/api/businesses/1081/generate-pin','POST'],['/api/businesses/1081/verify-edit-pin','POST']])assert.ok([403,503].includes((await api.request(path,method,{},token)).status),path);
+  // A valid business:delete permission passes the Staging HTTP gate only while the isolated write lane is open.
+  assert.equal((await api.request('/api/businesses/1081','DELETE',{},token)).status,200);
+  assert.equal((await api.request('/api/businesses/1081','DELETE',{},undefined)).status,401);
+  api.db.state.canWrite=false;
+  assert.ok([403,503].includes((await api.request('/api/businesses/1081','DELETE',{},token)).status));
+  api.db.state.canWrite=true;
   api.auth.expire();assert.equal((await api.request('/api/businesses/1081','PATCH',{name:'No autorizado'},token)).status,401);
   const relogin=await api.request('/api/admin/login','POST',{username:'Y',password:'Synthetic-password-only'});assert.equal(relogin.status,200);
   api.db.state.canWrite=false;assert.ok([403,503].includes((await api.request('/api/submit-business','POST',draft(8),relogin.body.token,key())).status));
