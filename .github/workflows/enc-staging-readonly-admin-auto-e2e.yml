@@ -1,5 +1,5 @@
 name: ENCARMEN staged admin automatic readonly login and revocation
-# Verify dynamic file-backed admin identity after 10 consecutive MariaDB healthy public samples.
+# Recheck dynamic admin identity after independent 10/10 SQL-ready Staging health samples on 2026-10-31T00:07:38Z.
 on:
   push:
     branches: [coord/staging-admin-login-window-20261030]
