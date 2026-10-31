@@ -1,0 +1,148 @@
+name: ENCARMEN enable public registration only in isolated Staging private config
+on:
+  push:
+    branches: [coord/enc-staging-005-diagnostic-20261030]
+    paths: [.github/workflows/enc-staging-enable-public-registration-20261030.yml]
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-staging-runtime-deploy
+  cancel-in-progress: false
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - name: Strict private release, SQL, backup, flag and invalid-payload checks
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          sudo apt-get update -qq >/dev/null 2>&1
+          sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          test "$fp" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          export SSHPASS
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' <<'PY'
+          import os,pathlib,stat,subprocess,tempfile,urllib.request,urllib.error,json,time,datetime,shutil,uuid
+          H=pathlib.Path.home();S=H/'domains/staging.encarmen.org/hbuilds';E=S/'config/.env';B=H/'encarmen-staging-backups';D='u293982346_encarmentest';BASE='https://staging.encarmen.org'
+          expected={'APP_ENV':'staging','DB_NAME':D,'STAGING_READ_ONLY':'false','STAGING_DB_CONFIRMED':'true','STAGING_BUSINESS_WRITES_ENABLED':'true','ENC_ADMIN_MUTATIONS_ENABLED':'true','STAGING_ALLOW_SCHEMA_INIT':'false','ENABLE_WP_SYNC':'false','ENC_ADMIN_PUBLIC_ORIGIN':BASE}
+          def stop(code):raise RuntimeError(code)
+          if not E.is_file() or E.is_symlink() or (E.stat().st_mode&0o077)!=0:stop('UNSAFE_PRIVATE_FILE')
+          if not B.is_dir() or B.is_symlink() or (B.stat().st_mode&0o077)!=0:stop('UNSAFE_BACKUP_DIR')
+          original=E.read_text()
+          def parse(text):
+              values={}
+              for row in text.splitlines():
+                  row=row.strip().removeprefix('export ').strip()
+                  if not row or row.startswith('#') or '=' not in row:continue
+                  k,v=row.split('=',1)
+                  k=k.strip()
+                  if k in values:stop('DUPLICATE_ENV_KEY')
+                  values[k]=v.strip().strip("'").strip('"')
+              return values
+          env=parse(original)
+          for k,v in expected.items():
+              if env.get(k)!=v:stop('BASELINE_MISMATCH_'+k)
+          if not env.get('DB_USER') or env['DB_USER']=='u293982346_appuser' or not env.get('DB_PASSWORD'):stop('STAGING_USER_UNSAFE')
+          if env.get('PUBLIC_REGISTRATION_ENABLED') not in (None,'false','true'):stop('UNKNOWN_PUBLIC_FLAG')
+          admin=json.loads(env.get('ENC_ADMIN_CREDENTIALS_JSON','{}'))
+          if admin.get('version')!=1 or not any(a.get('username')=='jeo' for a in admin.get('accounts',[])):stop('JEO_ADMIN_MISSING')
+          active=(S/'current/nodejs').resolve()
+          if (S/'versions').resolve() not in active.parents:stop('UNMANAGED_RELEASE')
+          bundle=active/'server.js'
+          if not bundle.is_file() or b'ENC_PUBLIC_PRIVATE_GATE_20261030' not in bundle.read_bytes():stop('NEW_PUBLIC_GATE_NOT_DEPLOYED')
+          print('STAGING_NEW_BUNDLE=VERIFIED',flush=True)
+          node=False
+          for p in pathlib.Path('/proc').iterdir():
+              if not p.name.isdigit():continue
+              try:
+                  if pathlib.Path(os.readlink(p/'cwd'))==active and 'node' in pathlib.Path(os.readlink(p/'exe')).name.lower():node=True;break
+              except (OSError,PermissionError):pass
+          if not node:stop('NEW_NODE_RELEASE_NOT_RUNNING')
+          print('STAGING_NODE_RELEASE=VERIFIED',flush=True)
+          healthy=False
+          for _ in range(24):
+              try:
+                  req=urllib.request.Request(BASE+'/api/health?public_gate_attest='+uuid.uuid4().hex,headers={'Cache-Control':'no-cache'})
+                  with urllib.request.urlopen(req,timeout=10) as response:
+                      body=json.loads(response.read(15000))
+                      if response.status==200 and response.headers.get('X-Encarmen-Public-Registration-Release')=='ENC_PUBLIC_PRIVATE_GATE_20261030' and body.get('environment')=='staging' and body.get('database')=='mariadb':healthy=True;break
+              except Exception:pass
+              time.sleep(5)
+          if not healthy:stop('PUBLIC_RELEASE_OR_MARIADB_NOT_ACTIVE')
+          print('PUBLIC_NEW_GATE_HTTP_MARIADB=VERIFIED',flush=True)
+          fd,cfg=tempfile.mkstemp(dir=B,prefix='.enc-pub-test-',suffix='.cnf')
+          try:
+              os.fchmod(fd,0o600)
+              with os.fdopen(fd,'w') as fp:
+                  fp.write('[client]\n')
+                  for key,field in [('host','DB_HOST'),('user','DB_USER'),('password','DB_PASSWORD')]:
+                      v=env.get(field,'').replace('\\','\\\\').replace('"','\\"')
+                      fp.write(key+'="'+v+'"\n')
+              def sql(stmt):
+                  p=subprocess.run(['mariadb','--defaults-extra-file='+cfg,'-D',D,'--batch','--skip-column-names','-e',stmt],capture_output=True,text=True,timeout=20)
+                  if p.returncode:stop('SQL_PRECHECK_FAILED')
+                  return p.stdout.strip().splitlines()
+              if sql("SELECT DATABASE(),SUBSTRING_INDEX(CURRENT_USER(),'@',1)") != [D+'\t'+env['DB_USER']]:stop('SQL_USER_DB_MISMATCH')
+              if sql('SELECT env_name,db_name FROM encarmen_environment_marker')!=['staging\t'+D]:stop('SQL_STAGING_MARKER_MISMATCH')
+              if 'u293982346_encarmenapp' in sql('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA'):stop('PRODUCTION_VISIBLE')
+              before=sql('SELECT COUNT(*) FROM businesses')
+              if len(before)!=1 or not before[0].isdigit():stop('COUNT_PRECHECK_FAILED')
+              print('PRE_CHANGE_BUSINESS_COUNT='+before[0],flush=True)
+              print('STAGING_SQL_ISOLATION=VERIFIED',flush=True)
+              stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+              backup=B/('enc-public-registration-gate-'+stamp+'.env.bak')
+              if backup.exists():stop('BACKUP_EXISTS')
+              with os.fdopen(os.open(backup,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),'w') as fp:
+                  fp.write(original);fp.flush();os.fsync(fp.fileno())
+              if backup.read_text()!=original:stop('BACKUP_INVALID')
+              print('PRIVATE_CONFIG_BACKUP=VERIFIED',flush=True)
+              applied=False
+              try:
+                  rows=original.splitlines()
+                  index=[i for i,line in enumerate(rows) if line.strip().removeprefix('export ').strip().startswith('PUBLIC_REGISTRATION_ENABLED=')]
+                  if len(index)>1:stop('MULTIPLE_PUBLIC_FLAGS')
+                  if index:rows[index[0]]='PUBLIC_REGISTRATION_ENABLED=true'
+                  else:rows.append('PUBLIC_REGISTRATION_ENABLED=true')
+                  updated='\n'.join(rows)+'\n'
+                  new=parse(updated)
+                  for k,v in expected.items():
+                      if new.get(k)!=v:stop('MUTATION_CHANGED_BASELINE')
+                  if new.get('PUBLIC_REGISTRATION_ENABLED')!='true':stop('PUBLIC_FLAG_MISSING')
+                  for k,v in env.items():
+                      if k!='PUBLIC_REGISTRATION_ENABLED' and new.get(k)!=v:stop('UNRELATED_CONFIG_CHANGED')
+                  fd,temp=tempfile.mkstemp(dir=E.parent,prefix='.enc-pub-enable-')
+                  with os.fdopen(fd,'w') as fp:
+                      fp.write(updated);fp.flush();os.fsync(fp.fileno())
+                  os.chmod(temp,stat.S_IMODE(E.stat().st_mode))
+                  os.replace(temp,E)
+                  applied=True
+                  if parse(E.read_text()).get('PUBLIC_REGISTRATION_ENABLED')!='true':stop('PUBLIC_FLAG_DISK_MISMATCH')
+                  print('PRIVATE_PUBLIC_REGISTRATION_FLAG=ENABLED',flush=True)
+                  # Intentionally invalid business body: 400 implies route entered validation, no INSERT.
+                  payload=b'{}'
+                  request=urllib.request.Request(BASE+'/api/public/business-registrations',data=payload,method='POST',headers={'Content-Type':'application/json','Origin':BASE,'Content-Length':str(len(payload)),'Idempotency-Key':str(uuid.uuid4())})
+                  try:
+                      with urllib.request.urlopen(request,timeout=12) as response:status=response.status;data=json.loads(response.read(10000))
+                  except urllib.error.HTTPError as e:status=e.code;data=json.loads(e.read(10000))
+                  print('INVALID_PUBLIC_REGISTRATION_HTTP='+str(status),flush=True)
+                  if status!=400 or data.get('error')!='INVALID_REGISTRATION':stop('PUBLIC_GATE_NOT_ENABLED_SAFELY')
+                  after=sql('SELECT COUNT(*) FROM businesses')
+                  if after!=before:stop('BUSINESS_COUNT_CHANGED_DURING_NONWRITE_PROBE')
+                  print('PUBLIC_GATE_VALIDATION_WITHOUT_INSERT=VERIFIED',flush=True)
+                  print('RESULT=STAGING_PUBLIC_REGISTRATION_ENABLED_AND_VALIDATED',flush=True)
+              except Exception:
+                  if applied:
+                      fd,restore=tempfile.mkstemp(dir=E.parent,prefix='.enc-pub-rollback-')
+                      with os.fdopen(fd,'w') as fp:fp.write(original);fp.flush();os.fsync(fp.fileno())
+                      os.chmod(restore,stat.S_IMODE(E.stat().st_mode))
+                      os.replace(restore,E)
+                      print('ROLLBACK_PRIVATE_CONFIG=RESTORED',flush=True)
+                  raise
+          finally:os.unlink(cfg)
+          PY
