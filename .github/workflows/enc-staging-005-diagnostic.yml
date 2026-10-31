@@ -69,6 +69,7 @@ jobs:
           B=H/'encarmen-staging-backups'
           candidate=B/'enc-origin-patch-candidate.js'
           print('ACTIVE_EQUALS_LAST_CANDIDATE='+str(candidate.is_file() and candidate.read_bytes()==binary).lower(),flush=True)
+          print('ACTIVE_BUNDLE_ENC_005_DIAG_RELEASE='+str(b'ENC_005_DIAG_20261030' in binary).lower(),flush=True)
           processes=[]
           for entry in pathlib.Path('/proc').iterdir():
               if not entry.name.isdigit():continue
@@ -118,7 +119,7 @@ jobs:
           except Exception as ex:print('SQL_DIAGNOSTIC_FAILURE='+str(ex)[:60],flush=True)
           finally:os.unlink(tmp)
           try:
-              with urllib.request.urlopen('https://staging.encarmen.org/api/health',timeout=10) as resp:
+              with urllib.request.urlopen('https://staging.encarmen.org/api/health?gate_audit='+str(os.getpid()),timeout=10) as resp:
                   j=json.loads(resp.read(20000))
                   print('PUBLIC_HEALTH_STATUS='+str(resp.status),flush=True)
                   print('PUBLIC_RELEASE_ATTESTED='+str(resp.headers.get('X-Encarmen-Staging-Gate-Release')=='ENC_005_DIAG_20261030').lower(),flush=True)
