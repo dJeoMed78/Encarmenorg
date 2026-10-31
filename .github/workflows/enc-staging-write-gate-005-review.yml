@@ -1,0 +1,32 @@
+name: ENCARMEN 005 security patch independent local verification
+on:
+  push:
+    branches:
+      - work/enc-staging-write-gate-005-gas
+    paths:
+      - .github/workflows/enc-staging-write-gate-005-review.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies without deployment
+        run: npm ci
+      - name: TypeScript validation
+        run: npm run lint
+      - name: Unit security regression
+        run: node --import tsx --test tests/enc-staging-write-gate-005-unit.test.mjs
+      - name: Local HTTP staging gate regression
+        run: node --import tsx --test tests/enc-staging-write-gate-005-http.test.mjs
+      - name: Isolation and containment regression
+        run: node --import tsx --test tests/staging-isolation-proof.test.mjs tests/security-containment-003.test.mjs
+      - name: Build server and client (no deploy)
+        run: npm run build
