@@ -33,6 +33,12 @@ function database(initial=[fixture]){
     const rows=working||state.rows;
     if(sql==='SELECT * FROM businesses ORDER BY id ASC')return [structuredClone(rows)];
     if(sql.startsWith('SELECT * FROM businesses WHERE id = ?'))return [structuredClone(rows.filter(r=>String(r.id)===String(params[0])))];
+    if(sql.startsWith('SELECT id FROM businesses WHERE id = ?'))return [structuredClone(rows.filter(r=>String(r.id)===String(params[0])).map(r=>({id:r.id})))];
+    if(sql.startsWith('DELETE FROM businesses WHERE id = ?')){
+     const index=rows.findIndex(r=>String(r.id)===String(params[0]));
+     if(index<0)return [{affectedRows:0}];
+     rows.splice(index,1);return [{affectedRows:1}];
+    }
     if(sql.startsWith('INSERT INTO businesses')){
      assert.doesNotMatch(sql,/ON DUPLICATE/i);const row=Object.fromEntries(columns.map((c,i)=>[c,params[i]]));
      if(rows.some(r=>String(r.id)===String(row.id)))throw new Error('synthetic duplicate key');rows.push(row);return [{affectedRows:1}];
@@ -104,6 +110,32 @@ test('SW transactional update preserves fresh SQL contacts, metadata and unrelat
  await db.store.update(created.business.id,{description:'Cambio mínimo'});assert.equal(JSON.parse(db.state.rows.find(r=>Number(r.id)===created.business.id).raw_data)._stagingRegistrationId,metadata);
  const restarted=database(JSON.parse(JSON.stringify(db.state.rows)));const reread=serialize(restarted.state.rows[0]);assert.equal(reread.phone,'2223334455');assert.equal(reread.whatsapp,'');
  assert.ok(db.state.queries.some(q=>q.sql.endsWith('FOR UPDATE')));
+});
+
+test('SW isolated DELETE only removes exact synthetic PK and checks readback before commit',async()=>{
+ const db=database();
+ const created=await db.store.create(draft(9),key());
+ const savedBefore=structuredClone(db.state.rows[0]);
+ const id=created.business.id;
+ const done=await db.store.delete(id);
+ assert.equal(done.deleted,true);
+ assert.equal(db.state.rows.length,1);
+ assert.deepEqual(db.state.rows[0],savedBefore);
+ assert.ok(db.state.queries.some(q=>q.sql==='DELETE FROM businesses WHERE id = ?' && String(q.params[0])===String(id)));
+ assert.ok(db.state.queries.some(q=>q.sql==='SELECT id FROM businesses WHERE id = ?'));
+ await assert.rejects(db.store.delete(id),e=>e.code==='BUSINESS_NOT_FOUND'&&e.status===404);
+ await assert.rejects(db.store.delete('not-an-id'),e=>e.code==='BUSINESS_ID_INVALID'&&e.status===400);
+ db.state.canWrite=false;
+ await assert.rejects(db.store.delete(1081),e=>e.code==='STAGING_BUSINESS_READ_ONLY'&&e.status===403);
+ assert.equal(db.state.rows.length,1);
+ db.state.canWrite=true;
+ db.state.database='u293982346_encarmenapp';
+ await assert.rejects(db.store.delete(1081),e=>e.code==='DATABASE_TARGET_MISMATCH'&&e.status===403);
+ assert.equal(db.state.rows.length,1);
+ db.state.database=STAGING_BUSINESS_DATABASE;
+ db.state.fail='DELETE FROM businesses';
+ await assert.rejects(db.store.delete(1081),e=>e.code==='BUSINESS_WRITE_UNCONFIRMED'&&e.status===503);
+ assert.equal(db.state.rows.length,1);
 });
 
 test('SW rollback and lost commit acknowledgement never report success or duplicate a retried registration',async()=>{
