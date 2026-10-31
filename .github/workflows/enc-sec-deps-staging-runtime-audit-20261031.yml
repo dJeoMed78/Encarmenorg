@@ -1,0 +1,70 @@
+name: ENCARMEN inspect Staging active dependency versions after security patch
+on:
+  push:
+    branches: [coord/enc-staging-005-diagnostic-20261030]
+    paths: [.github/workflows/enc-sec-deps-staging-runtime-audit-20261031.yml]
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-staging-runtime-deploy
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: SSH read-only active version inspection
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          sudo apt-get update -qq >/dev/null 2>&1
+          sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          test "$fp" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          export SSHPASS
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' <<'PY'
+          import pathlib,os,json,subprocess,urllib.request
+          H=pathlib.Path.home();S=H/'domains/staging.encarmen.org/hbuilds';E=S/'config/.env'
+          if not E.is_file() or E.is_symlink():raise SystemExit('CONFIG_NOT_VERIFIED')
+          cfg={}
+          for line in E.read_text().splitlines():
+              line=line.strip().removeprefix('export ').strip()
+              if line and not line.startswith('#') and '=' in line:
+                  k,v=line.split('=',1);cfg[k.strip()]=v.strip().strip("'").strip('"')
+          if cfg.get('APP_ENV')!='staging' or cfg.get('DB_NAME')!='u293982346_encarmentest':raise SystemExit('STAGING_ISOLATION_MISMATCH')
+          active=(S/'current/nodejs').resolve()
+          if (S/'versions').resolve() not in active.parents:raise SystemExit('UNMANAGED_RELEASE')
+          print('RUNTIME_SCOPE=STAGING_ONLY',flush=True)
+          print('ACTIVE_RELEASE='+active.name,flush=True)
+          for name in ('minimatch','qs'):
+              sources=[active/'node_modules'/name/'package.json',active/'package-lock.json']
+              installed=sources[0]
+              if installed.is_file():
+                  try:version=json.loads(installed.read_text()).get('version')
+                  except Exception:version='INVALID'
+                  print('ACTIVE_'+name.upper()+'_INSTALLED='+str(version),flush=True)
+              else:print('ACTIVE_'+name.upper()+'_INSTALLED=NOT_FOUND',flush=True)
+              lock=sources[1]
+              if lock.is_file():
+                  try:version=json.loads(lock.read_text()).get('packages',{}).get('node_modules/'+name,{}).get('version','NOT_FOUND')
+                  except Exception:version='INVALID'
+                  print('ACTIVE_'+name.upper()+'_LOCK='+str(version),flush=True)
+          try:
+              cmd=subprocess.run(['node','-v'],capture_output=True,text=True,timeout=10)
+              print('ACTIVE_NODE_VERSION='+cmd.stdout.strip() if cmd.returncode==0 else 'NODE_UNAVAILABLE',flush=True)
+          except Exception:print('ACTIVE_NODE_VERSION=UNAVAILABLE',flush=True)
+          try:
+              req=urllib.request.Request('https://staging.encarmen.org/api/health?security_dep_audit=20261031',headers={'Cache-Control':'no-store'})
+              with urllib.request.urlopen(req,timeout=12) as response:
+                  result=json.loads(response.read(50000))
+                  print('PUBLIC_HEALTH_HTTP='+str(response.status),flush=True)
+                  print('PUBLIC_STAGING_MARIADB='+str(result.get('environment')=='staging' and result.get('database')=='mariadb'),flush=True)
+          except Exception:print('PUBLIC_HEALTH_UNAVAILABLE',flush=True)
+          print('RESULT=RUNTIME_AUDITED_READ_ONLY',flush=True)
+          PY
