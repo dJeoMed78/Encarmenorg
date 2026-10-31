@@ -203,6 +203,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   onSave
 }) => {
   const [formData, setFormData] = useState<Partial<Business>>({});
+  const mediaAttemptId = useRef<string>(crypto.randomUUID());
   const [postalCode, setPostalCode] = useState<string>('');
   const [selectedDeliveryOptions, setSelectedDeliveryOptions] = useState<string[]>([]);
   const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<string[]>([]);
@@ -352,7 +353,6 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   if (!isOpen || !business) return null;
 
   const changed = (key: keyof Business) => JSON.stringify(formData[key]) !== JSON.stringify(initialDraft.current[key]);
-  const mediaAttemptId = useRef(crypto.randomUUID());
   const upload = async (event: React.ChangeEvent<HTMLInputElement>, gallery: boolean, companyLogo = false) => {
     const input = event.currentTarget, files = Array.from(input.files || []);
     input.value = '';
