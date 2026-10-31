@@ -29,7 +29,7 @@ jobs:
           chmod 600 "$HOME/.ssh/known_hosts"
           export SSHPASS
           sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' <<'PY'
-          import os,pathlib,stat,hashlib,tempfile,subprocess,json,urllib.request,re
+          import os,pathlib,stat,hashlib,tempfile,subprocess,json,urllib.request,re,time
           H=pathlib.Path.home()
           S=H/'domains/staging.encarmen.org/hbuilds'
           E=S/'config/.env'
@@ -53,6 +53,10 @@ jobs:
               provider=json.loads(env.get('ENC_ADMIN_CREDENTIALS_JSON','{}'))
               print('ADMIN_PERMANENT_ACCOUNT_PRESERVED='+str(provider.get('version')==1 and len(provider.get('accounts',[]))==1 and provider['accounts'][0].get('username')=='jeo').lower(),flush=True)
           except Exception:print('ADMIN_PERMANENT_ACCOUNT_PRESERVED=false',flush=True)
+          for _ in range(24):
+              check=(S/'current/nodejs').resolve()/'server.js'
+              if check.is_file() and b'getPrivateStagingSnapshot' in check.read_bytes():break
+              time.sleep(10)
           active=(S/'current/nodejs').resolve()
           print('ACTIVE_DIR_INSIDE_STAGING='+str((S/'versions').resolve() in active.parents).lower(),flush=True)
           if (S/'versions').resolve() not in active.parents: raise SystemExit('FAIL_ACTIVE_NOT_STAGING')
@@ -123,3 +127,5 @@ jobs:
           except Exception:print('PUBLIC_HEALTH_FAILED=true',flush=True)
           print('RESULT=DIAGNOSIS_COLLECTED_READONLY',flush=True)
           PY
+
+# Repeat after PR 15 merge to prove Hostinger release provenance; no writes.
