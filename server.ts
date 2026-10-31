@@ -1711,6 +1711,7 @@ app.get(['/api/health', '/api/system/status'], (_req: Request, res: Response) =>
   res.setHeader('X-Encarmen-Staging-Gate-Release', isStaging ? 'ENC_005_DIAG_20261030' : 'n/a');
   res.setHeader('X-Encarmen-Admin-Login-Release', isStaging ? 'ENC_ADMIN_10CHAR_UI_20261030' : 'n/a');
   res.setHeader('X-Encarmen-Public-Registration-Release', isStaging ? 'ENC_PUBLIC_PRIVATE_GATE_20261030' : 'n/a');
+  res.setHeader('X-Encarmen-Staging-Delete-Release', isStaging ? 'ENC_STAGING_DELETE_20261030' : 'n/a');
   res.json({
     status: 'ok',
     uptime: Math.round(process.uptime()),
