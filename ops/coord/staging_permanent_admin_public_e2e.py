@@ -54,8 +54,14 @@ try:
  if record.get('version')!=1 or not isinstance(record.get('accounts'),list):abort('ADMIN_CONFIG_INVALID')
  if len(record['accounts'])!=1 or record['accounts'][0].get('username','').lower()!='jeo':abort('PERMANENT_ADMIN_NOT_UNIQUE')
  if not (B/'database').is_dir() or not any(p.is_file() and p.stat().st_size>0 for p in (B/'database').glob('staging-db-*.sql.gz')):abort('SQL_BACKUP_MISSING')
- status,health=http('GET','/api/health')
- if status!=200 or health.get('environment')!='staging' or health.get('database')!='mariadb' or health.get('staging',{}).get('readOnly') is not True:abort('PUBLIC_BASELINE_UNSAFE')
+ baseline=False
+ for attempt in range(24):
+  status,health=http('GET','/api/health')
+  if status==200 and health.get('environment')=='staging' and health.get('database')=='mariadb' and health.get('staging',{}).get('readOnly') is True:
+   baseline=True;break
+  if attempt in (0,12,23):out('BASELINE_RETRY_HTTP',status)
+  time.sleep(5)
+ if not baseline:abort('PUBLIC_BASELINE_UNSAFE')
  out('PUBLIC_BASELINE','STAGING_MARIADB_READONLY')
  fd,p=tempfile.mkstemp(dir=B,prefix='.enc-staging-test-sql-',suffix='.cnf');sqlcfg=pathlib.Path(p)
  os.fchmod(fd,0o600)
