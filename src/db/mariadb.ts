@@ -1,4 +1,4 @@
-import {STAGING_BUSINESS_DATABASE,stagingBusinessConfiguration} from '../server/stagingBusinessSecurity';
+import {STAGING_BUSINESS_DATABASE,stagingBusinessConfiguration,privateStagingBusinessWindowOpen} from '../server/stagingBusinessSecurity';
 import {createStagingBusinessStore} from './stagingBusinessStore';
 import mysql from 'mysql2/promise';
 import { createHash, randomUUID } from 'node:crypto';
@@ -1286,7 +1286,7 @@ export async function dbInsertRating(id: string, visitorKey: string, rating: num
 
 
 export function isBusinessWritePermitted(): boolean {
-  return isStagingEnvironment() && isConnected && pool !== null && connectedDatabase === STAGING_BUSINESS_DATABASE && stagingBusinessConfiguration(process.env, PRODUCTION_DB_USER);
+  return isStagingEnvironment() && isConnected && pool !== null && connectedDatabase === STAGING_BUSINESS_DATABASE && stagingBusinessConfiguration(process.env, PRODUCTION_DB_USER) && privateStagingBusinessWindowOpen(process.env);
 }
 export const stagingBusinessStore = createStagingBusinessStore({
   canWrite:isBusinessWritePermitted,
