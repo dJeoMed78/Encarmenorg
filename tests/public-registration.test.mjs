@@ -204,18 +204,17 @@ test('montaje: solo en Staging, una ruta POST, interruptor PUBLIC_REGISTRATION_E
   const queries = []; const rows = [{ id: 4001, name: 'Empresa Sintética 1', phone: phoneFor(1), whatsapp: '', status: 'published' }];
   const pool = { async query(sql, params) { queries.push({ sql, params }); if (sql.startsWith('SELECT COALESCE')) return [[{ hour_total: '2', day_total: 5 }]]; return [rows.filter((r) => String(r.id) === params[0])]; } };
   const store = { async create(draft, key) { return { business: { id: 4001, name: draft.name, status: 'published' }, replayed: false }; } };
-  const directory = []; const base = { canWrite: () => true, getPool: () => pool, businessStore: store, saved: (b) => directory.push(b), isVisible: (id) => directory.some((b) => b.id === id) };
+  let privateEnabled=false;
+  const directory = []; const base = { canWrite: () => true, getPool: () => pool, businessStore: store, saved: (b) => directory.push(b), isVisible: (id) => directory.some((b) => b.id === id),
+    privateRegistrationSnapshot:()=>({APP_ENV:'staging',DB_NAME:'u293982346_encarmentest',PUBLIC_REGISTRATION_ENABLED:privateEnabled?'true':'false'}) };
   mountPublicRegistration(app, { ...base, isStaging: () => false }); assert.equal(registered.length, 0);
-  const savedEnv = process.env.PUBLIC_REGISTRATION_ENABLED;
-  try {
-    mountPublicRegistration(app, { ...base, isStaging: () => true }); assert.deepEqual(registered.map(([p]) => p), [PUBLIC_REGISTRATION_PATH]);
-    const call = async () => { const out = { status: 200 }; const res = { status(c) { out.status = c; return res; }, json(b) { out.body = b; return res; } }; await registered[0][1]({ body: body(1), ip: '1.1.1.1', get: () => randomUUID() }, res); return out; };
-    delete process.env.PUBLIC_REGISTRATION_ENABLED; assert.equal((await call()).body.error, 'PUBLIC_REGISTRATION_DISABLED'); assert.equal(queries.length, 0);
-    process.env.PUBLIC_REGISTRATION_ENABLED = 'true'; const ok = await call();
-    assert.deepEqual([ok.status, ok.body.business.id, ok.body.directoryVisible], [201, 4001, true]);
-    assert.ok(queries.length === 3 && queries.every((q) => /^SELECT /.test(q.sql)));
-    assert.match(queries[0].params[0], /"registrationSource":"public-form"/); assert.deepEqual(queries[2].params, ['4001']);
-  } finally { if (savedEnv === undefined) delete process.env.PUBLIC_REGISTRATION_ENABLED; else process.env.PUBLIC_REGISTRATION_ENABLED = savedEnv; }
+  mountPublicRegistration(app, { ...base, isStaging: () => true }); assert.deepEqual(registered.map(([p]) => p), [PUBLIC_REGISTRATION_PATH]);
+  const call = async () => { const out = { status: 200 }; const res = { status(c) { out.status = c; return res; }, json(b) { out.body = b; return res; } }; await registered[0][1]({ body: body(1), ip: '1.1.1.1', get: () => randomUUID() }, res); return out; };
+  assert.equal((await call()).body.error, 'PUBLIC_REGISTRATION_DISABLED'); assert.equal(queries.length, 0);
+  privateEnabled=true; const ok = await call();
+  assert.deepEqual([ok.status, ok.body.business.id, ok.body.directoryVisible], [201, 4001, true]);
+  assert.ok(queries.length === 3 && queries.every((q) => /^SELECT /.test(q.sql)));
+  assert.match(queries[0].params[0], /"registrationSource":"public-form"/); assert.deepEqual(queries[2].params, ['4001']);
   const readers = createPoolReaders(() => null); await rejectsWith(readers.readBusiness(1), 'STORAGE_UNAVAILABLE');
   const broken = createPoolReaders(() => ({ query: async () => { throw new Error('conn lost'); } })); await rejectsWith(broken.countRecentPublic(), 'STORAGE_UNAVAILABLE', (e) => e.status === 503);
 });

@@ -1,13 +1,25 @@
 import { createPublicRegistrationService, createPoolReaders, createAttemptLimiter, createCreationLimiter, validatePublicRegistration } from './publicRegistrationCore.ts';
 import { registerPublicRegistrationRoutes, publicRegistrationBodyLimit } from './publicRegistrationRoutes.ts';
+import {getPrivateStagingSnapshot, STAGING_BUSINESS_DATABASE} from './stagingBusinessSecurity.ts';
 
 export { publicRegistrationBodyLimit };
+
+
+/** Exige autorización explícita, exclusivamente desde el archivo privado de Staging.
+ * process.env no puede habilitar la ruta anónima por sí mismo.
+ */
+export function privatePublicRegistrationEnabled(config: Record<string,string|undefined> | null): boolean {
+  return Boolean(config &&
+    config.APP_ENV === 'staging' &&
+    config.DB_NAME === STAGING_BUSINESS_DATABASE &&
+    config.PUBLIC_REGISTRATION_ENABLED === 'true');
+}
 
 /**
  * Montaje exclusivo de Staging del registro público directo. En otros entornos no registra nada.
  * businessStore: el almacén de createStagingBusinessStore (INSERT sin upsert, duplicados, idempotencia, aislamiento).
  */
-export function mountPublicRegistration(app: any, deps: { isStaging: () => boolean; canWrite: () => boolean; getPool: () => any; businessStore: any; categorySlugs?: (categories: string[]) => string[]; saved: (business: any) => void; isVisible: (id: any) => boolean }): void {
+export function mountPublicRegistration(app: any, deps: { isStaging: () => boolean; canWrite: () => boolean; getPool: () => any; businessStore: any; categorySlugs?: (categories: string[]) => string[]; saved: (business: any) => void; isVisible: (id: any) => boolean; privateRegistrationSnapshot?: () => Record<string,string|undefined> | null }): void {
   if (!deps.isStaging()) return;
   const readers = createPoolReaders(deps.getPool);
   const service = createPublicRegistrationService({
@@ -22,7 +34,9 @@ export function mountPublicRegistration(app: any, deps: { isStaging: () => boole
   });
   registerPublicRegistrationRoutes(app, {
     service,
-    enabled: () => deps.canWrite() && process.env.PUBLIC_REGISTRATION_ENABLED === 'true',
+    enabled: () => deps.canWrite() && privatePublicRegistrationEnabled(
+      deps.privateRegistrationSnapshot ? deps.privateRegistrationSnapshot() : getPrivateStagingSnapshot()
+    ),
     attempts: createAttemptLimiter(20, 15 * 60 * 1000),
     creations: createCreationLimiter(3, 60 * 60 * 1000),
     validate: validatePublicRegistration,

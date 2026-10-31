@@ -14,7 +14,6 @@ import {mountPublicRegistration,publicRegistrationBodyLimit} from '../src/server
 import {validatePublicRegistration} from '../src/server/publicRegistrationCore.ts';
 import {contactDigits,contactCounts,matchesContactFilter,CONTACT_FILTERS} from '../src/utils/businessContacts.ts';
 import {submitBusinessRegistration} from '../src/services/api.ts';
-import {applyPatch} from '../scripts/apply-public-registration-patch.mjs';
 
 const source = readFileSync(new URL('../server.ts',import.meta.url),'utf8');
 const DATABASE = 'u293982346_encarmentest';
@@ -55,10 +54,10 @@ async function harness(){
  const saved=Object.fromEntries(Object.keys(env).map(key=>[key,process.env[key]]));
  for(const [key,value] of Object.entries(env)){if(value===undefined)delete process.env[key];else process.env[key]=value;}
  const {state,conn}=model();let writable=true,staging=true;let clock=Date.now();
- const app=express();const context={app,businessesCache:[],cachedDbSignature:null,contactDigits,contactCounts,matchesContactFilter,CONTACT_FILTERS,
+ const app=express();const context={app,businessesCache:[],cachedDbSignature:null,stagingDynamicIdentity:false,getPrivateStagingSnapshot:()=>env,contactDigits,contactCounts,matchesContactFilter,CONTACT_FILTERS,
   isStagingEnvironment:()=>staging,isWritePermitted:()=>false,isBusinessWritePermitted:()=>writable,
   environmentAdminProvider,administrativeWritesReady,process:{env},registerAdminSecurity:(app,options)=>registerAdminSecurity(app,{...options,now:()=>clock}),registerStagingBusinessRoutes,
-  publicRegistrationBodyLimit,mountPublicRegistration,getPool:()=>conn,generateCategorySlugs:categories=>categories.map(c=>c.toLowerCase())};
+  publicRegistrationBodyLimit,mountPublicRegistration:(app,deps)=>mountPublicRegistration(app,{...deps,privateRegistrationSnapshot:()=>env}),getPool:()=>conn,generateCategorySlugs:categories=>categories.map(c=>c.toLowerCase())};
  context.stagingBusinessStore=createStagingBusinessStore({canWrite:()=>writable,getConnection:async()=>conn,serialize:businessFromRow});
  context.refreshBusinessesFromDbIfNeeded=async()=>{const [rows]=await conn.query('SELECT * FROM businesses ORDER BY id ASC');context.businessesCache=rows.map(businessFromRow);};
  vm.createContext(context);const run=code=>vm.runInContext(transformSync(code,{loader:'ts',format:'cjs'}).code,context);
@@ -77,9 +76,11 @@ async function harness(){
  return {state,context,base,setMutations:value=>env.ENC_ADMIN_MUTATIONS_ENABLED=value?'true':'false',expire:()=>clock+=7*3600000,setWritable:value=>writable=value,setStaging:value=>staging=value,close:async()=>{await new Promise(resolve=>server.close(resolve));for(const [key,value] of Object.entries(saved)){if(value===undefined)delete process.env[key];else process.env[key]=value;}}};
 }
 
-test('server.ts completo contiene el parche aplicado e idempotente',()=>{
- const result=applyPatch(source);assert.equal(result.applied.length,0);assert.equal(result.skipped.length,5);assert.equal(result.source,source);
+test('server.ts conserva el montaje público controlado antes de la ruta legacy y el límite del cuerpo',()=>{
+ assert.ok(source.includes('mountPublicRegistration(app, {'));
+ assert.ok(source.includes('isStaging:isStagingEnvironment, canWrite:isBusinessWritePermitted'));
  assert.ok(source.indexOf("app.use('/api/public/business-registrations', publicRegistrationBodyLimit)")<source.indexOf("app.use(express.json({ limit: '50mb' }))"));
+ assert.ok(source.indexOf('mountPublicRegistration(app, {')<source.indexOf("app.post('/api/submit-business'"));
 });
 
 test('contrato público valida modalidades/pagos/CP y rechaza imágenes, privilegios y teléfonos contaminados',()=>{

@@ -60,6 +60,7 @@ export function getPrivateStagingSnapshot(options?: PrivateSnapshotOptions): Rec
       'STAGING_DB_CONFIRMED',
       'STAGING_BUSINESS_WRITES_ENABLED',
       'ENC_ADMIN_MUTATIONS_ENABLED',
+      'PUBLIC_REGISTRATION_ENABLED',
       'ENC_ADMIN_PUBLIC_ORIGIN',
       'ENC_ADMIN_CREDENTIALS_JSON'
     ];
