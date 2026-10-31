@@ -437,3 +437,15 @@ Tras autorización del propietario para finalizar pruebas empresariales, Coordin
 - CI independiente: Actions `41166849692` PASS (TypeScript, prueba HTTP positiva para password de 10 caracteres con hash scrypt sintetico, rechazo de 9, clave incorrecta, CORS/Origin, regresiones de seguridad y build).
 - Despliegue real: Actions `41167161898` PASS: nuevo release respondio por HTTP, frontend publico confirmo las etiquetas `Mostrar contraseña` y `Ocultar contraseña`, longitud 9 devolvio 400, 10 con usuario inexistente devolvio 401, proceso Node activo con bundle correcto, configuracion permanente de Staging conservada.
 - Nota: no se ha probado el login con la contraseña real de `jeo`; longitud correcta no equivale a coincidencia con el hash. Usuario debe probar desde su navegador. Ninguna credencial alterada. Produccion no intervenida.
+
+
+## ENC-PUBLIC-REGISTRATION-GATE-20261030 — alta pública real en Staging
+
+**Estado:** CORREGIDO / CI PASS / INTEGRADO EN `ia-desarrollo` / DESPLEGADO EN STAGING / E2E PUBLICO CON SQL REAL PASS / ACEPTACION DEL FORMULARIO DEL PROPIETARIO PENDIENTE. Issue #12 actualizado, abierto por protocolo.
+
+- Causa: error explícito `PUBLIC_REGISTRATION_DISABLED` en formulario anónimo. `publicRegistrationWiring.ts` exigía `process.env.PUBLIC_REGISTRATION_ENABLED`; faltaba bandera en la configuración privada y su lectura era de arranque. La edición administrativa usa otro carril y sí funcionaba.
+- PR #18, merge `67f7c96ca757caaf0e61e07e828b8479e6e79a2f`. Registro público exige bandera explícita del `.env` Staging leída dinámicamente y `canWrite()` de negocio. Sin acceso por process.env ni producción. Protecciones contra duplicados, idempotencia, límites, SQL, validación y rutas ajenas intactas. CI PASS run `41168498639` con TypeScript, build e integraciones.
+- Hostinger: respaldo y cambio de única variable privada `PUBLIC_REGISTRATION_ENABLED=true`, después de atestiguar bundle y HTTP `ENC_PUBLIC_PRIVATE_GATE_20261030`; demás controles, cuenta `jeo` y MariaDB de Staging sin cambios. Run `41168635340` PASS: 400 por JSON deliberadamente inválido, antes 403.
+- Prueba real run `41168717485`: POST anónimo 201 (ID sintético 20272), readback independiente MariaDB, GET público y directorio verificados, reintento idéntico 200 replayed, eliminación exclusivamente del sintético, recuento 207→207, respaldo SQL previo y recovery limpio.
+- Reauditoría run `41168773826`: 207 registros SQL, cero sintéticos SQL y lista pública, marcadores de prueba ausentes y bandera pública preservada.
+- Pendiente: aceptación de alta real desde el formulario del propietario usando el botón `Reintentar Guardado` (mismo Idempotency-Key). No hacer un registro nuevo por riesgo de duplicar. Producción `main`/`encarmen.org` y DB productiva no intervenidas.
