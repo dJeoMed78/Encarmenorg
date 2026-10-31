@@ -1,0 +1,38 @@
+name: NIA6 verify business 20274 media readback
+on:
+  push:
+    branches: [coord/encarmen-work-control-001]
+    paths: [.github/workflows/nia6-business-20274-media-readback.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read public business and image from Staging (no writes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=$(curl -sSL --max-time 20 -o /tmp/company.json -w '%{http_code}' https://staging.encarmen.org/api/businesses/20274)
+          echo "BUSINESS_HTTP=$status"
+          node - <<'JS'
+          const fs=require('fs');const raw=fs.readFileSync('/tmp/company.json','utf8');let body;try{body=JSON.parse(raw)}catch{console.log('INVALID_JSON');process.exit(1)}
+          const biz=body.business||body.data||body;
+          const pick=Array.isArray(biz)?biz.find(x=>String(x.id)==='20274'):biz;
+          if(!pick||String(pick.id)!=='20274'){console.log('BUSINESS_ID_MISMATCH');process.exit(1)}
+          console.log('BUSINESS_FOUND=true');
+          console.log('BUSINESS_NAME='+JSON.stringify(pick.name));
+          console.log('BUSINESS_IMAGE='+JSON.stringify(pick.image||null));
+          console.log('BUSINESS_LOGO='+JSON.stringify(pick.logo_url||null));
+          console.log('BUSINESS_GALLERY_COUNT='+ (Array.isArray(pick.gallery)?pick.gallery.length:'not-array'));
+          const urls=[pick.image,pick.logo_url,...(Array.isArray(pick.gallery)?pick.gallery:[])].filter(x=>typeof x==='string'&&x.startsWith('/uploads/pub-'));
+          fs.writeFileSync('/tmp/media_urls.txt',Array.from(new Set(urls)).join('\n'));
+          console.log('PUBLIC_MEDIA_REFERENCES='+urls.length);
+          JS
+          while IFS= read -r p; do
+            [ -n "$p" ] || continue
+            result=$(curl -sSL --max-time 20 -o /tmp/enc-media-file -w '%{http_code}' "https://staging.encarmen.org$p")
+            echo "MEDIA_GET_STATUS=$result"
+            file /tmp/enc-media-file
+          done < /tmp/media_urls.txt
