@@ -1,4 +1,5 @@
 name: ENCARMEN 005 gated real Staging HTTP and MariaDB E2E with binary rollback
+# Bounded second attempt; emergency recovery step runs on failed deployment or E2E.
 # Validate private Staging-only business write revocation gate with immediate rollback on config restore.
 on:
   push:
@@ -57,11 +58,11 @@ jobs:
             if [ "$fp" != 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then echo 'RESULT=BLOCKED_SSH_HOST_KEY'; exit 0; fi
             echo 'HOST_KEY=VERIFIED'
             export SSHPASS
-            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'umask 077; test -d "$HOME/encarmen-staging-backups" && cat > "$HOME/encarmen-staging-backups/enc-origin-patch-candidate.js"' < /tmp/enc-staging-origin-server.js
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ConnectTimeout=15 u293982346@45.137.159.114 'umask 077; test -d "$HOME/encarmen-staging-backups" && cat > "$HOME/encarmen-staging-backups/enc-origin-patch-candidate.js"' < /tmp/enc-staging-origin-server.js
             echo 'CANDIDATE_TRANSFER=OK'
-            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'umask 077; test -d "$HOME/encarmen-staging-backups" && cat > "$HOME/encarmen-staging-backups/enc-005-public-e2e.py"' < ops/coord/staging_permanent_admin_public_e2e.py
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ConnectTimeout=15 u293982346@45.137.159.114 'umask 077; test -d "$HOME/encarmen-staging-backups" && cat > "$HOME/encarmen-staging-backups/enc-005-public-e2e.py"' < ops/coord/staging_permanent_admin_public_e2e.py
             echo 'E2E_SCRIPT_TRANSFER=OK'
-            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' <<'REMOTE'
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' <<'REMOTE'
           import os,pathlib,stat,subprocess,tempfile,time,json,urllib.request,urllib.error,datetime,sys,shutil
           H=pathlib.Path.home()
           B=H/'encarmen-staging-backups'
@@ -183,6 +184,104 @@ jobs:
           } > ENC_STAGING_005_LIVE_E2E_RESULT.txt 2>&1
           cat ENC_STAGING_005_LIVE_E2E_RESULT.txt
           grep -q '^RESULT=PASS_STAGING_PUBLIC_CREATE_EDIT_SQL_CLEANUP_READONLY$' ENC_STAGING_005_LIVE_E2E_RESULT.txt
+      - name: Emergency restore Staging after failed live test
+        if: failure()
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -u
+          {
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if [ -z "${SSHPASS:-}" ]; then echo RESULT=BLOCKED_NO_SSH; exit 0; fi
+            sudo apt-get update -qq >/dev/null 2>&1
+            sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+            umask 077
+            mkdir -p "$HOME/.ssh"
+            ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+            fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 2>/dev/null | awk '{print $2}')
+            if [ "$fp" != 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then echo RESULT=BLOCKED_SSH_HOST; exit 0; fi
+            export SSHPASS
+            sshpass -e ssh -T -p 65002 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 -' <<'PY'
+          import pathlib,os,hashlib,stat,tempfile,json,urllib.request,urllib.error,time
+          H=pathlib.Path.home()
+          B=H/'encarmen-staging-backups'
+          S=H/'domains/staging.encarmen.org/hbuilds'
+          E=S/'config/.env'
+          print('SSH_RECONNECTED=VERIFIED',flush=True)
+          if not B.is_dir() or B.is_symlink() or not E.is_file() or E.is_symlink():
+              print('RESULT=BLOCKED_PATH',flush=True);raise SystemExit(0)
+          def env(t):
+              d={}
+              for l in t.splitlines():
+                  l=l.strip()
+                  if l.startswith('export '):l=l[7:]
+                  if '=' in l and not l.startswith('#'):
+                      k,v=l.split('=',1);d.setdefault(k,[]).append(v.strip().strip('"').strip("'"))
+              return d
+          marker=B/'enc-staging-permanent-admin-e2e-active.json'
+          if marker.is_file() and not marker.is_symlink():
+              try:
+                  m=json.loads(marker.read_text())
+                  backup=pathlib.Path(m['backup'])
+                  secret=pathlib.Path(m['secret'])
+                  if backup.parent!=B or secret.parent!=B or not backup.is_file() or backup.is_symlink():raise ValueError('unsafe')
+                  original=backup.read_text()
+                  original_env=env(original)
+                  if original_env.get('DB_NAME')!=['u293982346_encarmentest'] or original_env.get('STAGING_READ_ONLY')!=['true'] or original_env.get('STAGING_DB_CONFIRMED')!=['false']:raise ValueError('baseline')
+                  fd,p=tempfile.mkstemp(dir=E.parent,prefix='.enc-005-emergency-')
+                  with os.fdopen(fd,'w') as f:f.write(original);f.flush();os.fsync(f.fileno())
+                  os.chmod(p,stat.S_IMODE(E.stat().st_mode)&0o700)
+                  os.replace(p,E)
+                  if secret.is_file() and not secret.is_symlink():secret.unlink()
+                  marker.unlink()
+                  print('CONFIG_RESTORE=VERIFIED',flush=True)
+              except Exception:
+                  print('RESULT=BLOCKED_CONFIG_RESTORE_MANUAL',flush=True);raise SystemExit(0)
+          else:
+              print('CONFIG_MARKER=ABSENT',flush=True)
+          current=env(E.read_text())
+          if current.get('DB_NAME')!=['u293982346_encarmentest'] or current.get('STAGING_READ_ONLY')!=['true'] or current.get('STAGING_DB_CONFIRMED')!=['false']:
+              print('RESULT=BLOCKED_PRIVATE_CONFIG_UNSAFE',flush=True);raise SystemExit(0)
+          print('STAGING_CONFIG_READONLY=VERIFIED',flush=True)
+          active=(S/'current/nodejs').resolve()
+          if (S/'versions').resolve() not in active.parents or not (active/'server.js').is_file() or not (active/'tmp').is_dir():
+              print('RESULT=BLOCKED_ACTIVE_PATH',flush=True);raise SystemExit(0)
+          candidate=B/'enc-origin-patch-candidate.js'
+          backups=sorted((p for p in B.glob('enc-origin-server-pre-*.js') if p.is_file() and not p.is_symlink()),key=lambda p:p.stat().st_mtime,reverse=True)
+          if not backups:
+              print('RESULT=BLOCKED_BINARY_BACKUP_MISSING',flush=True);raise SystemExit(0)
+          checksum=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
+          deployed=active/'server.js'
+          if candidate.is_file() and checksum(deployed)==checksum(candidate):
+              original=backups[0]
+              if original.stat().st_size<10000:
+                  print('RESULT=BLOCKED_ORIGINAL_BINARY',flush=True);raise SystemExit(0)
+              fd,p=tempfile.mkstemp(dir=active,prefix='.enc-005-binary-revert-')
+              with os.fdopen(fd,'wb') as f:f.write(original.read_bytes());f.flush();os.fsync(f.fileno())
+              os.chmod(p,stat.S_IMODE(deployed.stat().st_mode))
+              os.replace(p,deployed)
+              print('BINARY_RESTORE=RESTORED_LATEST_BACKUP',flush=True)
+          else:
+              print('BINARY_RESTORE=NOT_NEEDED_BUNDLE_DIFFERS_FROM_CANDIDATE',flush=True)
+          (active/'tmp/restart.txt').touch()
+          print('STAGING_RESTART=REQUESTED',flush=True)
+          ok=False
+          for n in range(20):
+              try:
+                  with urllib.request.urlopen('https://staging.encarmen.org/api/health',timeout=10) as r:
+                      data=json.loads(r.read(15000))
+                  if data.get('environment')=='staging' and data.get('database')=='mariadb' and data.get('staging',{}).get('readOnly') is True:
+                      ok=True;break
+              except Exception:pass
+              time.sleep(4)
+          print('PUBLIC_STAGING_MARIADB_READONLY='+str(ok).lower(),flush=True)
+          print('RESULT='+('RECOVERED_READONLY' if ok else 'BLOCKED_HEALTH_UNVERIFIED'),flush=True)
+          PY
+            echo "SSH_EXIT=$?"
+          } > ENC_STAGING_005_RECOVERY_AFTER_FAILURE.txt 2>&1
+          cat ENC_STAGING_005_RECOVERY_AFTER_FAILURE.txt
+          grep -q '^RESULT=RECOVERED_READONLY$' ENC_STAGING_005_RECOVERY_AFTER_FAILURE.txt
       - name: Publish sanitized deployment evidence
         if: always()
         shell: bash
