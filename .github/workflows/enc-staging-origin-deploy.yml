@@ -1,5 +1,5 @@
 name: ENCARMEN controlled Staging origin fix deploy and automatic rollback
-# Validate host DB user aliases against explicitly isolated Staging configuration.
+# Validate private Staging-only MariaDB bootstrap and admin gate; no production writes.
 on:
   push:
     branches: [coord/staging-origin-deploy-20261030]
@@ -27,6 +27,8 @@ jobs:
           if grep -q 'STAGING_PRIVATE_CONFIGURATION_UNAVAILABLE' /tmp/enc-staging-origin-server.js; then echo 'UNSAFE_STARTUP_GUARD_PRESENT'; exit 1; fi
           grep -q 'STAGING_BUSINESS_WRITES_ENABLED' /tmp/enc-staging-origin-server.js
           grep -q 'ENC_ADMIN_CREDENTIALS_JSON' /tmp/enc-staging-origin-server.js
+          grep -q 'STAGING_PRIVATE_DB_IDENTITY' /tmp/enc-staging-origin-server.js
+          grep -q 'config/.env' /tmp/enc-staging-origin-server.js
           echo 'BUILD=PASS'
       - name: Public Staging deployment with guarded rollback
         shell: bash
