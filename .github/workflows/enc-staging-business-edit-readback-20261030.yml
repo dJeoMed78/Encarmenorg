@@ -74,7 +74,7 @@ jobs:
               fully_verified=0
               date_matches=0
               for i,row in enumerate(rows):
-                  fields=row.split('\\t')
+                  fields=row.split('\t')
                   if len(fields)!=3 or not fields[0].isdigit():raise SystemExit('RESULT=INVALID_BUSINESS_RECORD')
                   number=fields[0]
                   actual_name=bytes.fromhex(fields[1]).decode('utf8')
