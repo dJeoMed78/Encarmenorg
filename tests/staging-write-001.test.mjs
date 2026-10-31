@@ -65,9 +65,14 @@ test('SW explicit configuration, selected database and production account guards
  const prefix=source.slice(source.indexOf('export interface MariaDbConfig'),source.indexOf('export function isMariaDbActive'));
  const permission=source.slice(source.indexOf('export function isBusinessWritePermitted'),source.indexOf('export const stagingBusinessStore'));
  for(const target of [STAGING_BUSINESS_DATABASE,'u293982346_encarmenapp']){
-  const queries=[];const api=execute(prefix+permission,{...modules,process:{env},console:{log(){},warn(){},error(){}},mysql:{createPool:()=>({query:async sql=>{queries.push(sql);return sql.includes('DATABASE()')?[[{db_name:target}]]:[[{test:1}]];},end:async()=>{}})},createTablesIfNotExist:()=>{throw new Error('DDL forbidden');},getPrivateStagingSnapshot:()=>env,privateStagingBusinessWindowOpen:()=>true});
+  const queries=[];const api=execute(prefix+permission,{...modules,process:{env},console:{log(){},warn(){},error(){}},mysql:{createPool:()=>({query:async sql=>{
+   queries.push(sql);
+   if(sql.includes('CURRENT_USER()')&&sql.includes('DATABASE()'))return [[{effective_user:env.DB_USER,db_name:target}]];
+   if(sql.startsWith('SHOW GRANTS'))return [[{'Grants':`GRANT SELECT, INSERT, UPDATE, DELETE ON \\`${STAGING_BUSINESS_DATABASE}\\`.* TO 'synthetic-staging-user'@'localhost'`}]];
+   return [[{test:1}]];
+  },end:async()=>{}})},createTablesIfNotExist:()=>{throw new Error('DDL forbidden');},getPrivateStagingSnapshot:()=>env,privateStagingBusinessWindowOpen:()=>true});
   assert.equal(await api.initMariaDb(),target===STAGING_BUSINESS_DATABASE);assert.equal(api.isWritePermitted(),false);assert.equal(api.isBusinessWritePermitted(),target===STAGING_BUSINESS_DATABASE);
-  assert.ok(queries.every(q=>q.startsWith('SELECT')));
+  assert.ok(queries.every(q=>q.startsWith('SELECT')||q.startsWith('SHOW GRANTS')));
  }
  const classification=execute(prefix,{...modules,process:{env:{NODE_ENV:'production',DB_NAME:STAGING_BUSINESS_DATABASE}}});assert.equal(classification.isStagingEnvironment(),true);assert.equal(classification.isWritePermitted(),false);
  const wrongTarget=execute(prefix,{...modules,process:{env:{...env,APP_ENV:undefined,DB_NAME:'u293982346_encarmenapp'}}});assert.equal(wrongTarget.isStagingEnvironment(),true);assert.equal(wrongTarget.validateStagingDbConfiguration().valid,false);
