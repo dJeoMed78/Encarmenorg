@@ -74,8 +74,16 @@ jobs:
               time.sleep(10)
           check(loaded,'HOSTINGER_MANAGED_PATCH_NOT_ACTIVE')
           print('ACTIVE_MANAGED_RELEASE=PATCH_VERIFIED',flush=True)
-          with urllib.request.urlopen('https://staging.encarmen.org/api/health',timeout=12) as res:
-              h=json.loads(res.read(12000));check(res.status==200 and h.get('environment')=='staging' and h.get('database')=='mariadb' and h.get('staging',{}).get('readOnly') is True,'PUBLIC_BASELINE_NOT_SAFE')
+          health_ok=False
+          for attempt in range(24):
+              try:
+                  with urllib.request.urlopen('https://staging.encarmen.org/api/health',timeout=12) as res:
+                      h=json.loads(res.read(12000))
+                      if res.status==200 and h.get('environment')=='staging' and h.get('database')=='mariadb' and h.get('staging',{}).get('readOnly') is True:
+                          health_ok=True;break
+              except Exception:pass
+              time.sleep(5)
+          check(health_ok,'PUBLIC_BASELINE_NOT_SAFE')
           print('PUBLIC_BASELINE=MARIADB_READONLY',flush=True)
           fd,config=tempfile.mkstemp(dir=B,prefix='.enc-e2e-sql-',suffix='.cnf')
           try:
