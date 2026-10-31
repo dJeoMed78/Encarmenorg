@@ -240,6 +240,13 @@ test('12 & 13. Explicit business DELETE allowed with all gates; unrelated mutati
   const state = { mutationsEnabled: true, isStaging: true, businessWrites: true };
   assert.equal(administrativeWritesReady({ path: '/api/businesses/1081', method: 'DELETE' }, state), true);
   assert.equal(administrativeWritesReady({ path: '/businesses/1081', method: 'DELETE' }, state), true);
+  for(const blocked of [
+    {...state,mutationsEnabled:false},
+    {...state,isStaging:false},
+    {...state,businessWrites:false}
+  ])assert.equal(administrativeWritesReady({path:'/api/businesses/1081',method:'DELETE'},blocked),false);
+  assert.equal(administrativeWritesReady({path:'/api/businesses/1081/sync-wp',method:'DELETE'},state),false);
+
   assert.equal(administrativeWritesReady({ path: '/api/reports', method: 'POST' }, state), false);
   assert.equal(administrativeWritesReady({ path: '/api/events', method: 'POST' }, state), false);
   assert.equal(administrativeWritesReady({ path: '/api/classifieds', method: 'POST' }, state), false);
