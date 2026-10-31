@@ -1363,3 +1363,30 @@ export const stagingBusinessStore = createStagingBusinessStore({
     return verifyStagingIsolation(conn, snapshot ? { ...process.env, ...snapshot } : process.env);
   }
 });
+
+/** Staging-only, boolean-only diagnostics. Admin-only /api/database-status; never expose private values. */
+export function stagingBusinessGateSafetyDiagnostics() {
+  const staging = isStagingEnvironment();
+  const connected = isConnected && pool !== null;
+  const matchedDb = connectedDatabase === STAGING_BUSINESS_DATABASE;
+  const effectiveUser = connectedUser || getMariaDbConfig()?.user;
+  const identityKnown = Boolean(effectiveUser && effectiveUser !== PRODUCTION_DB_USER);
+  const snapshot = staging && identityKnown ? getPrivateStagingSnapshot({connectionUser: effectiveUser}) : null;
+  const unboundSnapshot = staging ? getPrivateStagingSnapshot() : null;
+  return {
+    staging,
+    connected,
+    matchedDb,
+    identityKnown,
+    snapshotValid: Boolean(snapshot),
+    unboundSnapshotValid: Boolean(unboundSnapshot),
+    snapshotWindowOpen: Boolean(snapshot && privateStagingBusinessWindowOpen(snapshot, {connectionUser: effectiveUser})),
+    snapshotBusinessConfiguration: Boolean(snapshot && stagingBusinessConfiguration(snapshot, PRODUCTION_DB_USER)),
+    privateReadOnlyDisabled: snapshot?.STAGING_READ_ONLY === 'false',
+    privateConfirmed: snapshot?.STAGING_DB_CONFIRMED === 'true',
+    privateBusinessEnabled: snapshot?.STAGING_BUSINESS_WRITES_ENABLED === 'true',
+    privateAdminMutations: snapshot?.ENC_ADMIN_MUTATIONS_ENABLED === 'true',
+    connectionPrivateUserMatch: Boolean(snapshot && snapshot.DB_USER === effectiveUser),
+    processHasConfigPathOverride: Boolean(process.env.ENC_STAGING_CONFIG_FILE)
+  };
+}

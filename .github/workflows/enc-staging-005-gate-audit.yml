@@ -1,0 +1,21 @@
+name: ENCARMEN 005 safe gate diagnostics CI
+on:
+  push:
+    branches: [coord/enc-staging-005-gate-audit-20261030]
+    paths: [.github/workflows/enc-staging-005-gate-audit.yml, server.ts, src/db/mariadb.ts]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: node --import tsx --test tests/enc-staging-write-gate-005-unit.test.mjs tests/enc-staging-write-gate-005-http.test.mjs tests/staging-isolation-proof.test.mjs
+      - run: npm run build
