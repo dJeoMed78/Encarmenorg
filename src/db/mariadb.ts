@@ -166,32 +166,39 @@ export async function initMariaDb(): Promise<boolean> {
         );
         const effectiveDb = context[0]?.db_name;
         // Identidad efectiva de SQL obtenida desde CURRENT_USER()
-        const effectiveUser = context[0]?.effective_user ?? (context[0] && !('effective_user' in context[0]) ? config.user : null);
+        const effectiveUser = context[0]?.effective_user;
 
         if (!effectiveDb || effectiveDb !== STAGING_BUSINESS_DATABASE) {
           throw new Error('STAGING_DATABASE_TARGET_MISMATCH');
         }
-        if (!effectiveUser || effectiveUser === PRODUCTION_DB_USER) {
+        // Never trust the configured username when CURRENT_USER() was not
+        // returned by the SQL server. An unverified identity must fail closed.
+        if (typeof effectiveUser !== 'string' || !effectiveUser.trim()) {
+          throw new Error('STAGING_DB_IDENTITY_UNVERIFIED');
+        }
+        if (effectiveUser === PRODUCTION_DB_USER) {
           throw new Error('STAGING_DB_USER_IS_PRODUCTION');
         }
-        if (config.user && effectiveUser !== config.user) {
+        if (!config.user || effectiveUser !== config.user) {
           throw new Error('STAGING_DB_USER_IDENTITY_MISMATCH');
         }
 
-        // Comprobar privilegios efectivos de la cuenta MariaDB
+        // Privilege verification is mandatory for a Staging write-capable
+        // connection. SQL errors, malformed output, and empty grants all fail
+        // closed; never silently treat a failed grants query as success.
+        let grantLines: string[];
         try {
           const [grantsRows]: any = await pool.query('SHOW GRANTS FOR CURRENT_USER()');
-          const grantLines = (grantsRows || []).map((row: any) => String(Object.values(row || {})[0] || ''));
-          if (grantLines.length > 0 && grantLines.some((l: string) => l.startsWith('GRANT'))) {
-            const snapshot = getPrivateStagingSnapshot({ connectionUser: effectiveUser });
-            const requireMinimal = (snapshot?.STAGING_REQUIRE_MINIMAL_GRANTS || process.env.STAGING_REQUIRE_MINIMAL_GRANTS) === 'true';
-            const grantCheck = evaluateGrants(grantLines, STAGING_BUSINESS_DATABASE, PRODUCTION_DB_NAME, requireMinimal);
-            if (grantCheck.code) {
-              throw new Error(`STAGING_DB_GRANTS_INVALID:${grantCheck.code}`);
-            }
-          }
-        } catch (grantErr: any) {
-          if (grantErr?.message?.startsWith('STAGING_DB_GRANTS_INVALID:')) throw grantErr;
+          if (!Array.isArray(grantsRows)) throw new Error('GRANTS_NOT_ARRAY');
+          grantLines = grantsRows.map((row: any) => String(Object.values(row || {})[0] || ''));
+        } catch {
+          throw new Error('STAGING_DB_GRANTS_UNVERIFIED');
+        }
+        const snapshot = getPrivateStagingSnapshot({ connectionUser: effectiveUser });
+        const requireMinimal = (snapshot?.STAGING_REQUIRE_MINIMAL_GRANTS || process.env.STAGING_REQUIRE_MINIMAL_GRANTS) === 'true';
+        const grantCheck = evaluateGrants(grantLines, STAGING_BUSINESS_DATABASE, PRODUCTION_DB_NAME, requireMinimal);
+        if (grantCheck.code) {
+          throw new Error(`STAGING_DB_GRANTS_INVALID:${grantCheck.code}`);
         }
 
         connectedDatabase = effectiveDb;
