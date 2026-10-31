@@ -78,6 +78,32 @@ jobs:
                   if cwd==active and 'node' in pathlib.Path(os.readlink(entry/'exe')).name.lower():processes.append(entry)
               except (OSError,PermissionError):pass
           print('STAGING_NODE_PROCESS_COUNT='+str(len(processes)),flush=True)
+          stageproc=[]
+          versions=(S/'versions').resolve()
+          for entry in pathlib.Path('/proc').iterdir():
+              if not entry.name.isdigit():continue
+              try:
+                  cwd=pathlib.Path(os.readlink(entry/'cwd'))
+                  exe=os.readlink(entry/'exe')
+                  if versions in cwd.parents and 'node' in pathlib.Path(exe).name.lower():
+                      parent=(entry/'stat').read_text().split(') ')[1].split()[1]
+                      cmdline=(entry/'cmdline').read_bytes().decode(errors='ignore').split('\\0')
+                      stageproc.append((entry.name,parent,cwd,cmdline))
+              except (OSError,PermissionError,IndexError):pass
+          print('ALL_STAGE_NODE_PROCESS_COUNT='+str(len(stageproc)),flush=True)
+          for pid,ppid,cwd,cmdline in stageproc[:6]:
+              rel=cwd.relative_to(versions)
+              print('STAGE_NODE_RELEASE_ID='+str(rel.parts[0])[:32],flush=True)
+              print('STAGE_NODE_IS_ACTIVE='+str(cwd==active).lower(),flush=True)
+              try:
+                  pcwd=pathlib.Path(os.readlink(pathlib.Path('/proc')/ppid/'cwd'))
+                  print('STAGE_NODE_PARENT_IN_STAGING='+str(versions in pcwd.parents).lower(),flush=True)
+              except (OSError,PermissionError):print('STAGE_NODE_PARENT_CWD_UNREADABLE=true',flush=True)
+          builds=sorted((a for a in versions.iterdir() if a.is_dir()),key=lambda a:a.stat().st_mtime,reverse=True)
+          print('STAGING_RELEASES_COUNT='+str(len(builds)),flush=True)
+          for build in builds[:4]:
+              print('STAGING_RELEASE='+build.name[:32]+'_HAS_DIAG='+str(b'ENC_005_DIAG_20261030' in (build/'nodejs/server.js').read_bytes() if (build/'nodejs/server.js').is_file() else False).lower(),flush=True)
+
           for p in processes[:3]:
               try:
                   pe=(p/'environ').read_bytes().decode(errors='replace').split('\0')
