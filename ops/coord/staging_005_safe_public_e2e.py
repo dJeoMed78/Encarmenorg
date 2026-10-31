@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """ENCARMEN controlled public business E2E. Preserve permanent jeo admin, fail closed."""
-import os, pathlib, json, secrets, hashlib, stat, tempfile, subprocess, time, datetime, uuid, gzip, urllib.request, urllib.error
+import os, pathlib, json, secrets, hashlib, stat, tempfile, subprocess, time, datetime, uuid, gzip, urllib.request, urllib.error, re
 H=pathlib.Path.home(); S=H/'domains/staging.encarmen.org/hbuilds'; E=S/'config/.env'
 B=H/'encarmen-staging-backups'; DB='u293982346_encarmentest'; URL='https://staging.encarmen.org'
 MARK=B/'enc-staging-permanent-admin-e2e-active.json'
@@ -84,7 +84,12 @@ try:
  private_write(secret,json.dumps({'username':'enc_e2e_temp','password':pwd}))
  private_write(MARK,json.dumps({'backup':str(backup),'secret':str(secret),'created':stamp,'synthetic_name':synth_name}))
  modified=old.rstrip('\n')+'\nSTAGING_BUSINESS_WRITES_ENABLED=true\nENC_ADMIN_MUTATIONS_ENABLED=true\n'
- modified=modified.replace('STAGING_READ_ONLY=true','STAGING_READ_ONLY=false').replace('STAGING_DB_CONFIRMED=false','STAGING_DB_CONFIRMED=true')
+ modified,count1=re.subn(r"(?m)^\\s*(?:export\\s+)?STAGING_READ_ONLY\\s*=\\s*['\\\"]?true['\\\"]?\\s*$",'STAGING_READ_ONLY=false',modified)
+ if count1!=1:abort('STAGING_READ_ONLY_ASSIGNMENT_NOT_FOUND')
+ modified,count2=re.subn(r"(?m)^\\s*(?:export\\s+)?STAGING_DB_CONFIRMED\\s*=\\s*['\\\"]?false['\\\"]?\\s*$",'STAGING_DB_CONFIRMED=true',modified)
+ if count2!=1:abort('STAGING_DB_CONFIRMED_ASSIGNMENT_NOT_FOUND')
+ changed=parse(modified)
+ if one(changed,'STAGING_READ_ONLY')!='false' or one(changed,'STAGING_DB_CONFIRMED')!='true':abort('STAGING_WRITE_FLAGS_UNCHANGED')
  oldkey='ENC_ADMIN_CREDENTIALS_JSON='
  modified='\n'.join(oldkey+json.dumps(newrecord,separators=(',',':')) if line.startswith(oldkey) else line for line in modified.splitlines())+'\n'
  atomic_restore(modified,mode)
