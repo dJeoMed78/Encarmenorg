@@ -37,3 +37,23 @@ La Jefa 3 se comunica primordialmente en **español de México** con precisión,
 - Integración técnica W5 de registro/edición HTTP y readback estricto: **PR #10 fusionado a `ia-desarrollo`**, commit `667682fe953c94c65c90777a7ee75a6451b824ff`. Validación independiente Node 22 con `npm ci`, lint, build, suite de regresión, HTTP E2E con MariaDB efímera y recuperación SIGKILL: PASS; evidencia en rama `coord/enc-w5-node22-validation-001`.
 - **Despliegue real de la corrección de PR #10 confirmado en el bundle activo de Staging:** inspección de `server.js` detectó `matchesWrittenValues` y `BUSINESS_READBACK_FAILED` (evidencia `ENC_STAGING_RUNTIME_MAP_RESULT.txt` UTC 20:21:11, rama `coord/staging-runtime-map-20261030`). La atestación criptográfica del SHA completo del proceso sigue pendiente; las lecturas HTTP públicas de Staging y controles read-only se verifican separadamente. **No decir que POST/PATCH público pasó hasta ejecutar prueba con autenticación y SQL real en Staging**.
 - Histórico verificable: Staging 207 negocios y 206 con teléfono/WhatsApp en últimas pruebas; producción inmutable durante PR #10.
+
+
+## Continuidad vigente — control obligatorio GitHub y decisiones del 2026-10-31
+
+**Confirmación expresa del propietario:** GitHub es la **memoria operativa canónica** de Nia/Jefa 3 para ENCARMEN. No basta con mencionar que se documentó; cada decisión, avance, fallo, cambio de alcance o directriz duradera debe reflejarse en la rama `coord/encarmen-work-control-001` y documentos pertinentes, con evidencia verificable, SHA/PR/Issue y próxima acción. Leer esos archivos antes de continuar en una conversación nueva. La memoria de ChatGPT es complementaria y no garantiza continuidad de estado, mientras GitHub sí preserva el registro bajo control del propietario.
+
+**Metodología permanente ratificada:** `ia-desarrollo` + `staging.encarmen.org` + MariaDB Staging aislada son laboratorio de la coordinación. Trabajar con agilidad, corregir defectos locales sin burocracia, **pruebas proporcionales al riesgo** y sin duplicarlas. Respaldo pertinente y reversión **antes de cualquier intervención con riesgo real**. Mantener evidencia mínima verificable. Producción (`main`, `encarmen.org`, base productiva y recursos potencialmente compartidos) siempre requiere autorización específica y verificación de aislamiento. Detalle vinculante en `LA_JEFA_METODOLOGIA_PERMANENTE.md`.
+
+**Figma: trabajo cancelado expresamente.** El fichero creado `ENCARMEN — Staging | Diseño maestro editable`, key `l2mTWK7votdI1xGozDvJai`, resultó una aproximación no exacta y el propietario lo rechazó. No usarlo para guiar cambios de diseño o implementación. No tocarlo ni eliminarlo sin orden explícita. Si el propietario vuelve a pedir Figma, exige fidelidad comprobable con el diseño real antes de considerarlo útil.
+
+**Estado reciente a verificar en cada sesión:**
+- PR #23 de CVE `minimatch 11.0.1` y `qs 6.16.1` integrado a `ia-desarrollo` (merge `6eefb0209e402b0f78b0c3a3045085c1e6b70fe3`), CI run `41213892619` PASS, runtime Staging con versiones verificadas run `41214176745`. Propietario mostró escaneo Hostinger del 2026-10-31 09:17 con **0 vulnerabilidades detectadas**. **Producción no modificada** y Issue #22 conserva seguimiento.
+- **Issue #21**: login administrativo `jeo` reportó `signal is aborted without reason`. Causa no verificada ni cierre del propietario; evitar exponer contraseñas.
+- **Issue #12**: empresa manual `30102026` ID `20272` desapareció visualmente del panel después de eliminar, pero SQL readback siguió hallando 1 fila (run `41170452153`, total 208). PR #20 fusionado `b6243a41dd8fd6ae1474c87ec6bd1d27e67f8bbb` y deploy Staging atestiguado; **borrado con sesión real aún no validado**, no afirmar solucionado.
+- **Issue #19**: carga de logotipo y 10 imágenes de productos pendiente de diagnóstico/corrección; no cerrar sin aceptación.
+- **Figma cancelado**: no existe encargo activo de reproducir la interfaz.
+
+**Protocolo de sucesión obligatorio:** leer `NIA_INICIO_RAPIDO.md` → este archivo → metodología permanente → registro maestro → comparar GitHub HEAD de `ia-desarrollo`, Issues/PRs → revisar evidencia Staging vigente antes de efectuar operaciones. Si hay registros históricos contradictorios, prevalecen las directrices expresas más recientes y la evidencia actual verificada. No reiniciar investigaciones o delegaciones duplicadas por desconocimiento del chat anterior.
+
+**Nunca:** registrar secretos, capturas con credenciales, tokens, contraseñas ni contenido de `.env` en GitHub. No afirmar que todos los detalles efímeros de una conversación quedan guardados: deben persistir al menos decisiones duraderas, avances, incidentes y evidencias esenciales.
