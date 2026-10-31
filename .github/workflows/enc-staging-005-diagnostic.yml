@@ -1,0 +1,124 @@
+name: ENCARMEN 005 safe Staging gate root-cause audit
+on:
+  push:
+    branches: [coord/enc-staging-005-diagnostic-20261030]
+    paths: [.github/workflows/enc-staging-005-diagnostic.yml]
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-staging-runtime-deploy
+  cancel-in-progress: false
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Collect sanitized non-mutating Hostinger and SQL diagnosis
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SSHPASS:-}" ]; then echo "RESULT=NO_STAGING_SSH_SECRET"; exit 1; fi
+          sudo apt-get update -qq >/dev/null 2>&1
+          sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          fingerprint=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          test "$fingerprint" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          chmod 600 "$HOME/.ssh/known_hosts"
+          export SSHPASS
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' <<'PY'
+          import os,pathlib,stat,hashlib,tempfile,subprocess,json,urllib.request,re
+          H=pathlib.Path.home()
+          S=H/'domains/staging.encarmen.org/hbuilds'
+          E=S/'config/.env'
+          D='u293982346_encarmentest'
+          print('AUDIT=STAGING_ONLY_READ_ONLY',flush=True)
+          if not E.is_file() or E.is_symlink() or E.stat().st_mode & 0o077: raise SystemExit('FAIL_PRIVATE_ENV_PATH')
+          env={}
+          duplicated=[]
+          for line in E.read_text().splitlines():
+              line=line.strip().removeprefix('export ').strip()
+              if not line or line.startswith('#') or '=' not in line: continue
+              k,v=line.split('=',1);k=k.strip()
+              if k in env:duplicated.append(k)
+              env[k]=v.strip().strip("'").strip('"')
+          expected={'APP_ENV':'staging','DB_NAME':D,'STAGING_READ_ONLY':'true','STAGING_DB_CONFIRMED':'false','ENC_ADMIN_PUBLIC_ORIGIN':'https://staging.encarmen.org'}
+          for k,v in expected.items(): print('PRIVATE_'+k+'_BASELINE='+str(env.get(k)==v).lower(),flush=True)
+          print('PRIVATE_DUPLICATE_CRITICAL='+str(any(k in duplicated for k in ('APP_ENV','DB_NAME','DB_USER','DB_HOST','DB_PASSWORD','STAGING_READ_ONLY','STAGING_DB_CONFIRMED','STAGING_BUSINESS_WRITES_ENABLED','ENC_ADMIN_MUTATIONS_ENABLED','ENC_ADMIN_CREDENTIALS_JSON'))).lower(),flush=True)
+          print('PRIVATE_USER_DISTINCT_PRODUCTION='+str(bool(env.get('DB_USER')) and env.get('DB_USER')!='u293982346_appuser').lower(),flush=True)
+          print('PRIVATE_CONFIG_MODE_600='+str(stat.S_IMODE(E.stat().st_mode)==0o600).lower(),flush=True)
+          try:
+              provider=json.loads(env.get('ENC_ADMIN_CREDENTIALS_JSON','{}'))
+              print('ADMIN_PERMANENT_ACCOUNT_PRESERVED='+str(provider.get('version')==1 and len(provider.get('accounts',[]))==1 and provider['accounts'][0].get('username')=='jeo').lower(),flush=True)
+          except Exception:print('ADMIN_PERMANENT_ACCOUNT_PRESERVED=false',flush=True)
+          active=(S/'current/nodejs').resolve()
+          print('ACTIVE_DIR_INSIDE_STAGING='+str((S/'versions').resolve() in active.parents).lower(),flush=True)
+          if (S/'versions').resolve() not in active.parents: raise SystemExit('FAIL_ACTIVE_NOT_STAGING')
+          deployed=active/'server.js'
+          print('ACTIVE_BINARY_EXISTS='+str(deployed.is_file()).lower(),flush=True)
+          if not deployed.is_file():raise SystemExit('FAIL_ACTIVE_BINARY_MISSING')
+          binary=deployed.read_bytes()
+          for marker in ('privateStagingBusinessWindowOpen','getPrivateStagingSnapshot','STAGING_DB_IDENTITY_UNVERIFIED','STAGING_DB_GRANTS_UNVERIFIED','matchesWrittenValues'):
+              print('ACTIVE_BUNDLE_'+marker+'='+str(marker.encode() in binary).lower(),flush=True)
+          B=H/'encarmen-staging-backups'
+          candidate=B/'enc-origin-patch-candidate.js'
+          print('ACTIVE_EQUALS_LAST_CANDIDATE='+str(candidate.is_file() and candidate.read_bytes()==binary).lower(),flush=True)
+          processes=[]
+          for entry in pathlib.Path('/proc').iterdir():
+              if not entry.name.isdigit():continue
+              try:
+                  cwd=pathlib.Path(os.readlink(entry/'cwd'))
+                  if cwd==active and 'node' in pathlib.Path(os.readlink(entry/'exe')).name.lower():processes.append(entry)
+              except (OSError,PermissionError):pass
+          print('STAGING_NODE_PROCESS_COUNT='+str(len(processes)),flush=True)
+          for p in processes[:3]:
+              try:
+                  pe=(p/'environ').read_bytes().decode(errors='replace').split('\0')
+                  data=dict(pair.split('=',1) for pair in pe if '=' in pair)
+                  print('RUNTIME_PROCESS_APP_ENV_STAGING='+str(data.get('APP_ENV')=='staging').lower(),flush=True)
+                  print('RUNTIME_PROCESS_DB_NAME_STAGING='+str(data.get('DB_NAME')==D).lower(),flush=True)
+                  print('RUNTIME_PROCESS_PRIVATE_CWD='+str(active==pathlib.Path(os.readlink(p/'cwd'))).lower(),flush=True)
+              except (OSError,PermissionError):print('RUNTIME_PROCESS_ENV_UNREADABLE=true',flush=True)
+          fd,tmp=tempfile.mkstemp(prefix='.enc-005-diagnostic-',suffix='.cnf',dir=B)
+          try:
+              os.fchmod(fd,0o600)
+              with os.fdopen(fd,'w') as f:
+                  f.write('[client]\n')
+                  for k,e in [('host','DB_HOST'),('user','DB_USER'),('password','DB_PASSWORD')]:
+                      v=env.get(e,'').replace('\\','\\\\').replace('"','\\"')
+                      f.write(k+'="'+v+'"\n')
+              def sql(statement):
+                  p=subprocess.run(['mariadb','--defaults-extra-file='+tmp,'-D',D,'--batch','--skip-column-names','-e',statement],capture_output=True,text=True,timeout=20)
+                  if p.returncode:raise RuntimeError('MARIADB_QUERY_FAILED')
+                  return p.stdout.strip().splitlines()
+              current=sql("SELECT DATABASE(),SUBSTRING_INDEX(CURRENT_USER(),'@',1),SUBSTRING_INDEX(USER(),'@',1)")
+              if len(current)!=1:raise RuntimeError('CURRENT_IDENTITY_UNAVAILABLE')
+              values=current[0].split('\t')
+              print('SQL_DATABASE_IS_STAGING='+str(values[0]==D).lower(),flush=True)
+              print('SQL_EFFECTIVE_USER_EQUALS_CONFIG='+str(values[1]==env.get('DB_USER')).lower(),flush=True)
+              print('SQL_LOGIN_USER_EQUALS_CONFIG='+str(values[2]==env.get('DB_USER')).lower(),flush=True)
+              visible=sql('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA')
+              print('SQL_PRODUCTION_SCHEMA_VISIBLE='+str('u293982346_encarmenapp' in visible).lower(),flush=True)
+              print('SQL_STAGING_SCHEMA_VISIBLE='+str(D in visible).lower(),flush=True)
+              marker=sql('SELECT env_name,db_name FROM encarmen_environment_marker')
+              print('SQL_STAGING_MARKER_MATCH='+str(marker==['staging\t'+D]).lower(),flush=True)
+              grants=sql('SHOW GRANTS FOR CURRENT_USER()')
+              print('SQL_GRANTS_AVAILABLE='+str(len(grants)>0).lower(),flush=True)
+              print('SQL_GRANTS_GLOBAL_WRITE='+str(any(re.search(r'GRANT\\s+(?!USAGE\\s+ON)\\S+.*\\s+ON\\s+\\*\\.\\*',g,re.I) for g in grants)).lower(),flush=True)
+              print('SQL_GRANTS_PRODUCTION='+str(any('encarmenapp' in g for g in grants)).lower(),flush=True)
+              print('SQL_GRANTS_STAGING_INSERT='+str(any(('INSERT' in g or 'ALL PRIVILEGES' in g) and D in g for g in grants)).lower(),flush=True)
+              print('SQL_GRANTS_STAGING_UPDATE='+str(any(('UPDATE' in g or 'ALL PRIVILEGES' in g) and D in g for g in grants)).lower(),flush=True)
+          except Exception as ex:print('SQL_DIAGNOSTIC_FAILURE='+str(ex)[:60],flush=True)
+          finally:os.unlink(tmp)
+          try:
+              with urllib.request.urlopen('https://staging.encarmen.org/api/health',timeout=10) as resp:
+                  j=json.loads(resp.read(20000))
+                  print('PUBLIC_HEALTH_STATUS='+str(resp.status),flush=True)
+                  print('PUBLIC_HEALTH_STAGING='+str(j.get('environment')=='staging').lower(),flush=True)
+                  print('PUBLIC_HEALTH_READONLY='+str(j.get('staging',{}).get('readOnly') is True).lower(),flush=True)
+                  print('PUBLIC_HEALTH_MARIADB='+str(j.get('database')=='mariadb').lower(),flush=True)
+          except Exception:print('PUBLIC_HEALTH_FAILED=true',flush=True)
+          print('RESULT=DIAGNOSIS_COLLECTED_READONLY',flush=True)
+          PY
