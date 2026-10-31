@@ -60,3 +60,11 @@ La documentación permanece en GitHub mientras el repositorio y acceso estén di
 - PR #15 merge a `ia-desarrollo` `6c978ab1e6a0a36783499619893749d5d9ef98d3`; PR #16 diagnostico protegido merge `35d3e882de34bb39da281170b9a09e5d6a310965`. Release activo Hostinger atestiguado por proceso Node, bundle y cabecera HTTP.
 - **Causa real del 503:** la herramienta de ventana E2E no cambio efectivamente `STAGING_READ_ONLY` y `STAGING_DB_CONFIRMED` por depender de cadenas literales; el guard de aplicacion actuaba correctamente. La herramienta E2E se reparo con sustituciones de asignaciones y validacion antes de escribir. No se trata de habilitar escrituras generales en Staging: solo carril negocio bajo control temporal.
 - No se modifico `main` / `encarmen.org` ni base productiva. **Aun pendiente aceptacion visual del propietario; Issue #12 abierto por protocolo**. No hacer mas despliegues a ciegas; los diagnosticos booleanos temporales deben retirarse/revisarse antes de produccion. Ver registro maestro para trazabilidad y decisiones.
+
+
+## Actualización 2026-10-30 — registro público E2E real PASS
+
+- PR #18 merge `67f7c96ca757caaf0e61e07e828b8479e6e79a2f` a `ia-desarrollo`, CI `41168498639` PASS. Resuelto HTTP 403 `PUBLIC_REGISTRATION_DISABLED` de alta anónima: lectura dinámica de autorización explícita `PUBLIC_REGISTRATION_ENABLED=true` desde el archivo privado Staging; sigue exigiendo aislamiento y `isBusinessWritePermitted`.
+- Hostinger Staging respaldado y configurado, ejecución `41168635340` PASS; producción no modificada.
+- E2E real público `41168717485` PASS: alta HTTP 201, lectura SQL/GET/listado y reintento idempotente HTTP 200; eliminación de prueba y 207 empresas preservadas. Auditoría independiente posterior `41168773826` PASS: 207 en SQL y público, 0 sintéticas, bandera habilitada.
+- Usuario debe pulsar **Reintentar Guardado** en el mismo formulario que mostró el 403; conserva UUID/idempotencia. Issue #12 abierto hasta aceptación humana. No permitir duplicados por iniciar otro formulario. 
