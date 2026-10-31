@@ -2702,8 +2702,8 @@ registerStagingBusinessRoutes(app, {
 mountPublicRegistration(app, {
   isStaging:isStagingEnvironment, canWrite:isBusinessWritePermitted, getPool,
   businessStore:stagingBusinessStore, categorySlugs:generateCategorySlugs,
-  saved:business=>{businessesCache=[business,...businessesCache.filter(b=>String(b.id)!==String(business.id))];cachedDbSignature=null;},
-  isVisible:id=>businessesCache.some(b=>String(b.id)===String(id)&&(b.status||'published')==='published')
+  saved:(business:any)=>{businessesCache=[business,...businessesCache.filter(b=>String(b.id)!==String(business.id))];cachedDbSignature=null;},
+  isVisible:(id:string|number)=>businessesCache.some(b=>String(b.id)===String(id)&&(b.status||'published')==='published')
 });
 
 // Legacy creation is retired outside the controlled Staging store.
