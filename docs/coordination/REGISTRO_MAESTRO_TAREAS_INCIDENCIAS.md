@@ -559,3 +559,11 @@ El propietario autorizó Google Drive como memoria narrativa más frecuente de C
 - **Protocolo de recuperación:** `docs/coordination/NIA_REACTIVACION_TU_ERES_NIA.md` (commit `3b886a0`). Actualizados `NIA_INICIO_RAPIDO.md` (`925130b`), `JEFA3_IDENTIDAD_Y_CONTINUIDAD.md` (`1cc3683`) y `LA_JEFA_METODOLOGIA_PERMANENTE.md` (`2c2f32d`).
 - **Drive:** checkpoint `CHECKPOINT-NIA5-ACTIVADOR-TU-ERES-NIA-20261031` añadido y leído de nuevo en el mismo archivo, sin quitar el contenido anterior.
 - **Límite confirmado:** la herramienta disponible no permite actualizar directamente las instrucciones personalizadas globales de ChatGPT; el propietario debe pegarlas en Configuración > Personalización. No afirmar activación global hasta que lo haga.
+
+
+### Nia 6 — Protección antirregresión de multimedia y empresa — 2026-10-31
+- **Aceptación del propietario:** registro público de la empresa ID 20274, nombre `2222222`, con logotipo y galería visualizados y aprobados en teléfono móvil. Evidencia externa: GitHub Actions 41246095985, `GET /api/businesses/20274` HTTP 200, imagen y logo `/uploads/pub-...`, galería 3 y tres WebP reales recuperados HTTP 200.
+- **Entregas ya integradas a `ia-desarrollo`:** PR #24 (borrado autorizado); #25 (registro público y persistencia multimedia), #26 (reparación de cargador administrativo), #27 (habilitación de selectores públicos). Las pruebas de alta, modificación y borrado en MariaDB Staging se realizaron en colaboración con el propietario; no confundir con producción.
+- **PR #28 integrado:** `1f137124cd3aee1baf3f71614ba4e9e3e1ce050c`; documento `docs/coordination/ENC_MEDIA_CONTRATO_NO_REGRESION.md`, seis pruebas nuevas `tests/enc-media-regression-guard.test.mjs` y workflow `.github/workflows/enc-media-regression-gate.yml` para todo PR hacia `ia-desarrollo`. CI #41246420707 aprobó TypeScript, pruebas y build.
+- **Condición pendiente para blindaje obligatorio:** protección de rama `ia-desarrollo` con status check requerido `media-regressions`. El GitHub connector disponible no expone la acción para modificar branch protection. El workflow detecta errores, pero por sí solo no bloquea una fusión manual.
+- **Pendiente funcional separado:** carga desde el editor administrativo debe verificarse en navegador real. El registro público con 3 fotografías sí cuenta con aceptación móvil y lectura remota. No modificar producción.
