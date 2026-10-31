@@ -1,4 +1,4 @@
-name: ENCARMEN verify actual business edit persisted in Staging MariaDB
+name: ENCARMEN verify deletion of manual business 20272 from Staging MariaDB
 on:
   push:
     branches: [coord/enc-staging-005-diagnostic-20261030]
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: SSH read-only exact-name SQL and public GET comparison
+      - name: Read-only SQL deletion proof and public directory absence
         shell: bash
         env:
           SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
@@ -62,44 +62,40 @@ jobs:
               if sql('SELECT env_name,db_name FROM encarmen_environment_marker')!=['staging\t'+D]:raise SystemExit('RESULT=SQL_WRONG_MARKER')
               if 'u293982346_encarmenapp' in sql('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA'):raise SystemExit('RESULT=PROD_VISIBLE')
               print('SQL_ENVIRONMENT=STAGING_ISOLATED_VERIFIED',flush=True)
-              phone='3898765432'
-              prefix='Prueba Staging Controlada'
-              pref='CONVERT(0x'+prefix.encode().hex()+' USING utf8mb4)'
-              phlit='CONVERT(0x'+phone.encode().hex()+' USING utf8mb4)'
-              cols=sql("SHOW COLUMNS FROM businesses LIKE 'phone'")
-              phone_clause=(' OR phone='+phlit) if len(cols)==1 else ''
-              rows=sql("SELECT id,HEX(name),HEX(description) FROM businesses WHERE id=20272 LIMIT 1")
-              print('SQL_CANDIDATE_ROWS='+str(len(rows)),flush=True)
-              if not rows:raise SystemExit('RESULT=MANUAL_BUSINESS_20272_NOT_IN_SQL')
-              fully_verified=0
-              date_matches=0
-              for i,row in enumerate(rows):
-                  fields=row.split('\t')
-                  if len(fields)!=3 or not fields[0].isdigit():raise SystemExit('RESULT=INVALID_BUSINESS_RECORD')
-                  number=fields[0]
-                  actual_name=bytes.fromhex(fields[1]).decode('utf8')
-                  description=bytes.fromhex(fields[2]).decode('utf8') if fields[2]!='NULL' else ''
-                  if actual_name!='30102026' or number!='20272':raise SystemExit('RESULT=MANUAL_BUSINESS_ID_NAME_MISMATCH')
-                  print('CANDIDATE_'+str(i+1)+'_ID='+number,flush=True)
-                  print('CANDIDATE_'+str(i+1)+'_NAME='+json.dumps(actual_name,ensure_ascii=False)[:700],flush=True)
-                  print('CANDIDATE_'+str(i+1)+'_DESCRIPTION='+json.dumps(description,ensure_ascii=False)[:700],flush=True)
-                  has_date=any(s in (actual_name+' '+description).lower() for s in ('30/10/2026','30-10-2026','2026-10-30','20261030','30102026','30 de octubre','octubre 30'))
-                  print('CANDIDATE_'+str(i+1)+'_HAS_2026_10_30='+str(has_date).lower(),flush=True)
-                  if has_date:date_matches+=1
-                  req=urllib.request.Request('https://staging.encarmen.org/api/businesses/'+number+'?readback='+str(os.getpid()),headers={'Cache-Control':'no-cache','User-Agent':'ENC-Staging-Edit-Readback/1'})
-                  try:
-                      with urllib.request.urlopen(req,timeout=12) as result:
-                          pub=json.loads(result.read(200000));http=result.status
-                  except urllib.error.HTTPError as e:
-                      http=e.code;pub={}
-                  business=pub.get('business') if isinstance(pub.get('business'),dict) else {}
-                  match=http==200 and pub.get('success') is True and business.get('name')==actual_name and business.get('description')==description
-                  print('CANDIDATE_'+str(i+1)+'_PUBLIC_GET_HTTP='+str(http),flush=True)
-                  print('CANDIDATE_'+str(i+1)+'_PUBLIC_SQL_MATCH='+str(match).lower(),flush=True)
-                  if match:fully_verified+=1
-              print('SQL_MATCHES_WITH_TODAY_DATE='+str(date_matches),flush=True)
-              print('PUBLIC_VERIFIED_CANDIDATES='+str(fully_verified),flush=True)
-              print('RESULT='+('DATED_EDIT_PERSISTED_AND_PUBLIC' if date_matches>0 and fully_verified>0 else 'FOUND_BUT_DATE_OR_PUBLIC_READBACK_NEEDS_REVIEW'),flush=True)
+              id_rows=sql('SELECT COUNT(*) FROM businesses WHERE id=20272')
+              name_rows=sql("SELECT COUNT(*) FROM businesses WHERE BINARY name=BINARY CONVERT(0x3330313032303236 USING utf8mb4)")
+              total_rows=sql('SELECT COUNT(*) FROM businesses')
+              print('SQL_TARGET_ID_COUNT='+str(id_rows[0] if id_rows else 'missing'),flush=True)
+              print('SQL_TARGET_NAME_COUNT='+str(name_rows[0] if name_rows else 'missing'),flush=True)
+              print('SQL_BUSINESS_COUNT='+str(total_rows[0] if total_rows else 'missing'),flush=True)
+              if id_rows!=['0']:raise SystemExit('RESULT=BUSINESS_ID_STILL_IN_SQL')
+              if name_rows!=['0']:raise SystemExit('RESULT=TARGET_NAME_STILL_IN_SQL')
+              uri='https://staging.encarmen.org/api/businesses/20272?verify_deleted='+str(os.getpid())
+              request=urllib.request.Request(uri,headers={'Cache-Control':'no-store','User-Agent':'ENC-Staging-Delete-Readback/1'})
+              try:
+                  with urllib.request.urlopen(request,timeout=15) as response:
+                      detail_status=response.status
+                      data=json.loads(response.read(250000))
+              except urllib.error.HTTPError as exc:
+                  detail_status=exc.code
+                  try:data=json.loads(exc.read(250000))
+                  except Exception:data={}
+              entry=data.get('business') if isinstance(data,dict) else None
+              detail_still_visible=detail_status==200 and isinstance(entry,dict) and str(entry.get('id'))=='20272'
+              print('PUBLIC_DETAIL_HTTP='+str(detail_status),flush=True)
+              print('PUBLIC_DETAIL_CONTAINS_TARGET='+str(detail_still_visible).lower(),flush=True)
+              if detail_still_visible:raise SystemExit('RESULT=PUBLIC_DETAIL_STILL_VISIBLE')
+              request=urllib.request.Request('https://staging.encarmen.org/api/businesses?verify_deleted='+str(os.getpid()),headers={'Cache-Control':'no-store','User-Agent':'ENC-Staging-Delete-Readback/1'})
+              with urllib.request.urlopen(request,timeout=15) as response:
+                  list_status=response.status
+                  listing=json.loads(response.read(10000000))
+              businesses=listing.get('businesses') if isinstance(listing,dict) else None
+              if list_status!=200 or not isinstance(businesses,list):raise SystemExit('RESULT=PUBLIC_LIST_UNAVAILABLE')
+              listed=any(str(x.get('id'))=='20272' or x.get('name')=='30102026' for x in businesses if isinstance(x,dict))
+              print('PUBLIC_DIRECTORY_COUNT='+str(len(businesses)),flush=True)
+              print('PUBLIC_DIRECTORY_CONTAINS_TARGET='+str(listed).lower(),flush=True)
+              if listed:raise SystemExit('RESULT=PUBLIC_DIRECTORY_STILL_VISIBLE')
+              print('RESULT=STAGING_BUSINESS_20272_DELETED_SQL_AND_PUBLIC',flush=True)
           finally:
               os.unlink(tmp)
           PY
