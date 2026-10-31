@@ -2,7 +2,7 @@ import {registerAdminSecurity,environmentAdminProvider} from './src/server/admin
 import {administrativeWritesReady} from './src/server/consolidatedWritePolicy';
 import {registerStagingBusinessRoutes} from './src/server/stagingBusinessRoutes';
 import {mountPublicRegistration,publicRegistrationBodyLimit} from './src/server/publicRegistrationWiring.ts';
-import {verifyStagingAdmin,createLoginLimiter,stagingBusinessConfiguration} from './src/server/stagingBusinessSecurity';
+import {verifyStagingAdmin,createLoginLimiter,stagingBusinessConfiguration,getPrivateStagingSnapshot} from './src/server/stagingBusinessSecurity';
 import { prepareContactPatch, contactsMatchReadback, ContactPatchError, contactDigits, contactCounts, matchesContactFilter, CONTACT_FILTERS, type ContactFilter } from './src/utils/businessContacts';
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
@@ -185,28 +185,11 @@ function privateStagingAdminIdentity(): {credentials:string;origin:string}|undef
     if (!isStagingEnvironment() ||
         db?.database !== STAGING_PRIVATE_DB_NAME ||
         db.user === 'u293982346_appuser') return undefined;
-    // Use the canonical active Staging release path, NOT HOME: Hostinger can
-    // omit HOME/APP_ENV from the managed Node process.
-    const actual = fs.realpathSync(process.cwd());
-    const marker = path.join('domains', 'staging.encarmen.org', 'hbuilds', 'versions');
-    const needle = path.sep + marker + path.sep;
-    const index = actual.indexOf(needle);
-    if (index < 1 || path.basename(actual) !== 'nodejs') return undefined;
-    const stagingRoot = path.join(actual.slice(0,index), 'domains','staging.encarmen.org','hbuilds');
-    if (!actual.startsWith(path.join(stagingRoot,'versions') + path.sep)) return undefined;
-    const configFile = path.join(stagingRoot, 'config/.env');
-    const st = fs.lstatSync(configFile);
-    if (!st.isFile() || st.isSymbolicLink() || (st.mode & 0o077) !== 0) return undefined;
-    const privateEnv = dotenv.parse(fs.readFileSync(configFile));
-    if (privateEnv.APP_ENV !== 'staging' ||
-        privateEnv.DB_NAME !== STAGING_PRIVATE_DB_NAME ||
-        !privateEnv.DB_USER ||
-        privateEnv.DB_USER === 'u293982346_appuser' ||
-        privateEnv.DB_USER !== db.user ||
-        !privateEnv.DB_PASSWORD ||
-        privateEnv.ENC_ADMIN_PUBLIC_ORIGIN !== 'https://staging.encarmen.org' ||
-        !privateEnv.ENC_ADMIN_CREDENTIALS_JSON) return undefined;
-    return {credentials:privateEnv.ENC_ADMIN_CREDENTIALS_JSON,origin:privateEnv.ENC_ADMIN_PUBLIC_ORIGIN};
+    const snapshot = getPrivateStagingSnapshot({ connectionUser: db.user });
+    if (!snapshot) return undefined;
+    if (!snapshot.ENC_ADMIN_CREDENTIALS_JSON || !snapshot.ENC_ADMIN_PUBLIC_ORIGIN) return undefined;
+    if (snapshot.ENC_ADMIN_PUBLIC_ORIGIN !== 'https://staging.encarmen.org') return undefined;
+    return {credentials:snapshot.ENC_ADMIN_CREDENTIALS_JSON,origin:snapshot.ENC_ADMIN_PUBLIC_ORIGIN};
   } catch { return undefined; }
 }
 const stagingDynamicIdentity = isStagingEnvironment() &&
@@ -227,10 +210,19 @@ const adminSecurity = registerAdminSecurity(app, {
       .update(identity.origin).update('\0').update(identity.credentials).digest('hex') : undefined;
   } : undefined,
   allowedOrigin: process.env.ENC_ADMIN_PUBLIC_ORIGIN || ((process.env.APP_ENV === 'staging' && process.env.DB_NAME === STAGING_PRIVATE_DB_NAME) ? 'https://staging.encarmen.org' : undefined),
-  writesReady: req=>administrativeWritesReady(req, {
-    mutationsEnabled:process.env.ENC_ADMIN_MUTATIONS_ENABLED==='true',
-    isStaging:isStagingEnvironment(), businessWrites:isBusinessWritePermitted()
-  })
+  writesReady: req => {
+    const isStaging = isStagingEnvironment();
+    const businessWrites = isBusinessWritePermitted();
+    const snapshot = isStaging ? getPrivateStagingSnapshot() : null;
+    const mutationsEnabled = isStaging
+      ? (businessWrites && Boolean(snapshot && snapshot.ENC_ADMIN_MUTATIONS_ENABLED === 'true'))
+      : (process.env.ENC_ADMIN_MUTATIONS_ENABLED === 'true');
+    return administrativeWritesReady(req, {
+      mutationsEnabled,
+      isStaging,
+      businessWrites
+    });
+  }
 });
 
 

@@ -129,13 +129,23 @@ export function evaluateMarker(rows: any[], database: string): string {
   return '';
 }
 
+import {getPrivateStagingSnapshot} from './stagingBusinessSecurity.ts';
+
 /** Comprobación completa. Falla cerrado: cualquier error o dato inesperado bloquea las escrituras. */
 export async function verifyStagingIsolation(conn: any, env: Env, options: IsolationOptions = {}): Promise<IsolationResult> {
   const staging = options.stagingDatabase || STAGING_DATABASE;
   const production = options.productionDatabase || PRODUCTION_DATABASE;
   const warnings = newWarnings();
   const fail = (code: string) => ({ ok: false, code, warnings });
-  const configuration = checkStagingConfiguration(env, options);
+  let effectiveEnv = env;
+  let configuration = checkStagingConfiguration(effectiveEnv, options);
+  if (configuration && effectiveEnv === process.env) {
+    const snapshot = getPrivateStagingSnapshot();
+    if (snapshot) {
+      effectiveEnv = { ...snapshot, ...env };
+      configuration = checkStagingConfiguration(effectiveEnv, options);
+    }
+  }
   if (configuration) return fail(configuration);
   try {
     const [current] = await conn.query('SELECT DATABASE() AS db_name');
