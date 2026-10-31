@@ -13,14 +13,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 18
     env:
-      SSHPASS: \${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - name: Establish pinned Hostinger Staging SSH access
         shell: bash
         run: |
           set -euo pipefail
-          test -n "\${SSHPASS:-}"
+          test -n "${SSHPASS:-}"
           sudo apt-get update -qq >/dev/null 2>&1
           sudo apt-get install -qq -y sshpass >/dev/null 2>&1
           mkdir -p "$HOME/.ssh"
@@ -138,7 +138,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "\${SSHPASS:-}"
+          test -n "${SSHPASS:-}"
           export SSHPASS
           sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ServerAliveInterval=15 -o ServerAliveCountMax=4 u293982346@45.137.159.114 'python3 -' <<'PY'
           import os,pathlib,stat,tempfile,json,subprocess,urllib.request,time,re
