@@ -428,3 +428,12 @@ Tras autorización del propietario para finalizar pruebas empresariales, Coordin
 - **Reauditoria independiente:** run `41164767055`: 207 empresas en MariaDB de pruebas (mismo recuento previo), ninguna empresa con nombre sintetico, marcador de ventana ausente, `jeo` preservado, configuracion privada readOnly real, health HTTP200 MariaDB y release HTTP atestiguado.
 - La escritura empresarial NO quedo habilitada permanentemente en Staging; el regreso a readOnly es un control de seguridad exigido por la prueba. Para sesiones manuales futuras se requiere una ventana de negocio controlada y respaldada. La integracion a `main` / produccion sigue prohibida sin orden expresa del propietario.
 - Pendiente: validacion fisica/visual del propietario; eliminar o justificar diagnosticos de booleanos `stagingGateDiagnostic` antes de un eventual candidato productivo. PR #14 contiene workflows experimentales no previstos para integracion; preferir PR #15/#16 ya revisados.
+
+
+### Subincidencia ENC-STAGING-ADMIN-LOGIN-UI-20261030
+
+- **Estado:** CODIGO PROBADO; INTEGRADO A `ia-desarrollo`; DESPLEGADO Y ATESTIGUADO EN STAGING; ACEPTACION REAL DE LOGIN `jeo` PENDIENTE.
+- PR #17, merge `5fbec000adde69e27c35bf34726ba82a71f8357c`: corrigio el contraste visual del nombre de usuario y lo sincroniza con los avatares; agrego control accesible para mostrar/ocultar contraseña; longitud minima de 10 caracteres solo en Staging, conservando 12 en otros entornos.
+- CI independiente: Actions `41166849692` PASS (TypeScript, prueba HTTP positiva para password de 10 caracteres con hash scrypt sintetico, rechazo de 9, clave incorrecta, CORS/Origin, regresiones de seguridad y build).
+- Despliegue real: Actions `41167161898` PASS: nuevo release respondio por HTTP, frontend publico confirmo las etiquetas `Mostrar contraseña` y `Ocultar contraseña`, longitud 9 devolvio 400, 10 con usuario inexistente devolvio 401, proceso Node activo con bundle correcto, configuracion permanente de Staging conservada.
+- Nota: no se ha probado el login con la contraseña real de `jeo`; longitud correcta no equivale a coincidencia con el hash. Usuario debe probar desde su navegador. Ninguna credencial alterada. Produccion no intervenida.
