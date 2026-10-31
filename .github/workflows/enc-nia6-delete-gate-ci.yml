@@ -1,0 +1,23 @@
+name: NIA6 staging delete gate validation
+on:
+  push:
+    branches:
+      - coord/nia6-staging-delete-gate-20261031
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - name: Directed deletion security and persistence regressions
+        run: node --import tsx --test tests/staging-write-001.test.mjs tests/staging-store-default-strict.test.mjs tests/enc-staging-write-gate-005-unit.test.mjs tests/enc-staging-write-gate-005-http.test.mjs tests/staging-isolation-proof.test.mjs tests/security-containment-003.test.mjs
+      - run: npm run build
