@@ -1,0 +1,208 @@
+name: ENCARMEN 005 Staging real HTTP SQL proof with emergency closure
+on:
+  push:
+    branches: [coord/enc-staging-005-e2e-20261030]
+    paths: [.github/workflows/enc-staging-005-public-e2e.yml]
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-staging-runtime-deploy
+  cancel-in-progress: false
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      SSHPASS: \${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Establish pinned Hostinger Staging SSH access
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "\${SSHPASS:-}"
+          sudo apt-get update -qq >/dev/null 2>&1
+          sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          test "$fp" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          chmod 600 "$HOME/.ssh/known_hosts"
+          echo SSH_FINGERPRINT=VERIFIED
+      - name: Transfer fixed synthetic-only test script
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SSHPASS
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ServerAliveInterval=15 -o ServerAliveCountMax=4 u293982346@45.137.159.114 'umask 077; test -d "$HOME/encarmen-staging-backups" && cat > "$HOME/encarmen-staging-backups/enc-005-safe-public-e2e.py"' < ops/coord/staging_005_safe_public_e2e.py
+          echo TEST_SCRIPT_TRANSFER=VERIFIED
+      - name: Verify managed release and create fresh SQL snapshot before test
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SSHPASS
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ServerAliveInterval=15 -o ServerAliveCountMax=4 u293982346@45.137.159.114 'python3 -' <<'PY'
+          import os,pathlib,stat,json,time,tempfile,subprocess,gzip,datetime,urllib.request
+          H=pathlib.Path.home();S=H/'domains/staging.encarmen.org/hbuilds';E=S/'config/.env';B=H/'encarmen-staging-backups';D='u293982346_encarmentest'
+          def check(x,code):
+              if not x:raise RuntimeError(code)
+          check(E.is_file() and not E.is_symlink() and E.stat().st_mode&0o077==0,'PRIVATE_FILE_UNSAFE')
+          check(B.is_dir() and not B.is_symlink() and B.stat().st_mode&0o077==0,'BACKUP_DIR_UNSAFE')
+          check(not (B/'enc-staging-permanent-admin-e2e-active.json').exists(),'PREVIOUS_WINDOW_ACTIVE')
+          env={}
+          for l in E.read_text().splitlines():
+              l=l.strip().removeprefix('export ').strip()
+              if not l or l.startswith('#') or '=' not in l:continue
+              k,v=l.split('=',1);check(k not in env,'DUPLICATE_CONFIG');env[k]=v.strip().strip('"').strip("'")
+          for k,v in [('APP_ENV','staging'),('DB_NAME',D),('STAGING_READ_ONLY','true'),('STAGING_DB_CONFIRMED','false'),('ENC_ADMIN_PUBLIC_ORIGIN','https://staging.encarmen.org')]:check(env.get(k)==v,'BASELINE_'+k)
+          check(env.get('DB_USER') and env.get('DB_USER')!='u293982346_appuser' and env.get('DB_PASSWORD'),'DB_USER_UNSAFE')
+          check(not any(k in env for k in ('STAGING_BUSINESS_WRITES_ENABLED','ENC_ADMIN_MUTATIONS_ENABLED')),'UNEXPECTED_WRITE_FLAGS')
+          check((S/'current').is_symlink(),'RELEASE_NOT_MANAGED')
+          active=None;loaded=False
+          for attempt in range(30):
+              active=(S/'current/nodejs').resolve()
+              bundle=active/'server.js'
+              marker=bundle.is_file() and b'getPrivateStagingSnapshot' in bundle.read_bytes() and b'STAGING_DB_GRANTS_UNVERIFIED' in bundle.read_bytes() and b'matchesWrittenValues' in bundle.read_bytes()
+              processes=[]
+              if marker and (S/'versions').resolve() in active.parents:
+                  for p in pathlib.Path('/proc').iterdir():
+                      if not p.name.isdigit():continue
+                      try:
+                          if pathlib.Path(os.readlink(p/'cwd'))==active and 'node' in pathlib.Path(os.readlink(p/'exe')).name.lower():processes.append(p)
+                      except (PermissionError,OSError):pass
+              if marker and processes:loaded=True;break
+              time.sleep(10)
+          check(loaded,'HOSTINGER_MANAGED_PATCH_NOT_ACTIVE')
+          print('ACTIVE_MANAGED_RELEASE=PATCH_VERIFIED',flush=True)
+          with urllib.request.urlopen('https://staging.encarmen.org/api/health',timeout=12) as res:
+              h=json.loads(res.read(12000));check(res.status==200 and h.get('environment')=='staging' and h.get('database')=='mariadb' and h.get('staging',{}).get('readOnly') is True,'PUBLIC_BASELINE_NOT_SAFE')
+          print('PUBLIC_BASELINE=MARIADB_READONLY',flush=True)
+          fd,config=tempfile.mkstemp(dir=B,prefix='.enc-e2e-sql-',suffix='.cnf')
+          try:
+              os.fchmod(fd,0o600)
+              with os.fdopen(fd,'w') as f:
+                  f.write('[client]\n')
+                  for key,envkey in [('host','DB_HOST'),('user','DB_USER'),('password','DB_PASSWORD')]:
+                      value=env[envkey].replace('\\','\\\\').replace('"','\\"')
+                      f.write(key+'="'+value+'"\n')
+              def sql(query):
+                  p=subprocess.run(['mariadb','--defaults-extra-file='+config,'-D',D,'--batch','--skip-column-names','-e',query],capture_output=True,text=True,timeout=20)
+                  check(p.returncode==0,'SQL_PRECHECK_FAIL')
+                  return p.stdout.strip().splitlines()
+              ident=sql("SELECT DATABASE(),SUBSTRING_INDEX(CURRENT_USER(),'@',1)")
+              check(ident==[D+'\t'+env['DB_USER']],'SQL_IDENTITY_MISMATCH')
+              check(sql('SELECT env_name,db_name FROM encarmen_environment_marker')==['staging\t'+D],'SQL_MARKER_MISMATCH')
+              schemas=sql('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA')
+              check('u293982346_encarmenapp' not in schemas,'PRODUCTION_SCHEMA_VISIBLE')
+              grants=sql('SHOW GRANTS FOR CURRENT_USER()')
+              check(any(('INSERT' in g or 'ALL PRIVILEGES' in g) and D in g for g in grants),'NO_INSERT')
+              check(any(('UPDATE' in g or 'ALL PRIVILEGES' in g) and D in g for g in grants),'NO_UPDATE')
+              check(any(('DELETE' in g or 'ALL PRIVILEGES' in g) and D in g for g in grants),'NO_CLEANUP_PERMISSION')
+              print('SQL_IDENTITY_MARKER_GRANTS=STAGING_ONLY_VERIFIED',flush=True)
+              folder=B/'database';check(folder.is_dir() and not folder.is_symlink(),'BACKUP_DATABASE_DIR_MISSING')
+              stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+              archive=folder/('staging-db-005-pre-e2e-'+stamp+'.sql.gz')
+              fd,out=tempfile.mkstemp(dir=folder,prefix='.enc-temp-snapshot-',suffix='.sql.gz')
+              try:
+                  with os.fdopen(fd,'wb') as raw:
+                      with gzip.GzipFile(fileobj=raw,mode='wb') as gz:
+                          p=subprocess.run(['mariadb-dump','--defaults-extra-file='+config,'--single-transaction','--quick','--skip-lock-tables','--no-tablespaces','--databases',D],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=120)
+                          check(p.returncode==0 and len(p.stdout)>1000,'FULL_SQL_DUMP_FAILED')
+                          gz.write(p.stdout)
+                  with gzip.open(out,'rb') as gz:
+                      dump=gz.read()
+                      check(b'CREATE TABLE' in dump and b'businesses' in dump,'SQL_DUMP_INVALID')
+                  os.replace(out,archive);os.chmod(archive,0o600)
+              finally:
+                  if os.path.exists(out):os.unlink(out)
+              print('FRESH_SQL_SNAPSHOT=VERIFIED',flush=True)
+          finally:
+              os.unlink(config)
+          print('PREFLIGHT=PASS_NO_WRITES',flush=True)
+          PY
+      - name: Public POST PATCH independent SQL readback and synthetic deletion
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SSHPASS
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ServerAliveInterval=15 -o ServerAliveCountMax=4 u293982346@45.137.159.114 'python3 -u "$HOME/encarmen-staging-backups/enc-005-safe-public-e2e.py"' | tee /tmp/enc-005-e2e.log
+          grep -q '^CREATE_HTTP=201$' /tmp/enc-005-e2e.log
+          grep -q '^EDIT_HTTP=200$' /tmp/enc-005-e2e.log
+          grep -q '^SQL_READBACK=VERIFIED$' /tmp/enc-005-e2e.log
+          grep -q '^PUBLIC_READBACK=VERIFIED$' /tmp/enc-005-e2e.log
+          grep -q '^SYNTHETIC_CLEANUP=VERIFIED$' /tmp/enc-005-e2e.log
+          grep -q '^PRIVATE_CONFIG_RESTORED=VERIFIED$' /tmp/enc-005-e2e.log
+          grep -q '^FINAL_RESULT=PASS_PUBLIC_CREATE_EDIT_SQL$' /tmp/enc-005-e2e.log
+      - name: Always restore private Staging baseline and recover interrupted synthetic only
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "\${SSHPASS:-}"
+          export SSHPASS
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ServerAliveInterval=15 -o ServerAliveCountMax=4 u293982346@45.137.159.114 'python3 -' <<'PY'
+          import os,pathlib,stat,tempfile,json,subprocess,urllib.request,time,re
+          H=pathlib.Path.home();B=H/'encarmen-staging-backups';E=H/'domains/staging.encarmen.org/hbuilds/config/.env'
+          MARK=B/'enc-staging-permanent-admin-e2e-active.json';D='u293982346_encarmentest';fail=[]
+          def parse(t):
+              d={}
+              for line in t.splitlines():
+                  line=line.strip().removeprefix('export ').strip()
+                  if line and not line.startswith('#') and '=' in line:
+                      k,v=line.split('=',1);d.setdefault(k,[]).append(v.strip().strip('"').strip("'"))
+              return d
+          marker=None
+          if MARK.is_file() and not MARK.is_symlink():
+              marker=json.loads(MARK.read_text())
+              backup=pathlib.Path(marker.get('backup',''));secret=pathlib.Path(marker.get('secret',''))
+              if backup.parent!=B or not backup.is_file() or backup.is_symlink() or secret.parent!=B:raise SystemExit('RECOVERY_UNTRUSTED_MARKER')
+              old=backup.read_text();oldcfg=parse(old)
+              if oldcfg.get('DB_NAME')!=[D] or oldcfg.get('STAGING_READ_ONLY')!=['true'] or oldcfg.get('STAGING_DB_CONFIRMED')!=['false']:raise SystemExit('RECOVERY_INVALID_BASELINE')
+              fd,p=tempfile.mkstemp(dir=E.parent,prefix='.enc-005-emergency-')
+              with os.fdopen(fd,'w') as f:f.write(old);f.flush();os.fsync(f.fileno())
+              os.chmod(p,stat.S_IMODE(E.stat().st_mode)&0o700)
+              os.replace(p,E)
+              print('EMERGENCY_PRIVATE_CONFIG=RESTORED',flush=True)
+              if secret.is_file() and not secret.is_symlink():secret.unlink()
+          cfg=parse(E.read_text())
+          if cfg.get('DB_NAME')!=[D] or cfg.get('STAGING_READ_ONLY')!=['true'] or cfg.get('STAGING_DB_CONFIRMED')!=['false']:raise SystemExit('RECOVERY_READONLY_NOT_CONFIRMED')
+          print('FINAL_PRIVATE_READONLY=VERIFIED',flush=True)
+          if marker is not None:
+              name=marker.get('synthetic_name','')
+              if not re.fullmatch(r'ENCARMEN TEST CONTROL [0-9A-F]{18}',name):raise SystemExit('RECOVERY_SYNTHETIC_IDENTITY_MISSING')
+              fd,tmp=tempfile.mkstemp(dir=B,prefix='.enc-005-clean-',suffix='.cnf')
+              try:
+                  os.fchmod(fd,0o600)
+                  with os.fdopen(fd,'w') as f:
+                      f.write('[client]\n')
+                      for key,envkey in [('host','DB_HOST'),('user','DB_USER'),('password','DB_PASSWORD')]:
+                          value=cfg[envkey][0].replace('\\','\\\\').replace('"','\\"')
+                          f.write(key+'="'+value+'"\n')
+                  def sql(statement):
+                      cmd=['mariadb','--defaults-extra-file='+tmp,'-D',D,'--batch','--skip-column-names','-e',statement]
+                      p=subprocess.run(cmd,capture_output=True,text=True,timeout=20)
+                      if p.returncode:raise RuntimeError('SQL_CLEANUP_FAILED')
+                      return p.stdout.strip().splitlines()
+                  if sql('SELECT env_name,db_name FROM encarmen_environment_marker')!=['staging\t'+D]:raise RuntimeError('MARKER_CHANGED')
+                  lit='CONVERT(0x'+name.encode().hex()+' USING utf8mb4)'
+                  ids=sql('SELECT id FROM businesses WHERE BINARY name=BINARY '+lit+' LIMIT 2')
+                  if len(ids)>1 or (ids and not ids[0].isdigit()):raise RuntimeError('MULTIPLE_OR_INVALID_SYNTHETIC')
+                  if ids:
+                      sql('DELETE FROM businesses WHERE id='+ids[0]+' AND BINARY name=BINARY '+lit)
+                      if sql('SELECT COUNT(*) FROM businesses WHERE id='+ids[0])!=['0']:raise RuntimeError('SYNTHETIC_REMAINS')
+                  MARK.unlink()
+                  print('EMERGENCY_SYNTHETIC_CLEANUP=VERIFIED',flush=True)
+              finally:os.unlink(tmp)
+          valid=False
+          for i in range(15):
+              try:
+                  with urllib.request.urlopen('https://staging.encarmen.org/api/health',timeout=10) as response:
+                      data=json.loads(response.read(15000))
+                  if data.get('environment')=='staging' and data.get('database')=='mariadb' and data.get('staging',{}).get('readOnly') is True:
+                      valid=True;break
+              except Exception:pass
+              time.sleep(4)
+          print('FINAL_PUBLIC_MARIADB_READONLY='+str(valid).lower(),flush=True)
+          if not valid:raise SystemExit('HEALTH_UNVERIFIED')
+          print('RESULT=RECOVERED_READONLY',flush=True)
+          PY
