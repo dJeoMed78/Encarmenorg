@@ -1,0 +1,209 @@
+name: ENCARMEN 005 gated real Staging HTTP and MariaDB E2E with binary rollback
+# Validate private Staging-only business write revocation gate with immediate rollback on config restore.
+on:
+  push:
+    branches: [work/enc-staging-write-gate-005-gas]
+    paths: [.github/workflows/enc-staging-write-gate-005-live.yml]
+permissions:
+  contents: write
+concurrency:
+  group: encarmen-staging-runtime-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build verified patch for Staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts >/tmp/enc-ci.log 2>&1
+          npx tsc --noEmit >/tmp/enc-tsc.log 2>&1
+          npx esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=/tmp/enc-staging-origin-server.js >/tmp/enc-esbuild.log 2>&1
+          node --check /tmp/enc-staging-origin-server.js
+          grep -q 'https://staging.encarmen.org' /tmp/enc-staging-origin-server.js
+          if grep -q 'STAGING_PRIVATE_CONFIGURATION_UNAVAILABLE' /tmp/enc-staging-origin-server.js; then echo 'UNSAFE_STARTUP_GUARD_PRESENT'; exit 1; fi
+          grep -q 'STAGING_BUSINESS_WRITES_ENABLED' /tmp/enc-staging-origin-server.js
+          grep -q 'ENC_ADMIN_CREDENTIALS_JSON' /tmp/enc-staging-origin-server.js
+          grep -q 'STAGING_PRIVATE_DB_IDENTITY' /tmp/enc-staging-origin-server.js
+          grep -q 'privateStagingAdminIdentity' /tmp/enc-staging-origin-server.js
+          grep -q 'privateStagingBusinessWindowOpen' /tmp/enc-staging-origin-server.js
+          grep -q 'STAGING_DB_IDENTITY_UNVERIFIED' /tmp/enc-staging-origin-server.js
+          grep -q 'STAGING_DB_GRANTS_UNVERIFIED' /tmp/enc-staging-origin-server.js
+          grep -q 'config/.env' /tmp/enc-staging-origin-server.js
+          echo 'BUILD=PASS'
+      - name: Public Staging deployment with guarded rollback
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -u
+          {
+            echo 'ENCARMEN STAGING 005 LIVE PATCH CONTROLLED DEPLOY AND E2E'
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if [ -z "${SSHPASS:-}" ]; then echo 'RESULT=BLOCKED_NO_SSH_CREDENTIAL'; exit 0; fi
+            for attempt in 1 2 3; do
+              if command -v sshpass >/dev/null 2>&1 || (sudo apt-get update -qq >/dev/null 2>&1 && sudo apt-get install -qq -y sshpass >/dev/null 2>&1); then break; fi
+              echo "SSH_TOOL_INSTALL_RETRY=$attempt"
+              sleep 5
+            done
+            if ! command -v sshpass >/dev/null 2>&1; then echo 'RESULT=BLOCKED_SSH_TOOL_UNAVAILABLE'; exit 0; fi
+            umask 077
+            mkdir -p "$HOME/.ssh"
+            ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+            fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 2>/dev/null | awk '{print $2}')
+            if [ "$fp" != 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then echo 'RESULT=BLOCKED_SSH_HOST_KEY'; exit 0; fi
+            echo 'HOST_KEY=VERIFIED'
+            export SSHPASS
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'umask 077; test -d "$HOME/encarmen-staging-backups" && cat > "$HOME/encarmen-staging-backups/enc-origin-patch-candidate.js"' < /tmp/enc-staging-origin-server.js
+            echo 'CANDIDATE_TRANSFER=OK'
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'umask 077; test -d "$HOME/encarmen-staging-backups" && cat > "$HOME/encarmen-staging-backups/enc-005-public-e2e.py"' < ops/coord/staging_permanent_admin_public_e2e.py
+            echo 'E2E_SCRIPT_TRANSFER=OK'
+            sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' <<'REMOTE'
+          import os,pathlib,stat,subprocess,tempfile,time,json,urllib.request,urllib.error,datetime,sys,shutil
+          H=pathlib.Path.home()
+          B=H/'encarmen-staging-backups'
+          S=H/'domains/staging.encarmen.org/hbuilds'
+          P=H/'domains/encarmen.org'
+          E=S/'config/.env'
+          C=B/'enc-origin-patch-candidate.js'
+          out=lambda k,v:print(f'{k}={v}',flush=True)
+          active=None;original=None;changed=False
+          def check(ok,code):
+              if not ok:raise RuntimeError(code)
+          def flags():
+              v={}
+              for line in E.read_text().splitlines():
+                  line=line.strip()
+                  if line.startswith('export '):line=line[7:]
+                  if '=' not in line or line.startswith('#'):continue
+                  key,val=line.split('=',1)
+                  if key in ('APP_ENV','DB_NAME','STAGING_READ_ONLY','STAGING_DB_CONFIRMED'):
+                      v.setdefault(key,[]).append(val.strip().strip('"').strip("'"))
+              return v
+          def http(method,path,body=None):
+              req=urllib.request.Request('https://staging.encarmen.org'+path,method=method,data=json.dumps(body).encode() if body is not None else None,headers={'Origin':'https://staging.encarmen.org','Content-Type':'application/json','User-Agent':'ENCARMEN-Staging-Only-Origin-Verification'})
+              try:
+                  with urllib.request.urlopen(req,timeout=15) as response:
+                      status=response.status;raw=response.read(15000)
+              except urllib.error.HTTPError as e:status=e.code;raw=e.read(10000)
+              except Exception:return 0,{}
+              try:return status,json.loads(raw)
+              except:return status,{}
+          def restarted_health():
+              for _ in range(16):
+                  code,data=http('GET','/api/health')
+                  if code==200 and data.get('environment')=='staging' and data.get('database')=='mariadb' and data.get('staging',{}).get('readOnly') is True:return True
+                  time.sleep(4)
+              return False
+          try:
+              check(B.is_dir() and not B.is_symlink() and B.stat().st_mode&0o077==0,'PRIVATE_BACKUP_DIR_UNSAFE')
+              check(E.is_file() and not E.is_symlink(),'STAGING_ENV_PATH')
+              env=flags()
+              check(env.get('APP_ENV')==['staging'] and env.get('DB_NAME')==['u293982346_encarmentest'] and env.get('STAGING_READ_ONLY')==['true'] and env.get('STAGING_DB_CONFIRMED')==['false'],'STAGING_ENV_ISOLATION')
+              dumps=list((B/'database').glob('staging-db-*.sql.gz'))
+              check(any(p.is_file() and p.stat().st_size>0 for p in dumps),'STAGING_SQL_BACKUP_MISSING')
+              out('STAGING_CONFIG_AND_SQL_BACKUP','VERIFIED')
+              check((S/'current').is_symlink(),'ACTIVE_RELEASE_NOT_SYMLINK')
+              active=(S/'current/nodejs').resolve()
+              check((S/'versions').resolve() in active.parents and P not in active.parents,'ACTIVE_RELEASE_ISOLATION')
+              check((active/'server.js').is_file() and (active/'tmp').is_dir(),'ACTIVE_RELEASE_INVALID')
+              check(C.is_file() and C.stat().st_size>10000 and not C.is_symlink(),'CANDIDATE_MISSING')
+              candidate=C.read_text(errors='replace')
+              check('STAGING_PRIVATE_CONFIGURATION_UNAVAILABLE' not in candidate and 'https://staging.encarmen.org' in candidate and 'u293982346_encarmentest' in candidate,'CANDIDATE_GUARD_MISSING')
+              old=active/'server.js'
+              old_bytes=old.read_bytes()
+              check(b'matchesWrittenValues' in old_bytes and b'BUSINESS_READBACK_FAILED' in old_bytes,'ACTIVE_OLD_BUNDLE_NOT_EXPECTED')
+              node_exe=None
+              for entry in pathlib.Path('/proc').iterdir():
+                  if not entry.name.isdigit():continue
+                  try:
+                      if pathlib.Path(os.readlink(entry/'cwd'))==active and 'node' in pathlib.Path(os.readlink(entry/'exe')).name.lower():
+                          node_exe=os.readlink(entry/'exe');break
+                  except (OSError,PermissionError):pass
+              check(node_exe is not None,'ACTIVE_NODE_EXECUTABLE_UNAVAILABLE')
+              node=subprocess.run([node_exe,'--check',str(C)],capture_output=True,timeout=25)
+              check(node.returncode==0,'STAGING_NODE_SYNTAX')
+              stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+              original=B/('enc-origin-server-pre-'+stamp+'.js')
+              with open(original,'xb') as backup:
+                  backup.write(old_bytes);backup.flush();os.fsync(backup.fileno())
+              check(original.stat().st_size==len(old_bytes),'ROLLBACK_BACKUP_FAILED')
+              out('SERVER_BACKUP','VERIFIED')
+              fd,temp=tempfile.mkstemp(dir=active,prefix='.enc-origin-server-')
+              with os.fdopen(fd,'wb') as stream:
+                  stream.write(C.read_bytes());stream.flush();os.fsync(stream.fileno())
+              os.chmod(temp,stat.S_IMODE(old.stat().st_mode))
+              os.replace(temp,old)
+              changed=True
+              (active/'tmp/restart.txt').touch()
+              out('STAGING_RESTART','TRIGGERED')
+              check(restarted_health(),'PUBLIC_STAGING_HEALTH_NOT_RECOVERED')
+              status,login=http('POST','/api/admin/login',{'username':'encarmen-nonexistent-validation-user','password':'invalid-secret-do-not-login-1234'})
+              out('PUBLIC_ORIGIN_LOGIN_HTTP',status)
+              check(status in (401,503),'ORIGIN_GATE_REJECTS_HTTPS_OR_UNEXPECTED')
+              check(flags().get('STAGING_READ_ONLY')==['true'],'POST_DEPLOY_READONLY_LOST')
+              out('PUBLIC_STAGE','READONLY_200')
+              out('PUBLIC_STAGE','READONLY_200')
+              # Execute the independent public test only after origin health.
+              # The test restores private config and deletes only its synthetic row.
+              test_path=B/'enc-005-public-e2e.py'
+              check(test_path.is_file() and not test_path.is_symlink(),'E2E_SCRIPT_UNAVAILABLE')
+              tested=subprocess.run([sys.executable,'-u',str(test_path)],capture_output=True,text=True,timeout=520)
+              for line in tested.stdout.splitlines():
+                  if line.startswith(('FINAL_RESULT=','CREATE_HTTP=','EDIT_HTTP=','SQL_READBACK=','SYNTHETIC_CLEANUP=','PRIVATE_CONFIG_RESTORED=','POST_RESTORE_WRITE_HTTP=','PUBLIC_BASELINE=','SQL_ISOLATION=','WRITE_WINDOW_VALIDATION_HTTP=','TEMP_LOGIN_HTTP=','TEMP_SESSION_HTTP=','UNRELATED_WRITE_HTTP=')):
+                      out('E2E_'+line.split('=',1)[0],line.split('=',1)[1])
+              result=[line.split('=',1)[1] for line in tested.stdout.splitlines() if line.startswith('FINAL_RESULT=')]
+              check(tested.returncode==0 and result==['PASS_PUBLIC_CREATE_EDIT_SQL'],'E2E_NOT_ACCEPTED_'+(result[0] if result else 'MISSING_RESULT'))
+              check(flags().get('STAGING_READ_ONLY')==['true'] and flags().get('STAGING_DB_CONFIRMED')==['false'],'POST_E2E_PRIVATE_READONLY_NOT_RESTORED')
+              (active/'tmp/restart.txt').touch()
+              check(restarted_health(),'POST_E2E_PUBLIC_READONLY_NOT_RESTORED')
+              out('RESULT','PASS_STAGING_PUBLIC_CREATE_EDIT_SQL_CLEANUP_READONLY')
+
+          except Exception as ex:
+              out('FAILURE_CODE',str(ex).replace(' ','_')[:100])
+              if changed and active is not None and original is not None:
+                  try:
+                      old=active/'server.js'
+                      fd,temp=tempfile.mkstemp(dir=active,prefix='.enc-origin-rollback-')
+                      with os.fdopen(fd,'wb') as stream:
+                          stream.write(original.read_bytes());stream.flush();os.fsync(stream.fileno())
+                      os.chmod(temp,stat.S_IMODE(old.stat().st_mode))
+                      os.replace(temp,old)
+                      (active/'tmp/restart.txt').touch()
+                      out('ROLLBACK','RESTORED_ORIGINAL_BUNDLE')
+                      out('POST_ROLLBACK_STAGING_HEALTH',str(restarted_health()).lower())
+                  except Exception as restore:
+                      out('ROLLBACK','FAILED_MANUAL_RECOVERY_REQUIRED')
+              else:out('ROLLBACK','NOT_NEEDED_NO_MODIFICATION')
+              out('RESULT','BLOCKED_OR_ROLLED_BACK')
+          REMOTE
+            echo "SSH_EXIT=$?"
+          } > ENC_STAGING_005_LIVE_E2E_RESULT.txt 2>&1
+          cat ENC_STAGING_005_LIVE_E2E_RESULT.txt
+          grep -q '^RESULT=PASS_STAGING_PUBLIC_CREATE_EDIT_SQL_CLEANUP_READONLY ENC_STAGING_005_LIVE_E2E_RESULT.txt
+      - name: Publish sanitized deployment evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ENC_STAGING_005_LIVE_E2E_RESULT.txt || echo RESULT=NO_REPORT > ENC_STAGING_005_LIVE_E2E_RESULT.txt
+          git config user.name encarmen-coordination
+          git config user.email encarmen-coordination@users.noreply.github.com
+          git add ENC_STAGING_005_LIVE_E2E_RESULT.txt
+          git commit -m 'docs: staging 005 live E2E patch deploy, SQL readback and rollback results' || exit 0
+          git push origin HEAD:work/enc-staging-write-gate-005-gas
+ ENC_STAGING_005_LIVE_E2E_RESULT.txt
+      - name: Publish sanitized deployment evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ENC_STAGING_005_LIVE_E2E_RESULT.txt || echo RESULT=NO_REPORT > ENC_STAGING_005_LIVE_E2E_RESULT.txt
+          git config user.name encarmen-coordination
+          git config user.email encarmen-coordination@users.noreply.github.com
+          git add ENC_STAGING_005_LIVE_E2E_RESULT.txt
+          git commit -m 'docs: Staging-only origin patch deployment and rollback result' || exit 0
+          git push origin HEAD:work/enc-staging-write-gate-005-gas
