@@ -881,6 +881,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                       type="button"
                       onClick={() => {
                         setSelectedAdminUser(account);
+                        setAdminUsernameInput(account.username);
                         setAdminLoginError(null);
                       }}
                       className="group flex flex-col items-center gap-2 cursor-pointer transition-transform duration-200 hover:scale-105"
@@ -916,10 +917,26 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 }}
                 className="space-y-2.5"
               >
-                <input type="text" autoComplete="username" aria-label="Usuario administrativo" placeholder="Usuario configurado" value={adminUsernameInput} onChange={e=>setAdminUsernameInput(e.target.value)} className="block w-full max-w-xs mx-auto py-2.5 px-4 rounded-full bg-white/85 border border-stone-300 text-sm" />
+                <input
+                  type="text"
+                  autoComplete="username"
+                  aria-label="Usuario administrativo"
+                  placeholder="Usuario configurado"
+                  value={adminUsernameInput}
+                  onChange={e => {
+                    setAdminUsernameInput(e.target.value);
+                    if (adminLoginError) setAdminLoginError(null);
+                  }}
+                  className="block w-full max-w-xs mx-auto py-2.5 px-4 rounded-full bg-white/95 border border-stone-300 text-sm font-medium text-stone-900 placeholder:text-stone-500 caret-stone-900 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                  style={{ color: '#1c1917', WebkitTextFillColor: '#1c1917' }}
+                />
                 <div className="relative flex items-center max-w-xs mx-auto">
                   <input
                     type={showAdminPassword ? 'text' : 'password'}
+                    aria-label="Contraseña de administrador"
+                    autoComplete="current-password"
+                    minLength={10}
+                    maxLength={200}
                     autoFocus
                     placeholder="Contraseña de administrador..."
                     value={adminPasswordInput}
@@ -930,8 +947,18 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                       setAdminPasswordInput(e.target.value);
                       if (adminLoginError) setAdminLoginError(null);
                     }}
-                    className="w-full py-2.5 pl-4 pr-11 rounded-full bg-white/85 border border-stone-300/90 text-xs sm:text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-sky-400 shadow-inner"
+                    className="w-full py-2.5 pl-4 pr-20 rounded-full bg-white/95 border border-stone-300/90 text-xs sm:text-sm text-stone-900 placeholder:text-stone-500 caret-stone-900 focus:outline-none focus:ring-2 focus:ring-sky-400 shadow-inner"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword(current => !current)}
+                    aria-label={showAdminPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    aria-pressed={showAdminPassword}
+                    title={showAdminPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    className="absolute right-10 w-7 h-7 rounded-full text-stone-700 hover:bg-white/90 focus-visible:outline-2 focus-visible:outline-sky-500 flex items-center justify-center"
+                  >
+                    {showAdminPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
+                  </button>
                   <button
                     type="submit"
                     disabled={isLoggingIn}
