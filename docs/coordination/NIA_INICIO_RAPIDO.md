@@ -75,3 +75,11 @@ La documentación permanece en GitHub mientras el repositorio y acceso estén di
 - **Alta pública manual aceptada visualmente:** empresa `30102026`, ID `20272`, pantalla «Guardado y Publicado en MariaDB» de `staging.encarmen.org`. La prueba sintética anterior de alta, readback y limpieza fue PASS; no confundir con datos de esta empresa manual.
 - **Nuevo pendiente:** usuario reporta imposibilidad de subir el **logotipo** y **10 imágenes de productos** en ese formulario. GitHub [Issue #19](https://github.com/dJeoMed78/Encarmenorg/issues/19), `ENC-STAGING-PUBLIC-MEDIA-001`; registrado también en el registro maestro. No hay causa técnica verificada.
 - **Orden expresa:** no investigar, no corregir ni desplegar este fallo ahora; retomar en sesión posterior. No tocar producción.
+
+
+## ENC-STAGING-BUSINESS-DELETE-20261030 — desplegado, pendiente eliminación manual
+
+- Diagnóstico del borrado fallido de `30102026` ID `20272`: `administrativeWritesReady` negaba DELETE, y el helper SQL legacy `dbDeleteBusiness` usa un guardia general de escrituras que nunca abre en Staging. No es ajuste del .env ni de SSH.
+- PR #20 merge `b6243a41dd8fd6ae1474c87ec6bd1d27e67f8bbb` a `ia-desarrollo`, CI `41170314885` PASS. Ruta DELETE empresarial limitada a sesión con `business:delete`, `stagingBusinessStore.delete` transaccional/aislamiento, affectedRows y SQL readback; UI muestra errores, producción no modificada.
+- Auditoría runtime Staging `41170452153` PASS: versión nueva por header HTTP, DELETE sin autenticación 401, cuenta `jeo` y permiso DELETE de SQL verificados; 208 empresas, ID `20272` intacto.
+- **Pendiente:** propietario usar administración web de Staging para confirmar eliminación real; después releer MariaDB y ficha pública. No afirmar que ya está borrado. **No requiere SSH ni cambios manuales Hostinger.** Issue #12 sigue abierto por protocolo.
