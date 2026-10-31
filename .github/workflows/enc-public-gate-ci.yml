@@ -8,6 +8,7 @@ on:
       - src/server/stagingBusinessSecurity.ts
       - server.ts
       - tests/public-registration-integration.test.mjs
+      - tests/public-registration.test.mjs
       - tests/public-registration-private-gate-20261030.test.mjs
 permissions:
   contents: read
