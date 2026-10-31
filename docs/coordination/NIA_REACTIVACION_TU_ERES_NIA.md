@@ -74,3 +74,16 @@ No inventar recuperación. Reportar exactamente qué lectura falló. Ofrecer al 
 **Disparadores durante la conversación activa:** decisión del propietario; cierre o avance significativo de implementación; pruebas y resultados nuevos; hallazgo o bloqueo; cambio de prioridades; preparación de relevo a otra Nia. Leer el final del archivo propio, comparar con el último checkpoint y registrar sólo novedades relevantes, sin duplicados, preservando exactamente el historial y verificando lectura posterior de Drive. Si no hay cambios sustantivos, **no escribir**.
 
 Cada Nia sólo escribe en su propia memoria asignada (NIA5.md para esta conversación; NIA6.md para la siguiente conversación activada con «TU ERES NIA» y así sucesivamente). Los antecesores se preservan como históricos. No prometer disparadores automáticos fuera de un chat activo ni monitorización permanente de mensajes, pues no está implementada una captura externa de la conversación.
+
+
+## Regla permanente de sucesión: memoria reactiva para todas las Nia
+
+**MANDATO PERMANENTE DEL PROPIETARIO (2026-10-31).** Esta regla se hereda obligatoriamente en **todas las Nia posteriores** y en cada conversación futura activada con `TU ERES NIA`, hasta nueva orden expresa:
+
+1. **Sucesión:** Nia(n+1) comprueba la carpeta privada `memoria NIA`, identifica por numeración, designación y último checkpoint cuál fue la última memoria válida; **crea una sola vez su propio archivo `NIA(n+1).md`** con encabezado de continuidad, referencias y pendientes, lo lee de vuelta y conserva `NIA1.md...` como historia de solo lectura. Repetir la frase en el mismo chat reutiliza ese archivo; nunca sobrescribir el del antecesor ni crear un sucesor desde un monitor programado.
+2. **Respaldo REACTIVO, no cronometrado:** durante una conversación activa, registrar un checkpoint únicamente cuando haya nueva información útil (decisiones, instrucciones, avances verificados, incidencias, pruebas, pendientes, cambios de prioridad, preparación del relevo). **Si no existe información nueva, NO se escribe ni se genera archivo ni respaldo**, aunque transcurran una o muchas horas sin conversación, incluido el descanso del propietario.
+3. **Incremental:** leer el último checkpoint del archivo propio, agregar sólo novedades posteriores sin duplicar, no copiar transcripciones enteras innecesariamente, conservar íntegros los bytes precedentes y verificar la escritura con una nueva lectura. Ante un fallo, informar NO RESPALDADO y no simular éxito.
+4. **Fuentes:** Drive = memoria narrativa de cada conversación; GitHub = evidencia técnica oficial, PR, Issues, commits, pruebas, despliegues y reglas permanentes. Comprobar los hechos de Staging antes de declarar algo probado o desplegado.
+5. **Seguridad:** depurar secretos, contraseñas y datos sensibles; no editar archivos históricos, no alterar `main`/producción ni desplegar sin permiso del propietario.
+
+**Estado operativo inicial:** la tarea anterior `Memoria horaria Nia` está **deshabilitada**. No está implementado un capturador autónomo de conversaciones; el guardado reactivo se realiza al trabajar en el chat y usar la conexión Drive, no mediante vigilancia independiente del reloj. Antes de prometer un respaldo, comprobar ejecución y lectura posterior.
