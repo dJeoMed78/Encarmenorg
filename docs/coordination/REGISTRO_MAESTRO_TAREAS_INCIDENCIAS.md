@@ -567,3 +567,17 @@ El propietario autorizó Google Drive como memoria narrativa más frecuente de C
 - **PR #28 integrado:** `1f137124cd3aee1baf3f71614ba4e9e3e1ce050c`; documento `docs/coordination/ENC_MEDIA_CONTRATO_NO_REGRESION.md`, seis pruebas nuevas `tests/enc-media-regression-guard.test.mjs` y workflow `.github/workflows/enc-media-regression-gate.yml` para todo PR hacia `ia-desarrollo`. CI #41246420707 aprobó TypeScript, pruebas y build.
 - **Condición pendiente para blindaje obligatorio:** protección de rama `ia-desarrollo` con status check requerido `media-regressions`. El GitHub connector disponible no expone la acción para modificar branch protection. El workflow detecta errores, pero por sí solo no bloquea una fusión manual.
 - **Pendiente funcional separado:** carga desde el editor administrativo debe verificarse en navegador real. El registro público con 3 fotografías sí cuenta con aceptación móvil y lectura remota. No modificar producción.
+
+
+### Nia 6 — Incorporación de hallazgos históricos del propietario (PDF 5 páginas) — 2026-10-31
+**Fuente:** `encar(1).pdf`, capturas realizadas aproximadamente tres días antes; **no atribuir actualidad a las capturas sin reprobar Staging**. El propietario solicitó omitir lo ya corregido y registrar solo pendientes.
+
+- **Omitidos por pruebas posteriores satisfactorias:** bloqueo general del alta/edición/borrado en Staging (PDF p. 1): el propietario confirmó alta ID 20273, cambio de nombre y eliminación de otro negocio mediante phpMyAdmin. También se omitió duplicar la incidencia de subida pública de logo/galería: alta ID 20274 con logo y tres fotos validada en móvil, lectura API y HTTP 200 WebP; PR #25, #27.
+- **Pendiente existente #19:** la subida desde **editor administrativo** necesita aceptación funcional específica; el texto «Logotipo requiere sesión verificada» en p. 1 es evidencia histórica, no confirmación del estado actual. Corrección de código PR #26 está integrada.
+- **Issue #29:** gestión desde la ficha pública deshabilitada aun con sesión administrativa; separado de edición desde panel administrativo ya comprobada.
+- **Issue #30:** sustituir botón grande «Gestión del negocio» por indicador «PI» pequeño/discreto, pendiente confirmar semántica y acceso alternativo.
+- **Issue #31:** designar una imagen ya subida como logo desde administración, comprobando pertenencia y persistencia, sin duplicar archivo.
+- **Issue #32:** mapa incrustado Google Maps no visible; investigar causa real y restricciones antes de proponer API de pago.
+- **Issue #33:** ordenar ficha móvil con ubicación, horario, pagos y entrega/servicios antes de calificaciones/comentarios, que deben quedar al final.
+- **Issue #34:** error de consulta de calificaciones y comentarios no disponibles. Distinguir problema de lectura de ratings de comentarios que podrían no estar implementados.
+**Control:** Issues 29–34 creados para diagnóstico y/o implementación posterior; ningún cambio a producción, no declarar corregidos sin prueba funcional en Staging.
