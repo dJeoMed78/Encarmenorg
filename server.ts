@@ -197,6 +197,7 @@ const stagingDynamicIdentity = isStagingEnvironment() &&
   getMariaDbConfig()?.database === STAGING_PRIVATE_DB_NAME;
 // Server-issued identity gate precedes all legacy middleware and handlers.
 const adminSecurity = registerAdminSecurity(app, {
+  minPasswordLength: stagingDynamicIdentity ? 10 : 12,
   provider: stagingDynamicIdentity ? undefined : environmentAdminProvider(process.env),
   providerResolver: stagingDynamicIdentity ? () => {
     const identity = privateStagingAdminIdentity();
