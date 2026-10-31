@@ -181,15 +181,20 @@ app.use(backupDownloadContainment);
 // No production process can pass the exact release-path and database guards.
 function privateStagingAdminIdentity(): {credentials:string;origin:string}|undefined {
   try {
-    if (process.env.APP_ENV !== 'staging' ||
-        process.env.DB_NAME !== STAGING_PRIVATE_DB_NAME ||
-        !process.env.HOME ||
-        process.env.DB_USER === 'u293982346_appuser') return undefined;
-    const root = path.join(process.env.HOME, 'domains/staging.encarmen.org/hbuilds');
+    const db = getMariaDbConfig();
+    if (!isStagingEnvironment() ||
+        db?.database !== STAGING_PRIVATE_DB_NAME ||
+        db.user === 'u293982346_appuser') return undefined;
+    // Use the canonical active Staging release path, NOT HOME: Hostinger can
+    // omit HOME/APP_ENV from the managed Node process.
     const actual = fs.realpathSync(process.cwd());
-    if (!actual.startsWith(path.join(root, 'versions') + path.sep) ||
-        path.basename(actual) !== 'nodejs') return undefined;
-    const configFile = path.join(root, 'config/.env');
+    const marker = path.join('domains', 'staging.encarmen.org', 'hbuilds', 'versions');
+    const needle = path.sep + marker + path.sep;
+    const index = actual.indexOf(needle);
+    if (index < 1 || path.basename(actual) !== 'nodejs') return undefined;
+    const stagingRoot = path.join(actual.slice(0,index), 'domains','staging.encarmen.org','hbuilds');
+    if (!actual.startsWith(path.join(stagingRoot,'versions') + path.sep)) return undefined;
+    const configFile = path.join(stagingRoot, 'config/.env');
     const st = fs.lstatSync(configFile);
     if (!st.isFile() || st.isSymbolicLink() || (st.mode & 0o077) !== 0) return undefined;
     const privateEnv = dotenv.parse(fs.readFileSync(configFile));
@@ -197,14 +202,15 @@ function privateStagingAdminIdentity(): {credentials:string;origin:string}|undef
         privateEnv.DB_NAME !== STAGING_PRIVATE_DB_NAME ||
         !privateEnv.DB_USER ||
         privateEnv.DB_USER === 'u293982346_appuser' ||
+        privateEnv.DB_USER !== db.user ||
         !privateEnv.DB_PASSWORD ||
         privateEnv.ENC_ADMIN_PUBLIC_ORIGIN !== 'https://staging.encarmen.org' ||
         !privateEnv.ENC_ADMIN_CREDENTIALS_JSON) return undefined;
     return {credentials:privateEnv.ENC_ADMIN_CREDENTIALS_JSON,origin:privateEnv.ENC_ADMIN_PUBLIC_ORIGIN};
   } catch { return undefined; }
 }
-const stagingDynamicIdentity = process.env.APP_ENV === 'staging' &&
-  process.env.DB_NAME === STAGING_PRIVATE_DB_NAME;
+const stagingDynamicIdentity = isStagingEnvironment() &&
+  getMariaDbConfig()?.database === STAGING_PRIVATE_DB_NAME;
 // Server-issued identity gate precedes all legacy middleware and handlers.
 const adminSecurity = registerAdminSecurity(app, {
   provider: stagingDynamicIdentity ? undefined : environmentAdminProvider(process.env),
