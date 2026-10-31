@@ -1,4 +1,5 @@
 name: ENCARMEN staged admin automatic readonly login and revocation
+# Verify dynamic file-backed admin identity without Hostinger manual restart.
 on:
   push:
     branches: [coord/staging-admin-login-window-20261030]
