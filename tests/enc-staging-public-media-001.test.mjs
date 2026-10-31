@@ -39,7 +39,7 @@ test('media upload confirms actual BLOB after storage, never accepts placeholder
  const store={saveVerified:async input=>{saved=input;},readBack:async()=>({mimeType:'image/webp',data:webp})};
  const svc=createPublicMediaService({canWrite:()=>true,store,recode:async()=>webp});
  const ok=await svc.upload({attemptId:goodAttempt(),role:'logo',declaredType:'image/webp',body:webp});
- assert.match(ok.url,/^\\/uploads\\/pub-/);assert.equal(saved.mimeType,'image/webp');
+ assert.ok(ok.url.startsWith('/uploads/pub-'));assert.equal(saved.mimeType,'image/webp');
  const fake=createPublicMediaService({canWrite:()=>true,store:{...store,readBack:async()=>({mimeType:'image/webp',data:Buffer.from('placeholder')})},recode:async()=>webp});
  await broken(()=>fake.upload({attemptId:goodAttempt(),role:'logo',declaredType:'image/webp',body:webp}),'MEDIA_READBACK_FAILED');
 });
