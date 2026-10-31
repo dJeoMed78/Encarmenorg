@@ -54,7 +54,7 @@ async function harness(){
  const saved=Object.fromEntries(Object.keys(env).map(key=>[key,process.env[key]]));
  for(const [key,value] of Object.entries(env)){if(value===undefined)delete process.env[key];else process.env[key]=value;}
  const {state,conn}=model();let writable=true,staging=true;let clock=Date.now();
- const app=express();const context={app,businessesCache:[],cachedDbSignature:null,stagingDynamicIdentity:false,contactDigits,contactCounts,matchesContactFilter,CONTACT_FILTERS,
+ const app=express();const context={app,businessesCache:[],cachedDbSignature:null,stagingDynamicIdentity:false,getPrivateStagingSnapshot:()=>env,contactDigits,contactCounts,matchesContactFilter,CONTACT_FILTERS,
   isStagingEnvironment:()=>staging,isWritePermitted:()=>false,isBusinessWritePermitted:()=>writable,
   environmentAdminProvider,administrativeWritesReady,process:{env},registerAdminSecurity:(app,options)=>registerAdminSecurity(app,{...options,now:()=>clock}),registerStagingBusinessRoutes,
   publicRegistrationBodyLimit,mountPublicRegistration:(app,deps)=>mountPublicRegistration(app,{...deps,privateRegistrationSnapshot:()=>env}),getPool:()=>conn,generateCategorySlugs:categories=>categories.map(c=>c.toLowerCase())};
