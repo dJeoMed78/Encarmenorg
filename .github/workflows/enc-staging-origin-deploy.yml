@@ -1,5 +1,5 @@
 name: ENCARMEN controlled Staging origin fix deploy and automatic rollback
-# Validate private Staging DB bootstrap and on-demand admin identity; no production writes.
+# Validate private Staging DB bootstrap and canonical release-path admin identity; no production writes.
 on:
   push:
     branches: [coord/staging-origin-deploy-20261030]
