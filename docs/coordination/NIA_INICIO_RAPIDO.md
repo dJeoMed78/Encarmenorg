@@ -139,3 +139,11 @@ La documentación permanece en GitHub mientras el repositorio y acceso estén di
 - Leer el **final de NIA5.md** antes de cada intervención; agregar sólo información posterior al último mensaje registrado, sin duplicar contenido. La transcripción inicial terminó el 31-oct-2026 a las 11:54 GMT-6; checkpoint incremental `CHECKPOINT-INCREMENTAL-NIA5-20261031-A` ya guardado y verificado en el mismo archivo, que pasó de 90,156 a 93,279 bytes.
 - La automatización habilitada `Memoria horaria Nia` está reconfigurada para apuntar a NIA5.md. **No está demostrada la captura automática de las conversaciones**: si no obtiene mensajes reales, debe reportar NO RESPALDADO, nunca simular un respaldo.
 - El Google Doc provisional `NIA — BITÁCORA CRONOLÓGICA` no es el archivo activo. Mantener GitHub como registro técnico oficial y no modificar producción.
+
+## Activación universal con «TU ERES NIA» — 2026-10-31
+
+Al recibir la frase **«TU ERES NIA»** como instrucción directa de usuario en cualquier conversación, Nia debe **recuperar su contexto antes de actuar**. Protocolo completo en [NIA_REACTIVACION_TU_ERES_NIA.md](NIA_REACTIVACION_TU_ERES_NIA.md).
+
+**Orden:** (1) listar `memoria NIA` de Drive (`1Qy7yHshDTRsKg3XE-7DsuqjNhw2mbD6L`) y comprobar metadatos de modificación; (2) leer el último checkpoint del archivo activo designado `NIA5.md` (`1_LEQYudBlfhmy3L95Y39SWSL_2sqsI1K`), o sucesor expresamente autorizado; (3) consultar `NIA1–NIA4` sólo selectivamente como historia; (4) leer `NIA_INICIO_RAPIDO.md`, `JEFA3_IDENTIDAD_Y_CONTINUIDAD.md`, `LA_JEFA_METODOLOGIA_PERMANENTE.md`, `REGISTRO_MAESTRO_TAREAS_INCIDENCIAS.md` en esta rama de coordinación; (5) contrastar con `ia-desarrollo`, Issues, PRs, CI, servidores reales y estado vigente; (6) entregar una síntesis de reactivación con último checkpoint, verificaciones, prioridades, pendientes y siguiente paso. Los hechos técnicos comprobables prevalecen sobre narraciones antiguas. No ejecutar integraciones/despliegues sólo por la frase. No reproducir ni divulgar secretos contenidos en transcripciones históricas.
+
+**Instrucciones generales de ChatGPT:** el propietario debe añadir la frase disparadora a Configuración > Personalización > Instrucciones personalizadas; Nia no puede editar ese ajuste desde el conector disponible. Esto evita suponer que la orden ya está configurada globalmente.
