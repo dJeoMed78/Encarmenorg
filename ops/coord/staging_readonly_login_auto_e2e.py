@@ -53,9 +53,9 @@ try:
  secret=pathlib.Path(marker['secret'])
  if secret.parent!=B or not secret.is_file():refuse('SECRET_PATH')
  creds=json.loads(secret.read_text())
- restart()
+ out('LIVE_IDENTITY_RELOAD','CONFIG_FILE_ONLY_NO_NODE_RESTART')
  authenticated=False
- for n in range(20):
+ for n in range(5):
   try:
    c,h=health()
    if c==200 and h.get('environment')=='staging' and h.get('database')=='mariadb' and h.get('staging',{}).get('readOnly') is True:
@@ -69,10 +69,10 @@ try:
      write,_=api('POST','/api/reports',{'reason':'readonly-test'},token=token);out('UNRELATED_WRITE_HTTP',write)
      if write!=403:refuse('WRITE_GUARD_NOT_ENFORCED')
      break
-    if n in (0,5,10,19):out('LOGIN_RETRY_STATUS',status)
+    if n in (0,4):out('LOGIN_RETRY_STATUS',status)
   except RuntimeError:raise
   except Exception:pass
-  time.sleep(4)
+  time.sleep(13)
  if not authenticated:refuse('LOGIN_NOT_AVAILABLE_AFTER_RELOAD')
  result='PASS_STAGING_ADMIN_LOGIN_SESSION_READONLY'
 except Exception as ex:
@@ -85,18 +85,17 @@ finally:
   if restored.get('RESULT')!='READONLY_LOGIN_CONFIG_RESTORED':result='BLOCKED_RESTORE_MANUAL_ATTENTION'
   else:
    try:
-    restart()
-    safe=False
-    for n in range(20):
-     try:
-      c,h=health()
-      if c==200 and h.get('environment')=='staging' and h.get('database')=='mariadb' and h.get('staging',{}).get('readOnly') is True:
-       # On restart, credential provider must be unavailable (503), not valid.
-       code,_=api('POST','/api/admin/login',creds)
-       if code==503:safe=True;break
-     except Exception:pass
-     time.sleep(4)
+    # The provider must revoke the issued token immediately when the
+    # temporary credential file is restored, without an app restart.
+    safe=True
+    if authenticated:
+     session_code,_=api('GET','/api/admin/session',token=token)
+     out('REVOKED_SESSION_HTTP',session_code)
+     safe=session_code==401
+    code,_=api('POST','/api/admin/login',creds)
+    out('REVOKED_LOGIN_HTTP',code)
+    safe=safe and code==503
     out('SESSION_PROVIDER_REVOKED',str(safe).lower())
     if not safe:result='BLOCKED_RUNTIME_REVOCATION_UNCONFIRMED'
-   except Exception as ex:result='BLOCKED_RESTART_REVOKE_ERROR'
+   except Exception:result='BLOCKED_REVOKE_CHECK_EXCEPTION'
  out('FINAL_RESULT',result)
