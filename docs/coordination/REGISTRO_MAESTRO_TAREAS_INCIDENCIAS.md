@@ -449,3 +449,14 @@ Tras autorización del propietario para finalizar pruebas empresariales, Coordin
 - Prueba real run `41168717485`: POST anónimo 201 (ID sintético 20272), readback independiente MariaDB, GET público y directorio verificados, reintento idéntico 200 replayed, eliminación exclusivamente del sintético, recuento 207→207, respaldo SQL previo y recovery limpio.
 - Reauditoría run `41168773826`: 207 registros SQL, cero sintéticos SQL y lista pública, marcadores de prueba ausentes y bandera pública preservada.
 - Pendiente: aceptación de alta real desde el formulario del propietario usando el botón `Reintentar Guardado` (mismo Idempotency-Key). No hacer un registro nuevo por riesgo de duplicar. Producción `main`/`encarmen.org` y DB productiva no intervenidas.
+
+
+## ENC-STAGING-PUBLIC-MEDIA-001 — Logo y galería de 10 imágenes en registro público
+
+**ESTADO: PENDIENTE — REPORTADO POR EL PROPIETARIO; SIN INVESTIGAR, SIN CORREGIR, SIN PROBAR. POSPUESTO POR INDICACIÓN EXPRESA.**
+
+- GitHub Issue **#19**: https://github.com/dJeoMed78/Encarmenorg/issues/19
+- Contexto: Staging `staging.encarmen.org`. En la prueba manual del alta pública, el negocio **`30102026`** recibió confirmación visual «Guardado y Publicado en MariaDB» con **ID #20272**. El propietario reportó que **no pudo subir el logotipo ni las diez imágenes de productos** durante ese proceso. Registro público de datos textuales confirmado por la interfaz; el problema específico es el flujo de medios.
+- No se dispone todavía de causa raíz, respuesta HTTP, límites, trazas o prueba independiente de los archivos; no suponer por qué fallan. Mantener separado del fallo de autorización pública corregido en PR #18.
+- Cuando el propietario retome el asunto: reproducir logo y galería, identificar fallo desde formulario/API/almacenamiento/persistencia/lectura, preservar controles de seguridad e integridad, probar en Staging con evidencia y revisar integración.
+- **Orden vigente: no arreglar ahora ni iniciar diagnóstico, código, pruebas o despliegues.** Producción `main`, `encarmen.org` y BD productiva excluidas.
