@@ -42,12 +42,13 @@ jobs:
           page_status,_,html=get('/')
           if page_status!=200:raise SystemExit('BLOCKED_PUBLIC_HTML_NOT_200')
           text=html.decode('utf-8',errors='replace')
-          scripts=re.findall(r'<script[^>]+src=["\\x27]([^"\\x27]+)',text,re.I)
-          scripts=[p for p in scripts if p.startswith('/assets/') and p.endswith('.js')]
+          scripts=re.findall(r'<script[^>]+src="([^"]+)"',text,re.I)
+          scripts+=re.findall(r"<script[^>]+src='([^']+)'",text,re.I)
+          scripts=[p for p in scripts if (p.startswith('/assets/') or p.startswith('./assets/')) and p.endswith('.js')]
           if not scripts:raise SystemExit('BLOCKED_PUBLIC_FRONTEND_ASSETS_MISSING')
           found=False
           for script in scripts[:8]:
-              status,_,js=get(script)
+              status,_,js=get(script[1:] if script.startswith('.') else script)
               if status==200 and all(t in js for t in ('Mostrar contraseña','Ocultar contraseña','Contraseña de administrador','Usuario administrativo')):
                   found=True;break
           if not found:raise SystemExit('BLOCKED_FRONTEND_LOGIN_PATCH_NOT_LIVE')
