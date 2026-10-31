@@ -2,7 +2,9 @@ name: ENCARMEN 005 Staging real HTTP SQL proof with emergency closure
 on:
   push:
     branches: [coord/enc-staging-005-e2e-20261030]
-    paths: [.github/workflows/enc-staging-005-public-e2e.yml]
+    paths:
+      - .github/workflows/enc-staging-005-public-e2e.yml
+      - ops/coord/staging_005_safe_public_e2e.py
 permissions:
   contents: read
 concurrency:
