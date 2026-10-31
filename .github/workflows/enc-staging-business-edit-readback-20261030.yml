@@ -82,7 +82,7 @@ jobs:
                   print('CANDIDATE_'+str(i+1)+'_ID='+number,flush=True)
                   print('CANDIDATE_'+str(i+1)+'_NAME='+json.dumps(actual_name,ensure_ascii=False)[:700],flush=True)
                   print('CANDIDATE_'+str(i+1)+'_DESCRIPTION='+json.dumps(description,ensure_ascii=False)[:700],flush=True)
-                  has_date=any(s in (actual_name+' '+description).lower() for s in ('30/10/2026','30-10-2026','2026-10-30','20261030','30 de octubre','octubre 30'))
+                  has_date=any(s in (actual_name+' '+description).lower() for s in ('30/10/2026','30-10-2026','2026-10-30','20261030','30102026','30 de octubre','octubre 30'))
                   print('CANDIDATE_'+str(i+1)+'_HAS_2026_10_30='+str(has_date).lower(),flush=True)
                   if has_date:date_matches+=1
                   req=urllib.request.Request('https://staging.encarmen.org/api/businesses/'+number+'?readback='+str(os.getpid()),headers={'Cache-Control':'no-cache','User-Agent':'ENC-Staging-Edit-Readback/1'})
