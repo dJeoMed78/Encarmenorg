@@ -3,7 +3,7 @@
 
 ## P1 — ENC-SEC-DEPS-20261031-001: reparar 2 vulnerabilidades moderadas npm
 
-**Prioridad de coordinación: ALTA (P1 seguridad).** [Issue #22](https://github.com/dJeoMed78/Encarmenorg/issues/22). **Estado: pendiente de corrección.** No desarrollado, probado, integrado ni desplegado.
+**Prioridad de coordinación: ALTA (P1 seguridad).** [Issue #22](https://github.com/dJeoMed78/Encarmenorg/issues/22). **Estado: corregido y probado, integrado a `ia-desarrollo`, dependencias instaladas/verificadas en Staging. Producción pendiente de autorización.**
 
 - Reporte de escáner (30-oct-2026, 22:55): 2 vulnerabilidades moderadas, 0 altas/críticas.
 - Revisión independiente del `package-lock.json` de `ia-desarrollo`: `minimatch@10.2.6` (CVE-2026-118764, objetivo >=11.0.1) y `qs@6.16.0` (CVE-2026-110816, objetivo >=6.16.1). En `package.json` no constan como dependencias directas; verificar cadena transitoria, compatibilidad y dónde se instalan.
@@ -499,3 +499,10 @@ Tras autorización del propietario para finalizar pruebas empresariales, Coordin
 4. **Seguridad posterior:** rotación del password temporal de `jeo` mostrado en captura, con respaldo y recuperación de acceso, sin poner secretos en el repositorio. Es tarea futura sujeta a coordinación, no acción para esta noche.
 
 **Ambiente:** solo `staging.encarmen.org` y base `u293982346_encarmentest`. `main`, `encarmen.org`, base productiva y credenciales no se modifican. Retomar mañana partiendo de Issues #12, #19, #21.
+
+
+### Evidencia de cierre técnico en Staging — 2026-10-31
+- PR #23 merge `6eefb0209e402b0f78b0c3a3045085c1e6b70fe3` a `ia-desarrollo`. Overrides exactos: `readdir-glob/minimatch=11.0.1` y `qs=6.16.1`, lockfile regenerado por npm con integridad real. Solamente se actualizaron las 2 dependencias vulnerables y se agregó dependencia requerida `@isaacs/nonrecursive-glob-match@1.0.3`.
+- CI run `41213892619` SUCCESS: `npm ci`, `npm audit --audit-level=moderate`, `npm ls`, lint, regresiones de seguridad/MariaDB/auth/registro, prueba ZIP Archiver 8 compatible con minimatch 11 y build.
+- Verificación de Staging vía SSH de solo lectura run `41214176745`: `current/nodejs` activo contiene `minimatch 11.0.1`, `qs 6.16.1` en `node_modules` y lockfile; health HTTP 200 y contexto Staging/MariaDB correcto. No se cambió .env ni se ejecutó SQL mutable.
+- **Producción no intervenida:** `main`, `encarmen.org` y BD productiva siguen fuera de alcance. Cierre de alcance productivo sujeto a permiso explícito, revisión e inspección de respaldos/rollback. Issue #22 queda abierto para trazabilidad de ese alcance.
