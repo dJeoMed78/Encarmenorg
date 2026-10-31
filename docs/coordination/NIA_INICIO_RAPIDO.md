@@ -52,3 +52,11 @@ Si GitHub no está conectado, solicitar al propietario **únicamente el enlace o
 
 ## Límites honestos de continuidad
 La documentación permanece en GitHub mientras el repositorio y acceso estén disponibles. Los modelos o conversaciones no se transforman en un mismo agente permanente: el contexto se reconstruye leyendo esta documentación y el estado real. Las restricciones del producto, disponibilidad del conector y memoria de ChatGPT pueden variar. No prometemos ejecución de fondo sin tarea programada ni acceso instantáneo sin conexión.
+
+
+## Actualizacion 2026-10-30 21:32 CDMX — ENC-STAGING-WRITE-GATE-005
+
+- **Registro y edicion de empresas en Staging: E2E real PASS**, GitHub Actions `41164661573` (HTTP 201 alta / HTTP 200 PATCH; lectura independiente MariaDB y GET publico; borrado sintetico y restauracion readOnly). Verificacion posterior `41164767055`: 207 empresas reales, 0 sinteticas, MariaDB staging saludable y readOnly.
+- PR #15 merge a `ia-desarrollo` `6c978ab1e6a0a36783499619893749d5d9ef98d3`; PR #16 diagnostico protegido merge `35d3e882de34bb39da281170b9a09e5d6a310965`. Release activo Hostinger atestiguado por proceso Node, bundle y cabecera HTTP.
+- **Causa real del 503:** la herramienta de ventana E2E no cambio efectivamente `STAGING_READ_ONLY` y `STAGING_DB_CONFIRMED` por depender de cadenas literales; el guard de aplicacion actuaba correctamente. La herramienta E2E se reparo con sustituciones de asignaciones y validacion antes de escribir. No se trata de habilitar escrituras generales en Staging: solo carril negocio bajo control temporal.
+- No se modifico `main` / `encarmen.org` ni base productiva. **Aun pendiente aceptacion visual del propietario; Issue #12 abierto por protocolo**. No hacer mas despliegues a ciegas; los diagnosticos booleanos temporales deben retirarse/revisarse antes de produccion. Ver registro maestro para trazabilidad y decisiones.
