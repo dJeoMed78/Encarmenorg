@@ -175,9 +175,50 @@ export function backupDownloadContainment(req: Request, res: Response, next: Nex
 app.use(backupDownloadContainment);
 // ENC-BACKUP-SECURITY-002 CONTAINMENT END
 
+// Read *only* the verified Staging credential settings at request time.
+// This allows a controlled test account to become available without relying
+// on Hostinger's restart marker, and revokes its sessions after config rollback.
+// No production process can pass the exact release-path and database guards.
+function privateStagingAdminIdentity(): {credentials:string;origin:string}|undefined {
+  try {
+    if (process.env.APP_ENV !== 'staging' ||
+        process.env.DB_NAME !== STAGING_PRIVATE_DB_NAME ||
+        !process.env.HOME ||
+        process.env.DB_USER === 'u293982346_appuser') return undefined;
+    const root = path.join(process.env.HOME, 'domains/staging.encarmen.org/hbuilds');
+    const actual = fs.realpathSync(process.cwd());
+    if (!actual.startsWith(path.join(root, 'versions') + path.sep) ||
+        path.basename(actual) !== 'nodejs') return undefined;
+    const configFile = path.join(root, 'config/.env');
+    const st = fs.lstatSync(configFile);
+    if (!st.isFile() || st.isSymbolicLink() || (st.mode & 0o077) !== 0) return undefined;
+    const privateEnv = dotenv.parse(fs.readFileSync(configFile));
+    if (privateEnv.APP_ENV !== 'staging' ||
+        privateEnv.DB_NAME !== STAGING_PRIVATE_DB_NAME ||
+        privateEnv.DB_USER !== process.env.DB_USER ||
+        !privateEnv.DB_PASSWORD ||
+        privateEnv.ENC_ADMIN_PUBLIC_ORIGIN !== 'https://staging.encarmen.org' ||
+        !privateEnv.ENC_ADMIN_CREDENTIALS_JSON) return undefined;
+    return {credentials:privateEnv.ENC_ADMIN_CREDENTIALS_JSON,origin:privateEnv.ENC_ADMIN_PUBLIC_ORIGIN};
+  } catch { return undefined; }
+}
+const stagingDynamicIdentity = process.env.APP_ENV === 'staging' &&
+  process.env.DB_NAME === STAGING_PRIVATE_DB_NAME;
 // Server-issued identity gate precedes all legacy middleware and handlers.
 const adminSecurity = registerAdminSecurity(app, {
-  provider: environmentAdminProvider(process.env),
+  provider: stagingDynamicIdentity ? undefined : environmentAdminProvider(process.env),
+  providerResolver: stagingDynamicIdentity ? () => {
+    const identity = privateStagingAdminIdentity();
+    return identity ? environmentAdminProvider({
+      ENC_ADMIN_CREDENTIALS_JSON: identity.credentials,
+      ENC_ADMIN_PUBLIC_ORIGIN: identity.origin
+    }) : undefined;
+  } : undefined,
+  providerVersion: stagingDynamicIdentity ? () => {
+    const identity = privateStagingAdminIdentity();
+    return identity ? crypto.createHash('sha256')
+      .update(identity.origin).update('\0').update(identity.credentials).digest('hex') : undefined;
+  } : undefined,
   allowedOrigin: process.env.ENC_ADMIN_PUBLIC_ORIGIN || ((process.env.APP_ENV === 'staging' && process.env.DB_NAME === STAGING_PRIVATE_DB_NAME) ? 'https://staging.encarmen.org' : undefined),
   writesReady: req=>administrativeWritesReady(req, {
     mutationsEnabled:process.env.ENC_ADMIN_MUTATIONS_ENABLED==='true',
