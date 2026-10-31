@@ -58,7 +58,7 @@ async function harness(){
  const app=express();const context={app,businessesCache:[],cachedDbSignature:null,contactDigits,contactCounts,matchesContactFilter,CONTACT_FILTERS,
   isStagingEnvironment:()=>staging,isWritePermitted:()=>false,isBusinessWritePermitted:()=>writable,
   environmentAdminProvider,administrativeWritesReady,process:{env},registerAdminSecurity:(app,options)=>registerAdminSecurity(app,{...options,now:()=>clock}),registerStagingBusinessRoutes,
-  publicRegistrationBodyLimit,mountPublicRegistration,getPool:()=>conn,generateCategorySlugs:categories=>categories.map(c=>c.toLowerCase())};
+  publicRegistrationBodyLimit,mountPublicRegistration:(app,deps)=>mountPublicRegistration(app,{...deps,privateRegistrationSnapshot:()=>env}),getPool:()=>conn,generateCategorySlugs:categories=>categories.map(c=>c.toLowerCase())};
  context.stagingBusinessStore=createStagingBusinessStore({canWrite:()=>writable,getConnection:async()=>conn,serialize:businessFromRow});
  context.refreshBusinessesFromDbIfNeeded=async()=>{const [rows]=await conn.query('SELECT * FROM businesses ORDER BY id ASC');context.businessesCache=rows.map(businessFromRow);};
  vm.createContext(context);const run=code=>vm.runInContext(transformSync(code,{loader:'ts',format:'cjs'}).code,context);
