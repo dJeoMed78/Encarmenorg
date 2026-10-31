@@ -264,7 +264,7 @@ export async function submitAdministrativeBusinessRegistration(data: import('../
 }
 
 // Reports & Admin Management Functions
-export async function submitBusinessRegistration(data: import('../types').BusinessSubmission & {hp?:string;subcategory?:string}, requestId: string = crypto.randomUUID()): Promise<{
+export async function submitBusinessRegistration(data: import('../types').BusinessSubmission & {hp?:string;subcategory?:string;logo_url?:string;image?:string;gallery?:string[];mediaAttempt?:string}, requestId: string = crypto.randomUUID()): Promise<{
   success:boolean; message:string; business?:Business; directoryVisible?:boolean; replayed?:boolean;
   isDuplicate?:boolean; existingBusiness?:Business; error?:string; writeMayHaveSucceeded?:boolean;
 }> {

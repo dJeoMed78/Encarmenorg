@@ -251,7 +251,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     // Permit only authenticated business deletion in the isolated Staging business-write lane.
     // Admin security runs before this middleware and requires business:delete.
     const adminBusinessDelete = req.method.toUpperCase() === 'DELETE' && /^\/(?:api\/)?businesses\/[^/]+$/.test(req.path) && adminSecurity.isAuthorized(req, 'business:delete');
-    if ((businessMutation || adminBusinessDelete) && isBusinessWritePermitted()) return next();
+    const publicMediaMutation = req.method === 'POST' && req.path === '/api/public/registration-media';
+    if ((businessMutation || adminBusinessDelete || publicMediaMutation) && isBusinessWritePermitted()) return next();
     if (req.method.toUpperCase() === 'POST' && (req.path === '/api/ratings/get' || req.path === '/api/events/radar-search')) return next();
     return res.status(403).json({success:false,error:'STAGING_READ_ONLY',message:'Solo el carril autorizado de registro y edición puede escribir negocios. Las demás operaciones permanecen bloqueadas.'});
   }
@@ -2701,8 +2702,8 @@ registerStagingBusinessRoutes(app, {
 mountPublicRegistration(app, {
   isStaging:isStagingEnvironment, canWrite:isBusinessWritePermitted, getPool,
   businessStore:stagingBusinessStore, categorySlugs:generateCategorySlugs,
-  saved:business=>{businessesCache=[business,...businessesCache.filter(b=>String(b.id)!==String(business.id))];cachedDbSignature=null;},
-  isVisible:id=>businessesCache.some(b=>String(b.id)===String(id)&&(b.status||'published')==='published')
+  saved:(business:any)=>{businessesCache=[business,...businessesCache.filter(b=>String(b.id)!==String(business.id))];cachedDbSignature=null;},
+  isVisible:(id:string|number)=>businessesCache.some(b=>String(b.id)===String(id)&&(b.status||'published')==='published')
 });
 
 // Legacy creation is retired outside the controlled Staging store.

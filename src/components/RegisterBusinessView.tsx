@@ -32,6 +32,7 @@ import {
   checkBusinessDuplicate
 } from '../services/api';
 import { cleanPhoneNumber } from '../utils/phone';
+import { uploadRegistrationImage, MEDIA_MAX_GALLERY } from '../services/publicMediaClient';
 import { contactDigits } from '../utils/businessContacts';
 import { formatBusinessName, formatAddressText } from '../utils/textUtils';
 import { DELIVERY_OPTIONS, normalizeDeliveryOption } from '../constants/delivery';
@@ -154,15 +155,74 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [isUploadingGallery, setIsUploadingGallery] = useState(false);
 
-  // La carga anónima no dispone de contrato seguro: no usar el uploader heredado ni dataURI.
-  const handleGalleryUpload = (_e: React.ChangeEvent<HTMLInputElement>) => {
-    setErrorMessage('La carga pública de imágenes todavía no está habilitada. El registro de texto sí está disponible.');
+  // ENC-STAGING-PUBLIC-MEDIA-001: carga pública real del logotipo y hasta 10 fotografías.
+  // Cada archivo se confirma en MariaDB (servidor) antes de mostrarse; el envío se bloquea mientras haya cargas pendientes.
+  const mediaAttemptId = useRef<string | null>(null);
+  const logoPending = useRef(0);
+  const galleryPending = useRef(0);
+  const galleryReserved = useRef(0);
+  const ensureMediaAttempt = () => {
+    if (!mediaAttemptId.current) mediaAttemptId.current = crypto.randomUUID();
+    return mediaAttemptId.current;
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setErrorMessage(null);
+    logoPending.current += 1;
+    setIsUploadingLogo(true);
+    setLogoUploadedSuccess(false);
+    try {
+      const uploaded = await uploadRegistrationImage(file, 'logo', ensureMediaAttempt());
+      setFormData(prev => ({ ...prev, image: uploaded.url }));
+      setLogoPreview(uploaded.url);
+      setLogoUploadedSuccess(true);
+    } catch (err: any) {
+      setErrorMessage('Logotipo: ' + (err?.message || 'no se pudo subir.'));
+    } finally {
+      logoPending.current -= 1;
+      setIsUploadingLogo(logoPending.current > 0);
+    }
+  };
+
+  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    setErrorMessage(null);
+    const room = MEDIA_MAX_GALLERY - galleryImages.length - galleryReserved.current;
+    if (room <= 0) {
+      setErrorMessage('Máximo ' + MEDIA_MAX_GALLERY + ' fotografías por empresa.');
+      return;
+    }
+    const batch = files.slice(0, room);
+    if (files.length > room) setErrorMessage('Solo caben ' + room + ' fotografías más; se subirán las primeras ' + room + '.');
+    galleryReserved.current += batch.length;
+    galleryPending.current += 1;
+    setIsUploadingGallery(true);
+    try {
+      for (const file of batch) {
+        try {
+          const uploaded = await uploadRegistrationImage(file, 'gallery', ensureMediaAttempt());
+          setGalleryImages(prev => (prev.length < MEDIA_MAX_GALLERY && !prev.includes(uploaded.url) ? [...prev, uploaded.url] : prev));
+        } catch (err: any) {
+          setErrorMessage(file.name + ': ' + (err?.message || 'no se pudo subir.'));
+        } finally {
+          galleryReserved.current -= 1;
+        }
+      }
+    } finally {
+      galleryPending.current -= 1;
+      setIsUploadingGallery(galleryPending.current > 0);
+    }
   };
   const handleRemoveGalleryImage = (index: number) => setGalleryImages(prev=>prev.filter((_,i)=>i!==index));
-  const handleLogoUpload = handleGalleryUpload;
 
   const handleRemoveLogo = () => {
     setLogoPreview(null);
+    setLogoUploadedSuccess(false);
     setFormData(prev => ({ ...prev, image: '' }));
   };
 
@@ -177,6 +237,10 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     if (e) e.preventDefault();
     if(registrationBusy.current) return;
+    if (logoPending.current > 0 || galleryPending.current > 0 || isUploadingLogo || isUploadingGallery) {
+      setErrorMessage('Espera a que terminen de subir las imágenes antes de enviar el registro.');
+      return;
+    }
     setErrorMessage(null);
 
     if (!formData.name.trim()) {
@@ -219,13 +283,19 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
         site = `https://${site}`;
       }
 
+      const mediaPayload: Record<string, unknown> = {
+        ...(formData.image ? { logo_url: formData.image, image: formData.image } : {}),
+        ...(galleryImages.length ? { gallery: galleryImages } : {}),
+        ...((formData.image || galleryImages.length) && mediaAttemptId.current ? { mediaAttempt: mediaAttemptId.current } : {})
+      };
       const formattedBizName = formatBusinessName(formData.name.trim());
       const res = await submitBusinessRegistration({
         name: formattedBizName, category: formData.category,
         description: formData.description, address: formatAddressText(formData.address),
         colonia: formData.colonia, postalCode: formData.postalCode,
         schedule: formData.schedule, payment: paymentStr, delivery: deliveryStr,
-        facebook: formData.facebook, website: site, phone: phoneClean, whatsapp: waClean
+        facebook: formData.facebook, website: site, phone: phoneClean, whatsapp: waClean,
+        ...mediaPayload
       }, registrationRequestId.current);
 
       if (res.success && res.directoryVisible === true && res.business) {
@@ -345,6 +415,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
               onClick={() => {
                 setIsSuccess(false);
                 registrationRequestId.current = null;
+                mediaAttemptId.current = null;
                 setRegisteredBusiness(null);
                 setFormData({
                   name: '',
