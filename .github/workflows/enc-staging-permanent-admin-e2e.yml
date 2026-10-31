@@ -1,0 +1,83 @@
+name: ENCARMEN guarded public business E2E preserving permanent admin
+on:
+  push:
+    branches: [coord/staging-public-e2e-20261030]
+    paths: [.github/workflows/enc-staging-permanent-admin-e2e.yml]
+permissions:
+  contents: write
+concurrency:
+  group: encarmen-staging-business-window
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax-check guarded E2E script
+        run: python3 -m py_compile ops/coord/staging_permanent_admin_public_e2e.py
+      - name: Execute staging-only public create edit SQL with owner admin preserved
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -u
+          {
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if [ -z "${SSHPASS:-}" ]; then echo FINAL_RESULT=BLOCKED_NO_SSH; exit 0; fi
+            sudo apt-get update -qq >/dev/null 2>&1
+            sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+            umask 077
+            mkdir -p "$HOME/.ssh"
+            ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+            fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 2>/dev/null | awk '{print $2}')
+            if [ "$fp" != 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' ]; then echo FINAL_RESULT=BLOCKED_SSH_PIN; exit 0; fi
+            echo SSH_HOST=VERIFIED
+            export SSHPASS
+            HOST=u293982346@45.137.159.114
+            OPT=(-T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no)
+            sshpass -e ssh "${OPT[@]}" "$HOST" 'umask 077; test -d "$HOME/encarmen-staging-backups" && cat > "$HOME/encarmen-staging-backups/enc-permanent-admin-public-e2e.py"' < ops/coord/staging_permanent_admin_public_e2e.py
+            sshpass -e ssh "${OPT[@]}" "$HOST" 'python3 -u "$HOME/encarmen-staging-backups/enc-permanent-admin-public-e2e.py"'
+            echo "SSH_EXIT=$?"
+          } > ENC_STAGING_PERMANENT_ADMIN_PUBLIC_E2E_RESULT.txt 2>&1
+          cat ENC_STAGING_PERMANENT_ADMIN_PUBLIC_E2E_RESULT.txt
+          grep -q '^FINAL_RESULT=PASS_PUBLIC_CREATE_EDIT_SQL$' ENC_STAGING_PERMANENT_ADMIN_PUBLIC_E2E_RESULT.txt
+      - name: Emergency revert if marker survives
+        if: always()
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        shell: bash
+        run: |
+          set -u
+          if [ -z "${SSHPASS:-}" ] || [ ! -s "$HOME/.ssh/known_hosts" ]; then exit 0; fi
+          export SSHPASS
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 -' <<'PY' >> ENC_STAGING_PERMANENT_ADMIN_PUBLIC_E2E_RESULT.txt 2>&1
+          import os,pathlib,json,tempfile,stat
+          H=pathlib.Path.home();B=H/'encarmen-staging-backups';M=B/'enc-staging-permanent-admin-e2e-active.json'
+          E=H/'domains/staging.encarmen.org/hbuilds/config/.env'
+          if M.is_file() and not M.is_symlink():
+              d=json.loads(M.read_text());p=pathlib.Path(d['backup'])
+              if p.parent==B and p.is_file() and not p.is_symlink() and E.is_file() and not E.is_symlink():
+                  old=p.read_text()
+                  if 'DB_NAME=u293982346_encarmentest' in old and 'STAGING_READ_ONLY=true' in old:
+                      fd,t=tempfile.mkstemp(dir=E.parent,prefix='.enc-emergency-perm-')
+                      with os.fdopen(fd,'w') as f:f.write(old);f.flush();os.fsync(f.fileno())
+                      os.chmod(t,stat.S_IMODE(E.stat().st_mode)&0o700);os.replace(t,E)
+                      c=pathlib.Path(d['secret'])
+                      if c.parent==B and c.is_file() and not c.is_symlink():c.unlink()
+                      M.unlink()
+                      print('EMERGENCY_PRIVATE_CONFIG_RESTORED=true')
+                  else:print('EMERGENCY_RESTORE_BLOCKED_UNSAFE_BACKUP=true')
+              else:print('EMERGENCY_RESTORE_BLOCKED_PATH=true')
+          else:print('EMERGENCY_RESTORE_NOT_REQUIRED=true')
+          PY
+      - name: Save redacted test report
+        if: always()
+        run: |
+          set -euo pipefail
+          test -s ENC_STAGING_PERMANENT_ADMIN_PUBLIC_E2E_RESULT.txt || echo FINAL_RESULT=NO_REPORT > ENC_STAGING_PERMANENT_ADMIN_PUBLIC_E2E_RESULT.txt
+          git config user.name encarmen-coordination
+          git config user.email encarmen-coordination@users.noreply.github.com
+          git add ENC_STAGING_PERMANENT_ADMIN_PUBLIC_E2E_RESULT.txt
+          git commit -m 'docs: permanent admin preserved Staging business public E2E result' || exit 0
+          git push origin HEAD:coord/staging-public-e2e-20261030
