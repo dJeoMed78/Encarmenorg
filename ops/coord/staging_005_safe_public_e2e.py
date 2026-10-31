@@ -84,9 +84,9 @@ try:
  private_write(secret,json.dumps({'username':'enc_e2e_temp','password':pwd}))
  private_write(MARK,json.dumps({'backup':str(backup),'secret':str(secret),'created':stamp,'synthetic_name':synth_name}))
  modified=old.rstrip('\n')+'\nSTAGING_BUSINESS_WRITES_ENABLED=true\nENC_ADMIN_MUTATIONS_ENABLED=true\n'
- modified,count1=re.subn(r"(?m)^\\s*(?:export\\s+)?STAGING_READ_ONLY\\s*=\\s*['\\\"]?true['\\\"]?\\s*$",'STAGING_READ_ONLY=false',modified)
+ modified,count1=re.subn(r"(?m)^\s*(?:export\s+)?STAGING_READ_ONLY\s*=\s*['\"]?true['\"]?\s*$",'STAGING_READ_ONLY=false',modified)
  if count1!=1:abort('STAGING_READ_ONLY_ASSIGNMENT_NOT_FOUND')
- modified,count2=re.subn(r"(?m)^\\s*(?:export\\s+)?STAGING_DB_CONFIRMED\\s*=\\s*['\\\"]?false['\\\"]?\\s*$",'STAGING_DB_CONFIRMED=true',modified)
+ modified,count2=re.subn(r"(?m)^\s*(?:export\s+)?STAGING_DB_CONFIRMED\s*=\s*['\"]?false['\"]?\s*$",'STAGING_DB_CONFIRMED=true',modified)
  if count2!=1:abort('STAGING_DB_CONFIRMED_ASSIGNMENT_NOT_FOUND')
  changed=parse(modified)
  if one(changed,'STAGING_READ_ONLY')!='false' or one(changed,'STAGING_DB_CONFIRMED')!='true':abort('STAGING_WRITE_FLAGS_UNCHANGED')
