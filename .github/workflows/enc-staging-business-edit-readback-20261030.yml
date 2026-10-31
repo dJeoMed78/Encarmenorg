@@ -1,0 +1,91 @@
+name: ENCARMEN verify actual business edit persisted in Staging MariaDB
+on:
+  push:
+    branches: [coord/enc-staging-005-diagnostic-20261030]
+    paths: [.github/workflows/enc-staging-business-edit-readback-20261030.yml]
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-staging-runtime-deploy
+  cancel-in-progress: false
+jobs:
+  readback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: SSH read-only exact-name SQL and public GET comparison
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          sudo apt-get update -qq >/dev/null 2>&1
+          sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          test "$fp" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          export SSHPASS
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=15 u293982346@45.137.159.114 'python3 -' <<'PY'
+          import pathlib,os,stat,subprocess,tempfile,urllib.request,urllib.error,json
+          H=pathlib.Path.home();S=H/'domains/staging.encarmen.org/hbuilds';E=S/'config/.env';D='u293982346_encarmentest'
+          name='Prueba Staging Controlada 20261027'
+          print('OPERATION=READ_ONLY_SQL_AND_PUBLIC_GET',flush=True)
+          if not E.is_file() or E.is_symlink() or (E.stat().st_mode&0o077):raise SystemExit('RESULT=CONFIG_FILE_UNSAFE')
+          env={};dup=[]
+          for line in E.read_text().splitlines():
+              line=line.strip().removeprefix('export ').strip()
+              if not line or line.startswith('#') or '=' not in line:continue
+              k,v=line.split('=',1);k=k.strip()
+              if k in env:dup.append(k)
+              env[k]=v.strip().strip("'").strip('"')
+          keys=('APP_ENV','DB_NAME','DB_HOST','DB_USER','DB_PASSWORD','STAGING_READ_ONLY','STAGING_DB_CONFIRMED')
+          if any(k in dup for k in keys):raise SystemExit('RESULT=DUPLICATE_CONFIG')
+          if env.get('APP_ENV')!='staging' or env.get('DB_NAME')!=D or env.get('DB_USER') in (None,'','u293982346_appuser'):raise SystemExit('RESULT=ISOLATION_REJECTED')
+          backup=H/'encarmen-staging-backups'
+          if not backup.is_dir() or backup.is_symlink():raise SystemExit('RESULT=BACKUP_PATH_UNSAFE')
+          fd,tmp=tempfile.mkstemp(dir=backup,prefix='.enc-edit-readback-',suffix='.cnf')
+          try:
+              os.fchmod(fd,0o600)
+              with os.fdopen(fd,'w') as f:
+                  f.write('[client]\n')
+                  for k,v in (('host','DB_HOST'),('user','DB_USER'),('password','DB_PASSWORD')):
+                      secret=env.get(v,'').replace('\\','\\\\').replace('"','\\"')
+                      f.write(k+'="'+secret+'"\n')
+              def sql(q):
+                  p=subprocess.run(['mariadb','--defaults-extra-file='+tmp,'-D',D,'--batch','--skip-column-names','-e',q],capture_output=True,text=True,timeout=20)
+                  if p.returncode:raise RuntimeError('SQL_READ_FAILED')
+                  return p.stdout.strip().splitlines()
+              identity=sql("SELECT DATABASE(),SUBSTRING_INDEX(CURRENT_USER(),'@',1)")
+              if identity!=[D+'\t'+env['DB_USER']]:raise SystemExit('RESULT=SQL_WRONG_IDENTITY')
+              if sql('SELECT env_name,db_name FROM encarmen_environment_marker')!=['staging\t'+D]:raise SystemExit('RESULT=SQL_WRONG_MARKER')
+              if 'u293982346_encarmenapp' in sql('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA'):raise SystemExit('RESULT=PROD_VISIBLE')
+              print('SQL_ENVIRONMENT=STAGING_ISOLATED_VERIFIED',flush=True)
+              lit='CONVERT(0x'+name.encode().hex()+' USING utf8mb4)'
+              rows=sql('SELECT id,HEX(name),HEX(description) FROM businesses WHERE BINARY name=BINARY '+lit+' LIMIT 3')
+              print('SQL_MATCHING_ROWS='+str(len(rows)),flush=True)
+              if len(rows)!=1:raise SystemExit('RESULT=BUSINESS_NOT_UNIQUE_OR_MISSING')
+              fields=rows[0].split('\t')
+              if len(fields)!=3 or not fields[0].isdigit():raise SystemExit('RESULT=UNEXPECTED_SQL_RECORD')
+              number=fields[0]
+              actual_name=bytes.fromhex(fields[1]).decode('utf8')
+              description=bytes.fromhex(fields[2]).decode('utf8') if fields[2]!='NULL' else ''
+              if actual_name!=name:raise SystemExit('RESULT=NAME_IDENTITY_MISMATCH')
+              print('SQL_BUSINESS_ID='+number,flush=True)
+              print('SQL_DESCRIPTION='+json.dumps(description,ensure_ascii=False)[:700],flush=True)
+              has_date=any(s in description.lower() for s in ('30/10/2026','30-10-2026','2026-10-30','30 de octubre','octubre 30'))
+              print('SQL_DESCRIPTION_CONTAINS_2026_10_30='+str(has_date).lower(),flush=True)
+              req=urllib.request.Request('https://staging.encarmen.org/api/businesses/'+number+'?readback='+str(os.getpid()),headers={'Cache-Control':'no-cache','User-Agent':'ENC-Staging-Edit-Readback/1'})
+              try:
+                  with urllib.request.urlopen(req,timeout=12) as result:
+                      pub=json.loads(result.read(200000));http=result.status
+              except urllib.error.HTTPError as e:
+                  http=e.code;pub={}
+              print('PUBLIC_GET_HTTP='+str(http),flush=True)
+              public_description=pub.get('business',{}).get('description') if isinstance(pub.get('business'),dict) else None
+              print('PUBLIC_DESCRIPTION_MATCHES_SQL='+str(http==200 and pub.get('success') is True and public_description==description).lower(),flush=True)
+              print('RESULT='+('EDIT_SAVED_SQL_AND_PUBLIC_MATCH' if has_date and http==200 and pub.get('success') and public_description==description else 'EDIT_READBACK_NEEDS_REVIEW'),flush=True)
+          finally:
+              os.unlink(tmp)
+          PY
