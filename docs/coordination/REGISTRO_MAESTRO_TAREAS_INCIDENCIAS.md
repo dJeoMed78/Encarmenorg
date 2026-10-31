@@ -1,4 +1,16 @@
 # ENCARMEN — Registro maestro de tareas e incidencias
+
+
+## P1 — ENC-SEC-DEPS-20261031-001: reparar 2 vulnerabilidades moderadas npm
+
+**Prioridad de coordinación: ALTA (P1 seguridad).** [Issue #22](https://github.com/dJeoMed78/Encarmenorg/issues/22). **Estado: pendiente de corrección.** No desarrollado, probado, integrado ni desplegado.
+
+- Reporte de escáner (30-oct-2026, 22:55): 2 vulnerabilidades moderadas, 0 altas/críticas.
+- Revisión independiente del `package-lock.json` de `ia-desarrollo`: `minimatch@10.2.6` (CVE-2026-118764, objetivo >=11.0.1) y `qs@6.16.0` (CVE-2026-110816, objetivo >=6.16.1). En `package.json` no constan como dependencias directas; verificar cadena transitoria, compatibilidad y dónde se instalan.
+- Orden de trabajo futura: identificar rutas de dependencia y exposición, actualizar con una rama aislada, no forzar cambios mayores sin revisar, `npm ci`, `npm audit`, `npm ls`, lint, tests, build, revisión independiente y verificación posterior en Staging. Preservar regresiones de seguridad e integridad; respaldos/rollback. Sin despliegue a producción.
+- **No ejecutar parche ahora.** Coordinar con las incidencias activas #21 (login), #12 (eliminación) y #19 (imágenes) para evitar colisiones en Staging.
+
+
 **Fecha de creación:** 2026-10-29. **Coordinación:** Jefa 3. **Rama canónica:** `coord/encarmen-work-control-001`.
 **OBJETIVO:** fuente única para decidir qué está pendiente, implementado, probado, integrado, desplegado, validado y cerrado. **Ninguna nueva Jefa debe tomar estados congelados de una instrucción de sucesión como estado actual.**
 
