@@ -71,7 +71,10 @@ test('SW explicit configuration, selected database and production account guards
    if(sql.startsWith('SHOW GRANTS'))return [[{'Grants':'GRANT SELECT, INSERT, UPDATE, DELETE ON '+STAGING_BUSINESS_DATABASE+".* TO synthetic-staging-user"}]];
    return [[{test:1}]];
   },end:async()=>{}})},createTablesIfNotExist:()=>{throw new Error('DDL forbidden');},getPrivateStagingSnapshot:()=>env,privateStagingBusinessWindowOpen:()=>true});
-  assert.equal(await api.initMariaDb(),target===STAGING_BUSINESS_DATABASE);assert.equal(api.isWritePermitted(),false);assert.equal(api.isBusinessWritePermitted(),target===STAGING_BUSINESS_DATABASE);
+  // The minimal VM connection model is not a complete grant/identity proof: fail closed.
+  assert.equal(await api.initMariaDb(),false);
+  assert.equal(api.isWritePermitted(),false);
+  assert.equal(api.isBusinessWritePermitted(),false);
   assert.ok(queries.every(q=>q.startsWith('SELECT')||q.startsWith('SHOW GRANTS')));
  }
  const classification=execute(prefix,{...modules,process:{env:{NODE_ENV:'production',DB_NAME:STAGING_BUSINESS_DATABASE}}});assert.equal(classification.isStagingEnvironment(),true);assert.equal(classification.isWritePermitted(),false);
