@@ -3,6 +3,8 @@
  * Ninguna consulta modifica datos ni esquema. El resultado contiene únicamente códigos:
  * nunca grants, hosts, usuarios ni credenciales.
  */
+import {getPrivateStagingSnapshot} from './stagingBusinessSecurity.ts';
+
 export const PRODUCTION_DATABASE = 'u293982346_encarmenapp';
 export const PRODUCTION_USER = 'u293982346_appuser';
 export const STAGING_DATABASE = 'u293982346_encarmentest';
@@ -10,7 +12,13 @@ export const STAGING_HOSTNAME = 'staging.encarmen.org';
 export const ENVIRONMENT_MARKER_TABLE = 'encarmen_environment_marker';
 
 type Env = Record<string, string | undefined>;
-export interface IsolationOptions { stagingDatabase?: string; productionDatabase?: string; productionUser?: string; stagingHostname?: string; }
+export interface IsolationOptions {
+  stagingDatabase?: string;
+  productionDatabase?: string;
+  productionUser?: string;
+  stagingHostname?: string;
+  configPath?: string;
+}
 export interface IsolationResult { ok: boolean; code: string; warnings: string[]; }
 export interface ParsedGrant { privileges: string[]; schema: string; table: string; grantOption: boolean; wildcard: boolean; }
 interface Resolved { value: string; conflict: boolean; }
@@ -135,7 +143,17 @@ export async function verifyStagingIsolation(conn: any, env: Env, options: Isola
   const production = options.productionDatabase || PRODUCTION_DATABASE;
   const warnings = newWarnings();
   const fail = (code: string) => ({ ok: false, code, warnings });
-  const configuration = checkStagingConfiguration(env, options);
+
+  // Precedencia estricta: la configuración privada validada prevalece sobre env heredado/congelado
+  let effectiveEnv = env;
+  if (effectiveEnv === process.env || options.configPath) {
+    const snapshot = getPrivateStagingSnapshot({ configPath: options.configPath });
+    if (snapshot) {
+      effectiveEnv = { ...env, ...snapshot };
+    }
+  }
+
+  const configuration = checkStagingConfiguration(effectiveEnv, options);
   if (configuration) return fail(configuration);
   try {
     const [current] = await conn.query('SELECT DATABASE() AS db_name');
@@ -146,7 +164,7 @@ export async function verifyStagingIsolation(conn: any, env: Env, options: Isola
 
     const [grantRows] = await conn.query('SHOW GRANTS FOR CURRENT_USER()');
     const lines = (grantRows || []).map((row: any) => String(Object.values(row || {})[0] || ''));
-    const grants = evaluateGrants(lines, staging, production, env.STAGING_REQUIRE_MINIMAL_GRANTS === 'true');
+    const grants = evaluateGrants(lines, staging, production, effectiveEnv.STAGING_REQUIRE_MINIMAL_GRANTS === 'true');
     for (const warning of grants.warnings) warnings.push(warning);
     if (grants.code) return fail(grants.code);
 

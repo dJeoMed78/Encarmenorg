@@ -1,4 +1,5 @@
-import {STAGING_BUSINESS_DATABASE,stagingBusinessConfiguration} from '../server/stagingBusinessSecurity';
+import {STAGING_BUSINESS_DATABASE,stagingBusinessConfiguration,privateStagingBusinessWindowOpen,getPrivateStagingSnapshot} from '../server/stagingBusinessSecurity';
+import {verifyStagingIsolation, evaluateGrants} from '../server/stagingIsolationProof';
 import {createStagingBusinessStore} from './stagingBusinessStore';
 import mysql from 'mysql2/promise';
 import { createHash, randomUUID } from 'node:crypto';
@@ -14,6 +15,7 @@ export interface MariaDbConfig {
 let pool: mysql.Pool | null = null;
 let isConnected = false;
 let connectedDatabase: string | null = null;
+let connectedUser: string | null = null;
 let lastConnectionError: string | null = null;
 
 export const PRODUCTION_DB_NAME = 'u293982346_encarmenapp';
@@ -159,9 +161,51 @@ export async function initMariaDb(): Promise<boolean> {
 
       await pool.query('SELECT 1 as test');
       if (isStaging) {
-        const [context]: any = await pool.query('SELECT DATABASE() AS db_name');
-        if (context[0]?.db_name !== STAGING_BUSINESS_DATABASE) throw new Error('STAGING_DATABASE_TARGET_MISMATCH');
-        connectedDatabase = context[0].db_name;
+        const [context]: any = await pool.query(
+          "SELECT SUBSTRING_INDEX(CURRENT_USER(), '@', 1) AS effective_user, DATABASE() AS db_name"
+        );
+        const effectiveDb = context[0]?.db_name;
+        // Identidad efectiva de SQL obtenida desde CURRENT_USER()
+        const effectiveUser = context[0]?.effective_user;
+
+        if (!effectiveDb || effectiveDb !== STAGING_BUSINESS_DATABASE) {
+          throw new Error('STAGING_DATABASE_TARGET_MISMATCH');
+        }
+        // Never trust the configured username when CURRENT_USER() was not
+        // returned by the SQL server. An unverified identity must fail closed.
+        if (typeof effectiveUser !== 'string' || !effectiveUser.trim()) {
+          throw new Error('STAGING_DB_IDENTITY_UNVERIFIED');
+        }
+        if (effectiveUser === PRODUCTION_DB_USER) {
+          throw new Error('STAGING_DB_USER_IS_PRODUCTION');
+        }
+        if (!config.user || effectiveUser !== config.user) {
+          throw new Error('STAGING_DB_USER_IDENTITY_MISMATCH');
+        }
+
+        // Privilege verification is mandatory for a Staging write-capable
+        // connection. SQL errors, malformed output, and empty grants all fail
+        // closed; never silently treat a failed grants query as success.
+        let grantLines: string[];
+        try {
+          const [grantsRows]: any = await pool.query('SHOW GRANTS FOR CURRENT_USER()');
+          if (!Array.isArray(grantsRows)) throw new Error('GRANTS_NOT_ARRAY');
+          grantLines = grantsRows.map((row: any) => String(Object.values(row || {})[0] || ''));
+        } catch {
+          throw new Error('STAGING_DB_GRANTS_UNVERIFIED');
+        }
+        const snapshot = getPrivateStagingSnapshot({ connectionUser: effectiveUser });
+        const requireMinimal = (snapshot?.STAGING_REQUIRE_MINIMAL_GRANTS || process.env.STAGING_REQUIRE_MINIMAL_GRANTS) === 'true';
+        const grantCheck = evaluateGrants(grantLines, STAGING_BUSINESS_DATABASE, PRODUCTION_DB_NAME, requireMinimal);
+        if (grantCheck.code) {
+          throw new Error(`STAGING_DB_GRANTS_INVALID:${grantCheck.code}`);
+        }
+
+        connectedDatabase = effectiveDb;
+        connectedUser = effectiveUser;
+      } else {
+        connectedDatabase = config.database || null;
+        connectedUser = config.user || null;
       }
       isConnected = true;
       lastConnectionError = null;
@@ -187,6 +231,7 @@ export async function initMariaDb(): Promise<boolean> {
       }
       pool = null;
       connectedDatabase = null;
+      connectedUser = null;
       isConnected = false;
     }
   }
@@ -196,6 +241,14 @@ export async function initMariaDb(): Promise<boolean> {
 
 export function isMariaDbActive(): boolean {
   return isConnected && pool !== null;
+}
+
+export function getConnectedDbUser(): string | null {
+  return connectedUser;
+}
+
+export function getConnectedDatabase(): string | null {
+  return connectedDatabase;
 }
 
 export function getPool(): mysql.Pool | null {
@@ -1286,10 +1339,27 @@ export async function dbInsertRating(id: string, visitorKey: string, rating: num
 
 
 export function isBusinessWritePermitted(): boolean {
-  return isStagingEnvironment() && isConnected && pool !== null && connectedDatabase === STAGING_BUSINESS_DATABASE && stagingBusinessConfiguration(process.env, PRODUCTION_DB_USER);
+  if (!isStagingEnvironment()) return false;
+  if (!isConnected || pool === null || connectedDatabase !== STAGING_BUSINESS_DATABASE) return false;
+  const effectiveUser = connectedUser || getMariaDbConfig()?.user;
+  if (!effectiveUser || effectiveUser === PRODUCTION_DB_USER) return false;
+
+  const snapshot = getPrivateStagingSnapshot({ connectionUser: effectiveUser });
+  if (snapshot) {
+    return stagingBusinessConfiguration(snapshot, PRODUCTION_DB_USER) &&
+      privateStagingBusinessWindowOpen(snapshot, { connectionUser: effectiveUser });
+  }
+
+  return stagingBusinessConfiguration(process.env, PRODUCTION_DB_USER) &&
+    privateStagingBusinessWindowOpen(process.env, { connectionUser: effectiveUser });
 }
 export const stagingBusinessStore = createStagingBusinessStore({
-  canWrite:isBusinessWritePermitted,
-  getConnection:async()=>{if(!pool)throw new Error('STAGING_DATABASE_UNAVAILABLE');return pool.getConnection();},
-  serialize:businessFromRow
+  canWrite: isBusinessWritePermitted,
+  getConnection: async () => { if (!pool) throw new Error('STAGING_DATABASE_UNAVAILABLE'); return pool.getConnection(); },
+  serialize: businessFromRow,
+  verifyIsolation: async (conn: any) => {
+    const effectiveUser = connectedUser || getMariaDbConfig()?.user;
+    const snapshot = getPrivateStagingSnapshot({ connectionUser: effectiveUser });
+    return verifyStagingIsolation(conn, snapshot ? { ...process.env, ...snapshot } : process.env);
+  }
 });

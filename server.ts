@@ -2,10 +2,64 @@ import {registerAdminSecurity,environmentAdminProvider} from './src/server/admin
 import {administrativeWritesReady} from './src/server/consolidatedWritePolicy';
 import {registerStagingBusinessRoutes} from './src/server/stagingBusinessRoutes';
 import {mountPublicRegistration,publicRegistrationBodyLimit} from './src/server/publicRegistrationWiring.ts';
-import {verifyStagingAdmin,createLoginLimiter,stagingBusinessConfiguration} from './src/server/stagingBusinessSecurity';
+import {verifyStagingAdmin,createLoginLimiter,stagingBusinessConfiguration,getPrivateStagingSnapshot} from './src/server/stagingBusinessSecurity';
 import { prepareContactPatch, contactsMatchReadback, ContactPatchError, contactDigits, contactCounts, matchesContactFilter, CONTACT_FILTERS, type ContactFilter } from './src/utils/businessContacts';
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
+// Hostinger may restart Node without injecting the build's database environment.
+// Bootstrap from the PRIVATE Staging file only when the actual resolved CWD
+// belongs to a Staging release. Never read or import credentials in production.
+// Fail closed: missing/invalid config does not enable database or writes.
+const STAGING_PRIVATE_DB_NAME = 'u293982346_encarmentest';
+if (process.env.HOME) {
+  const stagingRoot = path.join(process.env.HOME, 'domains/staging.encarmen.org/hbuilds');
+  let trustedRelease = false;
+  try {
+    const actualCwd = fs.realpathSync(process.cwd());
+    const versions = path.join(stagingRoot, 'versions') + path.sep;
+    trustedRelease = actualCwd.startsWith(versions) &&
+      path.basename(actualCwd) === 'nodejs' &&
+      process.env.DB_NAME !== 'u293982346_encarmenapp' &&
+      process.env.DB_USER !== 'u293982346_appuser';
+  } catch {}
+  if (trustedRelease) {
+    try {
+      const privatePath = path.join(stagingRoot, 'config/.env');
+      const stat = fs.lstatSync(privatePath);
+      if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o077) !== 0)
+        throw new Error('STAGING_PRIVATE_FILE_PERMISSIONS');
+      const staged = dotenv.parse(fs.readFileSync(privatePath));
+      if (staged.APP_ENV !== 'staging' ||
+          staged.DB_NAME !== STAGING_PRIVATE_DB_NAME ||
+          !staged.DB_HOST || !staged.DB_USER || !staged.DB_PASSWORD ||
+          staged.DB_USER === 'u293982346_appuser')
+        throw new Error('STAGING_PRIVATE_DB_IDENTITY');
+      // Only these explicit Staging keys may enter the process environment.
+      // Other values (including production and arbitrary secrets) are excluded.
+      const keys = ['DB_HOST','DB_PORT','DB_USER','DB_NAME','DB_PASSWORD',
+        'STAGING_READ_ONLY','STAGING_DB_CONFIRMED',
+        'STAGING_BUSINESS_WRITES_ENABLED','ENC_ADMIN_MUTATIONS_ENABLED',
+        'ENC_ADMIN_PUBLIC_ORIGIN','ENC_ADMIN_CREDENTIALS_JSON'] as const;
+      process.env.APP_ENV = 'staging';
+      for (const key of keys) {
+        if (typeof staged[key] === 'string') process.env[key] = staged[key];
+        else delete process.env[key];
+      }
+    } catch {
+      // Never downgrade to a production DB or allow writes if private Staging
+      // bootstrap cannot be authenticated; public read-only stays available.
+      process.env.APP_ENV = 'staging';
+      process.env.DB_NAME = STAGING_PRIVATE_DB_NAME;
+      delete process.env.DB_USER;
+      delete process.env.DB_PASSWORD;
+      process.env.STAGING_READ_ONLY = 'true';
+      process.env.STAGING_DB_CONFIRMED = 'false';
+      delete process.env.STAGING_BUSINESS_WRITES_ENABLED;
+      delete process.env.ENC_ADMIN_MUTATIONS_ENABLED;
+      delete process.env.ENC_ADMIN_CREDENTIALS_JSON;
+    }
+  }
+}
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import path from 'path';
@@ -121,14 +175,54 @@ export function backupDownloadContainment(req: Request, res: Response, next: Nex
 app.use(backupDownloadContainment);
 // ENC-BACKUP-SECURITY-002 CONTAINMENT END
 
+// Read *only* the verified Staging credential settings at request time.
+// This allows a controlled test account to become available without relying
+// on Hostinger's restart marker, and revokes its sessions after config rollback.
+// No production process can pass the exact release-path and database guards.
+function privateStagingAdminIdentity(): {credentials:string;origin:string}|undefined {
+  try {
+    const db = getMariaDbConfig();
+    if (!isStagingEnvironment() ||
+        db?.database !== STAGING_PRIVATE_DB_NAME ||
+        db.user === 'u293982346_appuser') return undefined;
+    const snapshot = getPrivateStagingSnapshot({ connectionUser: db.user });
+    if (!snapshot) return undefined;
+    if (!snapshot.ENC_ADMIN_CREDENTIALS_JSON || !snapshot.ENC_ADMIN_PUBLIC_ORIGIN) return undefined;
+    if (snapshot.ENC_ADMIN_PUBLIC_ORIGIN !== 'https://staging.encarmen.org') return undefined;
+    return {credentials:snapshot.ENC_ADMIN_CREDENTIALS_JSON,origin:snapshot.ENC_ADMIN_PUBLIC_ORIGIN};
+  } catch { return undefined; }
+}
+const stagingDynamicIdentity = isStagingEnvironment() &&
+  getMariaDbConfig()?.database === STAGING_PRIVATE_DB_NAME;
 // Server-issued identity gate precedes all legacy middleware and handlers.
 const adminSecurity = registerAdminSecurity(app, {
-  provider: environmentAdminProvider(process.env),
-  allowedOrigin: process.env.ENC_ADMIN_PUBLIC_ORIGIN,
-  writesReady: req=>administrativeWritesReady(req, {
-    mutationsEnabled:process.env.ENC_ADMIN_MUTATIONS_ENABLED==='true',
-    isStaging:isStagingEnvironment(), businessWrites:isBusinessWritePermitted()
-  })
+  provider: stagingDynamicIdentity ? undefined : environmentAdminProvider(process.env),
+  providerResolver: stagingDynamicIdentity ? () => {
+    const identity = privateStagingAdminIdentity();
+    return identity ? environmentAdminProvider({
+      ENC_ADMIN_CREDENTIALS_JSON: identity.credentials,
+      ENC_ADMIN_PUBLIC_ORIGIN: identity.origin
+    }) : undefined;
+  } : undefined,
+  providerVersion: stagingDynamicIdentity ? () => {
+    const identity = privateStagingAdminIdentity();
+    return identity ? crypto.createHash('sha256')
+      .update(identity.origin).update('\0').update(identity.credentials).digest('hex') : undefined;
+  } : undefined,
+  allowedOrigin: process.env.ENC_ADMIN_PUBLIC_ORIGIN || ((process.env.APP_ENV === 'staging' && process.env.DB_NAME === STAGING_PRIVATE_DB_NAME) ? 'https://staging.encarmen.org' : undefined),
+  writesReady: req => {
+    const isStaging = isStagingEnvironment();
+    const businessWrites = isBusinessWritePermitted();
+    const snapshot = isStaging ? getPrivateStagingSnapshot() : null;
+    const mutationsEnabled = isStaging
+      ? (businessWrites && Boolean(snapshot && snapshot.ENC_ADMIN_MUTATIONS_ENABLED === 'true'))
+      : (process.env.ENC_ADMIN_MUTATIONS_ENABLED === 'true');
+    return administrativeWritesReady(req, {
+      mutationsEnabled,
+      isStaging,
+      businessWrites
+    });
+  }
 });
 
 
