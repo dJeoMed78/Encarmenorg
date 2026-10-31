@@ -111,14 +111,14 @@ try:
  # Wait for Hostinger hPanel restart. Invalid payload must return 400 only when
  # actual admin session and staging business write lane are ready; no SQL writes.
  ready=False
- for attempt in range(72):
+ for attempt in range(12):
   probe,_=http('POST','/api/submit-business',{'name':'A'},token=token)
   if probe==400:
    ready=True;out('WRITE_WINDOW_VALIDATION_HTTP',400);break
   if probe==401:
    login_code,login=http('POST','/api/admin/login',{'username':'enc_e2e_temp','password':pwd})
    if login_code==200 and isinstance(login.get('token'),str):token=login['token']
-  if attempt in (0,12,24,36,48,60,71):out('WRITE_WINDOW_WAIT_HTTP',probe)
+  if attempt in (0,4,8,11):out('WRITE_WINDOW_WAIT_HTTP',probe)
   time.sleep(5)
  if not ready:abort('HOSTINGER_WRITE_WINDOW_RESTART_NOT_CONFIRMED')
  phone='9999'+str(secrets.randbelow(1000000)).zfill(6)
