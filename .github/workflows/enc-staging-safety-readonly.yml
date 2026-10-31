@@ -205,6 +205,21 @@ jobs:
               print('PUBLIC_HEALTH_STAGING_WRITE_PERMITTED='+str(d.get('staging',{}).get('writesPermitted') is True).lower())
           except Exception as e:print('PUBLIC_HEALTH_PARSE='+type(e).__name__)
           PYHEALTH
+            python3 - <<'PYSAMPLES'
+          import urllib.request,json,time
+          for i in range(1,11):
+              try:
+                  req=urllib.request.Request('https://staging.encarmen.org/api/health',headers={'Cache-Control':'no-store','User-Agent':'ENCARMEN-Staging-Diagnostic-Consistency'})
+                  with urllib.request.urlopen(req,timeout=12) as response:
+                      d=json.load(response)
+                      print('SAMPLE_'+str(i)+'_HTTP='+str(response.status))
+                      print('SAMPLE_'+str(i)+'_MARIADB='+str(d.get('database')=='mariadb').lower())
+                      print('SAMPLE_'+str(i)+'_READONLY='+str(d.get('staging',{}).get('readOnly') is True).lower())
+                      print('SAMPLE_'+str(i)+'_BUSINESSES='+str(d.get('businesses','unknown')))
+                      print('SAMPLE_'+str(i)+'_UPTIME='+str(d.get('uptime','unknown')))
+              except Exception as e:print('SAMPLE_'+str(i)+'_ERROR='+type(e).__name__)
+              time.sleep(2)
+          PYSAMPLES
           } > ENC_STAGING_SAFETY_READONLY_RESULT.txt 2>&1
           cat ENC_STAGING_SAFETY_READONLY_RESULT.txt
       - name: Record sanitized result on isolated branch only
