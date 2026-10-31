@@ -460,3 +460,14 @@ Tras autorización del propietario para finalizar pruebas empresariales, Coordin
 - No se dispone todavía de causa raíz, respuesta HTTP, límites, trazas o prueba independiente de los archivos; no suponer por qué fallan. Mantener separado del fallo de autorización pública corregido en PR #18.
 - Cuando el propietario retome el asunto: reproducir logo y galería, identificar fallo desde formulario/API/almacenamiento/persistencia/lectura, preservar controles de seguridad e integridad, probar en Staging con evidencia y revisar integración.
 - **Orden vigente: no arreglar ahora ni iniciar diagnóstico, código, pruebas o despliegues.** Producción `main`, `encarmen.org` y BD productiva excluidas.
+
+
+## ENC-STAGING-BUSINESS-DELETE-20261030 — borrado administrativo bloqueado
+
+**Estado:** CAUSA IDENTIFICADA / CORRECCION EN PR #20 / NO INTEGRADA NI DESPLEGADA HASTA CI VERDE / REGISTRO MANUAL 20272 AUN PRESENTE.
+
+- Propietario intentó borrar la empresa de prueba `30102026` (ID 20272). Auditoría SQL de solo lectura run `41169533577` devolvió `COUNT(id=20272)=1`, total 208: NO eliminada.
+- Causa doble comprobada en `ia-desarrollo`: `administrativeWritesReady()` denegaba expresamente DELETE en Staging aunque el usuario tuviera `business:delete`. La ruta DELETE en `server.ts` invocaba `dbDeleteBusiness()`, que usa `guardWrite()`, y la capacidad general `isWritePermitted()` siempre es falsa en Staging. NO abrir escrituras generales.
+- PR #20 https://github.com/dJeoMed78/Encarmenorg/pull/20, rama `coord/enc-staging-business-delete-20261030`: permiso para DELETE empresarial exclusivamente bajo sesión autorizada + guard business, transacción aislada `stagingBusinessStore.delete()` con SELECT FOR UPDATE, affectedRows 1, SELECT readback, rollback; sin modificar helper de producción. UI informa falla y ya no afirma sincronización WordPress.
+- Pruebas Node22 de seguridad/SQL/mocks en GitHub Actions. Algunas corridas fallaron al preparar `jsdom` y por harness antiguo que no simulaba verificación estricta de `CURRENT_USER()` / `SHOW GRANTS`; no considerar corregido hasta CI PASS. No publicar con errores ni borrar ID real desde scripts.
+- **El propietario NO necesita cambiar ninguna variable de Hostinger, contraseña, permiso SQL o SSH.** La cuenta `jeo` ya tenía `business:delete` y las verificaciones previas confirmaron permiso SQL DELETE en la BD de Staging. Se trata de código; el trabajo puede seguirse vía GitHub. Producción `main`, `encarmen.org` y MariaDB productiva excluidos.
