@@ -118,6 +118,12 @@ try:
   out('GATE_RUNTIME_ISOLATION_VALID',str(st.get('isolationValid')).lower())
   out('GATE_RUNTIME_DB_STAGING',str(st.get('databaseName')=='u293982346_encarmentest').lower())
   out('GATE_RUNTIME_DB_ERROR_PRESENT',str(bool(md.get('lastError'))).lower())
+  diagnostic=detail.get('stagingGateDiagnostic') or {}
+  for key in ('staging','connected','matchedDb','identityKnown','snapshotValid','unboundSnapshotValid','snapshotWindowOpen','snapshotBusinessConfiguration','privateReadOnlyDisabled','privateConfirmed','privateBusinessEnabled','privateAdminMutations','connectionPrivateUserMatch','processHasConfigPathOverride'):
+   out('GATE_DETAIL_'+key.upper(),str(diagnostic.get(key,'unknown')).lower())
+  out('GATE_RELEASE_DIAGNOSTIC',str(detail.get('stagingGateRelease')=='ENC_005_DIAG_20261030').lower())
+  if bw.get('permitted') is False:abort('POLICY_GATE_DETAILS_CAPTURED')
+
  # Wait for Hostinger hPanel restart. Invalid payload must return 400 only when
  # actual admin session and staging business write lane are ready; no SQL writes.
  ready=False
