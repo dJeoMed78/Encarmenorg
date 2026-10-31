@@ -1,5 +1,5 @@
 name: ENCARMEN Staging safety isolation and backup read-only inspection
-# Post-hPanel restart verification of revoked temporary login and read-only guard.
+# Live check 2026-10-31 after public Staging MariaDB baseline regression.
 on:
   workflow_dispatch:
   push:
