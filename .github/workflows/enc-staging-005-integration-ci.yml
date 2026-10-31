@@ -29,3 +29,5 @@ jobs:
       - run: node --import tsx --test tests/enc-staging-write-gate-005-unit.test.mjs tests/enc-staging-write-gate-005-http.test.mjs
       - run: node --import tsx --test tests/staging-isolation-proof.test.mjs tests/security-containment-003.test.mjs
       - run: npm run build
+
+# Independent CI, no SSH or deployment
