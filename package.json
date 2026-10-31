@@ -40,7 +40,11 @@
   },
   "overrides": {
     "@grpc/grpc-js": "^1.13.6",
-    "body-parser": "^1.20.9"
+    "body-parser": "^1.20.9",
+    "readdir-glob": {
+      "minimatch": "11.0.1"
+    },
+    "qs": "6.16.1"
   },
   "devDependencies": {}
 }
