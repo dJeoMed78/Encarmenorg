@@ -146,7 +146,6 @@ jobs:
               check(status in (401,503),'ORIGIN_GATE_REJECTS_HTTPS_OR_UNEXPECTED')
               check(flags().get('STAGING_READ_ONLY')==['true'],'POST_DEPLOY_READONLY_LOST')
               out('PUBLIC_STAGE','READONLY_200')
-              out('PUBLIC_STAGE','READONLY_200')
               # Execute the independent public test only after origin health.
               # The test restores private config and deletes only its synthetic row.
               test_path=B/'enc-005-public-e2e.py'
@@ -183,7 +182,7 @@ jobs:
             echo "SSH_EXIT=$?"
           } > ENC_STAGING_005_LIVE_E2E_RESULT.txt 2>&1
           cat ENC_STAGING_005_LIVE_E2E_RESULT.txt
-          grep -q '^RESULT=PASS_STAGING_PUBLIC_CREATE_EDIT_SQL_CLEANUP_READONLY ENC_STAGING_005_LIVE_E2E_RESULT.txt
+          grep -q '^RESULT=PASS_STAGING_PUBLIC_CREATE_EDIT_SQL_CLEANUP_READONLY$' ENC_STAGING_005_LIVE_E2E_RESULT.txt
       - name: Publish sanitized deployment evidence
         if: always()
         shell: bash
@@ -193,17 +192,5 @@ jobs:
           git config user.name encarmen-coordination
           git config user.email encarmen-coordination@users.noreply.github.com
           git add ENC_STAGING_005_LIVE_E2E_RESULT.txt
-          git commit -m 'docs: staging 005 live E2E patch deploy, SQL readback and rollback results' || exit 0
-          git push origin HEAD:work/enc-staging-write-gate-005-gas
- ENC_STAGING_005_LIVE_E2E_RESULT.txt
-      - name: Publish sanitized deployment evidence
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f ENC_STAGING_005_LIVE_E2E_RESULT.txt || echo RESULT=NO_REPORT > ENC_STAGING_005_LIVE_E2E_RESULT.txt
-          git config user.name encarmen-coordination
-          git config user.email encarmen-coordination@users.noreply.github.com
-          git add ENC_STAGING_005_LIVE_E2E_RESULT.txt
-          git commit -m 'docs: Staging-only origin patch deployment and rollback result' || exit 0
+          git commit -m 'docs: staging 005 real E2E and rollback result' || exit 0
           git push origin HEAD:work/enc-staging-write-gate-005-gas
