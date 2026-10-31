@@ -90,7 +90,7 @@ export function registerAdminSecurity(app:express.Express,options:{provider?:Cre
   const provider=currentProvider();
   if(!provider)return fail(res,503,'Acceso administrativo no configurado de forma segura.');
   const body=req.body;
-  if(!body || Array.isArray(body) || Object.keys(body).some(k=>!['username','password'].includes(k)) || typeof body.username!=='string' || !/^[a-z0-9_.-]{1,64}$/i.test(body.username) || typeof body.password!=='string' || body.password.length<12 || body.password.length>200)return fail(res,400,'Datos de acceso inválidos.');
+  if(!body || Array.isArray(body) || Object.keys(body).some(k=>!['username','password'].includes(k)) || typeof body.username!=='string' || !/^[a-z0-9_.-]{1,64}$/i.test(body.username) || typeof body.password!=='string' || body.password.length<10 || body.password.length>200)return fail(res,400,'Datos de acceso inválidos.');
   try {
    const principal=await provider.authenticate(body.username,body.password);
    if(!principal)return fail(res,401,'Usuario o contraseña incorrectos.');
