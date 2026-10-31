@@ -49,7 +49,7 @@ jobs:
           found=False
           for script in scripts[:8]:
               status,_,js=get(script[1:] if script.startswith('.') else script)
-              if status==200 and all(t in js for t in ('Mostrar contraseña','Ocultar contraseña','Contraseña de administrador','Usuario administrativo')):
+              if status==200 and all(t.encode() in js for t in ('Mostrar contraseña','Ocultar contraseña','Contraseña de administrador','Usuario administrativo')):
                   found=True;break
           if not found:raise SystemExit('BLOCKED_FRONTEND_LOGIN_PATCH_NOT_LIVE')
           print('PUBLIC_LOGIN_UI_SHOW_HIDE_AND_USERNAME=VERIFIED',flush=True)
