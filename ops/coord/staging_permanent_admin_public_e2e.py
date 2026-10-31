@@ -102,9 +102,23 @@ try:
  status,_=http('POST','/api/reports',{'reason':'staging synthetic'},token=token)
  if status!=403:abort('UNRELATED_WRITE_NOT_BLOCKED')
  out('UNRELATED_WRITE_HTTP',status)
+ # Wait for Hostinger hPanel restart. Invalid payload must return 400 only when
+ # actual admin session and staging business write lane are ready; no SQL writes.
+ ready=False
+ for attempt in range(72):
+  probe,_=http('POST','/api/submit-business',{'name':'A'},token=token)
+  if probe==400:
+   ready=True;out('WRITE_WINDOW_VALIDATION_HTTP',400);break
+  if probe==401:
+   login_code,login=http('POST','/api/admin/login',{'username':'enc_e2e_temp','password':pwd})
+   if login_code==200 and isinstance(login.get('token'),str):token=login['token']
+  if attempt in (0,12,24,36,48,60,71):out('WRITE_WINDOW_WAIT_HTTP',probe)
+  time.sleep(5)
+ if not ready:abort('HOSTINGER_WRITE_WINDOW_RESTART_NOT_CONFIRMED')
  phone='9999'+str(secrets.randbelow(1000000)).zfill(6)
  body={'name':synth_name,'category':'Servicios','description':'Prueba temporal inicial de ENCARMEN','phone':phone,'whatsapp':phone}
- status,result=http('POST','/api/submit-business',body,token=token,extra={'Idempotency-Key':str(uuid.uuid4())})
+ request_id=str(uuid.uuid4())
+ status,result=http('POST','/api/submit-business',body,token=token,extra={'Idempotency-Key':request_id})
  out('CREATE_HTTP',status)
  if status!=201 or not result.get('success'):abort('CREATE_FAILED')
  created_id=str(result.get('business',{}).get('id',''))
