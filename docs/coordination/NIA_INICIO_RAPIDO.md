@@ -93,3 +93,11 @@ La documentación permanece en GitHub mientras el repositorio y acceso estén di
 - **Issue #12: borrado no persistente / desaparición visual.** Propietario afirma que `30102026` ID `20272` desapareció del panel tras intentar borrar, pero MariaDB seguía conservando esa fila: SQL audit `41169533577`, más reciente `41170452153`, 208 empresas. No interpretar UI como DELETE confirmado. PR #20 integrado/atestiguado, no se validó borrado real con login `jeo`. Recuperar login antes de nuevos intentos; después comprobar SQL y GET público de ausencia.
 - **Issue #19: medios.** No se pudo subir logo ni 10 fotos de productos en formulario de alta pública. Sin diagnóstico ni corrección; mantener abierto.
 - **Producción:** `main`/`encarmen.org` y MariaDB productiva fuera de alcance. Para continuidad comenzar por registro maestro e Issues #12, #19 y #21. No repetir diagnósticos ya cerrados ni confundir pruebas sintéticas con alta/borrado manual del propietario.
+
+
+## Prioridad P1 de seguridad — 2026-10-31
+
+- [Issue #22](https://github.com/dJeoMed78/Encarmenorg/issues/22): `ENC-SEC-DEPS-20261031-001`, remediar dos CVE **moderados** reportados por escáner: `minimatch 10.2.6` → `11.0.1+`, `qs 6.16.0` → `6.16.1+`. Versiones vulnerables verificadas en `package-lock.json` de `ia-desarrollo`.
+- **Prioridad operativa alta (P1), pendiente, no implementado ni desplegado.** Revisar dependencias transitivas, compatibilidad del salto mayor minimatch, `npm audit`, `npm ci`, pruebas de regresión y CI antes de cualquier integración a Staging.
+- Coordinación debe secuenciar con incidentes #21/#12/#19, sin modificar `main` o producción sin autorización específica.
+
