@@ -1,5 +1,5 @@
 name: ENCARMEN staged admin automatic readonly login and revocation
-# Recheck dynamic admin identity after independent 10/10 SQL-ready Staging health samples on 2026-10-31T00:07:38Z.
+# Nonsecret live Node environment comparison to identify admin-provider 503 condition.
 on:
   push:
     branches: [coord/staging-admin-login-window-20261030]
