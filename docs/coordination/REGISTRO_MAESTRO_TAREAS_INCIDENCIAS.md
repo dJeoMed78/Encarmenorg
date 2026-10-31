@@ -1,5 +1,36 @@
 # ENCARMEN — Registro maestro de tareas e incidencias
 
+## ESTADO VIGENTE Y CONTROL DE CONTRADICCIONES — 31/oct/2026
+
+**Esta sección es el índice operativo de consulta PRIORITARIA.** El resto del documento conserva el historial cronológico, incluidos planes y estados antiguos que NO son instrucciones vigentes. **Las cifras históricas NO equivalen a una comprobación actual en MariaDB/Hostinger.**
+
+| Identificador | Síntoma o tarea | Estado real distinguido | Acción permitida / condición para cierre |
+|---|---|---|---|
+| ENC-F008 / [Issue #5](https://github.com/dJeoMed78/Encarmenorg/issues/5) | Teléfonos/WhatsApp ausentes, hallazgo de octubre | **Histórico, RECUPERACIÓN MASIVA YA DOCUMENTADA COMO REALIZADA** por Jefa 2 y propietario: 174 negocios por base Staging/producción; después 206/207 con contactos en Staging según registro anterior. Issue sigue abierto y contiene texto INICIAL DESACTUALIZADO. No hay evidencia nueva de pérdidas actuales. | **NO repetir restauración ni enviar otra tarea de recuperación.** Comentario rectificativo Issue #5 ID 6548004489. Solicitar al propietario cierre formal si procede; nunca cerrar por iniciativa de la coordinación. |
+| ENC-CONTACTS-RECOVERY-003 | Orden posterior de recuperación duplicada | **CANCELADA/OBSOLETA** en Registro Maestro | No asignar ni ejecutar. |
+| ENC-F009 / [Issue #6](https://github.com/dJeoMed78/Encarmenorg/issues/6) | Filtros y monitoreo de completitud de contactos | **Mejora PREVENTIVA**, no implica pérdida de números. Issue abierto; implementación/integración/despliegue actual **NO VERIFICADOS** | Conciliar con ramas de trabajo antes de ordenar una implementación; tarea distinta a F008. |
+| ENC-STAGING-WRITE-GATE-005 / [Issue #12](https://github.com/dJeoMed78/Encarmenorg/issues/12) — apartado altas/ediciones | Error HTTP 503 | **SOLUCIONADO Y PROBADO en Staging según evidencia histórica**: PR #15/#16 integrados, Actions run 41164661573 con POST 201, PATCH 200 y readback SQL, y controles de aislamiento restaurados. Registro público habilitado por PR #18; alta real de negocio reportada. | **No reabrir HTTP 503 por el mero hecho de que Issue #12 siga abierto.** Sólo reabrir ante un fallo nuevo reproducible. |
+| ENC-STAGING-BUSINESS-DELETE-20261030 / [Issue #12](https://github.com/dJeoMed78/Encarmenorg/issues/12) — apartado borrado | Empresa prueba 20272 desapareció del panel sin desaparecer de MariaDB | **Parche PR #20 integrado y atestiguado en Staging**, pero **borrado autenticado efectivo NO VERIFICADO** después; última lectura SQL anterior indicó 1 fila. | Una única validación dirigida de DELETE con sesión administrativa y lectura SQL; no declarar resuelto hasta confirmar desaparición real sin pérdida adicional y aceptación del propietario. |
+| ENC-STAGING-ADMIN-LOGIN-REGRESSION-001 / [Issue #21](https://github.com/dJeoMed78/Encarmenorg/issues/21) | Acceso cuenta jeo: `signal is aborted without reason` | **ABIERTA, SIN CORRECCIÓN VERIFICADA** tras último reporte del propietario. PR #17 corrigió interfaz/longitud, pero NO comprueba solución de este error posterior. | Primera prioridad funcional: diagnóstico acotado y corrección mínima en rama aislada; proteger credenciales. |
+| ENC-STAGING-PUBLIC-MEDIA-001 / [Issue #19](https://github.com/dJeoMed78/Encarmenorg/issues/19) | Formulario público no subió logo ni hasta 10 fotografías | **ABIERTA, SIN SOLUCIÓN VERIFICADA**; registro textual sí funcionó. | Revisar ramas de subida/persistencia existentes antes de crear otra. Corregir y comprobar persistencia remota en Staging una vez autorizada. No mezclar con #21 ni con pérdida de contactos. |
+| ENC-SEC-DEPS-20261031-001 / [Issue #22](https://github.com/dJeoMed78/Encarmenorg/issues/22) | 2 avisos npm | **CORREGIDO, PR #23 INTEGRADO Y STAGING VERIFICADO** con `minimatch@11.0.1`, `qs@6.16.1`; Actions 41213892619 y 41214176745. Issue abierto por seguimiento/aceptación, no por vulnerabilidades pendientes en Staging. | No repetir parche ni pruebas de Staging sin nueva alerta. Producción requiere autorización expresa; no cerrar Issue sin propietario. |
+| ENC-F001–F007B y ENC-INT-001–006 | Otros reportes históricos y parches parciales | **Historial abierto por conciliación**, con algunos parches implementados en ramas sin integración; no afirmar todos resueltos ni todos aún reproducibles. | Antes de asignar, comparar rama `ia-desarrollo`, PR, SHAs y pruebas, contrastar con reporte del propietario, evitar trabajos duplicados. |
+
+### Reglas obligatorias de control, aplicables a todas las Nia y ejecutores
+
+1. **Antes de dar un pendiente, leer ESTE índice, el registro histórico y la evidencia más reciente en la rama correcta**. No inferir que `Issue abierto = defecto actual no reparado`: separar `reporte/aceptación`, `implementado`, `probado`, `integrado`, `desplegado` y `validado por propietario`. Un PR merged NO prueba por sí solo Staging funcional.
+2. **Conciliar contradicciones antes de asignar**: la fecha de un Issue antiguo no prevalece sobre evidencia posterior; transcribir la discrepancia y citar qué la resuelve. La evidencia técnica actual en GitHub/CI/entorno prevalece para hechos técnicos; no presentar una comprobación documental histórica como auditoría SQL actual.
+3. Para cada incidente registrar: ID estable, alcance específico, prioridad, ambiente, síntoma, fecha del último hecho, fuente/URL, estado de código, pruebas, integración, despliegue, validación del propietario, encargado, rama/PR, siguiente paso concreto. **No crear otro ID si ya existe la incidencia.**
+4. **Control anti-duplicación**: buscar ramas/PR/issues/trabajos anteriores y leer resultados ANTES de delegar. GAS (cuota limitada) y Perplexity son ejecutores propuestos el 31/oct; la tarea no cuenta como enviada ni ejecutada hasta confirmación del propietario o evidencia del ejecutor. El propietario mencionó tres trabajadores, pero no identificó al tercero. No adjudicar automáticamente tareas nuevas.
+5. Priorizar solución específica, pruebas proporcionales al riesgo y respaldo/reversión cuando corresponda. Staging es laboratorio bajo aislamiento verificado; no modificar `main`, `encarmen.org` ni datos de producción sin autorización.
+6. **Cierre administrativo sólo por propietario**. Si se corrige un dato erróneo en un índice, registrar la rectificación sin eliminar el historial. No clasificar contactos recuperados como nueva pérdida por la persistencia de una descripción antigua.
+7. Guardar cambios de estado **reactivamente** tras nueva evidencia, nunca inventar avances o respaldos vacíos. Actualizar esta tabla antes de comunicar un nuevo listado de pendientes o asignar trabajadores.
+
+**Última conciliación:** se detectó el error de coordinación de presentar F008 como pérdida actual; rectificado en Issue #5 y `NIA_INICIO_RAPIDO.md` (commit `224b68ac`). `NIA5.md` es memoria narrativa; este Registro Maestro es el índice técnico oficial.
+
+---
+
+
 
 ## P1 — ENC-SEC-DEPS-20261031-001: reparar 2 vulnerabilidades moderadas npm
 
