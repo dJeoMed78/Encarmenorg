@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/enc-public-gate-ci.yml
       - src/server/publicRegistrationWiring.ts
+      - src/server/stagingBusinessSecurity.ts
       - server.ts
       - tests/public-registration-integration.test.mjs
       - tests/public-registration-private-gate-20261030.test.mjs
