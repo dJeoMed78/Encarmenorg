@@ -581,3 +581,11 @@ El propietario autorizó Google Drive como memoria narrativa más frecuente de C
 - **Issue #33:** ordenar ficha móvil con ubicación, horario, pagos y entrega/servicios antes de calificaciones/comentarios, que deben quedar al final.
 - **Issue #34:** error de consulta de calificaciones y comentarios no disponibles. Distinguir problema de lectura de ratings de comentarios que podrían no estar implementados.
 **Control:** Issues 29–34 creados para diagnóstico y/o implementación posterior; ningún cambio a producción, no declarar corregidos sin prueba funcional en Staging.
+
+
+### Nia 6 — Cierre Issue #30 (indicador PI) — 2026-10-31
+- **Estado: CERRADO / IMPLEMENTADO / VALIDADO EN STAGING POR EL PROPIETARIO.**
+- PR #35 fusionado en `ia-desarrollo`, SHA `4c14c3c226600428550bbb614d79eab823b8bc27`.
+- CI #41247127075 aprobó TypeScript, compilación y validación del indicador PI discreto.
+- El propietario confirmó visualmente el cambio publicado en Staging y solicitó retirar el error de la lista. Issue #30 cerrado con razón `completed`.
+- No reabrir ni volver a asignar salvo regresión nueva comprobable. Producción sin cambios.
