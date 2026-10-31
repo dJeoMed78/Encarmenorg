@@ -1,0 +1,22 @@
+name: ENCARMEN media regression gate
+on:
+  push:
+    branches: [coord/enc-media-regression-guard-20261031, ia-desarrollo]
+  pull_request:
+    branches: [ia-desarrollo]
+permissions:
+  contents: read
+jobs:
+  media-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: node --import tsx --test tests/enc-staging-public-media-001.test.mjs tests/enc-media-regression-guard.test.mjs
+      - run: npm run build
