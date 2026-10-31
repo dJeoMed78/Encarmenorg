@@ -1,0 +1,116 @@
+name: ENCARMEN Staging saved business-write configuration verification
+on:
+  push:
+    branches: [coord/enc-staging-005-diagnostic-20261030]
+    paths: [.github/workflows/enc-staging-005-saved-flags-verify.yml]
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-staging-runtime-deploy
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - name: Read-only audit of saved Staging configuration and MariaDB
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          sudo apt-get update -qq >/dev/null 2>&1
+          sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          test "$fp" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          export SSHPASS
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 -' <<'PY'
+          import os,pathlib,stat,subprocess,tempfile,json,time,urllib.request
+          H=pathlib.Path.home()
+          S=H/'domains/staging.encarmen.org/hbuilds'
+          E=S/'config/.env'
+          DB='u293982346_encarmentest'
+          failures=[]
+          def check(k,ok):
+              print(k+'='+('PASS' if ok else 'FAIL'),flush=True)
+              if not ok:failures.append(k)
+          check('STAGING_CONFIG_FILE_VALID',E.is_file() and not E.is_symlink())
+          if not E.is_file() or E.is_symlink():raise SystemExit('BLOCKED_CONFIG_MISSING')
+          check('STAGING_CONFIG_PERMISSIONS',not E.stat().st_mode&0o077)
+          cfg={};duplicates=set()
+          for line in E.read_text().splitlines():
+              line=line.strip().removeprefix('export ').strip()
+              if not line or line.startswith('#') or '=' not in line:continue
+              k,v=line.split('=',1);k=k.strip()
+              if k in cfg:duplicates.add(k)
+              cfg[k]=v.strip().strip("'").strip('"')
+          critical=('APP_ENV','DB_NAME','DB_HOST','DB_USER','DB_PASSWORD','STAGING_READ_ONLY','STAGING_DB_CONFIRMED','STAGING_BUSINESS_WRITES_ENABLED','ENC_ADMIN_MUTATIONS_ENABLED','ENC_ADMIN_CREDENTIALS_JSON')
+          check('CONFIG_NO_DUPLICATE_CRITICAL',not any(k in duplicates for k in critical))
+          expected={
+              'APP_ENV':'staging','DB_NAME':DB,
+              'STAGING_READ_ONLY':'false','STAGING_DB_CONFIRMED':'true',
+              'STAGING_BUSINESS_WRITES_ENABLED':'true','ENC_ADMIN_MUTATIONS_ENABLED':'true',
+              'STAGING_ALLOW_SCHEMA_INIT':'false','ENABLE_WP_SYNC':'false',
+              'ENC_ADMIN_PUBLIC_ORIGIN':'https://staging.encarmen.org'}
+          for k,v in expected.items():check('CONFIG_'+k,cfg.get(k)==v)
+          check('DB_USER_DISTINCT_FROM_PRODUCTION',bool(cfg.get('DB_USER')) and cfg.get('DB_USER')!='u293982346_appuser')
+          check('DB_CREDENTIALS_PRESENT',bool(cfg.get('DB_HOST')) and bool(cfg.get('DB_PASSWORD')))
+          try:
+              a=json.loads(cfg.get('ENC_ADMIN_CREDENTIALS_JSON','{}'))
+              accounts=a.get('accounts',[])
+              check('PERMANENT_JEO_ADMIN_CONFIGURED',a.get('version')==1 and len(accounts)==1 and accounts[0].get('username')=='jeo')
+          except Exception:check('PERMANENT_JEO_ADMIN_CONFIGURED',False)
+          current=(S/'current/nodejs').resolve()
+          check('STAGING_RELEASE_PATH',(S/'versions').resolve() in current.parents)
+          bundle=current/'server.js'
+          check('STAGING_PATCH_ACTIVE_BUNDLE',bundle.is_file() and all(v in bundle.read_bytes() for v in (b'privateStagingBusinessWindowOpen',b'getPrivateStagingSnapshot',b'ENC_005_DIAG_20261030')))
+          procs=0
+          for p in pathlib.Path('/proc').iterdir():
+              if not p.name.isdigit():continue
+              try:
+                  if pathlib.Path(os.readlink(p/'cwd'))==current and 'node' in pathlib.Path(os.readlink(p/'exe')).name.lower():procs+=1
+              except (OSError,PermissionError):pass
+          check('STAGING_NODE_RUNNING',procs>0)
+          backup=H/'encarmen-staging-backups'
+          fd,tmp=tempfile.mkstemp(dir=backup,prefix='.enc-verify-',suffix='.cnf')
+          try:
+              os.fchmod(fd,0o600)
+              with os.fdopen(fd,'w') as out:
+                  out.write('[client]\n')
+                  for k,v in [('host','DB_HOST'),('user','DB_USER'),('password','DB_PASSWORD')]:
+                      val=cfg.get(v,'').replace('\\','\\\\').replace('"','\\"')
+                      out.write(k+'="'+val+'"\n')
+              def query(sql):
+                  proc=subprocess.run(['mariadb','--defaults-extra-file='+tmp,'-D',DB,'--batch','--skip-column-names','-e',sql],capture_output=True,text=True,timeout=20)
+                  if proc.returncode:raise RuntimeError('DATABASE_READ_FAILED')
+                  return proc.stdout.strip().splitlines()
+              identity=query("SELECT DATABASE(),SUBSTRING_INDEX(CURRENT_USER(),'@',1)")
+              check('SQL_IS_STAGING_AND_EFFECTIVE_USER_MATCHES',identity==[DB+'\t'+cfg.get('DB_USER','')])
+              check('SQL_ENVIRONMENT_MARKER',query('SELECT env_name,db_name FROM encarmen_environment_marker')==['staging\t'+DB])
+              visible=query('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA')
+              check('SQL_PRODUCTION_NOT_VISIBLE','u293982346_encarmenapp' not in visible)
+              grants=query('SHOW GRANTS FOR CURRENT_USER()')
+              for priv in ('INSERT','UPDATE'):
+                  check('SQL_'+priv+'_ON_STAGING',any((priv in grant or 'ALL PRIVILEGES' in grant) and DB in grant for grant in grants))
+              total=query('SELECT COUNT(*) FROM businesses')
+              check('BUSINESS_TABLE_READABLE',len(total)==1 and total[0].isdigit())
+              if len(total)==1 and total[0].isdigit():print('STAGING_BUSINESS_COUNT='+total[0],flush=True)
+          except Exception:check('SQL_READONLY_INSPECTION',False)
+          finally:os.unlink(tmp)
+          ready=False
+          for attempt in range(8):
+              try:
+                  req=urllib.request.Request('https://staging.encarmen.org/api/health?verify_config='+str(os.getpid()),headers={'Cache-Control':'no-cache'})
+                  with urllib.request.urlopen(req,timeout=10) as response:
+                      body=json.loads(response.read(10000))
+                      ready=response.status==200 and response.headers.get('X-Encarmen-Staging-Gate-Release')=='ENC_005_DIAG_20261030' and body.get('environment')=='staging' and body.get('database')=='mariadb'
+                  if ready:break
+              except Exception:pass
+              time.sleep(4)
+          check('PUBLIC_STAGING_SAME_RELEASE_AND_MARIADB',ready)
+          print('RESULT='+('CONFIG_AND_SQL_READY_FOR_CONTROLLED_BUSINESS_WRITES' if not failures else 'BLOCKED_CONFIG_OR_DATABASE'),flush=True)
+          if failures:raise SystemExit(1)
+          PY
