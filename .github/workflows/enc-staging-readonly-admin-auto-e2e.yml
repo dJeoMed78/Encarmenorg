@@ -1,5 +1,5 @@
 name: ENCARMEN staged admin automatic readonly login and revocation
-# Verify dynamic file-backed admin identity without Hostinger manual restart.
+# Verify dynamic file-backed admin identity after 10 consecutive MariaDB healthy public samples.
 on:
   push:
     branches: [coord/staging-admin-login-window-20261030]
