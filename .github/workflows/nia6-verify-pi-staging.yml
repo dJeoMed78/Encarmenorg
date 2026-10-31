@@ -1,0 +1,35 @@
+name: NIA6 verify PI deployment on Staging
+on:
+  push:
+    branches: [coord/encarmen-work-control-001]
+    paths: [.github/workflows/nia6-verify-pi-staging.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check Staging browser bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --max-time 20 https://staging.encarmen.org/ -o /tmp/staging.html
+          curl -fsSL --max-time 20 https://staging.encarmen.org/api/version -o /tmp/version.json
+          echo "STAGING_VERSION=$(head -c 140 /tmp/version.json)"
+          node - <<'JS'
+          const fs=require('fs');
+          const html=fs.readFileSync('/tmp/staging.html','utf8');
+          const assets=[...html.matchAll(/(?:src|href)=["']([^"']+\.js)["']/g)].map(x=>x[1]);
+          if(!assets.length)process.exit(2);
+          fs.writeFileSync('/tmp/assets.list',assets.join('\n'));
+          JS
+          found=0
+          while IFS= read -r asset; do
+            [ -n "$asset" ] || continue
+            case "$asset" in http*) url="$asset";; /*) url="https://staging.encarmen.org$asset";; *) url="https://staging.encarmen.org/$asset";; esac
+            curl -fsSL --max-time 20 "$url" -o /tmp/asset.js
+            if grep -Fq 'bpd-pi-trigger' /tmp/asset.js; then found=1; fi
+          done < /tmp/assets.list
+          echo "PI_INDICATOR_IN_STAGING_BUNDLE=$found"
+          test "$found" = 1
