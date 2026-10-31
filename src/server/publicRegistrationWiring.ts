@@ -12,10 +12,6 @@ export function privatePublicRegistrationEnabled(config: Record<string,string|un
   return Boolean(config &&
     config.APP_ENV === 'staging' &&
     config.DB_NAME === STAGING_BUSINESS_DATABASE &&
-    config.STAGING_READ_ONLY === 'false' &&
-    config.STAGING_DB_CONFIRMED === 'true' &&
-    config.STAGING_BUSINESS_WRITES_ENABLED === 'true' &&
-    config.ENC_ADMIN_MUTATIONS_ENABLED === 'true' &&
     config.PUBLIC_REGISTRATION_ENABLED === 'true');
 }
 
