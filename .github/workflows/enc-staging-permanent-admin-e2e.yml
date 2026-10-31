@@ -1,5 +1,5 @@
 name: ENCARMEN guarded public business E2E preserving permanent admin
-# Await user-authorized Staging-only hPanel restart after gate deployed on 2026-10-31.
+# Owner is standing by for Staging-only hPanel restart; stable-health precheck and timed safe rollback.
 on:
   push:
     branches: [coord/staging-public-e2e-20261030]
