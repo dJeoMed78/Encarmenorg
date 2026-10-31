@@ -55,7 +55,12 @@ jobs:
           active=(S/'current/nodejs').resolve()
           if (S/'versions').resolve() not in active.parents:stop('UNMANAGED_RELEASE')
           bundle=active/'server.js'
-          if not bundle.is_file() or b'ENC_PUBLIC_PRIVATE_GATE_20261030' not in bundle.read_bytes():stop('NEW_PUBLIC_GATE_NOT_DEPLOYED')
+          bundle_ready=False
+          for attempt in range(48):
+              bundle_ready=bundle.is_file() and b'ENC_PUBLIC_PRIVATE_GATE_20261030' in bundle.read_bytes()
+              if bundle_ready:break
+              time.sleep(6)
+          if not bundle_ready:stop('NEW_PUBLIC_GATE_NOT_DEPLOYED')
           print('STAGING_NEW_BUNDLE=VERIFIED',flush=True)
           node=False
           for p in pathlib.Path('/proc').iterdir():
