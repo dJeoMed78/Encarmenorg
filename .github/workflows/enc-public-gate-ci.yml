@@ -1,0 +1,27 @@
+name: ENCARMEN public registration private gate CI
+on:
+  push:
+    branches: [coord/enc-public-registration-gate-20261030]
+    paths:
+      - .github/workflows/enc-public-gate-ci.yml
+      - src/server/publicRegistrationWiring.ts
+      - server.ts
+      - tests/public-registration-integration.test.mjs
+      - tests/public-registration-private-gate-20261030.test.mjs
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - name: Test anonymous registration, duplicate guard, public gate and isolation
+        run: node --import tsx --test tests/public-registration-private-gate-20261030.test.mjs tests/public-registration.test.mjs tests/public-registration-integration.test.mjs tests/public-registration-ui.test.mjs tests/enc-staging-write-gate-005-http.test.mjs tests/staging-isolation-proof.test.mjs
+      - run: npm run build
