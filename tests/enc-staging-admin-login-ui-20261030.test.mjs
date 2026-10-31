@@ -20,7 +20,7 @@ test('Staging admin accepts exactly ten-character valid scrypt password and reje
   assert.ok(provider);
   const app = express();
   app.use(express.json());
-  registerAdminSecurity(app, {provider, allowedOrigin: 'https://staging.encarmen.org'});
+  registerAdminSecurity(app, {provider, allowedOrigin: 'https://staging.encarmen.org', minPasswordLength: 10});
   const server = await new Promise(resolve => { const instance = app.listen(0, () => resolve(instance)); });
   const address = 'http://127.0.0.1:' + server.address().port;
   const submit = async (username, pass) => {
@@ -49,6 +49,25 @@ test('Staging admin accepts exactly ten-character valid scrypt password and reje
   } finally {
     await new Promise(resolve => server.close(resolve));
   }
+});
+
+
+test('Production/default administrator authentication keeps the 12-character minimum', async () => {
+  const app = express();
+  app.use(express.json());
+  registerAdminSecurity(app, {
+    allowedOrigin: 'https://staging.encarmen.org',
+    provider: {accounts:[{username:'jeo',role:'Administrador',initial:'j',avatarColor:''}],
+      authenticate: async () => ({username:'jeo',permissions:['admin:manage']})}
+  });
+  const server = await new Promise(resolve => { const instance=app.listen(0,()=>resolve(instance)); });
+  try {
+    const res=await fetch('http://127.0.0.1:'+server.address().port+'/api/admin/login',{
+      method:'POST',headers:{'Content-Type':'application/json','Origin':'https://staging.encarmen.org'},
+      body:JSON.stringify({username:'jeo',password:'TenChars!9'})
+    });
+    assert.equal(res.status,400);
+  }finally{ await new Promise(resolve=>server.close(resolve)); }
 });
 
 test('Login UI explicitly renders typed username and a keyboard-accessible show/hide password control', () => {
