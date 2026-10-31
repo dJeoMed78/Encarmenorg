@@ -67,4 +67,11 @@ La documentación permanece en GitHub mientras el repositorio y acceso estén di
 - PR #18 merge `67f7c96ca757caaf0e61e07e828b8479e6e79a2f` a `ia-desarrollo`, CI `41168498639` PASS. Resuelto HTTP 403 `PUBLIC_REGISTRATION_DISABLED` de alta anónima: lectura dinámica de autorización explícita `PUBLIC_REGISTRATION_ENABLED=true` desde el archivo privado Staging; sigue exigiendo aislamiento y `isBusinessWritePermitted`.
 - Hostinger Staging respaldado y configurado, ejecución `41168635340` PASS; producción no modificada.
 - E2E real público `41168717485` PASS: alta HTTP 201, lectura SQL/GET/listado y reintento idempotente HTTP 200; eliminación de prueba y 207 empresas preservadas. Auditoría independiente posterior `41168773826` PASS: 207 en SQL y público, 0 sintéticas, bandera habilitada.
-- Usuario debe pulsar **Reintentar Guardado** en el mismo formulario que mostró el 403; conserva UUID/idempotencia. Issue #12 abierto hasta aceptación humana. No permitir duplicados por iniciar otro formulario. 
+- Usuario debe pulsar **Reintentar Guardado** en el mismo formulario que mostró el 403; conserva UUID/idempotencia. Issue #12 abierto hasta aceptación humana. No permitir duplicados por iniciar otro formulario.
+
+
+## Pendiente reportado al cerrar la sesión: medios de alta pública (Issue #19)
+
+- **Alta pública manual aceptada visualmente:** empresa `30102026`, ID `20272`, pantalla «Guardado y Publicado en MariaDB» de `staging.encarmen.org`. La prueba sintética anterior de alta, readback y limpieza fue PASS; no confundir con datos de esta empresa manual.
+- **Nuevo pendiente:** usuario reporta imposibilidad de subir el **logotipo** y **10 imágenes de productos** en ese formulario. GitHub [Issue #19](https://github.com/dJeoMed78/Encarmenorg/issues/19), `ENC-STAGING-PUBLIC-MEDIA-001`; registrado también en el registro maestro. No hay causa técnica verificada.
+- **Orden expresa:** no investigar, no corregir ni desplegar este fallo ahora; retomar en sesión posterior. No tocar producción.
