@@ -1,0 +1,65 @@
+name: ENCARMEN security dependency patch independent CI
+on:
+  push:
+    branches: [coord/enc-sec-deps-20261031-001]
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/enc-sec-deps-ci-20261031.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exactly the committed lockfile
+        run: npm ci --no-fund
+      - name: Verify upstream-specified patched versions are installed in all copies
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const lock=JSON.parse(fs.readFileSync('package-lock.json','utf8'));
+          for(const [name,version] of [['minimatch','11.0.1'],['qs','6.16.1']]){
+            const entries=Object.entries(lock.packages).filter(([p])=>p==='node_modules/'+name||p.endsWith('/node_modules/'+name));
+            if(!entries.length||entries.some(([,p])=>p.version!==version))throw Error('Invalid '+name+' version');
+            console.log(name+' '+version+' locked copies: '+entries.length);
+          }
+          JS
+          npm ls minimatch qs
+      - name: npm security audit for all severities moderate and higher
+        run: npm audit --audit-level=moderate
+      - run: npm run lint
+      - name: Existing database isolation authentication and public-registration regressions
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund jsdom@26.1.0
+          node --import tsx --test tests/staging-write-001.test.mjs tests/staging-store-default-strict.test.mjs tests/enc-staging-write-gate-005-unit.test.mjs tests/enc-staging-write-gate-005-http.test.mjs tests/public-registration-private-gate-20261030.test.mjs tests/public-registration.test.mjs tests/staging-isolation-proof.test.mjs tests/security-containment-003.test.mjs tests/enc-staging-admin-login-ui-20261030.test.mjs
+      - name: Archiver ZIP directory smoke test for readdir-glob/minimatch major upgrade
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import os from 'node:os';
+          import path from 'node:path';
+          import {execFileSync} from 'node:child_process';
+          import archiver from 'archiver';
+          const dir=fs.mkdtempSync(path.join(os.tmpdir(),'encarmen-zip-smoke-'));
+          try{
+            const src=path.join(dir,'source');fs.mkdirSync(path.join(src,'nested'),{recursive:true});
+            fs.writeFileSync(path.join(src,'nested','hello.txt'),'ENCARMEN-ZIP-PATCH-OK');
+            const out=fs.createWriteStream(path.join(dir,'smoke.zip'));const zip=archiver('zip',{zlib:{level:5}});
+            zip.on('error',e=>{throw e;});zip.pipe(out);
+            zip.directory(src,'source');
+            await zip.finalize();await new Promise((resolve,reject)=>{out.on('close',resolve);out.on('error',reject);});
+            const listing=execFileSync('unzip',['-Z','-1',path.join(dir,'smoke.zip')],{encoding:'utf8'});
+            if(!listing.includes('source/nested/hello.txt'))throw Error('ZIP directory entry missing');
+            const content=execFileSync('unzip',['-p',path.join(dir,'smoke.zip'),'source/nested/hello.txt'],{encoding:'utf8'});
+            if(content!=='ENCARMEN-ZIP-PATCH-OK')throw Error('ZIP payload mismatch');
+            console.log('ARCHIVER_READDIR_GLOB_MINIMATCH11_ZIP_TEST=PASS');
+          } finally {fs.rmSync(dir,{recursive:true,force:true});}
+          JS
+      - run: npm run build
