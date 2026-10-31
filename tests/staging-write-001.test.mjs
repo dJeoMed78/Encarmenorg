@@ -68,7 +68,7 @@ test('SW explicit configuration, selected database and production account guards
   const queries=[];const api=execute(prefix+permission,{...modules,process:{env},console:{log(){},warn(){},error(){}},mysql:{createPool:()=>({query:async sql=>{
    queries.push(sql);
    if(sql.includes('CURRENT_USER()')&&sql.includes('DATABASE()'))return [[{effective_user:env.DB_USER,db_name:target}]];
-   if(sql.startsWith('SHOW GRANTS'))return [[{'Grants':`GRANT SELECT, INSERT, UPDATE, DELETE ON \\`${STAGING_BUSINESS_DATABASE}\\`.* TO 'synthetic-staging-user'@'localhost'`}]];
+   if(sql.startsWith('SHOW GRANTS'))return [[{'Grants':'GRANT SELECT, INSERT, UPDATE, DELETE ON '+STAGING_BUSINESS_DATABASE+".* TO synthetic-staging-user"}]];
    return [[{test:1}]];
   },end:async()=>{}})},createTablesIfNotExist:()=>{throw new Error('DDL forbidden');},getPrivateStagingSnapshot:()=>env,privateStagingBusinessWindowOpen:()=>true});
   assert.equal(await api.initMariaDb(),target===STAGING_BUSINESS_DATABASE);assert.equal(api.isWritePermitted(),false);assert.equal(api.isBusinessWritePermitted(),target===STAGING_BUSINESS_DATABASE);
