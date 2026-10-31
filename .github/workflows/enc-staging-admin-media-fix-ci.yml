@@ -18,3 +18,10 @@ jobs:
       - run: npm run lint
       - run: node --import tsx --test tests/enc-staging-public-media-001.test.mjs
       - run: npm run build
+      - name: Staging public media gate non-writing HTTP probe
+        run: |
+          set -euo pipefail
+          status=$(curl -sS --max-time 20 -o /tmp/enc-media-probe -w '%{http_code}' -X POST https://staging.encarmen.org/api/public/registration-media -H 'Content-Type: text/plain' --data-binary 'probe' || true)
+          echo "MEDIA_HTTP_STATUS=$status"
+          head -c 450 /tmp/enc-media-probe || true
+          echo
