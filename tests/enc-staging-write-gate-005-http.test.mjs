@@ -190,8 +190,8 @@ test('E2E HTTP Pipeline: Dynamic private window opening, mutation authorization,
     });
     assert.equal(deleteRes.status, 403);
 
-    // Even if an administrator had business:delete, administrativeWritesReady strictly denies DELETE
-    assert.equal(administrativeWritesReady({ path: '/api/businesses/1081', method: 'DELETE' }, { mutationsEnabled: true, isStaging: true, businessWrites: true }), false);
+    // Admin still requires business:delete; the independent business gate permits it only when fully open.
+    assert.equal(administrativeWritesReady({ path: '/api/businesses/1081', method: 'DELETE' }, { mutationsEnabled: true, isStaging: true, businessWrites: true }), true);
 
     // 8. Unrelated mutations like events remain blocked by permission / writesReady -> 403
     const eventRes = await fetch(`${baseUrl}/api/events`, {
