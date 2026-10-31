@@ -1,0 +1,20 @@
+name: ENC staging administrative media fix CI
+on:
+  push:
+    branches: [work/enc-staging-admin-media-fix-20261031]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: node --import tsx --test tests/enc-staging-public-media-001.test.mjs
+      - run: npm run build
