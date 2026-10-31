@@ -1,4 +1,5 @@
 name: ENCARMEN Staging safety isolation and backup read-only inspection
+# Preflight verification before permanent-admin protected Staging business E2E, 2026-10-30.
 # Live check 2026-10-31 after public Staging MariaDB baseline regression.
 on:
   workflow_dispatch:
