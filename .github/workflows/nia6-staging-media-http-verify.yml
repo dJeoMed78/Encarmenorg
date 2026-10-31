@@ -1,0 +1,33 @@
+name: NIA6 staging media HTTP postdeploy verification
+on:
+  push:
+    branches: [coord/encarmen-work-control-001]
+    paths: [.github/workflows/nia6-staging-media-http-verify.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify actual Staging frontend and uploaded WebP readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --max-time 20 https://staging.encarmen.org/ -o /tmp/enc-staging.html
+          curl -fsSL --max-time 20 https://staging.encarmen.org/api/version -o /tmp/enc-version.json
+          echo "STAGING_FRONTEND_HTTP=200"
+          echo "STAGING_VERSION_RESPONSE=$(head -c 250 /tmp/enc-version.json)"
+          node -e "const fs=require('fs');const h=fs.readFileSync('/tmp/enc-staging.html','utf8');const xs=[...h.matchAll(/(?:src|href)=['\"]([^'\"]+\\.js)['\"]/g)].map(x=>x[1]);console.log('ASSETS='+JSON.stringify(xs));fs.writeFileSync('/tmp/enc-assets.txt',xs.join('\\n'))"
+          found=0
+          while IFS= read -r asset; do
+            [ -n "$asset" ] || continue
+            case "$asset" in http*) url="$asset";; /*) url="https://staging.encarmen.org$asset";; *) url="https://staging.encarmen.org/$asset";; esac
+            curl -fsSL --max-time 25 "$url" -o /tmp/enc-current-asset.js
+            if grep -Fq 'Elige imágenes JPG, PNG o WebP de hasta 12 MB' /tmp/enc-current-asset.js; then found=1;fi
+          done < /tmp/enc-assets.txt
+          echo "ADMIN_MEDIA_FRONTEND_UPDATED=$found"
+          photo_status=$(curl -sS --max-time 20 -o /tmp/enc-photo.webp -w '%{http_code}' 'https://staging.encarmen.org/uploads/pub-bd7662a5eeb4-l-611e72a8f86a991906d69b9ae53d6ca8.webp')
+          echo "MEDIA_GET_HTTP_STATUS=$photo_status"
+          test "$photo_status" = 200
+          file /tmp/enc-photo.webp
