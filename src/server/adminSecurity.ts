@@ -57,11 +57,13 @@ export function adminPermission(requestPath:string,method:string):string|null {
  return null;
 }
 
-export function registerAdminSecurity(app:express.Express,options:{provider?:CredentialProvider;allowedOrigin?:string;writesReady?:(req:Request,permission:string)=>boolean;now?:()=>number;sessionMs?:number}={}) {
- const sessions=new Map<string,{principal:Principal;expiresAt:number}>();
+export function registerAdminSecurity(app:express.Express,options:{provider?:CredentialProvider;providerResolver?:()=>CredentialProvider|undefined;providerVersion?:()=>string|undefined;allowedOrigin?:string;writesReady?:(req:Request,permission:string)=>boolean;now?:()=>number;sessionMs?:number}={}) {
+ const sessions=new Map<string,{principal:Principal;expiresAt:number;providerVersion?:string}>();
  const attempts=new Map<string,{count:number;until:number}>();
  const sessionSecret=randomBytes(32);const now=options.now || Date.now;
  const digest=(value:string)=>createHmac('sha256',sessionSecret).update(value).digest('hex');
+ const currentProvider=()=>options.providerResolver?options.providerResolver():options.provider;
+ const currentVersion=()=>options.providerVersion?.();
  const fail=(res:Response,status:number,message:string)=>res.status(status).set('Cache-Control','no-store').json({success:false,message});
  const sameOrigin=(req:Request)=>{
   if(!req.get('Origin'))return true;
@@ -72,6 +74,10 @@ export function registerAdminSecurity(app:express.Express,options:{provider?:Cre
   if(!/^[a-f0-9]{64}$/.test(token))return;
   const key=digest(token),session=sessions.get(key);
   if(!session || session.expiresAt<=now()){sessions.delete(key);return;}
+  if(options.providerVersion){
+   try{const version=currentVersion();if(!version || version!==session.providerVersion){sessions.delete(key);return;}}
+   catch{sessions.delete(key);return;}
+  }
   return session;
  };
  app.post('/api/admin/login',(req,res,next)=>{if(!req.is('application/json'))return fail(res,415,'Envía JSON.');next();},express.json({limit:'2kb',strict:true}),async(req,res)=>{
@@ -81,17 +87,18 @@ export function registerAdminSecurity(app:express.Express,options:{provider?:Cre
   if(attempts.size>=1000&&!attempts.has(key))return fail(res,429,'Demasiados intentos.');
   const window=attempts.get(key)||{count:0,until:time+60000};attempts.set(key,window);
   if(++window.count>5){res.setHeader('Retry-After','60');return fail(res,429,'Demasiados intentos.');}
-  if(!options.provider)return fail(res,503,'Acceso administrativo no configurado de forma segura.');
+  const provider=currentProvider();
+  if(!provider)return fail(res,503,'Acceso administrativo no configurado de forma segura.');
   const body=req.body;
   if(!body || Array.isArray(body) || Object.keys(body).some(k=>!['username','password'].includes(k)) || typeof body.username!=='string' || !/^[a-z0-9_.-]{1,64}$/i.test(body.username) || typeof body.password!=='string' || body.password.length<12 || body.password.length>200)return fail(res,400,'Datos de acceso inválidos.');
   try {
-   const principal=await options.provider.authenticate(body.username,body.password);
+   const principal=await provider.authenticate(body.username,body.password);
    if(!principal)return fail(res,401,'Usuario o contraseña incorrectos.');
    if(typeof principal.username!=='string' || !Array.isArray(principal.permissions) || principal.permissions.some(p=>!ADMIN_PERMISSIONS.includes(p as any)))return fail(res,503,'Proveedor de identidad no disponible.');
    for(const [k,v]of sessions)if(v.expiresAt<=time)sessions.delete(k);
    if(sessions.size>=1000)return fail(res,503,'Sesiones no disponibles.');
    const token=randomBytes(32).toString('hex'),expiresAt=time+Math.max(1,Math.min(options.sessionMs || 6*3600000,6*3600000));
-   sessions.set(digest(token),{principal:{username:principal.username,permissions:[...principal.permissions]},expiresAt});
+   sessions.set(digest(token),{principal:{username:principal.username,permissions:[...principal.permissions]},expiresAt,providerVersion:currentVersion()});
    return res.set('Cache-Control','no-store').json({success:true,token});
   }catch{return fail(res,503,'No se pudo verificar la identidad.');}
  });
@@ -107,7 +114,7 @@ export function registerAdminSecurity(app:express.Express,options:{provider?:Cre
  });
  // No password is changed here, even for an administrator. Rotation is out-of-band.
  app.all('/api/admin/change-password',(_req,res)=>fail(res,503,'La rotación de credenciales requiere el procedimiento seguro del servidor.'));
- app.get('/api/admin/accounts',(_req,res)=>res.set('Cache-Control','no-store').json({success:true,accounts:options.provider?.accounts || []}));
+ app.get('/api/admin/accounts',(_req,res)=>res.set('Cache-Control','no-store').json({success:true,accounts:currentProvider()?.accounts || []}));
  app.use('/api/admin/login',(error:any,_req:Request,res:Response,_next:NextFunction)=>fail(res,error?.status===413?413:400,'Cuerpo de acceso inválido o demasiado grande.'));
  return {isAuthorized:(req:Request,permission='business:manage')=>Boolean(read(req)?.principal.permissions.includes(permission))};
 }
