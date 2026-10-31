@@ -1,0 +1,102 @@
+name: ENCARMEN verify deployed admin business deletion route without deleting records
+on:
+  push:
+    branches: [coord/enc-staging-005-diagnostic-20261030]
+    paths: [.github/workflows/enc-staging-delete-release-audit-20261030.yml]
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-staging-runtime-deploy
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+    steps:
+      - name: Verify public release and reject unauthenticated DELETE
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request,urllib.error,time,json,uuid
+          base='https://staging.encarmen.org'
+          ok=False
+          for attempt in range(48):
+              try:
+                  req=urllib.request.Request(base+'/api/health?delete_release='+uuid.uuid4().hex,headers={'Cache-Control':'no-store'})
+                  with urllib.request.urlopen(req,timeout=12) as res:
+                      body=json.loads(res.read(50000))
+                      ok=(res.status==200 and res.headers.get('X-Encarmen-Staging-Delete-Release')=='ENC_STAGING_DELETE_20261030' and body.get('environment')=='staging' and body.get('database')=='mariadb')
+                  if ok:break
+              except Exception:pass
+              if attempt in (0,15,30,47):print('RELEASE_POLL='+str(attempt)+' ATTESTED='+str(ok).lower(),flush=True)
+              time.sleep(5)
+          if not ok:raise SystemExit('RESULT=DELETE_RELEASE_NOT_LIVE')
+          print('PUBLIC_STAGING_DELETE_RELEASE=VERIFIED',flush=True)
+          req=urllib.request.Request(base+'/api/businesses/20272',method='DELETE',headers={'Origin':base,'Cache-Control':'no-store'})
+          try:
+              with urllib.request.urlopen(req,timeout=12) as response:status=response.status
+          except urllib.error.HTTPError as e:status=e.code
+          print('UNAUTHENTICATED_DELETE_HTTP='+str(status),flush=True)
+          if status!=401:raise SystemExit('RESULT=DELETE_AUTH_GUARD_UNEXPECTED')
+          print('RESULT=DEPLOYED_AND_UNAUTHENTICATED_DELETE_BLOCKED',flush=True)
+          PY
+      - name: Verify Hostinger private flags and exact SQL row remain untouched
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          sudo apt-get update -qq >/dev/null 2>&1
+          sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          test "$fp" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          export SSHPASS
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 -' <<'PY'
+          import pathlib,os,stat,tempfile,subprocess,json
+          H=pathlib.Path.home();E=H/'domains/staging.encarmen.org/hbuilds/config/.env';B=H/'encarmen-staging-backups';D='u293982346_encarmentest'
+          if not E.is_file() or E.is_symlink() or E.stat().st_mode&0o077:raise SystemExit('CONFIG_FILE_UNSAFE')
+          cfg={}
+          for line in E.read_text().splitlines():
+              line=line.strip().removeprefix('export ').strip()
+              if line and not line.startswith('#') and '=' in line:
+                  k,v=line.split('=',1);k=k.strip()
+                  if k in cfg:raise SystemExit('DUPLICATE_KEY')
+                  cfg[k]=v.strip().strip("'").strip('"')
+          expected={'APP_ENV':'staging','DB_NAME':D,'STAGING_READ_ONLY':'false','STAGING_DB_CONFIRMED':'true','STAGING_BUSINESS_WRITES_ENABLED':'true','ENC_ADMIN_MUTATIONS_ENABLED':'true','PUBLIC_REGISTRATION_ENABLED':'true'}
+          for k,v in expected.items():
+              if cfg.get(k)!=v:raise SystemExit('STAGING_CONFIG_CHANGED_'+k)
+          accounts=json.loads(cfg.get('ENC_ADMIN_CREDENTIALS_JSON','{}')).get('accounts',[])
+          if len(accounts)!=1 or accounts[0].get('username')!='jeo' or 'business:delete' not in accounts[0].get('permissions',[]):raise SystemExit('JEO_DELETE_PERMISSION_MISSING')
+          print('JEO_AUTH_AND_STAGING_WRITE_FLAGS=VERIFIED',flush=True)
+          fd,p=tempfile.mkstemp(dir=B,prefix='.enc-stage-delete-read-',suffix='.cnf')
+          try:
+              os.fchmod(fd,0o600)
+              with os.fdopen(fd,'w') as f:
+                  f.write('[client]\n')
+                  for k,var in [('host','DB_HOST'),('user','DB_USER'),('password','DB_PASSWORD')]:
+                      value=cfg[var].replace('\\','\\\\').replace('"','\\"')
+                      f.write(k+'="'+value+'"\n')
+              def sql(q):
+                  cmd=['mariadb','--defaults-extra-file='+p,'-D',D,'--batch','--skip-column-names','-e',q]
+                  res=subprocess.run(cmd,text=True,capture_output=True,timeout=20)
+                  if res.returncode:raise RuntimeError('SQL_READ_FAILED')
+                  return res.stdout.strip().splitlines()
+              if sql("SELECT DATABASE(),SUBSTRING_INDEX(CURRENT_USER(),'@',1)")!=[D+'\t'+cfg['DB_USER']]:raise SystemExit('DB_IDENTITY_MISMATCH')
+              if sql('SELECT env_name,db_name FROM encarmen_environment_marker')!=['staging\t'+D]:raise SystemExit('DB_MARKER_MISMATCH')
+              if 'u293982346_encarmenapp' in sql('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA'):raise SystemExit('PROD_VISIBLE')
+              grants=sql('SHOW GRANTS FOR CURRENT_USER()')
+              if not any(('DELETE' in grant or 'ALL PRIVILEGES' in grant) and D in grant for grant in grants):raise SystemExit('SQL_DELETE_NOT_GRANTED')
+              print('STAGING_SQL_DELETE_PRIVILEGE=VERIFIED',flush=True)
+              count=sql('SELECT COUNT(*) FROM businesses')
+              target=sql('SELECT COUNT(*) FROM businesses WHERE id=20272 AND BINARY name=BINARY CONVERT(0x3330313032303236 USING utf8mb4)')
+              print('SQL_BUSINESS_COUNT='+str(count[0] if count else 'invalid'),flush=True)
+              print('SQL_MANUAL_RECORD_20272_COUNT='+str(target[0] if target else 'invalid'),flush=True)
+              if count!=['208'] or target!=['1']:raise SystemExit('MANUAL_RECORD_CHANGED_DURING_READONLY_AUDIT')
+              print('RESULT=STAGING_CONFIG_PERMISSIONS_AND_MANUAL_RECORD_INTACT',flush=True)
+          finally:
+              os.unlink(p)
+          PY
