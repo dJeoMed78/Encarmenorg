@@ -25,6 +25,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      - name: Install isolated jsdom test dependency (not shipped)
+        run: npm install --no-save --no-package-lock jsdom@26.1.0
       - name: Validate delete isolation, SQL readback and prior HTTP safety
         run: node --import tsx --test tests/staging-write-001.test.mjs tests/staging-store-default-strict.test.mjs tests/enc-staging-write-gate-005-unit.test.mjs tests/enc-staging-write-gate-005-http.test.mjs tests/staging-isolation-proof.test.mjs tests/security-containment-003.test.mjs
       - run: npm run build
