@@ -42,8 +42,12 @@ jobs:
             echo 'ENCARMEN STAGING CONTROLLED ORIGIN DEPLOY'
             echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             if [ -z "${SSHPASS:-}" ]; then echo 'RESULT=BLOCKED_NO_SSH_CREDENTIAL'; exit 0; fi
-            sudo apt-get update -qq >/dev/null 2>&1 || exit 0
-            sudo apt-get install -qq -y sshpass >/dev/null 2>&1 || exit 0
+            for attempt in 1 2 3; do
+              if command -v sshpass >/dev/null 2>&1 || (sudo apt-get update -qq >/dev/null 2>&1 && sudo apt-get install -qq -y sshpass >/dev/null 2>&1); then break; fi
+              echo "SSH_TOOL_INSTALL_RETRY=$attempt"
+              sleep 5
+            done
+            if ! command -v sshpass >/dev/null 2>&1; then echo 'RESULT=BLOCKED_SSH_TOOL_UNAVAILABLE'; exit 0; fi
             umask 077
             mkdir -p "$HOME/.ssh"
             ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
