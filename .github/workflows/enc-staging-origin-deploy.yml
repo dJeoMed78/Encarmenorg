@@ -1,5 +1,5 @@
 name: ENCARMEN controlled Staging origin fix deploy and automatic rollback
-# Validate private Staging-only MariaDB bootstrap and admin gate; no production writes.
+# Validate private Staging DB bootstrap and on-demand admin identity; no production writes.
 on:
   push:
     branches: [coord/staging-origin-deploy-20261030]
@@ -28,6 +28,7 @@ jobs:
           grep -q 'STAGING_BUSINESS_WRITES_ENABLED' /tmp/enc-staging-origin-server.js
           grep -q 'ENC_ADMIN_CREDENTIALS_JSON' /tmp/enc-staging-origin-server.js
           grep -q 'STAGING_PRIVATE_DB_IDENTITY' /tmp/enc-staging-origin-server.js
+          grep -q 'privateStagingAdminIdentity' /tmp/enc-staging-origin-server.js
           grep -q 'config/.env' /tmp/enc-staging-origin-server.js
           echo 'BUILD=PASS'
       - name: Public Staging deployment with guarded rollback
