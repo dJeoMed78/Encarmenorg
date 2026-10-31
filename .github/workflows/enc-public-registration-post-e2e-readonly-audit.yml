@@ -1,0 +1,83 @@
+name: ENCARMEN final post-public-registration cleanup and public-cache readback
+on:
+  push:
+    branches: [coord/enc-staging-005-diagnostic-20261030]
+    paths: [.github/workflows/enc-public-registration-post-e2e-readonly-audit.yml]
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-staging-runtime-deploy
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify post-E2E public list excludes synthetic and Staging private controls remain
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          sudo apt-get update -qq >/dev/null 2>&1
+          sudo apt-get install -qq -y sshpass >/dev/null 2>&1
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          test "$fp" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          export SSHPASS
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 -' <<'PY'
+          import pathlib,os,stat,subprocess,tempfile,json,urllib.request,uuid,time
+          H=pathlib.Path.home();S=H/'domains/staging.encarmen.org/hbuilds';E=S/'config/.env';B=H/'encarmen-staging-backups';D='u293982346_encarmentest'
+          if not E.is_file() or E.is_symlink() or E.stat().st_mode&0o077:raise SystemExit('CONFIG_UNSAFE')
+          cfg={}
+          for l in E.read_text().splitlines():
+              l=l.strip().removeprefix('export ').strip()
+              if l and not l.startswith('#') and '=' in l:
+                  k,v=l.split('=',1);k=k.strip()
+                  if k in cfg:raise SystemExit('DUPLICATE_KEY')
+                  cfg[k]=v.strip().strip("'").strip('"')
+          exp={'APP_ENV':'staging','DB_NAME':D,'STAGING_READ_ONLY':'false','STAGING_DB_CONFIRMED':'true','STAGING_BUSINESS_WRITES_ENABLED':'true','ENC_ADMIN_MUTATIONS_ENABLED':'true','PUBLIC_REGISTRATION_ENABLED':'true'}
+          for k,v in exp.items():
+              if cfg.get(k)!=v:raise SystemExit('BASELINE_FLAG_'+k)
+          print('STAGING_BUSINESS_AND_PUBLIC_FLAGS=VERIFIED',flush=True)
+          if (B/'enc-public-registration-real-e2e-active.json').exists():raise SystemExit('SYNTHETIC_MARKER_REMAINS')
+          print('SYNTHETIC_MARKER=ABSENT',flush=True)
+          fd,tmp=tempfile.mkstemp(dir=B,prefix='.enc-public-postaudit-',suffix='.cnf')
+          try:
+              os.fchmod(fd,0o600)
+              with os.fdopen(fd,'w') as f:
+                  f.write('[client]\n')
+                  for dest,k in [('host','DB_HOST'),('user','DB_USER'),('password','DB_PASSWORD')]:
+                      v=cfg.get(k,'').replace('\\','\\\\').replace('"','\\"')
+                      f.write(dest+'="'+v+'"\n')
+              def sql(statement):
+                  p=subprocess.run(['mariadb','--defaults-extra-file='+tmp,'-D',D,'--batch','--skip-column-names','-e',statement],capture_output=True,text=True,timeout=20)
+                  if p.returncode:raise SystemExit('SQL_READ_FAILED')
+                  return p.stdout.strip().splitlines()
+              if sql("SELECT DATABASE(),SUBSTRING_INDEX(CURRENT_USER(),'@',1)")!=[D+'\t'+cfg['DB_USER']]:raise SystemExit('SQL_WRONG_DB')
+              if sql('SELECT env_name,db_name FROM encarmen_environment_marker')!=['staging\t'+D]:raise SystemExit('SQL_WRONG_MARKER')
+              if 'u293982346_encarmenapp' in sql('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA'):raise SystemExit('PRODUCTION_VISIBLE')
+              count=sql('SELECT COUNT(*) FROM businesses')
+              left=sql("SELECT COUNT(*) FROM businesses WHERE name LIKE 'ENCARMEN REG PUBLIC CONTROL %'")
+              print('SQL_BUSINESS_COUNT='+str(count[0] if count else 'invalid'),flush=True)
+              print('SQL_SYNTHETIC_COUNT='+str(left[0] if left else 'invalid'),flush=True)
+              if count!=['207'] or left!=['0']:raise SystemExit('SQL_POST_CLEANUP_MISMATCH')
+          finally:os.unlink(tmp)
+          found=False;valid=False;size=0
+          for i in range(10):
+              req=urllib.request.Request('https://staging.encarmen.org/api/businesses?post_public_audit='+uuid.uuid4().hex,headers={'Cache-Control':'no-store'})
+              with urllib.request.urlopen(req,timeout=15) as response:
+                  payload=json.loads(response.read(5000000))
+                  valid=response.status==200 and isinstance(payload.get('businesses'),list)
+              if not valid:raise SystemExit('PUBLIC_BUSINESS_LIST_INVALID')
+              rows=payload['businesses'];size=len(rows)
+              found=any(str(row.get('name','')).startswith('ENCARMEN REG PUBLIC CONTROL ') for row in rows)
+              if not found:break
+              time.sleep(5)
+          print('PUBLIC_BUSINESS_LIST_ENTRIES='+str(size),flush=True)
+          print('PUBLIC_LIST_HAS_SYNTHETIC='+str(found).lower(),flush=True)
+          if found:raise SystemExit('PUBLIC_CACHE_SYNTHETIC_STILL_VISIBLE')
+          print('RESULT=PUBLIC_REGISTRATION_CLEAN_SQL_AND_PUBLIC_PERSISTENT_FLAGS',flush=True)
+          PY
