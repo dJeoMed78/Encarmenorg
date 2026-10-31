@@ -25,7 +25,7 @@ jobs:
               request=urllib.request.Request(BASE+path,headers={'Cache-Control':'no-cache','User-Agent':'ENC-Staging-Public-Release-Audit/1.0',**(headers or {})})
               try:
                   with urllib.request.urlopen(request,timeout=13) as response:
-                      return response.status,dict(response.headers.items()),response.read(900000)
+                      return response.status,dict(response.headers.items()),response.read(12000000)
               except urllib.error.HTTPError as err:return err.code,dict(err.headers.items()),err.read(100000)
           ready=False
           for attempt in range(36):
@@ -46,12 +46,15 @@ jobs:
           scripts+=re.findall(r"<script[^>]+src='([^']+)'",text,re.I)
           scripts=[p for p in scripts if (p.startswith('/assets/') or p.startswith('./assets/')) and p.endswith('.js')]
           if not scripts:raise SystemExit('BLOCKED_PUBLIC_FRONTEND_ASSETS_MISSING')
-          found=False
-          for script in scripts[:8]:
+          markers=('Mostrar contraseña','Ocultar contraseña','Contraseña de administrador','Usuario administrativo')
+          found=set()
+          for script in scripts[:10]:
               status,_,js=get(script[1:] if script.startswith('.') else script)
-              if status==200 and all(t.encode() in js for t in ('Mostrar contraseña','Ocultar contraseña','Contraseña de administrador','Usuario administrativo')):
-                  found=True;break
-          if not found:raise SystemExit('BLOCKED_FRONTEND_LOGIN_PATCH_NOT_LIVE')
+              if status==200:
+                  for marker in markers:
+                      if marker.encode('utf-8') in js:found.add(marker)
+          for marker in markers:print('PUBLIC_UI_MARKER_'+str(markers.index(marker))+'='+str(marker in found).lower(),flush=True)
+          if len(found)!=len(markers):raise SystemExit('BLOCKED_FRONTEND_LOGIN_PATCH_NOT_LIVE')
           print('PUBLIC_LOGIN_UI_SHOW_HIDE_AND_USERNAME=VERIFIED',flush=True)
           # Test request shape only. No real account password used.
           def testlogin(p):
