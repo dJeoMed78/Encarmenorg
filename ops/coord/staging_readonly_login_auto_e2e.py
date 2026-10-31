@@ -54,6 +54,43 @@ try:
  if secret.parent!=B or not secret.is_file():refuse('SECRET_PATH')
  creds=json.loads(secret.read_text())
  out('LIVE_IDENTITY_RELOAD','CONFIG_FILE_ONLY_NO_NODE_RESTART')
+ # Redacted introspection of the *live Staging* Node process. Never print an
+ # environment variable, a username or a secret, only boolean comparisons.
+ private_env=S/'config/.env'
+ raw=private_env.read_text()
+ import re
+ private={}
+ for line in raw.splitlines():
+  line=line.strip()
+  if line.startswith('export '):line=line[7:]
+  if '=' not in line or line.startswith('#'):continue
+  k,v=line.split('=',1);private[k.strip()]=v.strip().strip('"').strip("'")
+ out('DIAG_PRIVATE_ADMIN_KEY',str('ENC_ADMIN_CREDENTIALS_JSON' in private).lower())
+ out('DIAG_PRIVATE_ORIGIN_VALID',str(private.get('ENC_ADMIN_PUBLIC_ORIGIN')==APP).lower())
+ out('DIAG_PRIVATE_FILE_MODE',str(private_env.stat().st_mode&0o077==0).lower())
+ out('DIAG_BUNDLE_DYNAMIC_IDENTITY',str(b'privateStagingAdminIdentity' in (active/'server.js').read_bytes()).lower())
+ import pathlib as _p
+ matching=[]
+ for proc in _p.Path('/proc').iterdir():
+  if not proc.name.isdigit():continue
+  try:
+   cwd=_p.Path(os.readlink(proc/'cwd'))
+   if cwd!=active:continue
+   exe=os.readlink(proc/'exe').lower()
+   if 'node' not in exe:continue
+   pairs={}
+   for item in (proc/'environ').read_bytes().split(b'\\0'):
+    if b'=' not in item:continue
+    key,value=item.split(b'=',1)
+    if key in (b'HOME',b'APP_ENV',b'DB_USER',b'DB_NAME'):pairs[key.decode()]=value.decode(errors='replace')
+   matching.append(pairs)
+  except (OSError,PermissionError):pass
+ out('DIAG_MATCHING_NODE_PROCESSES',len(matching))
+ for n,pairs in enumerate(matching[:3],1):
+  out('DIAG_PROC'+str(n)+'_ENV_STAGING',str(pairs.get('APP_ENV')=='staging').lower())
+  out('DIAG_PROC'+str(n)+'_DB_STAGING',str(pairs.get('DB_NAME')=='u293982346_encarmentest').lower())
+  out('DIAG_PROC'+str(n)+'_USER_EQUALS_PRIVATE',str(pairs.get('DB_USER')==private.get('DB_USER')).lower())
+  out('DIAG_PROC'+str(n)+'_HOME_IS_OWNER',str(pairs.get('HOME')==str(H)).lower())
  authenticated=False
  for n in range(5):
   try:
