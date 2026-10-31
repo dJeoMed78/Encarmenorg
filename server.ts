@@ -1711,6 +1711,7 @@ app.get(['/api/health', '/api/system/status'], (_req: Request, res: Response) =>
   res.setHeader('X-Encarmen-Staging-Gate-Release', isStaging ? 'ENC_005_DIAG_20261030' : 'n/a');
   res.setHeader('X-Encarmen-Admin-Login-Release', isStaging ? 'ENC_ADMIN_10CHAR_UI_20261030' : 'n/a');
   res.setHeader('X-Encarmen-Public-Registration-Release', isStaging ? 'ENC_PUBLIC_PRIVATE_GATE_20261030' : 'n/a');
+  res.setHeader('X-Encarmen-Staging-Delete-Release', isStaging ? 'ENC_STAGING_DELETE_20261030' : 'n/a');
   res.json({
     status: 'ok',
     uptime: Math.round(process.uptime()),
@@ -2957,8 +2958,13 @@ app.delete(['/api/businesses/:id', '/businesses/:id'], async (req:Request,res:Re
     await refreshBusinessesFromDbIfNeeded(true);
     const current=businessesCache.find(b=>String(b.id)===String(req.params.id));
     if(!current)return res.status(404).json({success:false,message:'Empresa no encontrada.'});
-    const deleted=await dbDeleteBusiness(current.id);
-    if(!deleted)return res.status(503).json({success:false,message:'No se confirmó la baja en MariaDB.'});
+    if(isStagingEnvironment()){
+      // Only the isolated transactional Staging business lane may delete; general database writes stay denied.
+      await stagingBusinessStore.delete(current.id);
+    }else{
+      const deleted=await dbDeleteBusiness(current.id);
+      if(!deleted)return res.status(503).json({success:false,message:'No se confirmó la baja en MariaDB.'});
+    }
     writeMayHaveSucceeded=true;
     const remaining=await dbLoadAllBusinesses(true);
     if(remaining.some(b=>String(b.id)===String(current.id)))throw new Error('DELETE_READBACK_FAILED');

@@ -3,5 +3,5 @@ export function administrativeWritesReady(req:{path:string;method:string},state:
   if(!state.mutationsEnabled || !state.isStaging || !state.businessWrites)return false;
   const p = (req.path || '').replace(/\/+$/, '') || '/';
   return (req.method==='POST' && p==='/api/submit-business') ||
-    (req.method==='PATCH' && /^\/(?:api\/)?businesses\/[^/]+$/.test(p));
+    ((req.method==='PATCH' || req.method==='DELETE') && /^\/(?:api\/)?businesses\/[^/]+$/.test(p));
 }

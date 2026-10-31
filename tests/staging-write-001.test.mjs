@@ -33,6 +33,12 @@ function database(initial=[fixture]){
     const rows=working||state.rows;
     if(sql==='SELECT * FROM businesses ORDER BY id ASC')return [structuredClone(rows)];
     if(sql.startsWith('SELECT * FROM businesses WHERE id = ?'))return [structuredClone(rows.filter(r=>String(r.id)===String(params[0])))];
+    if(sql.startsWith('SELECT id FROM businesses WHERE id = ?'))return [structuredClone(rows.filter(r=>String(r.id)===String(params[0])).map(r=>({id:r.id})))];
+    if(sql.startsWith('DELETE FROM businesses WHERE id = ?')){
+     const index=rows.findIndex(r=>String(r.id)===String(params[0]));
+     if(index<0)return [{affectedRows:0}];
+     rows.splice(index,1);return [{affectedRows:1}];
+    }
     if(sql.startsWith('INSERT INTO businesses')){
      assert.doesNotMatch(sql,/ON DUPLICATE/i);const row=Object.fromEntries(columns.map((c,i)=>[c,params[i]]));
      if(rows.some(r=>String(r.id)===String(row.id)))throw new Error('synthetic duplicate key');rows.push(row);return [{affectedRows:1}];
@@ -59,9 +65,17 @@ test('SW explicit configuration, selected database and production account guards
  const prefix=source.slice(source.indexOf('export interface MariaDbConfig'),source.indexOf('export function isMariaDbActive'));
  const permission=source.slice(source.indexOf('export function isBusinessWritePermitted'),source.indexOf('export const stagingBusinessStore'));
  for(const target of [STAGING_BUSINESS_DATABASE,'u293982346_encarmenapp']){
-  const queries=[];const api=execute(prefix+permission,{...modules,process:{env},console:{log(){},warn(){},error(){}},mysql:{createPool:()=>({query:async sql=>{queries.push(sql);return sql.includes('DATABASE()')?[[{db_name:target}]]:[[{test:1}]];},end:async()=>{}})},createTablesIfNotExist:()=>{throw new Error('DDL forbidden');}});
-  assert.equal(await api.initMariaDb(),target===STAGING_BUSINESS_DATABASE);assert.equal(api.isWritePermitted(),false);assert.equal(api.isBusinessWritePermitted(),target===STAGING_BUSINESS_DATABASE);
-  assert.ok(queries.every(q=>q.startsWith('SELECT')));
+  const queries=[];const api=execute(prefix+permission,{...modules,process:{env},console:{log(){},warn(){},error(){}},mysql:{createPool:()=>({query:async sql=>{
+   queries.push(sql);
+   if(sql.includes('CURRENT_USER()')&&sql.includes('DATABASE()'))return [[{effective_user:env.DB_USER,db_name:target}]];
+   if(sql.startsWith('SHOW GRANTS'))return [[{'Grants':'GRANT SELECT, INSERT, UPDATE, DELETE ON '+STAGING_BUSINESS_DATABASE+".* TO synthetic-staging-user"}]];
+   return [[{test:1}]];
+  },end:async()=>{}})},createTablesIfNotExist:()=>{throw new Error('DDL forbidden');},getPrivateStagingSnapshot:()=>env,privateStagingBusinessWindowOpen:()=>true});
+  // The minimal VM connection model is not a complete grant/identity proof: fail closed.
+  assert.equal(await api.initMariaDb(),false);
+  assert.equal(api.isWritePermitted(),false);
+  assert.equal(api.isBusinessWritePermitted(),false);
+  assert.ok(queries.every(q=>q.startsWith('SELECT')||q.startsWith('SHOW GRANTS')));
  }
  const classification=execute(prefix,{...modules,process:{env:{NODE_ENV:'production',DB_NAME:STAGING_BUSINESS_DATABASE}}});assert.equal(classification.isStagingEnvironment(),true);assert.equal(classification.isWritePermitted(),false);
  const wrongTarget=execute(prefix,{...modules,process:{env:{...env,APP_ENV:undefined,DB_NAME:'u293982346_encarmenapp'}}});assert.equal(wrongTarget.isStagingEnvironment(),true);assert.equal(wrongTarget.validateStagingDbConfiguration().valid,false);
@@ -106,6 +120,32 @@ test('SW transactional update preserves fresh SQL contacts, metadata and unrelat
  assert.ok(db.state.queries.some(q=>q.sql.endsWith('FOR UPDATE')));
 });
 
+test('SW isolated DELETE only removes exact synthetic PK and checks readback before commit',async()=>{
+ const db=database();
+ const created=await db.store.create(draft(9),key());
+ const savedBefore=structuredClone(db.state.rows[0]);
+ const id=created.business.id;
+ const done=await db.store.delete(id);
+ assert.equal(done.deleted,true);
+ assert.equal(db.state.rows.length,1);
+ assert.deepEqual(db.state.rows[0],savedBefore);
+ assert.ok(db.state.queries.some(q=>q.sql==='DELETE FROM businesses WHERE id = ?' && String(q.params[0])===String(id)));
+ assert.ok(db.state.queries.some(q=>q.sql==='SELECT id FROM businesses WHERE id = ?'));
+ await assert.rejects(db.store.delete(id),e=>e.code==='BUSINESS_NOT_FOUND'&&e.status===404);
+ await assert.rejects(db.store.delete('not-an-id'),e=>e.code==='BUSINESS_ID_INVALID'&&e.status===400);
+ db.state.canWrite=false;
+ await assert.rejects(db.store.delete(1081),e=>e.code==='STAGING_BUSINESS_READ_ONLY'&&e.status===403);
+ assert.equal(db.state.rows.length,1);
+ db.state.canWrite=true;
+ db.state.database='u293982346_encarmenapp';
+ await assert.rejects(db.store.delete(1081),e=>e.code==='DATABASE_TARGET_MISMATCH'&&e.status===403);
+ assert.equal(db.state.rows.length,1);
+ db.state.database=STAGING_BUSINESS_DATABASE;
+ db.state.fail='DELETE FROM businesses';
+ await assert.rejects(db.store.delete(1081),e=>e.code==='BUSINESS_WRITE_UNCONFIRMED'&&e.status===503);
+ assert.equal(db.state.rows.length,1);
+});
+
 test('SW rollback and lost commit acknowledgement never report success or duplicate a retried registration',async()=>{
  const db=database();db.state.fail='INSERT INTO';await assert.rejects(db.store.create(draft(),key()),e=>e.status===503);assert.equal(db.state.rows.length,1);
  db.state.fail='';db.state.commitLost=true;const request=key();await assert.rejects(db.store.create(draft(),request),e=>e.status===503&&e.writeMayHaveSucceeded===true);assert.equal(db.state.rows.length,2);
@@ -124,7 +164,7 @@ async function httpHarness(){
  const effectiveEnv={...env,ENC_ADMIN_MUTATIONS_ENABLED:'true',ENC_ADMIN_PUBLIC_ORIGIN:'https://fixture.invalid',ENC_ADMIN_CREDENTIALS_JSON:JSON.stringify({version:1,accounts:[{username:'Y',passwordHash:derived(),permissions:security.ADMIN_PERMISSIONS}]})};
  let now=Date.now();
  const auth=execute(`${registration}\n${globalGuard}\nexport const isVerifiedAdminSession=(req:any)=>adminSecurity.isAuthorized(req,'business:manage');`,{
-  app,...security,administrativeWritesReady,registerAdminSecurity:(app,options)=>security.registerAdminSecurity(app,{...options,now:()=>now}),process:{env:effectiveEnv},isStagingEnvironment:()=>true,isBusinessWritePermitted:()=>db.state.canWrite,isWritePermitted:()=>false,console:{log(){},warn(){},error(){}}
+  app,...security,administrativeWritesReady,registerAdminSecurity:(app,options)=>security.registerAdminSecurity(app,{...options,now:()=>now}),process:{env:effectiveEnv},isStagingEnvironment:()=>true,isBusinessWritePermitted:()=>db.state.canWrite,isWritePermitted:()=>false,stagingDynamicIdentity:false,getPrivateStagingSnapshot:()=>effectiveEnv,console:{log(){},warn(){},error(){}}
  });
  auth.expire=()=>{now+=7*3600000;};
  registerStagingBusinessRoutes(app,{isStaging:()=>true,canWrite:()=>db.state.canWrite,isAdmin:auth.isVerifiedAdminSession,canPublish:auth.isVerifiedAdminSession,store:db.store,readAll:async()=>db.state.rows.map(serialize),saved:()=>{}});

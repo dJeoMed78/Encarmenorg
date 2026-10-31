@@ -236,10 +236,17 @@ test('11. Unauthenticated or session-less requests are rejected with 401', async
   });
 });
 
-test('12 & 13. DELETE and unrelated mutations (reports, events, classifieds) remain blocked', () => {
+test('12 & 13. Explicit business DELETE allowed with all gates; unrelated mutations remain blocked', () => {
   const state = { mutationsEnabled: true, isStaging: true, businessWrites: true };
-  assert.equal(administrativeWritesReady({ path: '/api/businesses/1081', method: 'DELETE' }, state), false);
-  assert.equal(administrativeWritesReady({ path: '/businesses/1081', method: 'DELETE' }, state), false);
+  assert.equal(administrativeWritesReady({ path: '/api/businesses/1081', method: 'DELETE' }, state), true);
+  assert.equal(administrativeWritesReady({ path: '/businesses/1081', method: 'DELETE' }, state), true);
+  for(const blocked of [
+    {...state,mutationsEnabled:false},
+    {...state,isStaging:false},
+    {...state,businessWrites:false}
+  ])assert.equal(administrativeWritesReady({path:'/api/businesses/1081',method:'DELETE'},blocked),false);
+  assert.equal(administrativeWritesReady({path:'/api/businesses/1081/sync-wp',method:'DELETE'},state),false);
+
   assert.equal(administrativeWritesReady({ path: '/api/reports', method: 'POST' }, state), false);
   assert.equal(administrativeWritesReady({ path: '/api/events', method: 'POST' }, state), false);
   assert.equal(administrativeWritesReady({ path: '/api/classifieds', method: 'POST' }, state), false);
