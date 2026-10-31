@@ -108,11 +108,23 @@ try:
  status,_=http('POST','/api/reports',{'reason':'staging synthetic'},token=token)
  if status!=403:abort('UNRELATED_WRITE_NOT_BLOCKED')
  out('UNRELATED_WRITE_HTTP',status)
+ status,detail=http('GET','/api/database-status',token=token)
+ out('GATE_DIAGNOSTIC_HTTP',status)
+ if status==200:
+  bw=detail.get('businessWrites') or {};md=detail.get('mariadb') or {};st=detail.get('stagingIsolation') or {}
+  out('GATE_RUNTIME_BIZ_PERMITTED',str(bw.get('permitted')).lower())
+  out('GATE_RUNTIME_BIZ_CONFIGURED_PROCESS',str(bw.get('configured')).lower())
+  out('GATE_RUNTIME_MARIADB_CONNECTED',str(md.get('connected')).lower())
+  out('GATE_RUNTIME_ISOLATION_VALID',str(st.get('isolationValid')).lower())
+  out('GATE_RUNTIME_DB_STAGING',str(st.get('databaseName')=='u293982346_encarmentest').lower())
+  out('GATE_RUNTIME_DB_ERROR_PRESENT',str(bool(md.get('lastError'))).lower())
  # Wait for Hostinger hPanel restart. Invalid payload must return 400 only when
  # actual admin session and staging business write lane are ready; no SQL writes.
  ready=False
  for attempt in range(8):
   probe,_=http('POST','/api/submit-business',{'name':'A'},token=token)
+  if probe==503:
+   out('GATE_503_KIND','ADMIN_WRITE_GATE' if _.get('message')=='Operación bloqueada hasta habilitar administración segura.' else 'OTHER_503')
   if probe==400:
    ready=True;out('WRITE_WINDOW_VALIDATION_HTTP',400);break
   if probe==401:
