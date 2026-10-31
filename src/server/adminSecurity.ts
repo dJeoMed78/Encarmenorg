@@ -57,7 +57,7 @@ export function adminPermission(requestPath:string,method:string):string|null {
  return null;
 }
 
-export function registerAdminSecurity(app:express.Express,options:{provider?:CredentialProvider;providerResolver?:()=>CredentialProvider|undefined;providerVersion?:()=>string|undefined;allowedOrigin?:string;writesReady?:(req:Request,permission:string)=>boolean;now?:()=>number;sessionMs?:number}={}) {
+export function registerAdminSecurity(app:express.Express,options:{provider?:CredentialProvider;providerResolver?:()=>CredentialProvider|undefined;providerVersion?:()=>string|undefined;allowedOrigin?:string;writesReady?:(req:Request,permission:string)=>boolean;minPasswordLength?:10|12;now?:()=>number;sessionMs?:number}={}) {
  const sessions=new Map<string,{principal:Principal;expiresAt:number;providerVersion?:string}>();
  const attempts=new Map<string,{count:number;until:number}>();
  const sessionSecret=randomBytes(32);const now=options.now || Date.now;
@@ -90,7 +90,7 @@ export function registerAdminSecurity(app:express.Express,options:{provider?:Cre
   const provider=currentProvider();
   if(!provider)return fail(res,503,'Acceso administrativo no configurado de forma segura.');
   const body=req.body;
-  if(!body || Array.isArray(body) || Object.keys(body).some(k=>!['username','password'].includes(k)) || typeof body.username!=='string' || !/^[a-z0-9_.-]{1,64}$/i.test(body.username) || typeof body.password!=='string' || body.password.length<12 || body.password.length>200)return fail(res,400,'Datos de acceso inválidos.');
+  if(!body || Array.isArray(body) || Object.keys(body).some(k=>!['username','password'].includes(k)) || typeof body.username!=='string' || !/^[a-z0-9_.-]{1,64}$/i.test(body.username) || typeof body.password!=='string' || body.password.length<(options.minPasswordLength===10?10:12) || body.password.length>200)return fail(res,400,'Datos de acceso inválidos.');
   try {
    const principal=await provider.authenticate(body.username,body.password);
    if(!principal)return fail(res,401,'Usuario o contraseña incorrectos.');

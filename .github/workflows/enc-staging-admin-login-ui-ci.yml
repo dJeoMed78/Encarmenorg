@@ -1,0 +1,27 @@
+name: ENCARMEN staging admin login 10-character UI independent CI
+on:
+  push:
+    branches: [coord/enc-staging-admin-login-ui-20261030]
+    paths:
+      - .github/workflows/enc-staging-admin-login-ui-ci.yml
+      - src/components/WordPressSyncModal.tsx
+      - src/server/adminSecurity.ts
+      - server.ts
+      - tests/enc-staging-admin-login-ui-20261030.test.mjs
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - name: Confirm 10-char auth + UX and historical security regressions
+        run: node --import tsx --test tests/enc-staging-admin-login-ui-20261030.test.mjs tests/enc-staging-write-gate-005-http.test.mjs tests/enc-staging-write-gate-005-unit.test.mjs tests/staging-isolation-proof.test.mjs tests/security-containment-003.test.mjs
+      - run: npm run build
