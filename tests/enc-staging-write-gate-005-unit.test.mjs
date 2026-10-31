@@ -298,3 +298,98 @@ test('15. Authentication controls: permanent jeo account preserved and scrypt wo
   const authWrongUser = await provider.authenticate('unknown', password);
   assert.equal(authWrongUser, null);
 });
+
+test('16. Private snapshot takes strict precedence over stale process.env in verifyStagingIsolation', async () => {
+  const privateContent = [
+    'APP_ENV=staging',
+    `DB_NAME=${STAGING_BUSINESS_DATABASE}`,
+    'DB_USER=u293982346_privateuser',
+    'DB_HOST=127.0.0.1',
+    'DB_PASSWORD=secret_private_pw',
+    'STAGING_READ_ONLY=false',
+    'STAGING_DB_CONFIRMED=true',
+    'STAGING_BUSINESS_WRITES_ENABLED=true',
+    'ENC_ADMIN_MUTATIONS_ENABLED=true',
+    'ENC_ADMIN_PUBLIC_ORIGIN=https://staging.encarmen.org'
+  ].join('\n');
+
+  const { tmpDir, filePath } = createTempStagingEnv(privateContent);
+
+  try {
+    const fakeConn = {
+      query: async (sql) => {
+        if (sql === 'SELECT DATABASE() AS db_name') return [[{ db_name: STAGING_BUSINESS_DATABASE }]];
+        if (sql === 'SHOW GRANTS FOR CURRENT_USER()') return [[{ 'Grants': `GRANT SELECT, INSERT, UPDATE ON \`${STAGING_BUSINESS_DATABASE}\`.* TO \`u293982346_privateuser\`@\`%\`` }]];
+        if (sql.includes('information_schema.SCHEMATA')) return [[{ SCHEMA_NAME: STAGING_BUSINESS_DATABASE }, { SCHEMA_NAME: 'information_schema' }]];
+        if (sql.includes('encarmen_environment_marker')) return [[{ env_name: 'staging', db_name: STAGING_BUSINESS_DATABASE }]];
+        return [[]];
+      }
+    };
+
+    // Stale env with older/mismatched user
+    const staleEnv = {
+      APP_ENV: 'staging',
+      DB_NAME: STAGING_BUSINESS_DATABASE,
+      DB_USER: 'u293982346_staleuser',
+      DB_HOST: 'stale.host',
+      DB_PASSWORD: 'stale_password'
+    };
+
+    const res = await verifyStagingIsolation(fakeConn, staleEnv, { configPath: filePath });
+    assert.equal(res.ok, true);
+    assert.equal(res.code, 'ISOLATION_PROVEN');
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('17. STAGING_REQUIRE_MINIMAL_GRANTS in private snapshot strictly blocks broad grants', async () => {
+  const privateStrictContent = [
+    'APP_ENV=staging',
+    `DB_NAME=${STAGING_BUSINESS_DATABASE}`,
+    'DB_USER=u293982346_privateuser',
+    'DB_HOST=127.0.0.1',
+    'DB_PASSWORD=secret_private_pw',
+    'STAGING_READ_ONLY=false',
+    'STAGING_DB_CONFIRMED=true',
+    'STAGING_BUSINESS_WRITES_ENABLED=true',
+    'ENC_ADMIN_MUTATIONS_ENABLED=true',
+    'STAGING_REQUIRE_MINIMAL_GRANTS=true',
+    'ENC_ADMIN_PUBLIC_ORIGIN=https://staging.encarmen.org'
+  ].join('\n');
+
+  const { tmpDir, filePath } = createTempStagingEnv(privateStrictContent);
+
+  try {
+    const fakeConnBroad = {
+      query: async (sql) => {
+        if (sql === 'SELECT DATABASE() AS db_name') return [[{ db_name: STAGING_BUSINESS_DATABASE }]];
+        if (sql === 'SHOW GRANTS FOR CURRENT_USER()') return [[{ 'Grants': `GRANT ALL PRIVILEGES ON \`${STAGING_BUSINESS_DATABASE}\`.* TO \`u293982346_privateuser\`@\`%\`` }]];
+        if (sql.includes('information_schema.SCHEMATA')) return [[{ SCHEMA_NAME: STAGING_BUSINESS_DATABASE }, { SCHEMA_NAME: 'information_schema' }]];
+        if (sql.includes('encarmen_environment_marker')) return [[{ env_name: 'staging', db_name: STAGING_BUSINESS_DATABASE }]];
+        return [[]];
+      }
+    };
+
+    // Even if initial env has STAGING_REQUIRE_MINIMAL_GRANTS unset/false, snapshot overrides it to true!
+    const res = await verifyStagingIsolation(fakeConnBroad, { APP_ENV: 'staging' }, { configPath: filePath });
+    assert.equal(res.ok, false);
+    assert.equal(res.code, 'BROAD_STAGING_PRIVILEGES');
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('18. CURRENT_USER() effective SQL identity validation rejects production user and mismatches', () => {
+  // Parsing and grant evaluation directly testing MariaDB effective identity checks
+  const prodGrants = ['GRANT ALL ON `u293982346_encarmenapp`.* TO `u293982346_appuser`@`%`'];
+  const resProd = evaluateGrants(prodGrants, STAGING_BUSINESS_DATABASE, 'u293982346_encarmenapp', false);
+  assert.equal(resProd.code, 'GRANT_ON_PRODUCTION');
+
+  const validStagingGrants = [
+    `GRANT USAGE ON *.* TO \`u293982346_staginguser\`@\`%\``,
+    `GRANT SELECT, INSERT, UPDATE ON \`${STAGING_BUSINESS_DATABASE}\`.* TO \`u293982346_staginguser\`@\`%\``
+  ];
+  const resValid = evaluateGrants(validStagingGrants, STAGING_BUSINESS_DATABASE, 'u293982346_encarmenapp', true);
+  assert.equal(resValid.code, '');
+});

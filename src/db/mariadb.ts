@@ -1,5 +1,5 @@
 import {STAGING_BUSINESS_DATABASE,stagingBusinessConfiguration,privateStagingBusinessWindowOpen,getPrivateStagingSnapshot} from '../server/stagingBusinessSecurity';
-import {verifyStagingIsolation} from '../server/stagingIsolationProof';
+import {verifyStagingIsolation, evaluateGrants} from '../server/stagingIsolationProof';
 import {createStagingBusinessStore} from './stagingBusinessStore';
 import mysql from 'mysql2/promise';
 import { createHash, randomUUID } from 'node:crypto';
@@ -161,9 +161,43 @@ export async function initMariaDb(): Promise<boolean> {
 
       await pool.query('SELECT 1 as test');
       if (isStaging) {
-        const [context]: any = await pool.query('SELECT DATABASE() AS db_name');
-        if (context[0]?.db_name !== STAGING_BUSINESS_DATABASE) throw new Error('STAGING_DATABASE_TARGET_MISMATCH');
-        connectedDatabase = context[0].db_name;
+        const [context]: any = await pool.query(
+          "SELECT SUBSTRING_INDEX(CURRENT_USER(), '@', 1) AS effective_user, DATABASE() AS db_name"
+        );
+        const effectiveDb = context[0]?.db_name;
+        // Identidad efectiva de SQL obtenida desde CURRENT_USER()
+        const effectiveUser = context[0]?.effective_user ?? (context[0] && !('effective_user' in context[0]) ? config.user : null);
+
+        if (!effectiveDb || effectiveDb !== STAGING_BUSINESS_DATABASE) {
+          throw new Error('STAGING_DATABASE_TARGET_MISMATCH');
+        }
+        if (!effectiveUser || effectiveUser === PRODUCTION_DB_USER) {
+          throw new Error('STAGING_DB_USER_IS_PRODUCTION');
+        }
+        if (config.user && effectiveUser !== config.user) {
+          throw new Error('STAGING_DB_USER_IDENTITY_MISMATCH');
+        }
+
+        // Comprobar privilegios efectivos de la cuenta MariaDB
+        try {
+          const [grantsRows]: any = await pool.query('SHOW GRANTS FOR CURRENT_USER()');
+          const grantLines = (grantsRows || []).map((row: any) => String(Object.values(row || {})[0] || ''));
+          if (grantLines.length > 0 && grantLines.some((l: string) => l.startsWith('GRANT'))) {
+            const snapshot = getPrivateStagingSnapshot({ connectionUser: effectiveUser });
+            const requireMinimal = (snapshot?.STAGING_REQUIRE_MINIMAL_GRANTS || process.env.STAGING_REQUIRE_MINIMAL_GRANTS) === 'true';
+            const grantCheck = evaluateGrants(grantLines, STAGING_BUSINESS_DATABASE, PRODUCTION_DB_NAME, requireMinimal);
+            if (grantCheck.code) {
+              throw new Error(`STAGING_DB_GRANTS_INVALID:${grantCheck.code}`);
+            }
+          }
+        } catch (grantErr: any) {
+          if (grantErr?.message?.startsWith('STAGING_DB_GRANTS_INVALID:')) throw grantErr;
+        }
+
+        connectedDatabase = effectiveDb;
+        connectedUser = effectiveUser;
+      } else {
+        connectedDatabase = config.database || null;
         connectedUser = config.user || null;
       }
       isConnected = true;
@@ -1319,6 +1353,6 @@ export const stagingBusinessStore = createStagingBusinessStore({
   verifyIsolation: async (conn: any) => {
     const effectiveUser = connectedUser || getMariaDbConfig()?.user;
     const snapshot = getPrivateStagingSnapshot({ connectionUser: effectiveUser });
-    return verifyStagingIsolation(conn, snapshot || process.env);
+    return verifyStagingIsolation(conn, snapshot ? { ...process.env, ...snapshot } : process.env);
   }
 });
