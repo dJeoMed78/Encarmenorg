@@ -83,3 +83,13 @@ La documentación permanece en GitHub mientras el repositorio y acceso estén di
 - PR #20 merge `b6243a41dd8fd6ae1474c87ec6bd1d27e67f8bbb` a `ia-desarrollo`, CI `41170314885` PASS. Ruta DELETE empresarial limitada a sesión con `business:delete`, `stagingBusinessStore.delete` transaccional/aislamiento, affectedRows y SQL readback; UI muestra errores, producción no modificada.
 - Auditoría runtime Staging `41170452153` PASS: versión nueva por header HTTP, DELETE sin autenticación 401, cuenta `jeo` y permiso DELETE de SQL verificados; 208 empresas, ID `20272` intacto.
 - **Pendiente:** propietario usar administración web de Staging para confirmar eliminación real; después releer MariaDB y ficha pública. No afirmar que ya está borrado. **No requiere SSH ni cambios manuales Hostinger.** Issue #12 sigue abierto por protocolo.
+
+
+## 2026-10-30 — alto de jornada: 3 incidencias y rotación de credencial pendientes
+
+**Propietario ordenó cerrar actividades por hoy; NO diagnosticar, corregir, acceder por SSH, cambiar configuración ni desplegar hasta mañana.**
+
+- **Issue #21: login roto** tras última publicación; el formulario de `jeo` muestra `signal is aborted without reason`. Causa no confirmada. La captura del chat muestra una clave visible: no copiarla ni adjuntarla a GitHub. Rotación segura pendiente posterior.
+- **Issue #12: borrado no persistente / desaparición visual.** Propietario afirma que `30102026` ID `20272` desapareció del panel tras intentar borrar, pero MariaDB seguía conservando esa fila: SQL audit `41169533577`, más reciente `41170452153`, 208 empresas. No interpretar UI como DELETE confirmado. PR #20 integrado/atestiguado, no se validó borrado real con login `jeo`. Recuperar login antes de nuevos intentos; después comprobar SQL y GET público de ausencia.
+- **Issue #19: medios.** No se pudo subir logo ni 10 fotos de productos en formulario de alta pública. Sin diagnóstico ni corrección; mantener abierto.
+- **Producción:** `main`/`encarmen.org` y MariaDB productiva fuera de alcance. Para continuidad comenzar por registro maestro e Issues #12, #19 y #21. No repetir diagnósticos ya cerrados ni confundir pruebas sintéticas con alta/borrado manual del propietario.
