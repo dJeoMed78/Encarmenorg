@@ -121,6 +121,7 @@ jobs:
               with urllib.request.urlopen('https://staging.encarmen.org/api/health',timeout=10) as resp:
                   j=json.loads(resp.read(20000))
                   print('PUBLIC_HEALTH_STATUS='+str(resp.status),flush=True)
+                  print('PUBLIC_RELEASE_ATTESTED='+str(resp.headers.get('X-Encarmen-Staging-Gate-Release')=='ENC_005_DIAG_20261030').lower(),flush=True)
                   print('PUBLIC_HEALTH_STAGING='+str(j.get('environment')=='staging').lower(),flush=True)
                   print('PUBLIC_HEALTH_READONLY='+str(j.get('staging',{}).get('readOnly') is True).lower(),flush=True)
                   print('PUBLIC_HEALTH_MARIADB='+str(j.get('database')=='mariadb').lower(),flush=True)
