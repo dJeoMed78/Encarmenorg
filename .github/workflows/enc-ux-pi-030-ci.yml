@@ -1,0 +1,33 @@
+name: ENC UX PI indicator validation
+on:
+  push:
+    branches: [work/enc-ux-pi-030]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - name: Verify PI indicator and management callback
+        run: |
+          node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          import assert from 'node:assert/strict';
+          const view=fs.readFileSync('src/components/BusinessPublicDetail.tsx','utf8');
+          const css=fs.readFileSync('src/components/BusinessPublicDetail.css','utf8');
+          assert.match(view,/className="bpd-pi-trigger" onClick=\{\(\) => setAdmin\(true\)\}/);
+          assert.match(view,/aria-label="Gestión del negocio"/);
+          assert.match(view,/\n            PI\n/);
+          assert.doesNotMatch(view,/<LockKeyhole size=\{14\} \/> Gestión del negocio/);
+          assert.match(css,/\.bpd-footer \.bpd-pi-trigger \{/);
+          console.log('PI_INDICATOR_ASSERTIONS=PASS');
+          JS

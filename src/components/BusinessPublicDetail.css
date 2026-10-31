@@ -434,8 +434,29 @@
   color: #556a83;
   padding: 20px 0 5px;
 }
-.bpd-footer button {
-  font-size: 11px;
+.bpd-footer .bpd-pi-trigger {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 3px 5px;
+  margin: 0;
+  color: #708197;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: .02em;
+  cursor: pointer;
+  text-decoration: none;
+}
+.bpd-footer .bpd-pi-trigger:hover,
+.bpd-footer .bpd-pi-trigger:focus-visible {
+  color: #234e76;
+  text-decoration: underline;
+}
+.bpd-footer .bpd-pi-trigger:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 .bpd-notice {
   padding: 12px;
