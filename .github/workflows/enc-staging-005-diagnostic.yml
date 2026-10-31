@@ -110,6 +110,7 @@ jobs:
               print('SQL_GRANTS_PRODUCTION='+str(any('encarmenapp' in g for g in grants)).lower(),flush=True)
               print('SQL_GRANTS_STAGING_INSERT='+str(any(('INSERT' in g or 'ALL PRIVILEGES' in g) and D in g for g in grants)).lower(),flush=True)
               print('SQL_GRANTS_STAGING_UPDATE='+str(any(('UPDATE' in g or 'ALL PRIVILEGES' in g) and D in g for g in grants)).lower(),flush=True)
+              print('SQL_GRANTS_STAGING_DELETE='+str(any(('DELETE' in g or 'ALL PRIVILEGES' in g) and D in g for g in grants)).lower(),flush=True)
           except Exception as ex:print('SQL_DIAGNOSTIC_FAILURE='+str(ex)[:60],flush=True)
           finally:os.unlink(tmp)
           try:
