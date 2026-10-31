@@ -131,3 +131,11 @@ La documentación permanece en GitHub mientras el repositorio y acceso estén di
 - **GitHub NO se reemplaza:** sigue siendo el registro técnico oficial de código, pruebas, integraciones, incidencias y reglas permanentes. Toda modificación importante debe quedar rastreada allí. Si Drive y GitHub discrepan sobre un cambio técnico, verificar la evidencia real en repositorio/servidor antes de actuar.
 - La bitácora en Drive fue creada, trasladada a la carpeta NIA y leída posteriormente con éxito el 2026-10-31. La carpeta se verificó restringida. **No existe todavía captura automática de mensajes ni guardado programado cada cinco minutos**; realizar checkpoints al concretar decisiones o avances dentro de las sesiones activas, sin prometer ejecución en segundo plano.
 - Nunca guardar contraseñas, tokens, secretos o transcripciones sin depuración. No intervenir `main` ni producción sin autorización expresa del propietario.
+
+## Archivo activo de memoria narrativa — NIA5.md (2026-10-31)
+
+- **Fuente prioritaria de continuidad:** Google Drive, carpeta privada `memoria NIA`, ID `1Qy7yHshDTRsKg3XE-7DsuqjNhw2mbD6L`.
+- **Único archivo de memoria progresiva:** [NIA5.md](https://drive.google.com/file/d/1_LEQYudBlfhmy3L95Y39SWSL_2sqsI1K/view), ID `1_LEQYudBlfhmy3L95Y39SWSL_2sqsI1K`. El propietario lo designó expresamente. Los archivos `NIA1.md` a `NIA4.md` sólo se consultan como antecedentes históricos.
+- Leer el **final de NIA5.md** antes de cada intervención; agregar sólo información posterior al último mensaje registrado, sin duplicar contenido. La transcripción inicial terminó el 31-oct-2026 a las 11:54 GMT-6; checkpoint incremental `CHECKPOINT-INCREMENTAL-NIA5-20261031-A` ya guardado y verificado en el mismo archivo, que pasó de 90,156 a 93,279 bytes.
+- La automatización habilitada `Memoria horaria Nia` está reconfigurada para apuntar a NIA5.md. **No está demostrada la captura automática de las conversaciones**: si no obtiene mensajes reales, debe reportar NO RESPALDADO, nunca simular un respaldo.
+- El Google Doc provisional `NIA — BITÁCORA CRONOLÓGICA` no es el archivo activo. Mantener GitHub como registro técnico oficial y no modificar producción.
