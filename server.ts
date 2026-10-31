@@ -248,7 +248,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     if (['GET','HEAD','OPTIONS'].includes(req.method.toUpperCase())) return next();
     if (req.method === 'POST' && ['/api/admin/login','/api/admin/logout'].includes(req.path)) return next();
     const businessMutation = (req.method === 'POST' && (req.path === '/api/submit-business' || req.path === '/api/public/business-registrations')) || (req.method === 'PATCH' && /^\/(?:api\/)?businesses\/[^/]+$/.test(req.path));
-    if (businessMutation && isBusinessWritePermitted()) return next();
+    // Permit only authenticated business deletion in the isolated Staging business-write lane.
+    // Admin security runs before this middleware and requires business:delete.
+    const adminBusinessDelete = req.method.toUpperCase() === 'DELETE' && /^\/(?:api\/)?businesses\/[^/]+$/.test(req.path) && adminSecurity.isAuthorized(req, 'business:delete');
+    if ((businessMutation || adminBusinessDelete) && isBusinessWritePermitted()) return next();
     if (req.method.toUpperCase() === 'POST' && (req.path === '/api/ratings/get' || req.path === '/api/events/radar-search')) return next();
     return res.status(403).json({success:false,error:'STAGING_READ_ONLY',message:'Solo el carril autorizado de registro y edición puede escribir negocios. Las demás operaciones permanecen bloqueadas.'});
   }
