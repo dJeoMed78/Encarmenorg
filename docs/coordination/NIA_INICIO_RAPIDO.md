@@ -103,3 +103,10 @@ La documentación permanece en GitHub mientras el repositorio y acceso estén di
 
 
 - PR #23, merge `6eefb0209e402b0f78b0c3a3045085c1e6b70fe3` a `ia-desarrollo`; CI `41213892619` PASS (audit 0 hallazgos moderados+, pruebas auth/MariaDB/seguridad, ZIP y compilación). Hostinger Staging read-only `41214176745`: `minimatch=11.0.1`, `qs=6.16.1` instalados, health HTTP 200; producción sin cambios. Issue #22 permanece abierto hasta decisión de promoción productiva.
+
+
+## Directriz del propietario — agilidad en Staging y cancelación de Figma (2026-10-31)
+
+- **Metodología permanente:** actuar con agilidad y pragmatismo en `staging.encarmen.org` como laboratorio autorizado. Pruebas breves y estrictamente proporcionales al riesgo. Preparar respaldo pertinente y reversión cuando un cambio pueda impactar datos/servicios; no repetir pruebas generales innecesarias. Conservar siempre aislamiento y protección absoluta de `main`, `encarmen.org` y MariaDB productiva. Directriz desarrollada en `docs/coordination/LA_JEFA_METODOLOGIA_PERMANENTE.md` (commit `f9a77baf5adb6d07c5cf836b359db8b416080aec`).
+- **Figma CANCELADO por el propietario:** el archivo de referencia `ENCARMEN — Staging | Diseño maestro editable` (Figma `l2mTWK7votdI1xGozDvJai`) fue una reconstrucción aproximada, **NO una réplica fiel** del portal Staging. No utilizarlo como diseño oficial, fuente de verdad ni base para implementar cambios; no hacer nuevos trabajos de Figma salvo nueva solicitud expresa. El archivo creado no se elimina sin instrucción explícita.
+- **Criterio si se retoma Figma:** sólo sirve una reproducción visual y estructural comprobablemente exacta del diseño actual de Staging, no wireframes, placeholders ni reinterpretaciones. Verificar contra interfaz real y componentes, y comunicar limitaciones antes de afirmar fidelidad.
