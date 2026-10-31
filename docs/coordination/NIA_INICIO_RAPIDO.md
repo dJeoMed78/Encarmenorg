@@ -121,3 +121,13 @@ La documentación permanece en GitHub mientras el repositorio y acceso estén di
 **Prioridades vigentes:** (1) #21 login administrativo `jeo`; (2) #12 borrado visual de ID 20272 sin persistencia confirmada; (3) #19 carga de logo y 10 imágenes. Seguridad `minimatch/qs` Issue #22: corregida en `ia-desarrollo` y presente en Staging; producción sin tocar. El propietario rechazó y **canceló Figma** porque el archivo creado no es idéntico a la web: no utilizarlo, ni proponer sincronización a código salvo nueva solicitud expresa.
 
 **Metodología:** pruebas y respaldos proporcionales a riesgos reales, Staging como laboratorio, cambios simples con rapidez y validación concreta; aislamiento absoluto de producción. No se autoriza publicar en producción sin orden expresa.
+
+
+## Memoria narrativa primaria en Google Drive — instrucción del propietario (2026-10-31)
+
+- Carpeta privada NIA: https://drive.google.com/drive/folders/1M7DpHsFCatAg7YXcBWxZt4KeUHVKSfdX
+- Documento de lectura inicial: https://docs.google.com/document/d/1aNJblt-eoTyAlzj03FXblZnhIvQ-MDLsbFWQ87valGg/edit
+- **Orden del propietario:** consultar y actualizar Google Drive con mayor frecuencia que GitHub como memoria narrativa de conversaciones, decisiones y checkpoints. Al abrir otro chat, leer primero el último estado documentado en Drive; después revisar los cuatro documentos canónicos de coordinación en GitHub y corroborar los Issues, PR, SHA y estado de Staging.
+- **GitHub NO se reemplaza:** sigue siendo el registro técnico oficial de código, pruebas, integraciones, incidencias y reglas permanentes. Toda modificación importante debe quedar rastreada allí. Si Drive y GitHub discrepan sobre un cambio técnico, verificar la evidencia real en repositorio/servidor antes de actuar.
+- La bitácora en Drive fue creada, trasladada a la carpeta NIA y leída posteriormente con éxito el 2026-10-31. La carpeta se verificó restringida. **No existe todavía captura automática de mensajes ni guardado programado cada cinco minutos**; realizar checkpoints al concretar decisiones o avances dentro de las sesiones activas, sin prometer ejecución en segundo plano.
+- Nunca guardar contraseñas, tokens, secretos o transcripciones sin depuración. No intervenir `main` ni producción sin autorización expresa del propietario.
