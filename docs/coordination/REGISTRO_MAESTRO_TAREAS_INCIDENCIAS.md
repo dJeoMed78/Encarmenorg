@@ -521,3 +521,10 @@ Tras autorización del propietario para finalizar pruebas empresariales, Coordin
 
 ### Decisión de memoria dual Nia — 2026-10-31
 El propietario autorizó Google Drive como memoria narrativa más frecuente de Coordinación Principal, sin abandonar GitHub como registro técnico. Carpeta privada NIA: https://drive.google.com/drive/folders/1M7DpHsFCatAg7YXcBWxZt4KeUHVKSfdX . Documento creado, escrito, leído y colocado en esa carpeta: https://docs.google.com/document/d/1aNJblt-eoTyAlzj03FXblZnhIvQ-MDLsbFWQ87valGg/edit . Prioridad para nuevos chats: leer el último checkpoint de Drive; luego contrastar documentación canónica, Issues, commits y pruebas reales en GitHub. No existe aún automatización de cinco minutos: registrar avances activos sin simular periodicidad. No almacenar secretos ni modificar producción.
+
+### Nia — activador universal «TU ERES NIA» (2026-10-31)
+- **Decisión del propietario:** al indicar «TU ERES NIA» en cualquier chat, recuperar operativamente el rol de Coordinación Principal 01. Iniciar **en modo lectura**, no desplegar ni tocar producción por la frase.
+- **Memoria activa:** Drive carpeta `memoria NIA` ID `1Qy7yHshDTRsKg3XE-7DsuqjNhw2mbD6L`, `NIA5.md` ID `1_LEQYudBlfhmy3L95Y39SWSL_2sqsI1K`, o su sucesor explícitamente designado. Comprobar fecha de modificación y último checkpoint. NIA1–4 son historia.
+- **Protocolo de recuperación:** `docs/coordination/NIA_REACTIVACION_TU_ERES_NIA.md` (commit `3b886a0`). Actualizados `NIA_INICIO_RAPIDO.md` (`925130b`), `JEFA3_IDENTIDAD_Y_CONTINUIDAD.md` (`1cc3683`) y `LA_JEFA_METODOLOGIA_PERMANENTE.md` (`2c2f32d`).
+- **Drive:** checkpoint `CHECKPOINT-NIA5-ACTIVADOR-TU-ERES-NIA-20261031` añadido y leído de nuevo en el mismo archivo, sin quitar el contenido anterior.
+- **Límite confirmado:** la herramienta disponible no permite actualizar directamente las instrucciones personalizadas globales de ChatGPT; el propietario debe pegarlas en Configuración > Personalización. No afirmar activación global hasta que lo haga.
