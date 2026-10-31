@@ -8,7 +8,7 @@
 - Reporte de escáner (30-oct-2026, 22:55): 2 vulnerabilidades moderadas, 0 altas/críticas.
 - Revisión independiente del `package-lock.json` de `ia-desarrollo`: `minimatch@10.2.6` (CVE-2026-118764, objetivo >=11.0.1) y `qs@6.16.0` (CVE-2026-110816, objetivo >=6.16.1). En `package.json` no constan como dependencias directas; verificar cadena transitoria, compatibilidad y dónde se instalan.
 - Orden de trabajo futura: identificar rutas de dependencia y exposición, actualizar con una rama aislada, no forzar cambios mayores sin revisar, `npm ci`, `npm audit`, `npm ls`, lint, tests, build, revisión independiente y verificación posterior en Staging. Preservar regresiones de seguridad e integridad; respaldos/rollback. Sin despliegue a producción.
-- **No ejecutar parche ahora.** Coordinar con las incidencias activas #21 (login), #12 (eliminación) y #19 (imágenes) para evitar colisiones en Staging.
+- **Nota histórica de planeación (SUPERADA):** ya se ejecutó el parche y se verificó Staging; conservar como antecedente. Coordinar alcance productivo futuro con incidencias activas #21, #12 y #19, sin intervenir producción sin autorización.
 
 
 **Fecha de creación:** 2026-10-29. **Coordinación:** Jefa 3. **Rama canónica:** `coord/encarmen-work-control-001`.
@@ -506,3 +506,14 @@ Tras autorización del propietario para finalizar pruebas empresariales, Coordin
 - CI run `41213892619` SUCCESS: `npm ci`, `npm audit --audit-level=moderate`, `npm ls`, lint, regresiones de seguridad/MariaDB/auth/registro, prueba ZIP Archiver 8 compatible con minimatch 11 y build.
 - Verificación de Staging vía SSH de solo lectura run `41214176745`: `current/nodejs` activo contiene `minimatch 11.0.1`, `qs 6.16.1` en `node_modules` y lockfile; health HTTP 200 y contexto Staging/MariaDB correcto. No se cambió .env ni se ejecutó SQL mutable.
 - **Producción no intervenida:** `main`, `encarmen.org` y BD productiva siguen fuera de alcance. Cierre de alcance productivo sujeto a permiso explícito, revisión e inspección de respaldos/rollback. Issue #22 queda abierto para trazabilidad de ese alcance.
+
+
+## Decisiones permanentes del propietario — continuidad Nia y cancelación de Figma (2026-10-31)
+
+- **Memoria operativa obligatoria:** GitHub `dJeoMed78/Encarmenorg` rama `coord/encarmen-work-control-001` es fuente persistente y prioritaria de continuidad de Jefa 3/Nia. Se registra cada cambio, incidencia, decisión, permiso de alcance y evidencia verificable que impacte el proyecto; historial no se borra y ninguna incidencia se cierra automáticamente. La nueva conversación deberá leer `NIA_INICIO_RAPIDO.md`, `JEFA3_IDENTIDAD_Y_CONTINUIDAD.md`, `LA_JEFA_METODOLOGIA_PERMANENTE.md`, este Registro Maestro y comparar ramas/SHAs actuales.
+- **Metodología optimizada:** Staging es laboratorio; resolver de la forma más breve y segura. Pruebas dirigidas al impacto, no repetir suites sin justificación; respaldo pertinente y reversión antes de cambios que puedan causar pérdida, conflicto o impacto; proteger producción y verificar aislamiento. Véase metodología permanente, sección 2026-10-31.
+- **Figma CANCELADO POR EL PROPIETARIO:** el archivo creado `ENCARMEN — Staging | Diseño maestro editable`, Figma key `l2mTWK7votdI1xGozDvJai`, NO es réplica exacta del diseño real de Staging. Fue rechazado. **No usarlo para diseñar ni llevar cambios de Figma a la web; no editarlo ni eliminarlo sin nueva orden expresa**. Si se reabre, únicamente réplica exacta comprobada contra Staging, no aproximaciones. Estado de tarea: CANCELADA, sin modificaciones a web derivadas de ese diseño.
+- **Estado de seguridad CVE actualizado:** Issue #22/PR #23 **ya remediado en código y Staging**: `minimatch@11.0.1`, `qs@6.16.1`, CI run `41213892619`, verificación runtime run `41214176745`, reporte del propietario Hostinger 2026-10-31 09:17: «No se han encontrado vulnerabilidades». `main`/producción no modificada. No reabrir implementación en Staging sólo por ver notas históricas de «pendiente»; Issue #22 conserva seguimiento del alcance productivo.
+- **Incidencias funcionales aún pendientes de validación del propietario:** Issue #21 acceso administrativo; Issue #12 eliminación visual no persistida en MariaDB (ID 20272); Issue #19 logo y 10 fotos. Mantener resultados específicos y no atribuir causa raíz no comprobada.
+
+**Auditoría de continuidad:** el propietario preguntó expresamente si Nia estaba usando GitHub como memoria y qué ocurriría cuando termine el chat. Confirmación operativa: la sucesión se hace desde estos cuatro documentos y el estado vivo de GitHub; ningún chat o instancia de modelo garantiza por sí mismo continuidad automática, pero el registro permite reconstruir decisiones y trabajo sin perder rastreabilidad.
