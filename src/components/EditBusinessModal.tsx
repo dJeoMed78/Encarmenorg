@@ -27,7 +27,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { Business, Category } from '../types';
-import { uploadBusinessLogo } from '../services/api';
+import { uploadRegistrationImage } from '../services/publicMediaClient';
 import { formatBusinessName, formatAddressText } from '../utils/textUtils';
 import {
   ALL_POSTAL_CODES,
@@ -203,6 +203,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   onSave
 }) => {
   const [formData, setFormData] = useState<Partial<Business>>({});
+  const mediaAttemptId = useRef<string>(crypto.randomUUID());
   const [postalCode, setPostalCode] = useState<string>('');
   const [selectedDeliveryOptions, setSelectedDeliveryOptions] = useState<string[]>([]);
   const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<string[]>([]);
@@ -361,8 +362,8 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       setErrorMsg('La galería admite hasta 10 fotos. No se reemplazaron las existentes.');
       return;
     }
-    if (files.some(file => !(companyLogo ? /^image\/(jpeg|png|webp)$/ : /^image\/(jpeg|png|webp|gif)$/).test(file.type) || file.size > 5 * 1024 * 1024)) {
-      setErrorMsg('Elige imágenes JPG, PNG, WebP o GIF de hasta 5 MB.');
+    if (files.some(file => !(companyLogo ? /^image\/(jpeg|png|webp)$/ : /^image\/(jpeg|png|webp)$/).test(file.type) || file.size > 12 * 1024 * 1024)) {
+      setErrorMsg('Elige imágenes JPG, PNG o WebP de hasta 12 MB; se comprimen antes del envío.');
       return;
     }
     uploadBusy.current = true;
@@ -376,22 +377,9 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       if (!validOperation(v, key)) return;
       const urls: string[] = [];
       for (const file of files) {
-        const data = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('No fue posible leer la imagen.'));
-          reader.onerror = reader.onabort = () => reject(new Error('No fue posible leer la imagen.'));
-          reader.readAsDataURL(file);
-        });
+        const uploaded = await uploadRegistrationImage(file, companyLogo ? 'logo' : 'gallery', mediaAttemptId.current);
         if (!validOperation(v, key)) return;
-        const response = await uploadBusinessLogo(data, file.name);
-        if (!validOperation(v, key)) return;
-        // Shared helper can return success + dataURI after HTTP503; that is not a remote upload.
-        const url = response?.url;
-        if (response?.success !== true || !url || !/^(?:https?:\/\/|\/(?!\/))/.test(url))
-          throw new Error('No se confirmó la carga de la imagen en el servidor. Intenta de nuevo.');
-        const parsed = new URL(url, window.location.origin);
-        if (parsed.username || parsed.password) throw new Error('La URL de imagen no es válida.');
-        urls.push(url);
+        urls.push(uploaded.url);
       }
       if (validOperation(v, key)) setFormData(prev => companyLogo ? {...prev, logo_url: urls[0]} : gallery ? {...prev, gallery: [...(prev.gallery || []), ...urls]} : {...prev, image: urls[0]});
     } catch (failure) {

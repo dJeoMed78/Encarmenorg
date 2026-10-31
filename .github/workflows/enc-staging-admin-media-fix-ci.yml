@@ -1,0 +1,46 @@
+name: ENC staging administrative media fix CI
+on:
+  push:
+    branches: [work/enc-staging-admin-media-fix-20261031]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: node --import tsx --test tests/enc-staging-public-media-001.test.mjs
+      - run: npm run build
+      - name: Staging public media gate non-writing HTTP probe
+        run: |
+          set -euo pipefail
+          status=$(curl -sS --max-time 20 -o /tmp/enc-media-probe -w '%{http_code}' -X POST https://staging.encarmen.org/api/public/registration-media -H 'Content-Type: text/plain' --data-binary 'probe' || true)
+          echo "MEDIA_HTTP_STATUS=$status"
+          head -c 450 /tmp/enc-media-probe || true
+          echo
+      - name: Staging malformed PNG processing probe without DB writes
+        run: |
+          set -euo pipefail
+          node -e "require('fs').writeFileSync('/tmp/malformed.png',Buffer.from('89504e470d0a1a0a00000000','hex'))"
+          status=$(curl -sS --max-time 20 -o /tmp/media-png-response -w '%{http_code}' -X POST https://staging.encarmen.org/api/public/registration-media -H 'Content-Type: image/png' -H 'X-Media-Role: logo' -H 'X-Registration-Attempt: 11111111-1111-4111-8111-111111111111' --data-binary @/tmp/malformed.png || true)
+          echo "MALFORMED_PNG_STATUS=$status"
+          head -c 450 /tmp/media-png-response || true
+          echo
+      - name: Staging one-pixel media persistence test isolated to test DB
+        run: |
+          set -euo pipefail
+          echo 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC' | base64 -d > /tmp/enc-media-tiny.png
+          status=$(curl -sS --max-time 25 -o /tmp/enc-media-upload-response -w '%{http_code}' -X POST https://staging.encarmen.org/api/public/registration-media -H 'Content-Type: image/png' -H 'X-Media-Role: logo' -H 'X-Registration-Attempt: 11111111-1111-4111-8111-111111111111' --data-binary @/tmp/enc-media-tiny.png || true)
+          echo "VALID_PNG_UPLOAD_STATUS=$status"
+          head -c 500 /tmp/enc-media-upload-response || true
+          echo
+          if [ "$status" = 201 ]; then
+            node -e "const x=require('/tmp/enc-media-upload-response');" 2>/dev/null || true
+          fi
