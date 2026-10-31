@@ -195,7 +195,8 @@ function privateStagingAdminIdentity(): {credentials:string;origin:string}|undef
     const privateEnv = dotenv.parse(fs.readFileSync(configFile));
     if (privateEnv.APP_ENV !== 'staging' ||
         privateEnv.DB_NAME !== STAGING_PRIVATE_DB_NAME ||
-        privateEnv.DB_USER !== process.env.DB_USER ||
+        !privateEnv.DB_USER ||
+        privateEnv.DB_USER === 'u293982346_appuser' ||
         !privateEnv.DB_PASSWORD ||
         privateEnv.ENC_ADMIN_PUBLIC_ORIGIN !== 'https://staging.encarmen.org' ||
         !privateEnv.ENC_ADMIN_CREDENTIALS_JSON) return undefined;
