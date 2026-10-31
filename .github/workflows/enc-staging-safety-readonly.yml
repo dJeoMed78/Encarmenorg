@@ -189,6 +189,12 @@ jobs:
                       o('RECENT_LOG_MARKER_'+marker.upper(),str(marker.lower() in chunk.lower()).lower())
               except Exception:o('RECENT_LOG_SAFE_SCAN','UNAVAILABLE')
           o('SSH_READONLY_INSPECTION_ONLY','true')
+          marker=H/'encarmen-staging-backups'/'enc-staging-permanent-admin-e2e-active.json'
+          o('PERMANENT_ADMIN_E2E_WINDOW_MARKER',str(marker.is_file() and not marker.is_symlink()).lower())
+          if private_config.is_file():
+              content=private_config.read_text(errors='replace')
+              o('E2E_TEMP_WRITE_FLAG_PRESENT',str('STAGING_BUSINESS_WRITES_ENABLED=true' in content.splitlines()).lower())
+              o('E2E_TEMP_ADMIN_FLAG_PRESENT',str('ENC_ADMIN_MUTATIONS_ENABLED=true' in content.splitlines()).lower())
           o('SQL_OR_STAGING_WRITES_EXECUTED','false')
           o('RESULT','READONLY_INSPECTION_COMPLETE')
           REMOTE
