@@ -600,8 +600,8 @@ export function BusinessPublicDetail({
             </section>
         </div>
         <footer className="bpd-footer">
-          <button ref={adminButton} onClick={() => setAdmin(true)}>
-            <LockKeyhole size={14} /> Gestión del negocio
+          <button ref={adminButton} type="button" className="bpd-pi-trigger" onClick={() => setAdmin(true)} aria-label="Gestión del negocio" title="Gestión del negocio">
+            PI
           </button>
           <span>Directorio de negocios · encarmen.org</span>
         </footer>
