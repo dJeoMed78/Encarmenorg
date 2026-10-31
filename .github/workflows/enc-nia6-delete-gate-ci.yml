@@ -17,6 +17,8 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Install test-only jsdom dependency
+        run: npm install --no-save --no-package-lock jsdom@26.1.0
       - run: npm run lint
       - name: Directed deletion security and persistence regressions
         run: node --import tsx --test tests/staging-write-001.test.mjs tests/staging-store-default-strict.test.mjs tests/enc-staging-write-gate-005-unit.test.mjs tests/enc-staging-write-gate-005-http.test.mjs tests/staging-isolation-proof.test.mjs tests/security-containment-003.test.mjs
