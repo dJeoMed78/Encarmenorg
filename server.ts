@@ -109,6 +109,7 @@ import {
   isStagingEnvironment,
   isWritePermitted,
   isBusinessWritePermitted,
+  stagingBusinessGateSafetyDiagnostics,
   getPool,
   PRODUCTION_DB_USER,
   stagingBusinessStore,
@@ -1677,6 +1678,7 @@ app.get('/api/database-status', (_req: Request, res: Response) => {
   res.json({
     success: true,
     businessWrites: {configured:isStagingEnvironment() && stagingBusinessConfiguration(process.env,PRODUCTION_DB_USER),permitted:isBusinessWritePermitted(),scope:'businesses-only'},
+    ...(isStaging ? { stagingGateDiagnostic: stagingBusinessGateSafetyDiagnostics(), stagingGateRelease:'ENC_005_DIAG_20261030' } : {}),
     activeEngine: isMariaDbActive() ? 'mariadb_hostinger' : 'local_json',
     environment: isStaging ? 'staging' : (process.env.NODE_ENV || 'production'),
     stagingIsolation: {
@@ -1705,6 +1707,7 @@ app.get('/api/database-status', (_req: Request, res: Response) => {
 // System health and status check
 app.get(['/api/health', '/api/system/status'], (_req: Request, res: Response) => {
   const isStaging = isStagingEnvironment();
+  res.setHeader('X-Encarmen-Staging-Gate-Release', isStaging ? 'ENC_005_DIAG_20261030' : 'n/a');
   res.json({
     status: 'ok',
     uptime: Math.round(process.uptime()),
