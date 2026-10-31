@@ -59,6 +59,21 @@ export function createStagingBusinessStore(deps:{canWrite:()=>boolean;getConnect
     });
    } finally {if(locked){try{await conn.query('SELECT RELEASE_LOCK(?)',['encarmen:staging:business-create']);}catch{}}conn.release();}
   },
+  async delete(id:string|number){
+   const businessId=String(id);
+   if(!/^[0-9]+$/.test(businessId))throw new BusinessWriteError(400,'BUSINESS_ID_INVALID','Identificador empresarial inválido.');
+   const conn=await connection();
+   try{return await transaction(conn,async()=>{
+    const [locked]=await conn.query('SELECT id FROM businesses WHERE id = ? FOR UPDATE',[businessId]);
+    if(locked.length!==1)throw new BusinessWriteError(404,'BUSINESS_NOT_FOUND','La empresa ya no existe.');
+    assertWrite();
+    const [removed]=await conn.query('DELETE FROM businesses WHERE id = ?',[businessId]);
+    if(Number(removed.affectedRows)!==1)throw new BusinessWriteError(503,'BUSINESS_DELETE_UNCONFIRMED','MariaDB no confirmó una sola eliminación.');
+    const [remaining]=await conn.query('SELECT id FROM businesses WHERE id = ?',[businessId]);
+    if(remaining.length)throw new BusinessWriteError(503,'BUSINESS_DELETE_READBACK_FAILED','El registro permanece en MariaDB; no se confirmó su eliminación.');
+    return {deleted:true};
+   });}finally{conn.release();}
+  },
   async update(id:string|number,patch:any){
    const conn=await connection();
    try{return await transaction(conn,async()=>{
