@@ -2802,6 +2802,14 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
     const confirmed = (await dbLoadAllBusinesses(true)).find(b => String(b.id) === String(oldBiz.id));
     if (!confirmed) return res.status(503).json({success:false, writeMayHaveSucceeded:true, message:'No se pudo verificar el resultado del guardado; recarga antes de reintentar.'});
     if (!contactsMatchReadback(contactIntent.patch, confirmed)) return res.status(409).json({success:false, writeMayHaveSucceeded:true, message:'Los contactos releídos no coinciden con el cambio solicitado. Recarga antes de reintentar.'});
+    // Verify privileged badges against MariaDB readback, not only the PATCH acknowledgement.
+    for (const flag of ['isTopBusiness', 'isRecommended'] as const) {
+      if (Object.prototype.hasOwnProperty.call(safeBody, flag) &&
+          Boolean(confirmed[flag]) !== Boolean(safeBody[flag])) {
+        return res.status(409).json({ success:false, writeMayHaveSucceeded:true,
+          message: 'El distintivo no coincide con lo guardado en MariaDB. Recarga antes de reintentar.' });
+      }
+    }
     updated = confirmed;
     if (contactIntent.clear.length) console.info('[Business contacts] Authorized explicit removal', { businessId: String(oldBiz.id), fields: contactIntent.clear });
     businessesCache = businessesCache.map(b => String(b.id) === String(oldBiz.id) ? updated : b);
