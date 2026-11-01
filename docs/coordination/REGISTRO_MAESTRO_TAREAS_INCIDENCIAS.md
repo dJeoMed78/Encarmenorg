@@ -1,5 +1,16 @@
 # ENCARMEN — Registro maestro de tareas e incidencias
 
+## Regla de registro inmediato y consulta obligatoria — acuerdo del propietario 31/oct/2026
+
+**Instrucción vigente de Coordinación 01:** No depender de la memoria conversacional para listar pendientes ni reconstruir acuerdos. En cuanto se acuerde un cambio de estado, se compruebe una solución o el propietario apruebe una conclusión, actualizar en esa misma conversación este registro maestro, **sin esperar al cierre de sesión**. Antes de responder «¿qué tenemos pendiente?», consultar este índice y contrastarlo con Issues, PR, pruebas y evidencias nuevas. Conservar todas las incidencias históricas, incluso las concluidas, indicando fecha, fuente, estado, causa, solución y vínculos; no borrar sus antecedentes. Distinguir **fallo funcional pendiente** de **Issue administrativamente abierto**. Si falta evidencia propia, anotarlo como limitación de verificación y no volver a convertir automáticamente el problema en pendiente.
+
+**Caso de control:** empresa de prueba ID 20272: propietario confirmó consulta SQL en MariaDB de Staging el 31/oct/2026 y ausencia del registro. **El borrado se considera funcionalmente verificado por el propietario, no un defecto pendiente**. La comprobación SQL independiente desde esta conversación no está disponible; no repetir DELETE ni pedir otra consulta al propietario. Issue #12 puede permanecer abierto por conciliación administrativa, sin implicar regresión. Acceso autónomo de lectura SQL vía GitHub Actions es una tarea técnica **separada**, todavía no implementada ni ejecutada por esta conversación. Una nueva falla reproducible se registra como regresión enlazada, sin borrar la resolución anterior.
+
+**Control de calidad de memoria:** cada actualización debe conservar lo anterior, anotar fuente y momento, y verificarse con lectura posterior al commit. Si no se pudo escribir o comprobar, comunicarlo claramente; no afirmar que quedó guardado. No alterar producción.
+
+---
+
+
 ## ESTADO VIGENTE Y CONTROL DE CONTRADICCIONES — 31/oct/2026
 
 **Esta sección es el índice operativo de consulta PRIORITARIA.** El resto del documento conserva el historial cronológico, incluidos planes y estados antiguos que NO son instrucciones vigentes. **Las cifras históricas NO equivalen a una comprobación actual en MariaDB/Hostinger.**
