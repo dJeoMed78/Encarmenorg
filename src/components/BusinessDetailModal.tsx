@@ -38,6 +38,9 @@ export function BusinessDetailModal(props: BusinessDetailModalProps) {
       }
       onAdminClick={props.onAdminClick}
       onEditBusiness={props.onEditBusiness || props.onEdit}
+      onDeleteBusiness={props.onDeleteBusiness || (props.onDelete ? () => props.onDelete!() : undefined)}
+      onToggleTop={props.onToggleTop ? (b: Business) => (props.onToggleTop as (b: Business) => void)(b) : undefined}
+      onToggleRecommended={props.onToggleRecommended ? (b: Business) => (props.onToggleRecommended as (b: Business) => void)(b) : undefined}
       onOpenDigitalCard={props.onOpenDigitalCard}
       onOpenClientPage={props.onOpenClientPage}
       activePromotion={props.activePromotion}
