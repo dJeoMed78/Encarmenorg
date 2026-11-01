@@ -695,20 +695,16 @@ export function BusinessPublicDetail({
                   <LockKeyhole /> Gestión del negocio
                 </h2>
                 <p>Sesión administrativa verificada. Solo se habilitan acciones disponibles para esta empresa.</p>
-                {[
-                  ["Modificar registro", onEditBusiness],
-                  [b.isRecommended ? "Quitar recomendado" : "Marcar como recomendado", onToggleRecommended],
-                  [b.isTopBusiness ? "Quitar TOP" : "Marcar como TOP", onToggleTop],
-                  ["Eliminar del directorio", onDeleteBusiness],
-                ].map(([label, action]) => (
-                  <button
-                    key={label as string}
-                    disabled={!adminAuthorized || typeof action !== "function"}
-                    onClick={() => { void runManagement(action as ((biz: Business) => void) | undefined); }}
-                  >
-                    {label as string}
-                  </button>
-                ))}
+                <button type="button" disabled={!adminAuthorized || !onEditBusiness} onClick={() => { void runManagement(onEditBusiness); }}>Modificar registro</button>
+                <label>
+                  <input type="checkbox" checked={Boolean(b.isRecommended)} disabled={!adminAuthorized || !onToggleRecommended} onChange={() => { void runManagement(onToggleRecommended); }} />
+                  Recomendado
+                </label>
+                <label>
+                  <input type="checkbox" checked={Boolean(b.isTopBusiness)} disabled={!adminAuthorized || !onToggleTop} onChange={() => { void runManagement(onToggleTop); }} />
+                  TOP
+                </label>
+                <button type="button" disabled={!adminAuthorized || !onDeleteBusiness} onClick={() => { void runManagement(onDeleteBusiness); }}>Eliminar registro</button>
               </>
             )}
           </section>
