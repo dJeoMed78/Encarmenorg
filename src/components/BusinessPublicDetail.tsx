@@ -243,6 +243,7 @@ export function BusinessPublicDetail({
       onAdminClick?.();
       return;
     }
+    if (action === onDeleteBusiness && !window.confirm(`¿Eliminar definitivamente la empresa "${b.name}"? Esta acción no se puede deshacer.`)) return;
     setAdmin(false);
     action(b);
   };
@@ -696,8 +697,8 @@ export function BusinessPublicDetail({
                 <p>Sesión administrativa verificada. Solo se habilitan acciones disponibles para esta empresa.</p>
                 {[
                   ["Modificar registro", onEditBusiness],
-                  ["Marcar como recomendado", onToggleRecommended],
-                  ["Marcar como TOP", onToggleTop],
+                  [b.isRecommended ? "Quitar recomendado" : "Marcar como recomendado", onToggleRecommended],
+                  [b.isTopBusiness ? "Quitar TOP" : "Marcar como TOP", onToggleTop],
                   ["Eliminar del directorio", onDeleteBusiness],
                 ].map(([label, action]) => (
                   <button
