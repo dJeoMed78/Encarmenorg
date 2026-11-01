@@ -629,10 +629,13 @@ export default function App() {
   };
 
   const handleDeleteBusiness = async (b: Business) => {
+    // Never claim deletion locally unless the server confirms it.
+    const result = await adminDeleteBusiness(Number(b.id));
+    if (!result.success) {
+      window.alert(result.message || 'No se confirmó la eliminación del registro.');
+      return;
+    }
     invalidateBusinessRequests();
-    try {
-      await adminDeleteBusiness(Number(b.id));
-    } catch (_) {}
     setDeletedBusinessIds((prev) => [...prev, Number(b.id)]);
     setBusinessesList((prev) => prev.filter((item) => String(item.id) !== String(b.id)));
     if (selectedBusiness && String(selectedBusiness.id) === String(b.id)) {
