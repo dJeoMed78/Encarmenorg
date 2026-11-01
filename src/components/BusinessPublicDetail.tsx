@@ -282,7 +282,7 @@ export function BusinessPublicDetail({
       // Existing parent callbacks handle the authenticated API writes and refresh.
       if (draftRecommended !== Boolean(b.isRecommended)) onToggleRecommended?.(b);
       if (draftTop !== Boolean(b.isTopBusiness)) onToggleTop?.(b);
-      setFlagNotice("Cambios enviados. Comprueba su estado al actualizar la ficha.");
+      setFlagNotice("Solicitud enviada. Verifica las etiquetas tras actualizar la ficha.");
     } catch {
       setFlagNotice("No fue posible aplicar los cambios. Inténtalo de nuevo.");
     } finally {
