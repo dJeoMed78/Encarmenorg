@@ -695,7 +695,7 @@ export function BusinessPublicDetail({
                 </h2>
                 <p>Sesión administrativa verificada. Solo se habilitan acciones disponibles para esta empresa.</p>
                 {[
-                  ["Editar datos del negocio", onEditBusiness],
+                  ["Modificar registro", onEditBusiness],
                   ["Marcar como recomendado", onToggleRecommended],
                   ["Marcar como TOP", onToggleTop],
                   ["Eliminar del directorio", onDeleteBusiness],
