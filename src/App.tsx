@@ -743,6 +743,7 @@ export default function App() {
           }}
           onOpenDigitalCard={(b) => setDigitalCardBusiness(b)}
           isAdmin={isAdminLoggedIn}
+          onAdminClick={() => { setLandingBusiness(null); setIsAdminModalOpen(true); }}
           onEdit={(b) => setEditingBusiness(b)}
           onEditBusiness={(b) => setEditingBusiness(b)}
           onDelete={(id) => handleDeleteBusiness(landingBusiness)}
@@ -1268,6 +1269,7 @@ export default function App() {
         }
         onOpenClaimCouponModal={(p) => setActivePromoModal(p)}
         isAdmin={isAdminLoggedIn}
+        onAdminClick={() => { setSelectedBusiness(null); setIsAdminModalOpen(true); }}
         onOpenDigitalCard={(b) => {
           setSelectedBusiness(null);
           setDigitalCardBusiness(b);
