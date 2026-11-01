@@ -67,7 +67,7 @@ test('PI administration callbacks reach both public business views', () => {
   for (const view of ['src/components/DirectBusinessView.tsx', 'src/components/BusinessDetailModal.tsx']) {
     const code = read(view);
     for (const callback of ['onEditBusiness', 'onDeleteBusiness', 'onToggleTop', 'onToggleRecommended']) {
-      assert.match(code, new RegExp(callback + '={'), view + ' must wire ' + callback);
+      assert.ok(code.includes(callback + '={'), view + ' must wire ' + callback);
     }
   }
 });
