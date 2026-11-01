@@ -197,6 +197,8 @@ const stagingDynamicIdentity = isStagingEnvironment() &&
   getMariaDbConfig()?.database === STAGING_PRIVATE_DB_NAME;
 // Server-issued identity gate precedes all legacy middleware and handlers.
 const adminSecurity = registerAdminSecurity(app, {
+  // Staging sessions expire after 30 minutes; production retains its existing policy.
+  sessionMs: stagingDynamicIdentity ? 30 * 60 * 1000 : undefined,
   minPasswordLength: stagingDynamicIdentity ? 10 : 12,
   provider: stagingDynamicIdentity ? undefined : environmentAdminProvider(process.env),
   providerResolver: stagingDynamicIdentity ? () => {
