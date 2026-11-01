@@ -34,6 +34,9 @@ export function DirectBusinessView(props: DirectBusinessViewProps) {
       }
       onAdminClick={props.onAdminClick}
       onEditBusiness={props.onEditBusiness || props.onEdit}
+      onDeleteBusiness={props.onDeleteBusiness || (props.onDelete ? (b: Business) => props.onDelete!(b.id) : undefined)}
+      onToggleTop={props.onToggleTop ? (b: Business) => props.onToggleTop!(b.id) : undefined}
+      onToggleRecommended={props.onToggleRecommended ? (b: Business) => props.onToggleRecommended!(b.id) : undefined}
       onOpenDigitalCard={props.onOpenDigitalCard}
       activePromotion={props.activePromotion}
       onOpenPromotion={props.onOpenPromotion}
