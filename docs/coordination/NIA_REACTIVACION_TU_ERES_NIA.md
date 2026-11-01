@@ -87,3 +87,9 @@ Cada Nia sólo escribe en su propia memoria asignada (NIA5.md para esta conversa
 5. **Seguridad:** depurar secretos, contraseñas y datos sensibles; no editar archivos históricos, no alterar `main`/producción ni desplegar sin permiso del propietario.
 
 **Estado operativo inicial:** la tarea anterior `Memoria horaria Nia` está **deshabilitada**. No está implementado un capturador autónomo de conversaciones; el guardado reactivo se realiza al trabajar en el chat y usar la conexión Drive, no mediante vigilancia independiente del reloj. Antes de prometer un respaldo, comprobar ejecución y lectura posterior.
+
+## Actualización vigente: memorias por fecha (31/oct/2026)
+
+Por autorización expresa del propietario, el nombre de cada **nueva** memoria de conversación será `NIA-AAAA-MM-DD.md` (fecha local America/Mexico_City), en la carpeta Drive `memoria NIA`. En una jornada con dos conversaciones distintas usar `NIA-AAAA-MM-DD-02.md`, `-03.md`, etc. **Antes de crear**, revisar carpeta, nombre, identificador, checkpoint y designación para no duplicar el archivo de esa conversación; si se repite «TU ERES NIA» en el mismo chat, reutilizar el mismo archivo. Las memorias `NIA1.md` a `NIA6.md` se conservan como históricas, sin renombrar. La sucesión se determina por checkpoint y designación, no solo fecha modificada. Esta regla **sustituye** las referencias anteriores a crear `NIA(n+1).md` en este documento. Preservar el contenido y verificar lectura posterior. La configuración personalizada de ChatGPT que aún indique `NIA#` deberá actualizarse separadamente por el propietario en la interfaz, porque la conexión disponible no permite editar esas instrucciones. Esta actualización de GitHub no equivale a modificar la configuración personal.
+
+---
