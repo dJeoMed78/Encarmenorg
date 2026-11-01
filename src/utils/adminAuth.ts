@@ -8,7 +8,7 @@ export const ADMIN_AUTH_STORAGE_KEY = "admin_authenticated";
 export const ADMIN_TOKEN_STORAGE_KEY = "encarmen_admin_session_token";
 export const ADMIN_USER_STORAGE_KEY = "admin_authenticated_user";
 export const ADMIN_EXPIRES_STORAGE_KEY = "admin_auth_expires_at";
-export const SESSION_DURATION_MS = 6 * 60 * 60 * 1000;
+export const SESSION_DURATION_MS = 30 * 60 * 1000; // Staging target; actual expiry is enforced by server.
 /** Compatibility exports only; client password verification is permanently removed. */
 export const ADMIN_SALT = "";
 export const DEFAULT_ADMIN_ACCOUNTS: AdminAccountInfo[] = [];

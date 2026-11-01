@@ -15,6 +15,7 @@ interface BusinessDetailModalProps {
   onToggleRecommended?:
     ((id: string | number) => void) | ((b: Business) => void);
   isAdmin?: boolean;
+  onAdminClick?: () => void;
   activePromotion?: any;
   onOpenClaimCouponModal?: (p: any) => void;
   onOpenDigitalCard?: (b: Business) => void;
@@ -35,6 +36,11 @@ export function BusinessDetailModal(props: BusinessDetailModalProps) {
               (props.onToggleFavorite as (b: Business) => void)(props.business!)
           : undefined
       }
+      onAdminClick={props.onAdminClick}
+      onEditBusiness={props.onEditBusiness || props.onEdit}
+      onDeleteBusiness={props.onDeleteBusiness || (props.onDelete ? () => props.onDelete!() : undefined)}
+      onToggleTop={props.onToggleTop ? (b: Business) => (props.onToggleTop as (b: Business) => void)(b) : undefined}
+      onToggleRecommended={props.onToggleRecommended ? (b: Business) => (props.onToggleRecommended as (b: Business) => void)(b) : undefined}
       onOpenDigitalCard={props.onOpenDigitalCard}
       onOpenClientPage={props.onOpenClientPage}
       activePromotion={props.activePromotion}

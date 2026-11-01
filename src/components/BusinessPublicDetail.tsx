@@ -25,6 +25,7 @@ import { StarRatingWidget } from "./StarRatingWidget";
 import { getBusinessPublicUrl } from "../utils/businessUrl";
 import { BusinessDescription } from "./BusinessDescription";
 import "./BusinessPublicDetail.css";
+import { verifyAdminSession } from "../utils/adminAuth";
 
 interface Props {
   business: Business;
@@ -36,6 +37,11 @@ interface Props {
   onOpenClientPage?: (b: Business) => void;
   activePromotion?: any;
   onOpenPromotion?: (p: any) => void;
+  onAdminClick?: () => void;
+  onEditBusiness?: (b: Business) => void;
+  onDeleteBusiness?: (b: Business) => void;
+  onToggleTop?: (b: Business) => void;
+  onToggleRecommended?: (b: Business) => void;
 }
 function safeUrl(value?: string): string | undefined {
   if (!value) return;
@@ -154,6 +160,11 @@ export function BusinessPublicDetail({
   onOpenClientPage,
   activePromotion,
   onOpenPromotion,
+  onAdminClick,
+  onEditBusiness,
+  onDeleteBusiness,
+  onToggleTop,
+  onToggleRecommended,
 }: Props) {
   const extra = b as Business & { cover_url?: string; logo_url?: string };
   const photos = [
@@ -171,6 +182,8 @@ export function BusinessPublicDetail({
     [gallery, setGallery] = useState(false),
     [admin, setAdmin] = useState(false),
     [notice, setNotice] = useState("");
+  const [adminAuthorized, setAdminAuthorized] = useState(false);
+  const [adminChecking, setAdminChecking] = useState(false);
   const root = useRef<HTMLDivElement>(null),
     galleryButton = useRef<HTMLButtonElement>(null),
     adminButton = useRef<HTMLButtonElement>(null);
@@ -209,6 +222,31 @@ export function BusinessPublicDetail({
     return () =>
       document.removeEventListener("securitypolicyviolation", blocked);
   }, [mapConsent]);
+  const openManagement = async () => {
+    if (adminChecking) return;
+    setAdminChecking(true);
+    try {
+      const allowed = await verifyAdminSession();
+      setAdminAuthorized(allowed);
+      if (allowed) setAdmin(true);
+      else { setAdmin(false); onAdminClick?.(); }
+    } finally {
+      setAdminChecking(false);
+    }
+  };
+  const runManagement = async (action?: (biz: Business) => void) => {
+    if (!action) return;
+    const allowed = await verifyAdminSession();
+    setAdminAuthorized(allowed);
+    if (!allowed) {
+      setAdmin(false);
+      onAdminClick?.();
+      return;
+    }
+    if (action === onDeleteBusiness && !window.confirm(`¿Eliminar definitivamente la empresa "${b.name}"? Esta acción no se puede deshacer.`)) return;
+    setAdmin(false);
+    action(b);
+  };
   const overlay = gallery || admin;
   const hadOverlay = useRef(false);
   useEffect(() => {
@@ -600,7 +638,7 @@ export function BusinessPublicDetail({
             </section>
         </div>
         <footer className="bpd-footer">
-          <button ref={adminButton} type="button" className="bpd-pi-trigger" onClick={() => setAdmin(true)} aria-label="Gestión del negocio" title="Gestión del negocio">
+          <button ref={adminButton} type="button" className="bpd-pi-trigger" onClick={() => { void openManagement(); }} disabled={adminChecking} aria-label="Gestión del negocio" title="Gestión del negocio">
             PI
           </button>
           <span>Directorio de negocios · encarmen.org</span>
@@ -656,20 +694,17 @@ export function BusinessPublicDetail({
                 <h2>
                   <LockKeyhole /> Gestión del negocio
                 </h2>
-                <p>
-                  Acceso administrativo pendiente de una implementación segura.
-                  Estas acciones no están disponibles desde esta ficha.
-                </p>
-                {[
-                  "Editar datos del negocio",
-                  "Marcar como recomendado",
-                  "Marcar como TOP",
-                  "Eliminar del directorio",
-                ].map((t) => (
-                  <button key={t} disabled>
-                    {t}
-                  </button>
-                ))}
+                <p>Sesión administrativa verificada. Solo se habilitan acciones disponibles para esta empresa.</p>
+                <button type="button" disabled={!adminAuthorized || !onEditBusiness} onClick={() => { void runManagement(onEditBusiness); }}>Modificar registro</button>
+                <label>
+                  <input type="checkbox" checked={Boolean(b.isRecommended)} disabled={!adminAuthorized || !onToggleRecommended} onChange={() => { void runManagement(onToggleRecommended); }} />
+                  Recomendado
+                </label>
+                <label>
+                  <input type="checkbox" checked={Boolean(b.isTopBusiness)} disabled={!adminAuthorized || !onToggleTop} onChange={() => { void runManagement(onToggleTop); }} />
+                  TOP
+                </label>
+                <button type="button" disabled={!adminAuthorized || !onDeleteBusiness} onClick={() => { void runManagement(onDeleteBusiness); }}>Eliminar registro</button>
               </>
             )}
           </section>
