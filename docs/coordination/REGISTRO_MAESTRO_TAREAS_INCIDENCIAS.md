@@ -623,3 +623,13 @@ El propietario autorizó Google Drive como memoria narrativa más frecuente de C
 - CI #41247127075 aprobó TypeScript, compilación y validación del indicador PI discreto.
 - El propietario confirmó visualmente el cambio publicado en Staging y solicitó retirar el error de la lista. Issue #30 cerrado con razón `completed`.
 - No reabrir ni volver a asignar salvo regresión nueva comprobable. Producción sin cambios.
+
+
+### Nia 6 — Issue #29 / PR #36 y autorización Staging — 2026-11-01
+- PR #36 fusionada a `ia-desarrollo` mediante merge `961a3326fe9301dbb76905cbd9c312d03425a9b5`, desde HEAD `090f93978c8917b7c8a5aab95f2de60139e08b7f`.
+- CI GitHub Actions run `41317807347` aprobó instalación, lint, pruebas de regresión y build.
+- Alcance: PI con sesión administrativa verificada, límite objetivo 30 minutos en Staging, modificación, eliminación confirmada, TOP/Recomendado persistidos y readback de flags desde MariaDB.
+- Estado: IMPLEMENTADO, CI APROBADA, INTEGRADO. Despliegue real y E2E con MariaDB de Staging todavía NO verificados. No cerrar Issue #29 sin evidencia funcional.
+- Propietario ratificó aislamiento de Staging y autorizó publicación allí tras pruebas sin pedir nuevamente la misma confirmación. `main`/producción siguen fuera de alcance.
+- Iniciativa en diseño: Centro de Control Unificado privado de Nia y hasta seis trabajadores, tablero de estado y avisos de conclusión, vistas individuales y acceso centralizado a GitHub, Hostinger y plataformas de IA. Verificar políticas de iframe/API; no evadir proxy corporativo. Sin implementación.
+- Memoria narrativa: Google Drive `NIA6.md` ID `1fojoFpNDJ2AaPbXJY4bh2Oj3TP-QZNVQ`, actualizada y releída 2026-11-01. Automatización horaria contempla actualización narrativa en Drive y registro técnico en esta rama.
