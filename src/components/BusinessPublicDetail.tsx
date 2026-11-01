@@ -229,7 +229,7 @@ export function BusinessPublicDetail({
       const allowed = await verifyAdminSession();
       setAdminAuthorized(allowed);
       if (allowed) setAdmin(true);
-      else onAdminClick?.();
+      else { setAdmin(false); onAdminClick?.(); }
     } finally {
       setAdminChecking(false);
     }
