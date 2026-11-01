@@ -832,3 +832,70 @@
   border-radius: 13px;
   background: #e8f0f3;
 }
+
+
+/* PI management: compact native-feeling sheet, isolated from generic business-card controls. */
+.bpd-overlay .bpd-admin {
+  box-sizing: border-box;
+  width: min(100%, 420px);
+  max-height: min(85dvh, 660px);
+  overflow-y: auto;
+  padding: 26px 22px 22px;
+  border: 1px solid rgba(255,255,255,.68);
+  border-radius: 24px;
+  background: rgba(248,250,255,.94);
+  color: #172b49;
+  box-shadow: 0 24px 70px rgba(9,29,58,.28);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  backdrop-filter: blur(28px) saturate(1.5);
+}
+.bpd-overlay .bpd-admin .bpd-dialog-close {
+  width: 36px;
+  height: 36px;
+  top: 13px;
+  right: 13px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(120,135,158,.14);
+  color: #243651;
+}
+.bpd-admin-login, .bpd-admin-actions { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.bpd-admin-login h2, .bpd-admin-actions h2 {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 38px 4px 0; font-size: 20px; line-height: 1.3;
+}
+.bpd-admin-login p, .bpd-admin-actions p { margin: 0 0 8px; font-size: 14px; line-height: 1.5; }
+.bpd-admin-login label { font-size: 13px; font-weight: 600; }
+.bpd-admin-login input {
+  box-sizing: border-box; width: 100%; min-height: 44px; padding: 10px 12px;
+  border: 1px solid #b8c5d5; border-radius: 12px;
+  background: #fff; color: #152b48; font-size: 16px;
+}
+.bpd-admin-login input:focus-visible { outline: 2px solid #397de0; outline-offset: 2px; }
+.bpd-admin-login .bpd-admin-error { color: #a12534; font-weight: 600; }
+.bpd-admin-actions label {
+  box-sizing: border-box; width: 100%; min-height: 48px;
+  display: flex; flex-direction: row-reverse; justify-content: space-between;
+  align-items: center; gap: 12px; margin: 0; padding: 10px 12px;
+  border-radius: 13px; background: rgba(224,231,241,.64);
+  font-size: 15px; font-weight: 600;
+}
+.bpd-admin-actions input[type="checkbox"] { width: 20px; height: 20px; flex: 0 0 auto; accent-color: #2777d3; }
+.bpd-overlay .bpd-admin .bpd-admin-primary,
+.bpd-overlay .bpd-admin .bpd-admin-danger {
+  box-sizing: border-box; width: 100%; min-height: 46px;
+  display: flex; align-items: center; justify-content: center;
+  margin: 4px 0 0; padding: 11px 14px;
+  border: 0; border-radius: 13px; font-size: 15px;
+  font-weight: 650; line-height: 1.25; white-space: normal;
+  cursor: pointer;
+}
+.bpd-overlay .bpd-admin .bpd-admin-primary { background: #246cd0; color: white; }
+.bpd-overlay .bpd-admin .bpd-admin-danger { background: #fff0f1; color: #a42235; }
+.bpd-overlay .bpd-admin button:disabled { opacity: .48; cursor: not-allowed; }
+@media (max-width: 480px) {
+  .bpd-overlay { padding: 16px; }
+  .bpd-overlay .bpd-admin { padding: 25px 18px 20px; border-radius: 22px; }
+}
