@@ -598,35 +598,27 @@ export default function App() {
     );
   };
 
-  const handleToggleTop = (b: Business) => {
-    const bId = String(b.id);
-    const currentTop = businessOverrides[bId]?.isTopBusiness ?? b.isTopBusiness ?? false;
-    setBusinessOverrides((prev) => ({
-      ...prev,
-      [bId]: { ...prev[bId], isTopBusiness: !currentTop }
-    }));
-    if (selectedBusiness && String(selectedBusiness.id) === bId) {
-      setSelectedBusiness((prev) => prev ? { ...prev, isTopBusiness: !currentTop } : null);
+  // Persistir indicadores en el servidor; nunca simular éxito en el catálogo.
+  const updateBusinessFlag = async (b: Business, field: 'isTopBusiness' | 'isRecommended') => {
+    const id = Number(b.id);
+    if (!Number.isSafeInteger(id) || id <= 0) return;
+    const current = Boolean(businessOverrides[String(id)]?.[field] ?? b[field]);
+    const next = !current;
+    const result = await adminUpdateBusiness(id, { [field]: next } as Partial<Business>);
+    if (!result.success || !result.business || Boolean(result.business[field]) !== next) {
+      window.alert(result.message || 'No se confirmó el cambio en el servidor. Recarga la ficha.');
+      return;
     }
-    if (landingBusiness && String(landingBusiness.id) === bId) {
-      setLandingBusiness((prev) => prev ? { ...prev, isTopBusiness: !currentTop } : null);
-    }
+    invalidateBusinessRequests();
+    const confirmed = result.business;
+    setBusinessesList(prev => prev.map(item => Number(item.id) === id ? { ...item, ...confirmed } : item));
+    setBusinessOverrides(prev => ({ ...prev, [String(id)]: { ...prev[String(id)], ...confirmed } }));
+    setSelectedBusiness(prev => prev && Number(prev.id) === id ? { ...prev, ...confirmed } : prev);
+    setLandingBusiness(prev => prev && Number(prev.id) === id ? { ...prev, ...confirmed } : prev);
   };
 
-  const handleToggleRecommended = (b: Business) => {
-    const bId = String(b.id);
-    const currentRec = businessOverrides[bId]?.isRecommended ?? b.isRecommended ?? false;
-    setBusinessOverrides((prev) => ({
-      ...prev,
-      [bId]: { ...prev[bId], isRecommended: !currentRec }
-    }));
-    if (selectedBusiness && String(selectedBusiness.id) === bId) {
-      setSelectedBusiness((prev) => prev ? { ...prev, isRecommended: !currentRec } : null);
-    }
-    if (landingBusiness && String(landingBusiness.id) === bId) {
-      setLandingBusiness((prev) => prev ? { ...prev, isRecommended: !currentRec } : null);
-    }
-  };
+  const handleToggleTop = (b: Business) => { void updateBusinessFlag(b, 'isTopBusiness'); };
+  const handleToggleRecommended = (b: Business) => { void updateBusinessFlag(b, 'isRecommended'); };
 
   const handleDeleteBusiness = async (b: Business) => {
     // Never claim deletion locally unless the server confirms it.
