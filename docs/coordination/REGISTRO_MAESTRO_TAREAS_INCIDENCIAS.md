@@ -1,5 +1,12 @@
 # ENCARMEN — Registro maestro de tareas e incidencias
 
+## Aclaración funcional #29 — sesión administrativa y botón π (31/oct/2026)
+
+**Issue #29**, comentario 6552111743: propietario verificó en ficha móvil de Staging que tocar π muestra acciones deshabilitadas aunque previamente había iniciado sesión como administrador. **Pendiente funcional, sin implementación ni pruebas nuevas verificadas.** Requisito: sin sesión válida, π solicita autenticación; con sesión válida, reutiliza acceso y habilita solo funciones autorizadas; vigencia solicitada 30 minutos, con modalidad de expiración por determinar antes de programar. Validar seguridad servidor, no solo UI. No confundir con Issue #30 (indicador π ya aprobado) ni Issue #33 (orden móvil). [Evidencia/requisitos](https://github.com/dJeoMed78/Encarmenorg/issues/29#issuecomment-6552111743).
+
+---
+
+
 ## Convención de memoria Nia por jornada — 31/oct/2026
 
 Para nuevas memorias en Drive, carpeta memoria NIA: usar `NIA-AAAA-MM-DD.md`, con fecha local de México. Ejemplo: `NIA-2026-11-01.md`. La práctica prevista es una conversación por día. Si existe un archivo para la misma fecha pero corresponde a otra conversación, usar sufijos `-02`, `-03`, sin sobrescribir. Conservar sin renombrar NIA1.md a NIA6.md. Mantener continuidad por checkpoint y referencia al archivo previo; no confundir fecha de modificación con memoria activa. Reutilizar el mismo archivo si se activa Nia otra vez en la misma conversación. Pendiente actualizar las instrucciones personalizadas «TU ERES NIA», que aún describen la numeración NIA#. No afirmar que esa configuración se haya cambiado. Sin modificaciones de producción.
