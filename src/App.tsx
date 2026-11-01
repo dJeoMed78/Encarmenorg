@@ -761,7 +761,6 @@ export default function App() {
             )
           }
           onOpenPromotion={(p) => setActivePromoModal(p)}
-          onAdminClick={() => setIsAdminModalOpen(true)}
         />
         <DigitalCardModal
           business={digitalCardBusiness as any}
