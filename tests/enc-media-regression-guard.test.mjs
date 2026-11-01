@@ -62,3 +62,24 @@ test('media client never silently falls back to local success', () => {
   assert.match(client, /result\.success !== true/);
   assert.doesNotMatch(client, /localStorage\.setItem\(/);
 });
+
+test('PI administration callbacks reach both public business views', () => {
+  for (const view of ['src/components/DirectBusinessView.tsx', 'src/components/BusinessDetailModal.tsx']) {
+    const code = read(view);
+    for (const callback of ['onEditBusiness', 'onDeleteBusiness', 'onToggleTop', 'onToggleRecommended']) {
+      assert.match(code, new RegExp(callback + '={'), view + ' must wire ' + callback);
+    }
+  }
+});
+
+test('PI checks server session, exposes independent badges and confirms deletion', () => {
+  const detail = read('src/components/BusinessPublicDetail.tsx');
+  assert.match(detail, /const allowed = await verifyAdminSession\(\)/);
+  assert.match(detail, /type="checkbox" checked=\{Boolean\(b\.isRecommended\)\}/);
+  assert.match(detail, /type="checkbox" checked=\{Boolean\(b\.isTopBusiness\)\}/);
+  assert.match(detail, /window\.confirm\(/);
+  const app = read('src/App.tsx');
+  assert.match(app, /await adminUpdateBusiness\(id, \{ \[field\]: next \}/);
+  assert.match(app, /if \(!result\.success\)/);
+  assert.match(read('server.ts'), /El distintivo no coincide con lo guardado en MariaDB/);
+});
