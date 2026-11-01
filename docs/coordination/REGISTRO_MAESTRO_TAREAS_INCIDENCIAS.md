@@ -1,5 +1,12 @@
 # ENCARMEN — Registro maestro de tareas e incidencias
 
+## Acuerdo de almacenamiento exclusivo Drive + GitHub — 31/oct/2026
+
+Decisión expresa del propietario: **mantener únicamente Google Drive y GitHub como repositorios documentales operativos**. No crear una tercera copia, índice persistente ni proceso de actualización adicional dentro de ChatGPT. Motivo: evitar duplicación de trabajo, demoras, contradicciones y pérdida de la fuente de verdad. **Drive** conserva la memoria narrativa, identidad operativa y metodología transversal de Nia; **GitHub** conserva estados técnicos, incidencias, pruebas y decisiones de ENCARMEN, con respaldo en Drive según las prácticas existentes. El contexto conversacional de ChatGPT puede ayudar durante la sesión, pero no es una nueva fuente oficial ni se debe depender de él como único respaldo. Mantener registro inmediato de nuevos hallazgos/acuerdos/cierres en su fuente correspondiente y verificar la escritura. Este acuerdo reemplaza la propuesta anterior de añadir un índice permanente en ChatGPT. Sin cambios de producción.
+
+---
+
+
 ## Regla de registro inmediato y consulta obligatoria — acuerdo del propietario 31/oct/2026
 
 **Instrucción vigente de Coordinación 01:** No depender de la memoria conversacional para listar pendientes ni reconstruir acuerdos. En cuanto se acuerde un cambio de estado, se compruebe una solución o el propietario apruebe una conclusión, actualizar en esa misma conversación este registro maestro, **sin esperar al cierre de sesión**. Antes de responder «¿qué tenemos pendiente?», consultar este índice y contrastarlo con Issues, PR, pruebas y evidencias nuevas. Conservar todas las incidencias históricas, incluso las concluidas, indicando fecha, fuente, estado, causa, solución y vínculos; no borrar sus antecedentes. Distinguir **fallo funcional pendiente** de **Issue administrativamente abierto**. Si falta evidencia propia, anotarlo como limitación de verificación y no volver a convertir automáticamente el problema en pendiente.
