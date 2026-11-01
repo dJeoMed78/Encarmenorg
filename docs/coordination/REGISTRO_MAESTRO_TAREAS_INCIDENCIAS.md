@@ -1,5 +1,12 @@
 # ENCARMEN — Registro maestro de tareas e incidencias
 
+## Convención de memoria Nia por jornada — 31/oct/2026
+
+Para nuevas memorias en Drive, carpeta memoria NIA: usar `NIA-AAAA-MM-DD.md`, con fecha local de México. Ejemplo: `NIA-2026-11-01.md`. La práctica prevista es una conversación por día. Si existe un archivo para la misma fecha pero corresponde a otra conversación, usar sufijos `-02`, `-03`, sin sobrescribir. Conservar sin renombrar NIA1.md a NIA6.md. Mantener continuidad por checkpoint y referencia al archivo previo; no confundir fecha de modificación con memoria activa. Reutilizar el mismo archivo si se activa Nia otra vez en la misma conversación. Pendiente actualizar las instrucciones personalizadas «TU ERES NIA», que aún describen la numeración NIA#. No afirmar que esa configuración se haya cambiado. Sin modificaciones de producción.
+
+---
+
+
 ## Acuerdo de almacenamiento exclusivo Drive + GitHub — 31/oct/2026
 
 Decisión expresa del propietario: **mantener únicamente Google Drive y GitHub como repositorios documentales operativos**. No crear una tercera copia, índice persistente ni proceso de actualización adicional dentro de ChatGPT. Motivo: evitar duplicación de trabajo, demoras, contradicciones y pérdida de la fuente de verdad. **Drive** conserva la memoria narrativa, identidad operativa y metodología transversal de Nia; **GitHub** conserva estados técnicos, incidencias, pruebas y decisiones de ENCARMEN, con respaldo en Drive según las prácticas existentes. El contexto conversacional de ChatGPT puede ayudar durante la sesión, pero no es una nueva fuente oficial ni se debe depender de él como único respaldo. Mantener registro inmediato de nuevos hallazgos/acuerdos/cierres en su fuente correspondiente y verificar la escritura. Este acuerdo reemplaza la propuesta anterior de añadir un índice permanente en ChatGPT. Sin cambios de producción.
