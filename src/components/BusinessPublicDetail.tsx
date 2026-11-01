@@ -25,7 +25,7 @@ import { StarRatingWidget } from "./StarRatingWidget";
 import { getBusinessPublicUrl } from "../utils/businessUrl";
 import { BusinessDescription } from "./BusinessDescription";
 import "./BusinessPublicDetail.css";
-import { verifyAdminSession } from "../utils/adminAuth";
+import { verifyAdminSession, loginAdminUser } from "../utils/adminAuth";
 
 interface Props {
   business: Business;
@@ -184,6 +184,10 @@ export function BusinessPublicDetail({
     [notice, setNotice] = useState("");
   const [adminAuthorized, setAdminAuthorized] = useState(false);
   const [adminChecking, setAdminChecking] = useState(false);
+  const [adminLogin, setAdminLogin] = useState(false);
+  const [adminUsername, setAdminUsername] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminError, setAdminError] = useState("");
   const root = useRef<HTMLDivElement>(null),
     galleryButton = useRef<HTMLButtonElement>(null),
     adminButton = useRef<HTMLButtonElement>(null);
@@ -229,7 +233,25 @@ export function BusinessPublicDetail({
       const allowed = await verifyAdminSession();
       setAdminAuthorized(allowed);
       if (allowed) setAdmin(true);
-      else { setAdmin(false); onAdminClick?.(); }
+      else { setAdmin(true); setAdminLogin(true); setAdminError(""); }
+    } finally {
+      setAdminChecking(false);
+    }
+  };
+  const submitInlineLogin = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (adminChecking) return;
+    setAdminChecking(true);
+    setAdminError("");
+    try {
+      const result = await loginAdminUser(adminUsername.trim(), adminPassword);
+      setAdminPassword("");
+      if (!result.success || !(await verifyAdminSession())) {
+        setAdminError(result.error || "No se pudo verificar la sesión administrativa.");
+        return;
+      }
+      setAdminAuthorized(true);
+      setAdminLogin(false);
     } finally {
       setAdminChecking(false);
     }
@@ -239,8 +261,9 @@ export function BusinessPublicDetail({
     const allowed = await verifyAdminSession();
     setAdminAuthorized(allowed);
     if (!allowed) {
-      setAdmin(false);
-      onAdminClick?.();
+      setAdmin(true);
+      setAdminLogin(true);
+      setAdminError("La sesión expiró. Inicia sesión nuevamente.");
       return;
     }
     if (action === onDeleteBusiness && !window.confirm(`¿Eliminar definitivamente la empresa "${b.name}"? Esta acción no se puede deshacer.`)) return;
@@ -639,7 +662,7 @@ export function BusinessPublicDetail({
         </div>
         <footer className="bpd-footer">
           <button ref={adminButton} type="button" className="bpd-pi-trigger" onClick={() => { void openManagement(); }} disabled={adminChecking} aria-label="Gestión del negocio" title="Gestión del negocio">
-            PI
+            π
           </button>
           <span>Directorio de negocios · encarmen.org</span>
         </footer>
@@ -650,7 +673,7 @@ export function BusinessPublicDetail({
             data-bpd-dialog
             role="dialog"
             aria-modal="true"
-            aria-label={gallery ? "Galería del negocio" : "Gestión pendiente"}
+            aria-label={gallery ? "Galería del negocio" : adminLogin ? "Acceso administrativo" : "Gestión del negocio"}
             className={`bpd-card ${gallery ? "bpd-gallery" : "bpd-admin"}`}
           >
             <button
@@ -659,6 +682,9 @@ export function BusinessPublicDetail({
               onClick={() => {
                 setGallery(false);
                 setAdmin(false);
+                setAdminLogin(false);
+                setAdminPassword("");
+                setAdminError("");
               }}
             >
               <X />
@@ -689,13 +715,24 @@ export function BusinessPublicDetail({
                   </button>
                 </div>
               </>
+            ) : adminLogin ? (
+              <form className="bpd-admin-login" onSubmit={(event) => { void submitInlineLogin(event); }}>
+                <h2><LockKeyhole size={20} /> Acceso administrativo</h2>
+                <p>Ingresa tus credenciales para gestionar este negocio.</p>
+                <label htmlFor="bpd-admin-user">Usuario</label>
+                <input id="bpd-admin-user" autoComplete="username" value={adminUsername} onChange={(event) => setAdminUsername(event.target.value)} required disabled={adminChecking} />
+                <label htmlFor="bpd-admin-password">Contraseña</label>
+                <input id="bpd-admin-password" type="password" autoComplete="current-password" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} required disabled={adminChecking} />
+                {adminError && <p className="bpd-admin-error" role="alert">{adminError}</p>}
+                <button className="bpd-admin-primary" type="submit" disabled={adminChecking}>{adminChecking ? "Verificando…" : "Entrar"}</button>
+              </form>
             ) : (
-              <>
+              <div className="bpd-admin-actions">
                 <h2>
-                  <LockKeyhole /> Gestión del negocio
+                  <LockKeyhole size={20} /> Gestión del negocio
                 </h2>
                 <p>Sesión administrativa verificada. Solo se habilitan acciones disponibles para esta empresa.</p>
-                <button type="button" disabled={!adminAuthorized || !onEditBusiness} onClick={() => { void runManagement(onEditBusiness); }}>Modificar registro</button>
+                <button className="bpd-admin-primary" type="button" disabled={!adminAuthorized || !onEditBusiness} onClick={() => { void runManagement(onEditBusiness); }}>Modificar registro</button>
                 <label>
                   <input type="checkbox" checked={Boolean(b.isRecommended)} disabled={!adminAuthorized || !onToggleRecommended} onChange={() => { void runManagement(onToggleRecommended); }} />
                   Recomendado
@@ -704,8 +741,8 @@ export function BusinessPublicDetail({
                   <input type="checkbox" checked={Boolean(b.isTopBusiness)} disabled={!adminAuthorized || !onToggleTop} onChange={() => { void runManagement(onToggleTop); }} />
                   TOP
                 </label>
-                <button type="button" disabled={!adminAuthorized || !onDeleteBusiness} onClick={() => { void runManagement(onDeleteBusiness); }}>Eliminar registro</button>
-              </>
+                <button className="bpd-admin-danger" type="button" disabled={!adminAuthorized || !onDeleteBusiness} onClick={() => { void runManagement(onDeleteBusiness); }}>Eliminar registro</button>
+              </div>
             )}
           </section>
         </div>
