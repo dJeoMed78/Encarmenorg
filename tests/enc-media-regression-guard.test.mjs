@@ -75,8 +75,10 @@ test('PI administration callbacks reach both public business views', () => {
 test('PI checks server session, exposes independent badges and confirms deletion', () => {
   const detail = read('src/components/BusinessPublicDetail.tsx');
   assert.match(detail, /const allowed = await verifyAdminSession\(\)/);
-  assert.match(detail, /type="checkbox" checked=\{Boolean\(b\.isRecommended\)\}/);
-  assert.match(detail, /type="checkbox" checked=\{Boolean\(b\.isTopBusiness\)\}/);
+  assert.match(detail, /type="checkbox" checked=\{draftRecommended\}/);
+  assert.match(detail, /type="checkbox" checked=\{draftTop\}/);
+  assert.match(detail, /Aplicar cambios/);
+  assert.match(detail, /const applyFlagChanges = async/);
   assert.match(detail, /window\.confirm\(/);
   const app = read('src/App.tsx');
   assert.match(app, /await adminUpdateBusiness\(id, \{ \[field\]: next \}/);

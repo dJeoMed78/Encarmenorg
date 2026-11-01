@@ -188,6 +188,16 @@ export function BusinessPublicDetail({
   const [adminUsername, setAdminUsername] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [adminError, setAdminError] = useState("");
+  const [draftRecommended, setDraftRecommended] = useState(Boolean(b.isRecommended));
+  const [draftTop, setDraftTop] = useState(Boolean(b.isTopBusiness));
+  const [applyingFlags, setApplyingFlags] = useState(false);
+  const [flagNotice, setFlagNotice] = useState("");
+  const flagsDirty = draftRecommended !== Boolean(b.isRecommended) || draftTop !== Boolean(b.isTopBusiness);
+  const resetFlagDraft = () => {
+    setDraftRecommended(Boolean(b.isRecommended));
+    setDraftTop(Boolean(b.isTopBusiness));
+    setFlagNotice("");
+  };
   const root = useRef<HTMLDivElement>(null),
     galleryButton = useRef<HTMLButtonElement>(null),
     adminButton = useRef<HTMLButtonElement>(null);
@@ -232,8 +242,8 @@ export function BusinessPublicDetail({
     try {
       const allowed = await verifyAdminSession();
       setAdminAuthorized(allowed);
-      if (allowed) setAdmin(true);
-      else { setAdmin(true); setAdminLogin(true); setAdminError(""); }
+      if (allowed) { resetFlagDraft(); setAdminLogin(false); setAdmin(true); }
+      else { resetFlagDraft(); setAdmin(true); setAdminLogin(true); setAdminError(""); }
     } finally {
       setAdminChecking(false);
     }
@@ -251,9 +261,32 @@ export function BusinessPublicDetail({
         return;
       }
       setAdminAuthorized(true);
+      resetFlagDraft();
       setAdminLogin(false);
     } finally {
       setAdminChecking(false);
+    }
+  };
+  const applyFlagChanges = async () => {
+    if (!flagsDirty || applyingFlags) return;
+    setApplyingFlags(true);
+    setFlagNotice("");
+    try {
+      const allowed = await verifyAdminSession();
+      setAdminAuthorized(allowed);
+      if (!allowed) {
+        setAdminLogin(true);
+        setAdminError("La sesión expiró. Inicia sesión nuevamente.");
+        return;
+      }
+      // Existing parent callbacks handle the authenticated API writes and refresh.
+      if (draftRecommended !== Boolean(b.isRecommended)) onToggleRecommended?.(b);
+      if (draftTop !== Boolean(b.isTopBusiness)) onToggleTop?.(b);
+      setFlagNotice("Solicitud enviada. Verifica las etiquetas tras actualizar la ficha.");
+    } catch {
+      setFlagNotice("No fue posible aplicar los cambios. Inténtalo de nuevo.");
+    } finally {
+      setApplyingFlags(false);
     }
   };
   const runManagement = async (action?: (biz: Business) => void) => {
@@ -685,6 +718,7 @@ export function BusinessPublicDetail({
                 setAdminLogin(false);
                 setAdminPassword("");
                 setAdminError("");
+                resetFlagDraft();
               }}
             >
               <X />
@@ -734,13 +768,15 @@ export function BusinessPublicDetail({
                 <p>Sesión administrativa verificada. Solo se habilitan acciones disponibles para esta empresa.</p>
                 <button className="bpd-admin-primary" type="button" disabled={!adminAuthorized || !onEditBusiness} onClick={() => { void runManagement(onEditBusiness); }}>Modificar registro</button>
                 <label>
-                  <input type="checkbox" checked={Boolean(b.isRecommended)} disabled={!adminAuthorized || !onToggleRecommended} onChange={() => { void runManagement(onToggleRecommended); }} />
+                  <input type="checkbox" checked={draftRecommended} disabled={!adminAuthorized || !onToggleRecommended || applyingFlags} onChange={(event) => { setDraftRecommended(event.target.checked); setFlagNotice(""); }} />
                   Recomendado
                 </label>
                 <label>
-                  <input type="checkbox" checked={Boolean(b.isTopBusiness)} disabled={!adminAuthorized || !onToggleTop} onChange={() => { void runManagement(onToggleTop); }} />
+                  <input type="checkbox" checked={draftTop} disabled={!adminAuthorized || !onToggleTop || applyingFlags} onChange={(event) => { setDraftTop(event.target.checked); setFlagNotice(""); }} />
                   TOP
                 </label>
+                {flagsDirty && <button className="bpd-admin-primary" type="button" disabled={applyingFlags || !adminAuthorized} onClick={() => { void applyFlagChanges(); }}>{applyingFlags ? "Aplicando…" : "Aplicar cambios"}</button>}
+                {flagNotice && <p className="bpd-admin-feedback" role="status">{flagNotice}</p>}
                 <button className="bpd-admin-danger" type="button" disabled={!adminAuthorized || !onDeleteBusiness} onClick={() => { void runManagement(onDeleteBusiness); }}>Eliminar registro</button>
               </div>
             )}
