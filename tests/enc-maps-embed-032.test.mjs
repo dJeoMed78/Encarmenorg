@@ -75,3 +75,30 @@ test('iframe remains opt-in and preserves external fallback', () => {
   assert.match(source, /referrerPolicy="strict-origin-when-cross-origin"/);
   assert.match(source, /Abrir mapa/);
 });
+
+test('business name and address provide a free map search without coordinates', () => {
+  const result = present({ name: 'Cafetería Ejemplo', address: 'Calle 31 número 42', colonia: 'Centro' });
+  const link = new URL(result.link);
+  const embed = new URL(result.embed);
+  assert.match(link.searchParams.get('query'), /Cafetería Ejemplo/);
+  assert.match(link.searchParams.get('query'), /Ciudad del Carmen/);
+  assert.match(link.searchParams.get('query'), /Campeche/);
+  assert.equal(embed.searchParams.get('output'), 'embed');
+  assert.match(embed.searchParams.get('q'), /Calle 31 número 42/);
+});
+
+test('phone is not disclosed to Google Maps as part of the query', () => {
+  const result = present({ name: 'Ejemplo', address: 'Calle 31 número 42', phone: '9381234567' });
+  assert.doesNotMatch(result.link, /9381234567/);
+  assert.doesNotMatch(result.embed, /9381234567/);
+});
+
+test('name alone or neighborhood alone cannot be presented as a location', () => {
+  assert.equal(present({ name: 'Cafetería Ejemplo' }).embed, undefined);
+  assert.equal(present({ name: 'Cafetería Ejemplo', colonia: 'Centro' }).embed, undefined);
+});
+
+test('registered embed remains preferred to unverified address search', () => {
+  const result = present({ address: 'Calle 31 número 42', mapsUrl: 'https://www.google.com/maps/embed?pb=!1m1!1sabc' });
+  assert.equal(new URL(result.embed).searchParams.get('pb'), '!1m1!1sabc');
+});
