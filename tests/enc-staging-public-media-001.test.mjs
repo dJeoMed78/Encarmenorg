@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { attemptPrefix, sniffImage, parseMediaUrl, newMediaFilename, createPublicMediaService, MEDIA_MAX_BYTES } from '../src/server/publicMediaCore.ts';
-import { validatePublicRegistration } from '../src/server/publicRegistrationCore.ts';
+import { validatePublicRegistration, mediaPersisted } from '../src/server/publicRegistrationCore.ts';
 import { PUBLIC_REGISTRATION_FIELDS } from '../src/constants/publicRegistration.ts';
 
 const webp = Buffer.from('524946460400000057454250', 'hex');
@@ -58,4 +58,21 @@ test('independent storefront cover uses its own filename role and cannot be pass
   const base = {name:'Negocio de prueba', category:'Comercio', phone:'9381234567', mediaAttempt:attempt};
   assert.throws(() => validatePublicRegistration({...base, logo_url:coverUrl}), e => e.code === 'INVALID_REGISTRATION');
   assert.throws(() => validatePublicRegistration({...base, gallery:[coverUrl]}), e => e.code === 'INVALID_REGISTRATION');
+});
+
+test('twelve distinct assets persist as one logo, one cover and ten product images', () => {
+ const attempt = goodAttempt();
+ const prefix = attemptPrefix(attempt);
+ const logo = '/uploads/' + newMediaFilename(prefix, 'logo');
+ const cover = '/uploads/' + newMediaFilename(prefix, 'cover');
+ const gallery = Array.from({length:10}, () => '/uploads/' + newMediaFilename(prefix, 'gallery'));
+ const input = {name:'Negocio de prueba', category:'Comercio', phone:'9381234567', mediaAttempt:attempt, logo_url:logo, image:logo, cover_url:cover, gallery};
+ const validated = validatePublicRegistration(input);
+ assert.equal(validated.draft.logo_url, logo);
+ assert.equal(validated.draft.cover_url, cover);
+ assert.equal(validated.draft.gallery.length, 10);
+ assert.equal(validated.media.filenames.length, 12);
+ assert.ok(mediaPersisted({image:logo, raw_data:JSON.stringify(validated.draft)},validated.draft));
+ assert.equal(mediaPersisted({image:logo,raw_data:JSON.stringify({...validated.draft,cover_url:''})},validated.draft),false);
+ assert.throws(() => validatePublicRegistration({...input,gallery:[...gallery, '/uploads/'+newMediaFilename(prefix,'gallery')]}), e => e.code === 'INVALID_REGISTRATION');
 });
