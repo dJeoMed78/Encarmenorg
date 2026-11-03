@@ -899,3 +899,56 @@
   .bpd-overlay { padding: 16px; }
   .bpd-overlay .bpd-admin { padding: 25px 18px 20px; border-radius: 22px; }
 }
+
+
+/* Confirmación de guardado Glass — sobre la gestión, antes del cierre de 2 s. */
+.bpd-glass-save-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  border-radius: inherit;
+  background: rgba(29, 49, 77, 0.23);
+  -webkit-backdrop-filter: blur(9px) saturate(145%);
+  backdrop-filter: blur(9px) saturate(145%);
+  pointer-events: none;
+  animation: bpd-save-backdrop-in 180ms ease-out both;
+}
+.bpd-glass-save-toast {
+  width: min(100%, 320px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 25px 22px;
+  text-align: center;
+  color: #183254;
+  background: linear-gradient(150deg, rgba(255,255,255,.94), rgba(230,243,255,.82));
+  border: 1px solid rgba(255,255,255,.9);
+  border-radius: 26px;
+  box-shadow: 0 18px 54px rgba(16, 42, 74, .23), inset 0 1px 0 rgba(255,255,255,.95);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+  animation: bpd-save-toast-in 240ms cubic-bezier(.2, .8, .2, 1) both;
+}
+.bpd-glass-save-icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  color: white;
+  font-size: 32px;
+  font-weight: 800;
+  background: linear-gradient(145deg, #36c98b, #159c67);
+  box-shadow: 0 6px 20px rgba(22, 155, 101, .27), inset 0 1px 1px rgba(255,255,255,.6);
+}
+.bpd-glass-save-toast strong { font-size: 20px; line-height: 1.25; font-weight: 800; }
+.bpd-glass-save-toast > span:last-child { font-size: 13px; line-height: 1.45; color: #48607c; }
+@keyframes bpd-save-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bpd-save-toast-in { from { opacity: 0; transform: translateY(12px) scale(.94); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .bpd-glass-save-overlay, .bpd-glass-save-toast { animation: none; }
+}
