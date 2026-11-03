@@ -688,3 +688,10 @@ Autorización del propietario: conciliar y cerrar registros si la evidencia de r
 - **Residuos por tratar separadamente:** referencias y UI WordPress en componentes, archivos de despliegue antiguos Render/Vercel, scripts históricos de recuperación y limpieza documental. No eliminar scripts de recuperación sin evaluar conservación; no mezclar con radar de clasificados ni con cambios de registro sin pruebas.
 - **Motivo del cierre:** la PR mezcla borrados extensos y modificaciones ajenas a la limpieza que podrían introducir regresiones. Su cierre no certifica que la limpieza residual esté implementada. El trabajo pendiente, si se prioriza, es limpieza selectiva con revisión de impacto y pruebas independientes.
 - `main` y producción no modificados; ninguna rama de despliegue alterada.
+
+
+### 2026-11-03 — Radares pendientes separados
+Por solicitud del propietario se revisó código de `ia-desarrollo` y se crearon Issues independientes, sin afirmar fallo reproducido ni funcionamiento terminado:
+- Issue #41 https://github.com/dJeoMed78/Encarmenorg/issues/41: radar de clasificados, endpoint `POST /api/classifieds/radar-search` existente; cliente `src/services/api.ts` fuerza `useAi: true` pese al parámetro, pendiente verificación E2E, fuentes reales, deduplicación, aprobación y persistencia.
+- Issue #42 https://github.com/dJeoMed78/Encarmenorg/issues/42: radar de eventos, endpoints `POST /api/events/radar-search`, `/api/events/radar-scan`, `GET /api/events/radar-status` existentes; pendiente validar fuentes de eventos individuales, fechas reales, cuota Gemini, persistencia y E2E.
+Clasificación: implementación parcial identificada, funcionamiento real no confirmado. No duplicar desarrollo completo ni publicar candidatos automáticamente. PR #1 cerrada sin fusionar; no se modificó código ni producción.
