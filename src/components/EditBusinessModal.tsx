@@ -445,7 +445,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       if (!validOperation(v, key)) return;
       const response = await onSave(id, payload);
       if (!validOperation(v, key)) return;
-      if (response?.success === true) { setSuccessMsg('¡Negocio actualizado correctamente!'); onClose(); }
+      if (response?.success === true) { setSuccessMsg('Cambios guardados'); window.setTimeout(() => { if (validOperation(v, key)) onClose(); }, 2000); }
       else setErrorMsg(response?.message || 'El servidor no confirmó los cambios. Conservamos la edición para reintentar.');
     } catch (failure) {
       if (validOperation(v, key)) setErrorMsg(failure instanceof Error ? failure.message : 'Error de conexión. No se confirmó el guardado.');
