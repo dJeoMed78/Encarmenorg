@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import ts from 'typescript';
+import { transformSync } from 'esbuild';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../src/components/BusinessPublicDetail.tsx', import.meta.url), 'utf8');
@@ -9,9 +9,7 @@ const start = source.indexOf('export function businessMapPresentation(');
 const end = source.indexOf('\nfunction companyLogo(', start);
 assert.ok(start >= 0 && end > start, 'map helper must exist');
 const isolated = source.slice(start, end).replace('export function', 'function');
-const js = ts.transpileModule(isolated, {
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
-}).outputText;
+const js = transformSync(isolated, { loader: 'ts', target: 'es2022', format: 'iife' }).code;
 const context = vm.createContext({ URL, Number, encodeURIComponent });
 vm.runInContext(js + '\nthis.present = businessMapPresentation;', context);
 const present = (value) => context.present(value);
