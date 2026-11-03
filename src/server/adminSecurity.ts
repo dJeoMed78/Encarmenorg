@@ -78,6 +78,9 @@ export function registerAdminSecurity(app:express.Express,options:{provider?:Cre
    try{const version=currentVersion();if(!version || version!==session.providerVersion){sessions.delete(key);return;}}
    catch{sessions.delete(key);return;}
   }
+  // Active Staging sessions use a sliding 30-minute inactivity window.
+  // Never revive an expired or revoked token; renew only after validation.
+  if(options.sessionMs)session.expiresAt=now()+options.sessionMs;
   return session;
  };
  app.post('/api/admin/login',(req,res,next)=>{if(!req.is('application/json'))return fail(res,415,'Envía JSON.');next();},express.json({limit:'2kb',strict:true}),async(req,res)=>{
