@@ -79,6 +79,12 @@ export function businessMapPresentation(b: {
     lat !== undefined && lon !== undefined
       ? `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`
       : undefined;
+  // Coordinate-based embeds do not require an API key or a Places lookup.
+  // They locate the registered point, not a business by its name.
+  const coordinateEmbed =
+    lat !== undefined && lon !== undefined
+      ? `https://maps.google.com/maps?q=${encodeURIComponent(`${lat},${lon}`)}&z=16&output=embed`
+      : undefined;
   let link: string | undefined, embed: string | undefined;
   if (typeof b.mapsUrl === "string" && b.mapsUrl.length <= 7000)
     try {
@@ -121,7 +127,7 @@ export function businessMapPresentation(b: {
     } catch {
       /* Invalid registered map is not a frame. */
     }
-  return { link: coordinateLink || link, embed };
+  return { link: coordinateLink || link, embed: coordinateEmbed || embed };
 }
 function companyLogo(value: unknown) {
   if (typeof value !== "string" || !value || value.length > 2048)
