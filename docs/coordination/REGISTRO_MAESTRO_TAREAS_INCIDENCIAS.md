@@ -680,3 +680,11 @@ Autorización del propietario: conciliar y cerrar registros si la evidencia de r
 - PR #1 (limpieza autónoma) **ABIERTA**: cambios extensos/destructivos en integración histórica y scripts; requiere revisión de riesgo y contraste específico antes de cerrar o fusionar.
 - PR #3 (editor Glass) **ABIERTA**: modificaciones significativas en editor; no declarar incorporadas por completo sin comparar comportamiento y código con versión actual.
 - Issues #19, #21, #29, #31, #32, #33, #34 y #6 permanecen abiertos; no confundir el estado del encabezado con fallo activo. #19 carga pública aceptada para 3 fotos; editor administrativo independiente. #29 TOP/Recomendado y popup Glass aprobados, pero sesión/login requieren validación. La presente depuración es administrativa y no prueba nuevos despliegues.
+
+
+### 2026-11-03 — Cierre conciliado PR #1 (limpieza autónoma)
+- GitHub PR #1 `https://github.com/dJeoMed78/Encarmenorg/pull/1`: **CERRADA SIN FUSIONAR**, obsoleta parcialmente por divergencia de 2 commits adelante/186 atrás respecto de `ia-desarrollo`. Se inspeccionaron los 12 archivos de su diff y el código actual.
+- **Objetivo principal ya protegido en `ia-desarrollo`:** rutas de sincronización WordPress/WooCommerce devuelven HTTP 410, salvaguardas `STAGING_READ_ONLY` preservadas y registro público basado en MariaDB; no reactivar sincronización.
+- **Residuos por tratar separadamente:** referencias y UI WordPress en componentes, archivos de despliegue antiguos Render/Vercel, scripts históricos de recuperación y limpieza documental. No eliminar scripts de recuperación sin evaluar conservación; no mezclar con radar de clasificados ni con cambios de registro sin pruebas.
+- **Motivo del cierre:** la PR mezcla borrados extensos y modificaciones ajenas a la limpieza que podrían introducir regresiones. Su cierre no certifica que la limpieza residual esté implementada. El trabajo pendiente, si se prioriza, es limpieza selectiva con revisión de impacto y pruebas independientes.
+- `main` y producción no modificados; ninguna rama de despliegue alterada.
