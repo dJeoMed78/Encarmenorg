@@ -40,8 +40,8 @@ interface Props {
   onAdminClick?: () => void;
   onEditBusiness?: (b: Business) => void;
   onDeleteBusiness?: (b: Business) => void;
-  onToggleTop?: (b: Business) => void;
-  onToggleRecommended?: (b: Business) => void;
+  onToggleTop?: (b: Business) => Promise<boolean> | boolean | void;
+  onToggleRecommended?: (b: Business) => Promise<boolean> | boolean | void;
 }
 function safeUrl(value?: string): string | undefined {
   if (!value) return;
@@ -279,10 +279,15 @@ export function BusinessPublicDetail({
         setAdminError("La sesión expiró. Inicia sesión nuevamente.");
         return;
       }
-      // Existing parent callbacks handle the authenticated API writes and refresh.
-      if (draftRecommended !== Boolean(b.isRecommended)) onToggleRecommended?.(b);
-      if (draftTop !== Boolean(b.isTopBusiness)) onToggleTop?.(b);
-      setFlagNotice("Solicitud enviada. Verifica las etiquetas tras actualizar la ficha.");
+      // Do not report success before the parent confirms the server write.
+      if (draftRecommended !== Boolean(b.isRecommended)) {
+        if (!onToggleRecommended || await onToggleRecommended(b) !== true) throw new Error("recommended update unconfirmed");
+      }
+      if (draftTop !== Boolean(b.isTopBusiness)) {
+        if (!onToggleTop || await onToggleTop(b) !== true) throw new Error("top update unconfirmed");
+      }
+      setFlagNotice("Cambios guardados");
+      window.setTimeout(() => { setAdmin(false); resetFlagDraft(); }, 2000);
     } catch {
       setFlagNotice("No fue posible aplicar los cambios. Inténtalo de nuevo.");
     } finally {
