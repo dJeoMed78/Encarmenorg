@@ -2730,6 +2730,27 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
     }
 
     const oldBiz = businessesCache[idx];
+    // Migration of existing gallery media into the logo field is an admin-only
+    // atomic update. Never accept a client-supplied URL that was not already
+    // attached to this business, and never allow a gallery removal alone to
+    // bypass this validation when changing the logo.
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'logo_url') &&
+        String(req.body.logo_url || '') !== String(businessesCache[idx].logo_url || '')) {
+      if (!isVerifiedAdminSession(req)) {
+        return res.status(403).json({ success:false, message:'El cambio de logotipo requiere una sesión administrativa válida.' });
+      }
+      const gallery = businessesCache[idx].gallery;
+      const selected = String(req.body.logo_url || '');
+      if (selected && (!Array.isArray(gallery) || !gallery.includes(selected))) {
+        // New uploads already use the normal logo uploader; this route must
+        // still allow valid new uploads, so only enforce gallery membership
+        // for an explicit gallery-to-logo transfer.
+        if (Array.isArray(req.body.gallery) && gallery?.length > req.body.gallery.length) {
+          return res.status(409).json({success:false,message:'La imagen seleccionada no pertenece a la galería actual.'});
+        }
+      }
+    }
+
     const contactIntent = prepareContactPatch(req.body || {}, isVerifiedAdminSession(req));
     const safeBody = { ...req.body };
     delete safeBody.phone;
@@ -2810,6 +2831,15 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
           message: 'El distintivo no coincide con lo guardado en MariaDB. Recarga antes de reintentar.' });
       }
     }
+    // Verify the logo and gallery move from the persisted MariaDB readback.
+    if (Object.prototype.hasOwnProperty.call(safeBody, 'logo_url') &&
+        String(confirmed.logo_url || '') !== String(safeBody.logo_url || '')) {
+      return res.status(409).json({success:false,writeMayHaveSucceeded:true,message:'El logotipo guardado no coincide. Recarga antes de reintentar.'});
+    }
+    if (Object.prototype.hasOwnProperty.call(safeBody, 'gallery') &&
+        JSON.stringify(confirmed.gallery || []) !== JSON.stringify(safeBody.gallery || [])) {
+      return res.status(409).json({success:false,writeMayHaveSucceeded:true,message:'La galería guardada no coincide. Recarga antes de reintentar.'});
+    }
     updated = confirmed;
     if (contactIntent.clear.length) console.info('[Business contacts] Authorized explicit removal', { businessId: String(oldBiz.id), fields: contactIntent.clear });
     businessesCache = businessesCache.map(b => String(b.id) === String(oldBiz.id) ? updated : b);
@@ -2821,61 +2851,7 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
 
     
 
-    // Sync update with WordPress WooCommerce if credentials exist
-    const authHeader = getWpAuthHeader();
-    if (authHeader) {
-      try {
-        const cleanDesc = cleanWooCommerceDescription(updated.description || updated.name);
-        const fichaShortcode = buildFichaEmpresaShortcode(updated);
-        const catPayload = resolveWooCommerceCategoryIds(updated);
-        const wpImages = buildWooCommerceImagesPayload(updated);
-
-        const putBody: any = {
-          name: updated.name,
-          slug: updated.slug,
-          categories: catPayload,
-          description: `<p>${cleanDesc}</p>`,
-          short_description: fichaShortcode,
-          meta_data: [
-            { key: 'telefono', value: updated.phone || '' },
-            { key: 'phone', value: updated.phone || '' },
-            { key: 'whatsapp', value: updated.whatsapp || updated.phone || '' },
-            { key: 'direccion', value: updated.address || '' },
-            { key: 'address', value: updated.address || '' },
-            { key: 'colonia', value: updated.colonia || '' },
-            { key: 'horario', value: updated.schedule || '' },
-            { key: 'pagos', value: updated.payment || '' },
-            { key: 'envio', value: updated.delivery || '' },
-            { key: 'facebook', value: updated.facebook || '' },
-            { key: 'website', value: updated.website || '' }
-          ]
-        };
-
-        // Only re-upload images to WooCommerce if the user explicitly provided a new image or gallery
-        if (wpImages.length > 0 && (req.body.image || req.body.gallery)) {
-          putBody.images = wpImages;
-        }
-
-        fetch(`https://empresasencarmen.com/wp-json/wc/v3/products/${id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': authHeader
-          },
-          body: JSON.stringify(putBody)
-        }).then(async (wpRes) => {
-          if (wpRes.status === 404) {
-            // Product does not exist on WordPress yet, export it as a new product!
-            await exportBusinessToWooCommerce(updated, authHeader);
-          } else if (wpRes.ok) {
-            purgeWordPressCache([updated.slug, ...(updated.previousSlugs || [])]);
-          }
-        }).catch(err => console.warn('[WooCommerce Update] Error:', err.message));
-        purgeWordPressCache([updated.slug, ...(updated.previousSlugs || [])]);
-      } catch (_) {}
-    }
-
-    return res.json({ success: true, message: 'Empresa actualizada con éxito', business: updated });
+    // WordPress/WooCommerce is retired. Never propagate Staging edits to legacy systems.\n\n    return res.json({ success: true, message: 'Empresa actualizada con éxito', business: updated });
   } catch (err: any) {
     if (err instanceof ContactPatchError) return res.status(err.status).json({success:false, message:err.message});
     return res.status(503).json({ success: false, writeMayHaveSucceeded, message: writeMayHaveSucceeded ? 'La escritura fue aceptada, pero no pudo confirmarse. Recarga antes de reintentar.' : 'No fue posible confirmar el guardado en MariaDB.' });
