@@ -399,6 +399,22 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   const handleRemoveGalleryPhoto = (index: number) => {
     if (!saveBusy.current && !uploadBusy.current) setFormData(prev => ({...prev, gallery: (prev.gallery || []).filter((_, i) => i !== index)}));
   };
+  // Temporary migration tool: move one existing gallery URL into the independent
+  // logo field in the same save payload. Never delete the underlying media file.
+  const handlePromoteGalleryPhotoToLogo = (index: number) => {
+    if (!logoAllowed || saveBusy.current || uploadBusy.current || isSaving) return;
+    setFormData(prev => {
+      const gallery = Array.isArray(prev.gallery) ? prev.gallery : [];
+      const selected = gallery[index];
+      if (!selected || safeCompanyLogo(selected) === undefined) return prev;
+      return {
+        ...prev,
+        logo_url: selected,
+        gallery: gallery.filter((_, i) => i !== index),
+      };
+    });
+    setErrorMsg(null);
+  };
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saveBusy.current || uploadBusy.current || !originalBusiness.current) return;
@@ -1054,6 +1070,18 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 {formData.gallery.map((photo, idx) => (
                   <div key={idx} className="group relative aspect-square rounded-xl overflow-hidden bg-white/35 border border-white/80 shadow-[0_5px_15px_rgba(35,75,130,.15)]">
                     <img src={photo} alt={`Trabajo ${idx + 1}`} className="w-full h-full object-cover" />
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handlePromoteGalleryPhotoToLogo(idx)}
+                        disabled={!logoAllowed || isSaving || isUploadingPhoto || isUploadingGallery || isUploadingLogo}
+                        className="absolute inset-x-1 bottom-1 z-10 rounded-md bg-blue-800/95 px-1 py-1.5 text-[9px] font-bold text-white shadow-sm hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
+                        title="Mover esta foto al campo de logotipo; se quitará de la galería al guardar"
+                        aria-label={`Usar foto ${idx + 1} como logotipo`}
+                      >
+                        Usar como logotipo
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleRemoveGalleryPhoto(idx)}
