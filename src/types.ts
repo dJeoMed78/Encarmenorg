@@ -311,6 +311,7 @@ export interface AutoBusinessCandidate {
   schedule?: string;
   payment?: string;
   image: string;
+  cover_url?: string;
   gallery?: string[];
   source: string;
   sourceUrl: string;
