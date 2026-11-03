@@ -230,7 +230,6 @@ export function BusinessPublicDetail({
     adminButton = useRef<HTMLButtonElement>(null);
   const [logoFailed, setLogoFailed] = useState(false),
     [coverFailed, setCoverFailed] = useState(false),
-    [mapConsent, setMapConsent] = useState(false),
     [mapFailed, setMapFailed] = useState(false),
     [mapWide, setMapWide] = useState(false);
   const mapBox = useRef<HTMLDivElement>(null);
@@ -248,7 +247,6 @@ export function BusinessPublicDetail({
     setIndex(0);
   }, [b.id, b.logo_url, extra.cover_url, b.image, b.imageUrl]);
   useEffect(() => {
-    setMapConsent(false);
     setMapFailed(false);
   }, [b.id, b.mapsUrl, b.latitude, b.longitude]);
   useEffect(() => {
@@ -264,7 +262,6 @@ export function BusinessPublicDetail({
   useEffect(() => {
     const blocked = (event: SecurityPolicyViolationEvent) => {
       if (
-        mapConsent &&
         ["frame-src", "child-src"].includes(event.effectiveDirective) &&
         event.blockedURI.startsWith("https://www.google.com")
       )
@@ -273,7 +270,7 @@ export function BusinessPublicDetail({
     document.addEventListener("securitypolicyviolation", blocked);
     return () =>
       document.removeEventListener("securitypolicyviolation", blocked);
-  }, [mapConsent]);
+  }, []);
   const openManagement = async () => {
     if (adminChecking) return;
     setAdminChecking(true);
@@ -668,30 +665,20 @@ export function BusinessPublicDetail({
               </h2>
               <div ref={mapBox} className="bpd-map-container">
                 {mapPresentation.embed && mapWide && !mapFailed ? (
-                  mapConsent ? (
-                    <>
-                      <iframe
-                        className="bpd-map-embed"
-                        src={mapPresentation.embed}
-                        title={`Mapa de ${b.name}`}
-                        loading="lazy"
-                        referrerPolicy="strict-origin-when-cross-origin"
-                        allowFullScreen
-                        onError={() => setMapFailed(true)}
-                      />
-                      <small>
-                        Si el mapa no se visualiza, utiliza el enlace externo.
-                      </small>
-                    </>
-                  ) : (
-                    <div className="bpd-map">
-                      <MapPin size={30} />
-                      <button type="button" onClick={() => setMapConsent(true)}>
-                        Cargar mapa de Google
-                      </button>
-                      <small>Al cargarlo, conectarás con Google Maps.</small>
-                    </div>
-                  )
+                  <>
+                    <iframe
+                      className="bpd-map-embed"
+                      src={mapPresentation.embed}
+                      title={`Mapa de ${b.name}`}
+                      loading="lazy"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      allowFullScreen
+                      onError={() => setMapFailed(true)}
+                    />
+                    <small>
+                      Si el mapa no se visualiza, utiliza el enlace externo.
+                    </small>
+                  </>
                 ) : (
                   <div className="bpd-map">
                     <MapPin size={30} />
