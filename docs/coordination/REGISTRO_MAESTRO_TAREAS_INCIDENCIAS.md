@@ -669,3 +669,14 @@ El propietario autorizó Google Drive como memoria narrativa más frecuente de C
 - **#32/#33/#34:** mapas, orden móvil, ratings/comentarios requieren comparación dirigida con `work/enc-glass-logo-maps-002`, `work/enc-reviews-comments-002`, `work/enc-glass-business-detail-001`, `work/enc-glass-editor-001`, sus commits y `ia-desarrollo`; no declarar resueltos ni fallidos sin evidencia.
 - **PR abiertos #1/#3/#11/#13:** conciliación pendiente; clasificar incorporado por otra PR, parcial, necesario u obsoleto. PR #11 rotulada NO INTEGRAR. No fusionar ni cerrar automáticamente.
 **Prioridad inmediata:** continuar desde PR #38, cotejar despliegue Hostinger `a97176e8` y realizar únicamente E2E específico de Aplicar cambios. Producción `main`/`encarmen.org` protegida. Este registro rectifica estados históricos, no certifica despliegues no observados ni ejecuta pruebas nuevas.
+
+
+## 2026-11-03 — Depuración administrativa de entregas históricas
+Autorización del propietario: conciliar y cerrar registros si la evidencia de resolución es suficiente, sin modificar producción ni fusionar PR antiguas.
+- Issues #5 (restauración histórica de contactos), #12 (HTTP 503 original corregido y E2E comprobado, PR #15/#16), #22 (dependencias corregidas en Staging, PR #23) **CERRADOS** en GitHub con motivo `completed`; se preserva historial y evidencias. #6 permanece independiente para monitoreo preventivo.
+- PR #13 **CERRADA sin fusionar**: su diff ya no aporta cambios respecto de `ia-desarrollo` y la corrección original fue integrada por PR #15/#16.
+- PR #39 **CERRADA sin fusionar**: sus cinco archivos fueron aplicados previamente directamente a `ia-desarrollo` por autorización del propietario; fusionarla de nuevo sería duplicar trabajo. PR #40 fue integrada por squash y el aviso Glass fue aceptado.
+- PR #11 **CERRADA sin fusionar**: explícitamente identificada como validación «NO INTEGRAR» de configuración histórica; no publicar ni reaplicar parche de entorno sin nueva incidencia comprobada.
+- PR #1 (limpieza autónoma) **ABIERTA**: cambios extensos/destructivos en integración histórica y scripts; requiere revisión de riesgo y contraste específico antes de cerrar o fusionar.
+- PR #3 (editor Glass) **ABIERTA**: modificaciones significativas en editor; no declarar incorporadas por completo sin comparar comportamiento y código con versión actual.
+- Issues #19, #21, #29, #31, #32, #33, #34 y #6 permanecen abiertos; no confundir el estado del encabezado con fallo activo. #19 carga pública aceptada para 3 fotos; editor administrativo independiente. #29 TOP/Recomendado y popup Glass aprobados, pero sesión/login requieren validación. La presente depuración es administrativa y no prueba nuevos despliegues.
