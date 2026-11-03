@@ -165,8 +165,14 @@ export async function verifyAdminSession(
     // A temporary network failure is not evidence that the server revoked the session.
     // Only an explicit HTTP 401 or a locally expired token ends the session.
     const status = (error as Error & { status?: number }).status;
-    if (ticket === epoch && (status === 401 || (verified?.expiresAt ?? Infinity) <= Date.now())) clearAdminAuth();
-    return false;
+    if (ticket !== epoch || signal?.aborted) return false;
+    if (status === 401 || (verified?.expiresAt ?? Infinity) <= Date.now()) {
+      clearAdminAuth();
+      return false;
+    }
+    // An intermittent network failure must not discard a previously server-verified
+    // session. The server still authorizes every privileged write independently.
+    return Boolean(verified && verified.token === t && verified.expiresAt > Date.now());
   }
 }
 export async function loginAdminUser(
