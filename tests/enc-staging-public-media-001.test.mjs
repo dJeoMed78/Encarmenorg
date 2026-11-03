@@ -47,3 +47,15 @@ test('registration field allowlist includes media but no privileged fields', () 
  for (const key of ['logo_url','image','gallery','mediaAttempt']) assert.ok(PUBLIC_REGISTRATION_FIELDS.includes(key));
  for (const key of ['id','verified','featured','status','role']) assert.ok(!PUBLIC_REGISTRATION_FIELDS.includes(key));
 });
+
+test('independent storefront cover uses its own filename role and cannot be passed as gallery or logo', () => {
+  const prefix = attemptPrefix(goodAttempt());
+  const cover = newMediaFilename(prefix, 'cover');
+  assert.deepEqual(parseMediaUrl('/uploads/' + cover), {filename: cover, prefix, role: 'cover'});
+  assert.ok(PUBLIC_REGISTRATION_FIELDS.includes('cover_url'));
+  const attempt = goodAttempt();
+  const coverUrl = '/uploads/' + newMediaFilename(attemptPrefix(attempt), 'cover');
+  const base = {name:'Negocio de prueba', category:'Comercio', phone:'9381234567', mediaAttempt:attempt};
+  assert.throws(() => validatePublicRegistration({...base, logo_url:coverUrl}), e => e.code === 'INVALID_REGISTRATION');
+  assert.throws(() => validatePublicRegistration({...base, gallery:[coverUrl]}), e => e.code === 'INVALID_REGISTRATION');
+});
