@@ -77,12 +77,13 @@ function contact(body: any, key: string): string {
 function mediaFields(body: any): any {
   const logoRaw = body.logo_url === undefined || body.logo_url === null ? '' : body.logo_url;
   const imageRaw = body.image === undefined || body.image === null ? '' : body.image;
+  const coverRaw = body.cover_url === undefined || body.cover_url === null ? '' : body.cover_url;
   const galleryRaw = body.gallery === undefined || body.gallery === null ? [] : body.gallery;
-  if (typeof logoRaw !== 'string' || typeof imageRaw !== 'string') fail(400, 'INVALID_REGISTRATION', 'Imagen de logotipo inválida.');
+  if (typeof logoRaw !== 'string' || typeof imageRaw !== 'string' || typeof coverRaw !== 'string') fail(400, 'INVALID_REGISTRATION', 'Imagen de logotipo inválida.');
   if (!Array.isArray(galleryRaw)) fail(400, 'INVALID_REGISTRATION', 'La galería debe ser una lista.');
   if (logoRaw && imageRaw && logoRaw !== imageRaw) fail(400, 'INVALID_REGISTRATION', 'image y logo_url deben coincidir.');
   const logo = logoRaw || imageRaw;
-  if (!logo && galleryRaw.length === 0) return null;
+  if (!logo && !coverRaw && galleryRaw.length === 0) return null;
   if (galleryRaw.length > MEDIA_MAX_GALLERY) fail(400, 'INVALID_REGISTRATION', 'Máximo ' + MEDIA_MAX_GALLERY + ' fotografías.');
   const attempt = body.mediaAttempt;
   if (typeof attempt !== 'string' || !MEDIA_UUID_V4.test(attempt)) fail(400, 'INVALID_REGISTRATION', 'Falta el identificador del intento de carga de imágenes.');
@@ -94,6 +95,13 @@ function mediaFields(body: any): any {
     filenames.push(parsed.filename);
   }
   const seen = new Set();
+  if (coverRaw) {
+    const parsed = parseMediaUrl(coverRaw);
+    if (!parsed || parsed.role !== 'cover' || parsed.prefix !== prefix) fail(400, 'INVALID_REGISTRATION', 'La portada no es una imagen subida en este registro.');
+    if (seen.has(parsed.filename)) fail(400, 'INVALID_REGISTRATION', 'Imagen repetida.');
+    seen.add(parsed.filename);
+    filenames.push(parsed.filename);
+  }
   for (const entry of galleryRaw) {
     const parsed = parseMediaUrl(entry);
     if (!parsed || parsed.role !== 'gallery' || parsed.prefix !== prefix) fail(400, 'INVALID_REGISTRATION', 'Una fotografía no es una imagen subida en este registro.');
@@ -101,7 +109,7 @@ function mediaFields(body: any): any {
     seen.add(parsed.filename);
     filenames.push(parsed.filename);
   }
-  return {logo, gallery: galleryRaw.slice(), prefix, filenames};
+  return {logo, cover: coverRaw, gallery: galleryRaw.slice(), prefix, filenames};
 }
 
 /** Valida y normaliza el envío público. Teléfono y WhatsApp son independientes; nada se infiere ni se recorta en silencio. */
@@ -146,6 +154,10 @@ export function validatePublicRegistration(body: any): any {
   if (media.logo) {
     draft.logo_url = media.logo;
     draft.image = media.logo;
+  }
+  if (media.cover) {
+    draft.cover_url = media.cover;
+    if (!media.logo) draft.image = media.cover;
   }
   if (media.gallery.length > 0) draft.gallery = media.gallery;
   return {draft, media: {prefix: media.prefix, filenames: media.filenames}};
@@ -213,7 +225,7 @@ export function createPoolReaders(getPool: any): any {
 /** Las imágenes del borrador deben releerse desde la fila persistida (columna image y raw_data.gallery). */
 export function mediaPersisted(row: any, draft: any): boolean {
   const wanted = Array.isArray(draft.gallery) ? draft.gallery : [];
-  if (!draft.image && wanted.length === 0) return true;
+  if (!draft.image && !draft.cover_url && wanted.length === 0) return true;
   let extra: any = {};
   try {
     extra = JSON.parse(String(row.raw_data || '{}'));
@@ -221,7 +233,7 @@ export function mediaPersisted(row: any, draft: any): boolean {
     return false;
   }
   const stored = Array.isArray(extra.gallery) ? extra.gallery : [];
-  return String(row.image || '') === String(draft.image || '') && String(extra.logo_url || '') === String(draft.logo_url || '') && stored.length === wanted.length && wanted.every((url: any, index: number) => stored[index] === url);
+  return String(row.image || '') === String(draft.image || '') && String(extra.logo_url || '') === String(draft.logo_url || '') && String(extra.cover_url || '') === String(draft.cover_url || '') && stored.length === wanted.length && wanted.every((url: any, index: number) => stored[index] === url);
 }
 
 export function createPublicRegistrationService(deps: any): any {
