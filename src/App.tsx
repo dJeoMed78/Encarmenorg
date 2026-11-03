@@ -83,6 +83,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('negocios');
   const [isEmergencyModalOpen, setIsEmergencyModalOpen] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [adminActionToast, setAdminActionToast] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [selectedColonia, setSelectedColonia] = useState('Todas');
 
@@ -628,6 +629,8 @@ export default function App() {
       window.alert(result.message || 'No se confirmó la eliminación del registro.');
       return;
     }
+    setAdminActionToast('Cambios guardados');
+    window.setTimeout(() => setAdminActionToast(''), 2000);
     invalidateBusinessRequests();
     setDeletedBusinessIds((prev) => [...prev, Number(b.id)]);
     setBusinessesList((prev) => prev.filter((item) => String(item.id) !== String(b.id)));
@@ -1337,6 +1340,8 @@ export default function App() {
         {businessesStatus === 'error' ? 'No se pudieron consultar los negocios vigentes. No se muestran contactos de respaldo.' : 'Consultando negocios vigentes…'}
         {businessesStatus === 'error' && <button type="button" aria-label="Reintentar carga de negocios" className="ml-3 underline font-bold" onClick={() => setBusinessesReload(n => n + 1)}>Reintentar</button>}
       </div>}
+
+      {adminActionToast && <div role="status" aria-live="polite" className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] rounded-xl bg-slate-900 px-6 py-3 text-white shadow-xl">{adminActionToast}</div>}
 
       {/* MODAL / SISTEMA OPERATIVO DE ADMINISTRACIÓN (VINCULADO AL BOTÓN π) */}
       <WordPressSyncModal
