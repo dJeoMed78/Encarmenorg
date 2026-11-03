@@ -179,6 +179,7 @@ export function BusinessPublicDetail({
     ),
   ] as string[];
   const [index, setIndex] = useState(0),
+    [heroLogoMode, setHeroLogoMode] = useState(true),
     [gallery, setGallery] = useState(false),
     [admin, setAdmin] = useState(false),
     [notice, setNotice] = useState("");
@@ -208,7 +209,11 @@ export function BusinessPublicDetail({
   const mapBox = useRef<HTMLDivElement>(null);
   const mapPresentation = businessMapPresentation(b),
     registeredLogo = companyLogo(b.logo_url);
-  useEffect(() => setLogoFailed(false), [b.id, b.logo_url]);
+  useEffect(() => {
+    setLogoFailed(false);
+    setHeroLogoMode(true);
+    setIndex(0);
+  }, [b.id, b.logo_url]);
   useEffect(() => {
     setMapConsent(false);
     setMapFailed(false);
@@ -395,8 +400,11 @@ export function BusinessPublicDetail({
     b.deliveryOption ||
     b.delivery ||
     (b.hasDelivery === true ? "Entrega a domicilio" : "");
-  const turn = (n: number) =>
+  const turn = (n: number) => {
+    if (!photos.length) return;
+    setHeroLogoMode(false);
     setIndex((i) => (i + n + photos.length) % photos.length);
+  };
   return (
     <div ref={root} className={`bpd-shell ${modal ? "bpd-modal" : ""}`}>
       <div
@@ -441,7 +449,16 @@ export function BusinessPublicDetail({
         <div className="bpd-grid">
           <aside className="bpd-media">
             <div className="bpd-hero">
-              <Photo src={photos[index]} alt={`${b.name}, foto ${index + 1}`} />
+              {registeredLogo && !logoFailed && (heroLogoMode || !photos.length) ? (
+                <img
+                  className="bpd-hero-logo"
+                  src={registeredLogo}
+                  alt={`Logotipo de ${b.name}`}
+                  onError={() => setLogoFailed(true)}
+                />
+              ) : (
+                <Photo src={photos[index]} alt={`${b.name}, foto ${index + 1}`} />
+              )}
               {photos.length > 1 && (
                 <>
                   <button
@@ -464,7 +481,10 @@ export function BusinessPublicDetail({
                 <button
                   ref={galleryButton}
                   className="bpd-allphotos"
-                  onClick={() => setGallery(true)}
+                  onClick={() => {
+                    setHeroLogoMode(false);
+                    setGallery(true);
+                  }}
                 >
                   <Images size={15} /> Ver todas las fotos ({photos.length})
                 </button>
@@ -476,8 +496,9 @@ export function BusinessPublicDetail({
                   <button
                     key={src}
                     aria-label={`Ver foto ${i + 1}${i === 4 && photos.length > 5 ? ` y ${photos.length - 5} más` : ""}`}
-                    aria-pressed={index === i}
+                    aria-pressed={!heroLogoMode && index === i}
                     onClick={() => {
+                      setHeroLogoMode(false);
                       setIndex(i);
                       if (i === 4 && photos.length > 5) setGallery(true);
                     }}
