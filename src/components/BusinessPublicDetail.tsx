@@ -402,8 +402,12 @@ export function BusinessPublicDetail({
     (b.hasDelivery === true ? "Entrega a domicilio" : "");
   const turn = (n: number) => {
     if (!photos.length) return;
+    if (heroLogoMode && registeredLogo && !logoFailed) {
+      setIndex(n < 0 ? photos.length - 1 : 0);
+    } else {
+      setIndex((i) => (i + n + photos.length) % photos.length);
+    }
     setHeroLogoMode(false);
-    setIndex((i) => (i + n + photos.length) % photos.length);
   };
   return (
     <div ref={root} className={`bpd-shell ${modal ? "bpd-modal" : ""}`}>
