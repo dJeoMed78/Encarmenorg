@@ -56,11 +56,14 @@ function phone(value?: string) {
   const digits = contactDigits(value);
   return digits ? `52${digits}` : undefined;
 }
-// Only known Google Maps origins can become links/frames; no address/name geocoding.
+// Google Maps URLs use registered coordinates or address text; no paid geocoding or identity verification.
 export function businessMapPresentation(b: {
   mapsUrl?: unknown;
   latitude?: unknown;
   longitude?: unknown;
+  name?: unknown;
+  address?: unknown;
+  colonia?: unknown;
 }) {
   const coordinate = (v: unknown, max: number) => {
     if (
@@ -85,6 +88,23 @@ export function businessMapPresentation(b: {
     lat !== undefined && lon !== undefined
       ? `https://maps.google.com/maps?q=${encodeURIComponent(`${lat},${lon}`)}&z=16&output=embed`
       : undefined;
+  // Text lookup is a search suggestion, not a verified business pin.
+  // Do not send registered phone numbers to third-party map services.
+  const clean = (v: unknown) =>
+    typeof v === "string" ? v.trim().replace(/\\s+/g, " ").slice(0, 180) : "";
+  const address = clean(b.address);
+  const name = clean(b.name);
+  const colonia = clean(b.colonia);
+  const searchText = address.length >= 6
+    ? [name, address, colonia, "Ciudad del Carmen", "Campeche", "México"]
+        .filter(Boolean).join(", ")
+    : undefined;
+  const searchLink = searchText
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchText)}`
+    : undefined;
+  const searchEmbed = searchText
+    ? `https://maps.google.com/maps?q=${encodeURIComponent(searchText)}&output=embed`
+    : undefined;
   let link: string | undefined, embed: string | undefined;
   if (typeof b.mapsUrl === "string" && b.mapsUrl.length <= 7000)
     try {
@@ -127,7 +147,7 @@ export function businessMapPresentation(b: {
     } catch {
       /* Invalid registered map is not a frame. */
     }
-  return { link: coordinateLink || link, embed: coordinateEmbed || embed };
+  return { link: coordinateLink || link || searchLink, embed: coordinateEmbed || embed || searchEmbed };
 }
 function companyLogo(value: unknown) {
   if (typeof value !== "string" || !value || value.length > 2048)
