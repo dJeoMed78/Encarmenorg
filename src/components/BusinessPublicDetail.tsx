@@ -203,17 +203,24 @@ export function BusinessPublicDetail({
     galleryButton = useRef<HTMLButtonElement>(null),
     adminButton = useRef<HTMLButtonElement>(null);
   const [logoFailed, setLogoFailed] = useState(false),
+    [coverFailed, setCoverFailed] = useState(false),
     [mapConsent, setMapConsent] = useState(false),
     [mapFailed, setMapFailed] = useState(false),
     [mapWide, setMapWide] = useState(false);
   const mapBox = useRef<HTMLDivElement>(null);
   const mapPresentation = businessMapPresentation(b),
-    registeredLogo = companyLogo(b.logo_url);
+    // Presentation-only fallback: the stored cover remains a separate field.
+    registeredLogo = companyLogo(b.logo_url),
+    // Cover is a separate business asset: use it only when no usable logo exists.
+    coverPhoto = companyLogo(extra.cover_url) || companyLogo(b.image) || companyLogo(b.imageUrl),
+    displayBrandImage = (registeredLogo && !logoFailed ? registeredLogo : undefined) ||
+      (coverPhoto && !coverFailed ? coverPhoto : undefined);
   useEffect(() => {
     setLogoFailed(false);
+    setCoverFailed(false);
     setHeroLogoMode(true);
     setIndex(0);
-  }, [b.id, b.logo_url]);
+  }, [b.id, b.logo_url, extra.cover_url, b.image, b.imageUrl]);
   useEffect(() => {
     setMapConsent(false);
     setMapFailed(false);
@@ -402,7 +409,7 @@ export function BusinessPublicDetail({
     (b.hasDelivery === true ? "Entrega a domicilio" : "");
   const turn = (n: number) => {
     if (!photos.length) return;
-    if (heroLogoMode && registeredLogo && !logoFailed) {
+    if (heroLogoMode && displayBrandImage) {
       setIndex(n < 0 ? photos.length - 1 : 0);
     } else {
       setIndex((i) => (i + n + photos.length) % photos.length);
@@ -453,12 +460,12 @@ export function BusinessPublicDetail({
         <div className="bpd-grid">
           <aside className="bpd-media">
             <div className="bpd-hero">
-              {registeredLogo && !logoFailed && (heroLogoMode || !photos.length) ? (
+              {displayBrandImage && (heroLogoMode || !photos.length) ? (
                 <img
                   className="bpd-hero-logo"
-                  src={registeredLogo}
-                  alt={`Logotipo de ${b.name}`}
-                  onError={() => setLogoFailed(true)}
+                  src={displayBrandImage}
+                  alt={`${displayBrandImage === registeredLogo ? 'Logotipo' : 'Fotografía de portada'} de ${b.name}`}
+                  onError={() => displayBrandImage === registeredLogo ? setLogoFailed(true) : setCoverFailed(true)}
                 />
               ) : (
                 <Photo src={photos[index]} alt={`${b.name}, foto ${index + 1}`} />
@@ -613,11 +620,11 @@ export function BusinessPublicDetail({
             )}
           </main>
           <div className="bpd-card bpd-identity">
-            {registeredLogo && !logoFailed ? (
+            {displayBrandImage ? (
               <img
-                src={registeredLogo}
-                alt={`Logotipo de ${b.name}`}
-                onError={() => setLogoFailed(true)}
+                src={displayBrandImage}
+                alt={`${displayBrandImage === registeredLogo ? 'Logotipo' : 'Fotografía de portada'} de ${b.name}`}
+                onError={() => displayBrandImage === registeredLogo ? setLogoFailed(true) : setCoverFailed(true)}
               />
             ) : (
               <>
