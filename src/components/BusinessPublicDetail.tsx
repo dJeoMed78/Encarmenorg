@@ -781,7 +781,16 @@ export function BusinessPublicDetail({
                   TOP
                 </label>
                 {flagsDirty && <button className="bpd-admin-primary" type="button" disabled={applyingFlags || !adminAuthorized} onClick={() => { void applyFlagChanges(); }}>{applyingFlags ? "Aplicando…" : "Aplicar cambios"}</button>}
-                {flagNotice && <p className="bpd-admin-feedback" role="status">{flagNotice}</p>}
+                {flagNotice && flagNotice !== "Cambios guardados" && <p className="bpd-admin-feedback" role="alert">{flagNotice}</p>}
+                {flagNotice === "Cambios guardados" && (
+                  <div className="bpd-glass-save-overlay" role="status" aria-live="polite" aria-atomic="true">
+                    <div className="bpd-glass-save-toast">
+                      <span className="bpd-glass-save-icon" aria-hidden="true">✓</span>
+                      <strong>Cambios guardados</strong>
+                      <span>Tu configuración se actualizó correctamente.</span>
+                    </div>
+                  </div>
+                )}
                 <button className="bpd-admin-danger" type="button" disabled={!adminAuthorized || !onDeleteBusiness} onClick={() => { void runManagement(onDeleteBusiness); }}>Eliminar registro</button>
               </div>
             )}
