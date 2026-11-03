@@ -23,7 +23,7 @@ export async function prepareImage(file: File): Promise<Blob> {
   return blob;
 }
 
-export async function uploadRegistrationImage(file: File, role: 'logo' | 'gallery', attemptId: string): Promise<{ url: string }> {
+export async function uploadRegistrationImage(file: File, role: 'logo' | 'cover' | 'gallery', attemptId: string): Promise<{ url: string }> {
   const blob = await prepareImage(file);
   let response: Response;
   try {
@@ -36,7 +36,7 @@ export async function uploadRegistrationImage(file: File, role: 'logo' | 'galler
     throw new Error('Sin conexión con el servidor; la imagen no se subió.');
   }
   const result = await response.json().catch(() => null);
-  if (!response.ok || !result || result.success !== true || typeof result.url !== 'string' || !/^\/uploads\/pub-[a-f0-9]{12}-[lg]-[a-f0-9]{32}\.webp$/.test(result.url)) {
+  if (!response.ok || !result || result.success !== true || typeof result.url !== 'string' || !/^\/uploads\/pub-[a-f0-9]{12}-[lcg]-[a-f0-9]{32}\.webp$/.test(result.url)) {
     throw new Error((result && result.message) || 'No se confirmó la subida (HTTP ' + response.status + ').');
   }
   return { url: result.url };
