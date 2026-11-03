@@ -9,7 +9,7 @@ const start = source.indexOf('export function businessMapPresentation(');
 const end = source.indexOf('\nfunction companyLogo(', start);
 assert.ok(start >= 0 && end > start, 'map helper must exist');
 const isolated = source.slice(start, end).replace('export function', 'function');
-const js = transformSync(isolated, { loader: 'ts', target: 'es2022', format: 'iife' }).code;
+const js = transformSync(isolated, { loader: 'ts', target: 'es2022' }).code;
 const context = vm.createContext({ URL, Number, encodeURIComponent });
 vm.runInContext(js + '\nthis.present = businessMapPresentation;', context);
 const present = (value) => context.present(value);
