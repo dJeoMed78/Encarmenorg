@@ -67,10 +67,13 @@ test('business media fallbacks remain in the existing component', () => {
   assert.match(source, /onError=\{\(\) => displayBrandImage === registeredLogo/);
 });
 
-test('iframe remains opt-in and preserves external fallback', () => {
-  assert.match(source, /mapConsent \? \(/);
-  assert.match(source, /Cargar mapa de Google/);
+test('iframe loads automatically with lazy loading and preserves external fallback', () => {
+  assert.doesNotMatch(source, /mapConsent/);
+  assert.doesNotMatch(source, /Cargar mapa de Google/);
+  assert.match(source, /src=\{mapPresentation\.embed\}/);
+  assert.match(source, /loading="lazy"/);
   assert.match(source, /referrerPolicy="strict-origin-when-cross-origin"/);
+  assert.match(source, /onError=\{\(\) => setMapFailed\(true\)\}/);
   assert.match(source, /Abrir mapa/);
 });
 
