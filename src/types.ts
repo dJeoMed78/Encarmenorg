@@ -22,6 +22,8 @@ export interface Business {
   image: string;
   /** Independent company logo, preserved by the existing raw_data contract. */
   logo_url?: string;
+  /** Independent storefront/cover photograph, distinct from logo and gallery. */
+  cover_url?: string;
   imageUrl?: string;
   gallery?: string[];
   subcategory?: string;
