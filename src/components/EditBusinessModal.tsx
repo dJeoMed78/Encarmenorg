@@ -326,6 +326,7 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           instagram: ensureString(business.instagram),
           website: ensureString(business.website),
           image: ensureString(business.image),
+          cover_url: ensureString(business.cover_url),
           logo_url: ensureString(business.logo_url),
           gallery: safeGallery,
           slug: ensureString(business.slug),
@@ -377,11 +378,11 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       if (!validOperation(v, key)) return;
       const urls: string[] = [];
       for (const file of files) {
-        const uploaded = await uploadRegistrationImage(file, companyLogo ? 'logo' : 'gallery', mediaAttemptId.current);
+        const uploaded = await uploadRegistrationImage(file, companyLogo ? 'logo' : gallery ? 'gallery' : 'cover', mediaAttemptId.current);
         if (!validOperation(v, key)) return;
         urls.push(uploaded.url);
       }
-      if (validOperation(v, key)) setFormData(prev => companyLogo ? {...prev, logo_url: urls[0]} : gallery ? {...prev, gallery: [...(prev.gallery || []), ...urls]} : {...prev, image: urls[0]});
+      if (validOperation(v, key)) setFormData(prev => companyLogo ? {...prev, logo_url: urls[0]} : gallery ? {...prev, gallery: [...(prev.gallery || []), ...urls]} : {...prev, cover_url: urls[0]});
     } catch (failure) {
       if (validOperation(v, key)) setErrorMsg(failure instanceof Error ? failure.message : 'No fue posible cargar las imágenes.');
     } finally {
@@ -1009,13 +1010,13 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
           </div>
           <div className="space-y-1 pt-1">
             <label className="text-xs font-bold text-stone-700 flex items-center justify-between">
-              <span>Fotografía de portada</span>
+              <span>Fotografía de fachada / portada</span>
               {isUploadingPhoto && <span className="text-[10px] text-amber-600 animate-pulse">Subiendo...</span>}
             </label>
             <div className="flex items-center gap-3">
               <div className="w-16 h-14 rounded-xl bg-white/45 border border-white/80 overflow-hidden shrink-0 flex items-center justify-center shadow-[0_4px_12px_rgba(35,85,145,.14)]">
-                {formData.image ? (
-                  <img src={formData.image} alt="Preview" className="w-full h-full object-cover" />
+                {(formData.cover_url || formData.image) ? (
+                  <img src={formData.cover_url || formData.image} alt="Preview" className="w-full h-full object-cover" />
                 ) : (
                   <Building2 className="w-6 h-6 text-stone-300" />
                 )}
@@ -1023,13 +1024,13 @@ export const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
               <div className="grow space-y-1.5">
                 <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/45 border border-white/80 hover:bg-white/75 text-slate-800 text-xs font-bold cursor-pointer backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,.8)] transition-colors">
                   <Upload className="w-3.5 h-3.5 text-stone-600" />
-                  <span>{formData.image ? 'Cambiar foto desde tu dispositivo' : 'Subir foto desde tu dispositivo'}</span>
+                  <span>{formData.cover_url ? 'Cambiar fachada desde tu dispositivo' : 'Subir fotografía de fachada'}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={isSaving || isUploadingPhoto || isUploadingGallery || isUploadingLogo} />
                 </label>
-                {formData.image && (
+                {formData.cover_url && (
                   <button
                     type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, image: '' }))}
+                    onClick={() => setFormData(prev => ({ ...prev, cover_url: '' }))}
                     disabled={isSaving || isUploadingPhoto || isUploadingGallery || isUploadingLogo}
                     aria-label="Quitar fotografía de portada"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/45 border border-rose-200/80 hover:bg-rose-50/80 text-rose-700 text-xs font-bold cursor-pointer backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,.8)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
