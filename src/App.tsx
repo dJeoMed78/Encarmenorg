@@ -83,6 +83,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('negocios');
   const [isEmergencyModalOpen, setIsEmergencyModalOpen] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [adminActionToast, setAdminActionToast] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [selectedColonia, setSelectedColonia] = useState('Todas');
 
@@ -599,15 +600,15 @@ export default function App() {
   };
 
   // Persistir indicadores en el servidor; nunca simular éxito en el catálogo.
-  const updateBusinessFlag = async (b: Business, field: 'isTopBusiness' | 'isRecommended') => {
+  const updateBusinessFlag = async (b: Business, field: 'isTopBusiness' | 'isRecommended'): Promise<boolean> => {
     const id = Number(b.id);
-    if (!Number.isSafeInteger(id) || id <= 0) return;
+    if (!Number.isSafeInteger(id) || id <= 0) return false;
     const current = Boolean(businessOverrides[String(id)]?.[field] ?? b[field]);
     const next = !current;
     const result = await adminUpdateBusiness(id, { [field]: next } as Partial<Business>);
     if (!result.success || !result.business || Boolean(result.business[field]) !== next) {
       window.alert(result.message || 'No se confirmó el cambio en el servidor. Recarga la ficha.');
-      return;
+      return false;
     }
     invalidateBusinessRequests();
     const confirmed = result.business;
@@ -615,10 +616,11 @@ export default function App() {
     setBusinessOverrides(prev => ({ ...prev, [String(id)]: { ...prev[String(id)], ...confirmed } }));
     setSelectedBusiness(prev => prev && Number(prev.id) === id ? { ...prev, ...confirmed } : prev);
     setLandingBusiness(prev => prev && Number(prev.id) === id ? { ...prev, ...confirmed } : prev);
+    return true;
   };
 
-  const handleToggleTop = (b: Business) => { void updateBusinessFlag(b, 'isTopBusiness'); };
-  const handleToggleRecommended = (b: Business) => { void updateBusinessFlag(b, 'isRecommended'); };
+  const handleToggleTop = (b: Business) => updateBusinessFlag(b, 'isTopBusiness');
+  const handleToggleRecommended = (b: Business) => updateBusinessFlag(b, 'isRecommended');
 
   const handleDeleteBusiness = async (b: Business) => {
     // Never claim deletion locally unless the server confirms it.
@@ -627,6 +629,8 @@ export default function App() {
       window.alert(result.message || 'No se confirmó la eliminación del registro.');
       return;
     }
+    setAdminActionToast('Cambios guardados');
+    window.setTimeout(() => setAdminActionToast(''), 2000);
     invalidateBusinessRequests();
     setDeletedBusinessIds((prev) => [...prev, Number(b.id)]);
     setBusinessesList((prev) => prev.filter((item) => String(item.id) !== String(b.id)));
@@ -743,8 +747,8 @@ export default function App() {
           onEditBusiness={(b) => setEditingBusiness(b)}
           onDelete={(id) => handleDeleteBusiness(landingBusiness)}
           onDeleteBusiness={handleDeleteBusiness}
-          onToggleRecommended={(id) => handleToggleRecommended(landingBusiness)}
-          onToggleTop={(id) => handleToggleTop(landingBusiness)}
+          onToggleRecommended={() => handleToggleRecommended(landingBusiness)}
+          onToggleTop={() => handleToggleTop(landingBusiness)}
           isFavorite={favorites.includes(Number(landingBusiness.id))}
           onToggleFavorite={toggleFavorite as any}
           activePromotion={
@@ -1336,6 +1340,8 @@ export default function App() {
         {businessesStatus === 'error' ? 'No se pudieron consultar los negocios vigentes. No se muestran contactos de respaldo.' : 'Consultando negocios vigentes…'}
         {businessesStatus === 'error' && <button type="button" aria-label="Reintentar carga de negocios" className="ml-3 underline font-bold" onClick={() => setBusinessesReload(n => n + 1)}>Reintentar</button>}
       </div>}
+
+      {adminActionToast && <div role="status" aria-live="polite" className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] rounded-xl bg-slate-900 px-6 py-3 text-white shadow-xl">{adminActionToast}</div>}
 
       {/* MODAL / SISTEMA OPERATIVO DE ADMINISTRACIÓN (VINCULADO AL BOTÓN π) */}
       <WordPressSyncModal
