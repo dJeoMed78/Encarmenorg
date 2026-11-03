@@ -103,13 +103,13 @@ async function request(
     });
     const data = await response.json();
     if (!response.ok || data?.success !== true)
-      throw new Error(
+      throw Object.assign(new Error(
         response.status === 401
           ? "Usuario o contraseña incorrectos."
           : response.status === 503
             ? "Acceso administrativo no disponible; requiere configuración segura."
             : "El servidor no confirmó la operación.",
-      );
+      ), { status: response.status });
     return data;
   } finally {
     clearTimeout(timer);
@@ -158,8 +158,11 @@ export async function verifyAdminSession(
     };
     emit();
     return true;
-  } catch {
-    if (ticket === epoch) clearAdminAuth();
+  } catch (error) {
+    // A temporary network failure is not evidence that the server revoked the session.
+    // Only an explicit HTTP 401 or a locally expired token ends the session.
+    const status = (error as Error & { status?: number }).status;
+    if (ticket === epoch && (status === 401 || (verified?.expiresAt ?? Infinity) <= Date.now())) clearAdminAuth();
     return false;
   }
 }
