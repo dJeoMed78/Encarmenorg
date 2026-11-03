@@ -599,15 +599,15 @@ export default function App() {
   };
 
   // Persistir indicadores en el servidor; nunca simular éxito en el catálogo.
-  const updateBusinessFlag = async (b: Business, field: 'isTopBusiness' | 'isRecommended') => {
+  const updateBusinessFlag = async (b: Business, field: 'isTopBusiness' | 'isRecommended'): Promise<boolean> => {
     const id = Number(b.id);
-    if (!Number.isSafeInteger(id) || id <= 0) return;
+    if (!Number.isSafeInteger(id) || id <= 0) return false;
     const current = Boolean(businessOverrides[String(id)]?.[field] ?? b[field]);
     const next = !current;
     const result = await adminUpdateBusiness(id, { [field]: next } as Partial<Business>);
     if (!result.success || !result.business || Boolean(result.business[field]) !== next) {
       window.alert(result.message || 'No se confirmó el cambio en el servidor. Recarga la ficha.');
-      return;
+      return false;
     }
     invalidateBusinessRequests();
     const confirmed = result.business;
@@ -615,10 +615,11 @@ export default function App() {
     setBusinessOverrides(prev => ({ ...prev, [String(id)]: { ...prev[String(id)], ...confirmed } }));
     setSelectedBusiness(prev => prev && Number(prev.id) === id ? { ...prev, ...confirmed } : prev);
     setLandingBusiness(prev => prev && Number(prev.id) === id ? { ...prev, ...confirmed } : prev);
+    return true;
   };
 
-  const handleToggleTop = (b: Business) => { void updateBusinessFlag(b, 'isTopBusiness'); };
-  const handleToggleRecommended = (b: Business) => { void updateBusinessFlag(b, 'isRecommended'); };
+  const handleToggleTop = (b: Business) => updateBusinessFlag(b, 'isTopBusiness');
+  const handleToggleRecommended = (b: Business) => updateBusinessFlag(b, 'isRecommended');
 
   const handleDeleteBusiness = async (b: Business) => {
     // Never claim deletion locally unless the server confirms it.
@@ -743,8 +744,8 @@ export default function App() {
           onEditBusiness={(b) => setEditingBusiness(b)}
           onDelete={(id) => handleDeleteBusiness(landingBusiness)}
           onDeleteBusiness={handleDeleteBusiness}
-          onToggleRecommended={(id) => handleToggleRecommended(landingBusiness)}
-          onToggleTop={(id) => handleToggleTop(landingBusiness)}
+          onToggleRecommended={() => handleToggleRecommended(landingBusiness)}
+          onToggleTop={() => handleToggleTop(landingBusiness)}
           isFavorite={favorites.includes(Number(landingBusiness.id))}
           onToggleFavorite={toggleFavorite as any}
           activePromotion={
