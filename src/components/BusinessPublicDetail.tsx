@@ -208,12 +208,15 @@ export function BusinessPublicDetail({
     [mapWide, setMapWide] = useState(false);
   const mapBox = useRef<HTMLDivElement>(null);
   const mapPresentation = businessMapPresentation(b),
-    registeredLogo = companyLogo(b.logo_url);
+    // Presentation-only fallback: the stored cover remains a separate field.
+    registeredLogo = companyLogo(b.logo_url),
+    coverPhoto = companyLogo(extra.cover_url || b.image || b.imageUrl),
+    displayBrandImage = registeredLogo || coverPhoto;
   useEffect(() => {
     setLogoFailed(false);
     setHeroLogoMode(true);
     setIndex(0);
-  }, [b.id, b.logo_url]);
+  }, [b.id, b.logo_url, extra.cover_url, b.image, b.imageUrl]);
   useEffect(() => {
     setMapConsent(false);
     setMapFailed(false);
@@ -402,7 +405,7 @@ export function BusinessPublicDetail({
     (b.hasDelivery === true ? "Entrega a domicilio" : "");
   const turn = (n: number) => {
     if (!photos.length) return;
-    if (heroLogoMode && registeredLogo && !logoFailed) {
+    if (heroLogoMode && displayBrandImage && !logoFailed) {
       setIndex(n < 0 ? photos.length - 1 : 0);
     } else {
       setIndex((i) => (i + n + photos.length) % photos.length);
@@ -453,11 +456,11 @@ export function BusinessPublicDetail({
         <div className="bpd-grid">
           <aside className="bpd-media">
             <div className="bpd-hero">
-              {registeredLogo && !logoFailed && (heroLogoMode || !photos.length) ? (
+              {displayBrandImage && !logoFailed && (heroLogoMode || !photos.length) ? (
                 <img
                   className="bpd-hero-logo"
-                  src={registeredLogo}
-                  alt={`Logotipo de ${b.name}`}
+                  src={displayBrandImage}
+                  alt={`${registeredLogo ? 'Logotipo' : 'Fotografía de portada'} de ${b.name}`}
                   onError={() => setLogoFailed(true)}
                 />
               ) : (
@@ -613,10 +616,10 @@ export function BusinessPublicDetail({
             )}
           </main>
           <div className="bpd-card bpd-identity">
-            {registeredLogo && !logoFailed ? (
+            {displayBrandImage && !logoFailed ? (
               <img
-                src={registeredLogo}
-                alt={`Logotipo de ${b.name}`}
+                src={displayBrandImage}
+                alt={`${registeredLogo ? 'Logotipo' : 'Fotografía de portada'} de ${b.name}`}
                 onError={() => setLogoFailed(true)}
               />
             ) : (
