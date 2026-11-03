@@ -91,7 +91,7 @@ export function businessMapPresentation(b: {
   // Text lookup is a search suggestion, not a verified business pin.
   // Do not send registered phone numbers to third-party map services.
   const clean = (v: unknown) =>
-    typeof v === "string" ? v.trim().replace(/\\s+/g, " ").slice(0, 180) : "";
+    typeof v === "string" ? v.trim().replace(/\s+/g, " ").slice(0, 180) : "";
   const address = clean(b.address);
   const name = clean(b.name);
   const colonia = clean(b.colonia);
