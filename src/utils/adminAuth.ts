@@ -93,7 +93,7 @@ async function request(
   const abort = () => controller.abort();
   if (signal?.aborted) controller.abort();
   signal?.addEventListener("abort", abort, { once: true });
-  const timer = setTimeout(abort, 10000);
+  const timer = setTimeout(abort, 20000);
   try {
     const response = await fetch(url, {
       ...options,
@@ -111,6 +111,9 @@ async function request(
             : "El servidor no confirmó la operación.",
       ), { status: response.status });
     return data;
+  } catch (error) {
+    if (controller.signal.aborted && !signal?.aborted) throw new Error('La conexión tardó demasiado. Intenta nuevamente.');
+    throw error;
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener("abort", abort);
