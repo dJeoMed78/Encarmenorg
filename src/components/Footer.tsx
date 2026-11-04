@@ -1,6 +1,6 @@
 import React from 'react';
 import { getSavedPortalLinks, getSavedFooterAd } from './AdminLinksAndAdsManager';
-import { APP_VERSION } from '../constants/version';
+import { APP_VERSION, APP_COMMIT_SHA } from '../constants/version';
 
 interface FooterProps {
   onAdminClick: () => void;
@@ -10,15 +10,12 @@ interface FooterProps {
 }
 
 export function Footer({ onAdminClick }: FooterProps) {
-  // Extraer solo Fecha y Hora (DDMMAA:HHMM) eliminando cualquier sufijo :PRO:V o :V
-  const cleanDateTimeStamp = (() => {
-    const raw = typeof APP_VERSION === 'string' && APP_VERSION ? APP_VERSION : '241026:1305';
-    const parts = raw.split(':');
-    if (parts.length >= 2) {
-      return `${parts[0]}:${parts[1]}`;
-    }
-    return raw.replace(/:PRO:V|:V/gi, '');
-  })();
+  // Display the exact build's Git revision only when it was verified at build time.
+  // Timestamp alone is not proof that a particular commit was deployed.
+  const footerVersion = APP_VERSION;
+  const footerCommit = typeof APP_COMMIT_SHA === 'string' && /^[a-f0-9]{40}$/.test(APP_COMMIT_SHA)
+    ? APP_COMMIT_SHA.slice(0, 12)
+    : null;
 
   const footerLinks = getSavedPortalLinks().filter((l) => l.group === 'footer');
   const footerAd = getSavedFooterAd();
@@ -95,7 +92,7 @@ export function Footer({ onAdminClick }: FooterProps) {
             >
               ©
             </button>
-            <span>2026 encarmen.org · Ciudad del Carmen, Campeche · {cleanDateTimeStamp}</span>
+            <span>2026 encarmen.org · Ciudad del Carmen, Campeche · Compilación: {footerVersion} · Commit: {footerCommit || 'no verificado'}</span>
           </div>
         </div>
       </div>
