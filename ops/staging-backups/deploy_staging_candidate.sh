@@ -2,6 +2,7 @@
 # ONLY staging.encarmen.org — keep old release and private selective backup.
 set -euo pipefail
 SHA="${1:?SHA required}"
+EXPECTED_OLD="${2:?Prior release link required}"
 case "$SHA" in *[!a-f0-9]*|'') echo "SHA inválido" >&2; exit 2;; esac
 [[ "${#SHA}" -eq 40 ]] || exit 2
 ROOT="$HOME/domains/staging.encarmen.org/hbuilds"
@@ -12,17 +13,16 @@ PROD="$HOME/domains/encarmen.org"
 [[ "$(stat -c %a "$HOME/encarmen-staging-backups")" = 700 ]] || exit 3
 [[ -d "$PROD" && "$(realpath "$ROOT")" != "$(realpath "$PROD")" ]] || exit 3
 OLD_LINK=$(readlink "$ACTIVE")
+[[ "$OLD_LINK" == "$EXPECTED_OLD" ]] || { echo "ACTIVE_RELEASE_CHANGED_ABORT" >&2; exit 5; }
 case "$OLD_LINK" in versions/*) ;; *) echo "Active no compatible" >&2; exit 3;; esac
 OLD_REAL=$(realpath "$ACTIVE")
+[[ "$OLD_REAL" != "$(realpath "$PROD")" ]] || exit 3
 case "$OLD_REAL" in "$ROOT/versions/"*) ;; *) exit 3;; esac
 OLD="$ACTIVE/nodejs"
 [[ -f "$OLD/server.js" && -d "$OLD/dist" ]] || exit 3
 ID="enc-coord-${SHA:0:12}"
 NEW="$ROOT/versions/$ID"
-if [[ -e "$NEW" ]]; then
-  [[ -d "$NEW/nodejs" && -f "$NEW/nodejs/server.js" && ! -L "$NEW" ]] || { echo "Version candidate parcial inesperada"; exit 3; }
-  echo "REUSING_PREVIOUS_CANDIDATE_DIRECTORY=$NEW"
-fi
+[[ ! -e "$NEW" && ! -L "$NEW" ]] || { echo "TARGET_RELEASE_ALREADY_EXISTS_ABORT" >&2; exit 3; }
 TODAY=$(date -u +%Y-%m-%d)
 SNAP="$BACKUP/$TODAY"
 mkdir -p -m 700 "$SNAP"
@@ -47,7 +47,12 @@ fi
 # Archive was uploaded beforehand to the private backup root.
 PAYLOAD="$HOME/encarmen-staging-backups/payload-$ID.tar.gz"
 [[ -f "$PAYLOAD" && ! -L "$PAYLOAD" ]] || exit 4
-tar -tzf "$PAYLOAD" | grep -Fx 'server.js' >/dev/null || { echo "Bundle missing"; exit 4; }
+listing=$(tar -tzf "$PAYLOAD")
+grep -Fxq 'server.js' <<<"$listing" || { echo "Bundle missing"; exit 4; }
+grep -Fxq 'api/server.bundle.js' <<<"$listing" || { echo "API bundle missing"; exit 4; }
+grep -Fxq 'dist/index.html' <<<"$listing" || { echo "Dist index missing"; exit 4; }
+grep -Fxq 'dist/encarmen-release.txt' <<<"$listing" || { echo "Release marker missing"; exit 4; }
+if grep -Eq '^/|^\.\./|/\.\./' <<<"$listing"; then echo "ARCHIVE_UNSAFE" >&2; exit 4; fi
 tar -xzf "$PAYLOAD" -C "$NEW/nodejs"
 # The new metadata is owned only by the new release.
 python3 - "$NEW/.metadata.json" "$ID" <<'PY'
@@ -60,6 +65,7 @@ PY
 test -f "$NEW/nodejs/server.js"
 test -f "$NEW/nodejs/dist/index.html"
 test -f "$NEW/nodejs/api/server.bundle.js"
+test "$(tr -d '\n' < "$NEW/nodejs/dist/encarmen-release.txt")" = "$SHA"
 # Ensure no unexpected switch since initial read.
 [[ "$(readlink "$ACTIVE")" = "$OLD_LINK" ]] || { echo "Active changed during deployment"; exit 5; }
 SWAP="$ROOT/.current-enc-coord"
