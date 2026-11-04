@@ -87,6 +87,23 @@ jobs:
           export SSHPASS="$SSH_PASSWORD"
           sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 "$HOME/encarmen-staging-backups/bin/run_hostinger_backup.py"'
           echo 'STAGING_DATABASE_BACKUP_CHECK=PASS'
+          # Verify a complete recent snapshot after the official rotation-safe backup.
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 -' <<'REMOTE'
+          from pathlib import Path
+          from datetime import datetime, timezone, timedelta
+          import subprocess
+          folder=Path.home()/'encarmen-staging-backups/database'
+          pairs=[p for p in folder.glob('staging-db-*.sql.gz') if p.is_file() and not p.is_symlink() and p.with_name(p.name[:-7]+'.json').is_file()]
+          if not pairs:
+              raise SystemExit('STAGING_BACKUP_NO_VERIFIED_PAIR')
+          latest=max(pairs,key=lambda p:p.name)
+          timestamp=datetime.strptime(latest.name[len('staging-db-'):-len('.sql.gz')],'%Y%m%dT%H%M%SZ').replace(tzinfo=timezone.utc)
+          if datetime.now(timezone.utc)-timestamp > timedelta(days=4):
+              raise SystemExit('STAGING_BACKUP_OLDER_THAN_FOUR_DAYS')
+          if subprocess.run(['gzip','-t',str(latest)],capture_output=True,timeout=40).returncode:
+              raise SystemExit('STAGING_BACKUP_CORRUPTED')
+          print('STAGING_BACKUP_FRESH_AND_VERIFIED=PASS')
+          REMOTE
       - name: Transferir paquete únicamente a directorio privado Staging
         shell: bash
         run: |
