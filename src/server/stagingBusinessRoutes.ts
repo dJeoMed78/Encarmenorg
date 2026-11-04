@@ -17,7 +17,7 @@ export function validateBusinessInput(body:unknown,creating=false){
  }
  if((creating||Object.hasOwn(data,'name'))&&(!patch.name||patch.name.length<2))invalid('El nombre de empresa es obligatorio.');
  for(const key of arrays)if(Object.hasOwn(data,key)){
-  if(!Array.isArray(data[key])||data[key].length>20||data[key].some((v:unknown)=>typeof v!=='string'||v.length>2048))invalid('Lista empresarial inválida.');
+  if(!Array.isArray(data[key])||data[key].length>(creating&&key==='gallery'?10:20)||data[key].some((v:unknown)=>typeof v!=='string'||v.length>2048))invalid('Lista empresarial inválida.');
   patch[key]=[...data[key]];
  }
  for(const key of booleans)if(Object.hasOwn(data,key)){if(typeof data[key]!=='boolean')invalid('Indicador empresarial inválido.');patch[key]=data[key];}
