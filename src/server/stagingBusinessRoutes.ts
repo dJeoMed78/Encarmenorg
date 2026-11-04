@@ -1,7 +1,7 @@
 import type {Express,Request,Response,NextFunction} from 'express';
 import {prepareContactPatch,ContactPatchError,contactDigits} from '../utils/businessContacts';
 import {BusinessWriteError} from '../db/stagingBusinessStore';
-const strings=['name','category','subcategory','description','address','colonia','postalCode','city','schedule','openingHours','payment','delivery','deliveryOption','facebook','instagram','website','mapsUrl','image','logo_url'];
+const strings=['name','category','subcategory','description','address','colonia','postalCode','city','schedule','openingHours','payment','delivery','deliveryOption','facebook','instagram','website','mapsUrl','image','logo_url','cover_url'];
 const arrays=['categories','categorySlugs','gallery','paymentMethods'];
 const booleans=['hasDelivery','isTopBusiness','isRecommended'];
 function invalid(message:string):never{throw new BusinessWriteError(400,'INVALID_BUSINESS',message);}
@@ -17,14 +17,14 @@ export function validateBusinessInput(body:unknown,creating=false){
  }
  if((creating||Object.hasOwn(data,'name'))&&(!patch.name||patch.name.length<2))invalid('El nombre de empresa es obligatorio.');
  for(const key of arrays)if(Object.hasOwn(data,key)){
-  if(!Array.isArray(data[key])||data[key].length>20||data[key].some((v:unknown)=>typeof v!=='string'||v.length>2048))invalid('Lista empresarial inválida.');
+  if(!Array.isArray(data[key])||data[key].length>(creating&&key==='gallery'?10:20)||data[key].some((v:unknown)=>typeof v!=='string'||v.length>2048))invalid('Lista empresarial inválida.');
   patch[key]=[...data[key]];
  }
  for(const key of booleans)if(Object.hasOwn(data,key)){if(typeof data[key]!=='boolean')invalid('Indicador empresarial inválido.');patch[key]=data[key];}
  if(!creating&&Object.hasOwn(data,'slug')){if(typeof data.slug!=='string'||!(/^[a-z0-9][a-z0-9_-]{0,159}$/).test(data.slug))invalid('Enlace personalizado inválido.');patch.slug=data.slug;}
  const contacts=prepareContactPatch(data,true);Object.assign(patch,contacts.patch);
  if(creating){if(data.clearContacts!==undefined)invalid('No se retiran contactos en un alta.');patch.phone=contactDigits(data.phone);patch.whatsapp=contactDigits(data.whatsapp);if(!patch.phone&&!patch.whatsapp)invalid('Se requiere teléfono o WhatsApp mexicano válido.');}
- for(const value of [patch.website,patch.facebook,patch.instagram,patch.mapsUrl,patch.image,patch.logo_url,...(patch.gallery||[])])if(value){
+ for(const value of [patch.website,patch.facebook,patch.instagram,patch.mapsUrl,patch.image,patch.logo_url,patch.cover_url,...(patch.gallery||[])])if(value){
   if(typeof value!=='string')invalid('URL inválida.');
   if(value.startsWith('/uploads/')&&!value.includes('..'))continue;
   try{const url=new URL(value);if(!['https:','http:'].includes(url.protocol)||url.username||url.password)invalid('URL inválida.');}catch{invalid('URL inválida.');}

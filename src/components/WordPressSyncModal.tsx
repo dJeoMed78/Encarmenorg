@@ -99,11 +99,11 @@ import {
   adminDeleteBusiness,
   fetchAnalytics,
   submitAdministrativeBusinessRegistration,
-  uploadBusinessLogo,
   checkBusinessDuplicate,
   getPromotions
 } from '../services/api';
 import { getEventsData, fetchEventsFromAPI } from '../services/eventsService';
+import { uploadRegistrationImage, MEDIA_MAX_GALLERY } from '../services/publicMediaClient';
 
 interface WordPressSyncModalProps {
   classifieds?: ClassifiedAd[];
@@ -446,6 +446,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
     facebook: '',
     website: '',
     image: '',
+    cover_url: '',
     ownerName: 'Administrador',
     ownerEmail: 'admin@empresasencarmen.com'
   });
@@ -457,6 +458,12 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
   const [newBizErrorMsg, setNewBizErrorMsg] = useState<string | null>(null);
   const [newBizLogoPreview, setNewBizLogoPreview] = useState<string | null>(null);
   const [isUploadingNewBizLogo, setIsUploadingNewBizLogo] = useState(false);
+  const [newBizCoverPreview, setNewBizCoverPreview] = useState<string | null>(null);
+  const [isUploadingNewBizCover, setIsUploadingNewBizCover] = useState(false);
+  const newBizMediaAttempt = useRef<string | null>(null);
+  const newBizPendingUploads = useRef(0);
+  const newBizReservedGallery = useRef(0);
+  const ensureNewBizMediaAttempt = () => (newBizMediaAttempt.current ||= crypto.randomUUID());
   const [newBizDuplicateWarning, setNewBizDuplicateWarning] = useState<any>(null);
   const [newBizGallery, setNewBizGallery] = useState<string[]>([]);
   const [isUploadingNewBizGallery, setIsUploadingNewBizGallery] = useState(false);
@@ -480,83 +487,84 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
       .slice(0, 10);
   }, [businesses]);
 
-  const handleAdminGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    const available = 10 - newBizGallery.length;
-    if (available <= 0) {
-      setNewBizErrorMsg('Ya has alcanzado el límite máximo de 10 fotografías.');
-      return;
-    }
-    const selected = files.slice(0, available);
+  // Each upload is acknowledged only after the server verifies its MariaDB BLOB.
+  // Keep the same registration attempt across logo, cover and up to ten gallery images.
+  const handleAdminGalleryUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (!files.length) return;
+    const remaining = MEDIA_MAX_GALLERY - newBizGallery.length - newBizReservedGallery.current;
+    if (remaining <= 0) { setNewBizErrorMsg('Máximo 10 fotografías por empresa.'); return; }
+    const selected = files.slice(0, remaining);
+    newBizReservedGallery.current += selected.length;
+    newBizPendingUploads.current++;
     setIsUploadingNewBizGallery(true);
     setNewBizErrorMsg(null);
     try {
-      const urls: string[] = [];
       for (const file of selected) {
-        if (file.size > 8 * 1024 * 1024) continue;
-        const b64 = await new Promise<string>(res => {
-          const reader = new FileReader();
-          reader.onload = () => res(reader.result as string);
-          reader.readAsDataURL(file);
-        });
         try {
-          const uploadRes = await uploadBusinessLogo(b64, file.name);
-          if (uploadRes.success && uploadRes.url) {
-            urls.push(uploadRes.url);
-          } else {
-            throw new Error(uploadRes.message || 'No se confirmó la carga de la fotografía.');
-          }
+          const uploaded = await uploadRegistrationImage(file, 'gallery', ensureNewBizMediaAttempt());
+          setNewBizGallery(prev => prev.length < MEDIA_MAX_GALLERY && !prev.includes(uploaded.url) ? [...prev, uploaded.url] : prev);
         } catch (error) {
-          throw error;
-        }
+          setNewBizErrorMsg(error instanceof Error ? error.message : 'No se confirmó la foto de producto.');
+        } finally { newBizReservedGallery.current--; }
       }
-      setNewBizGallery(prev => [...prev, ...urls].slice(0, 10));
-    } catch (err: any) {
-      setNewBizErrorMsg(err.message || 'No se confirmó la carga de la galería.');
     } finally {
-      setIsUploadingNewBizGallery(false);
-      e.target.value = '';
+      newBizPendingUploads.current--;
+      setIsUploadingNewBizGallery(newBizPendingUploads.current > 0);
     }
   };
 
   const handleAdminRemoveGalleryPhoto = (index: number) => {
+    if (newBizPendingUploads.current) return;
     setNewBizGallery(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleAdminLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleAdminLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setNewBizErrorMsg('La imagen supera los 5MB.');
-      return;
+    newBizPendingUploads.current++;
+    setIsUploadingNewBizLogo(true);
+    setNewBizErrorMsg(null);
+    try {
+      const uploaded = await uploadRegistrationImage(file, 'logo', ensureNewBizMediaAttempt());
+      setNewBizLogoPreview(uploaded.url);
+      setNewBizForm(prev => ({...prev, image: uploaded.url, logo_url: uploaded.url}));
+    } catch (error) {
+      setNewBizErrorMsg(error instanceof Error ? error.message : 'No se confirmó el logotipo.');
+    } finally {
+      newBizPendingUploads.current--;
+      setIsUploadingNewBizLogo(false);
     }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const base64Data = reader.result as string;
-      setNewBizLogoPreview(base64Data);
-      setIsUploadingNewBizLogo(true);
-      try {
-        const uploadRes = await uploadBusinessLogo(base64Data, file.name);
-        if (uploadRes.success && uploadRes.url) {
-          setNewBizForm(prev => ({ ...prev, image: uploadRes.url! }));
-        } else {
-          setNewBizLogoPreview(null);
-          setNewBizErrorMsg(uploadRes.message || 'No se confirmó la carga del logotipo.');
-        }
-      } catch (err: any) {
-        setNewBizLogoPreview(null);
-        setNewBizErrorMsg(err.message || 'No se confirmó la carga del logotipo.');
-      } finally {
-        setIsUploadingNewBizLogo(false);
-      }
-    };
-    reader.readAsDataURL(file);
+  };
+
+  const handleAdminCoverUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    newBizPendingUploads.current++;
+    setIsUploadingNewBizCover(true);
+    setNewBizErrorMsg(null);
+    try {
+      const uploaded = await uploadRegistrationImage(file, 'cover', ensureNewBizMediaAttempt());
+      setNewBizCoverPreview(uploaded.url);
+      setNewBizForm(prev => ({...prev, cover_url: uploaded.url}));
+    } catch (error) {
+      setNewBizErrorMsg(error instanceof Error ? error.message : 'No se confirmó la fachada.');
+    } finally {
+      newBizPendingUploads.current--;
+      setIsUploadingNewBizCover(false);
+    }
   };
 
   const handleAdminCreateBusiness = async (e: React.FormEvent) => {
     if (e) e.preventDefault();
     if(createBusy.current) return;
+    if (newBizPendingUploads.current > 0 || isUploadingNewBizLogo || isUploadingNewBizCover || isUploadingNewBizGallery) {
+      setNewBizErrorMsg('Espera a que terminen de guardarse las imágenes antes de registrar la empresa.');
+      return;
+    }
     setNewBizErrorMsg(null);
     setNewBizSuccessMsg(null);
 
@@ -626,11 +634,15 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
           facebook: '',
           website: '',
           image: '',
+          cover_url: '',
           ownerName: 'Administrador',
           ownerEmail: 'admin@empresasencarmen.com'
         });
         setNewBizLogoPreview(null);
+        setNewBizCoverPreview(null);
         setNewBizGallery([]);
+        newBizMediaAttempt.current = null;
+        newBizReservedGallery.current = 0;
         createRequestId.current = null;
       } else if (res.isDuplicate) {
         setNewBizDuplicateWarning({
@@ -2800,7 +2812,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
 
                 {/* Subir Logotipo */}
                 <div className="space-y-1 pt-1">
-                  <label className="text-xs font-bold text-stone-700">Logotipo o Fotografía Principal</label>
+                  <label className="text-xs font-bold text-stone-700">Logotipo de la empresa</label>
                   <div className="flex items-center gap-3">
                     {newBizLogoPreview && (
                       <div className="w-12 h-12 rounded-xl border border-stone-200 overflow-hidden shrink-0 bg-white p-1">
@@ -2822,7 +2834,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                         type="button"
                         onClick={() => {
                           setNewBizLogoPreview(null);
-                          setNewBizForm(f => ({ ...f, image: '' }));
+                          setNewBizForm(f => ({ ...f, image: '', logo_url: '' }));
                         }}
                         className="text-xs text-rose-600 hover:underline"
                       >
@@ -2830,6 +2842,32 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                       </button>
                     )}
                   </div>
+                </div>
+
+                {/* La fachada se almacena independientemente del logotipo y de la galería. */}
+                <div className="space-y-2 pt-2 border-t border-stone-200">
+                  <label className="text-xs font-bold text-stone-700">Fotografía de fachada / portada</label>
+                  <div className="flex items-center gap-3">
+                    {newBizCoverPreview && (
+                      <div className="w-20 h-14 rounded-xl border border-stone-200 overflow-hidden shrink-0 bg-white">
+                        <img src={newBizCoverPreview} alt="Fachada de la empresa" className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                    <label className="cursor-pointer px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-xs font-semibold text-stone-700">
+                      <span>{isUploadingNewBizCover ? 'Subiendo fachada...' : newBizCoverPreview ? 'Cambiar fachada' : 'Subir fachada'}</span>
+                      <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                        onChange={handleAdminCoverUpload}
+                        disabled={isSubmittingNewBiz || isUploadingNewBizLogo || isUploadingNewBizCover || isUploadingNewBizGallery} />
+                    </label>
+                    {newBizCoverPreview && (
+                      <button type="button" onClick={() => {
+                        if (newBizPendingUploads.current) return;
+                        setNewBizCoverPreview(null);
+                        setNewBizForm(prev => ({...prev, cover_url: ''}));
+                      }} className="text-xs text-rose-600 hover:underline" disabled={isSubmittingNewBiz}>Quitar</button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-stone-500">Una fachada independiente. No cuenta entre las 10 fotos de productos o servicios.</p>
                 </div>
 
                 {/* Galería de Trabajos, Productos y Servicios (Hasta 10 Fotos) */}
@@ -2890,7 +2928,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 <div className="pt-2">
                   <button
                     type="submit"
-                    disabled={isSubmittingNewBiz}
+                    disabled={isSubmittingNewBiz || isUploadingNewBizLogo || isUploadingNewBizCover || isUploadingNewBizGallery}
                     className="w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-stone-950 font-extrabold text-sm shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     {isSubmittingNewBiz ? (

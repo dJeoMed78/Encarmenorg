@@ -152,6 +152,9 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoUploadedSuccess, setLogoUploadedSuccess] = useState(false);
 
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const coverPending = useRef(0);
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [isUploadingGallery, setIsUploadingGallery] = useState(false);
 
@@ -184,6 +187,24 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
     } finally {
       logoPending.current -= 1;
       setIsUploadingLogo(logoPending.current > 0);
+    }
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setErrorMessage(null);
+    coverPending.current += 1;
+    setIsUploadingCover(true);
+    try {
+      const uploaded = await uploadRegistrationImage(file, 'cover', ensureMediaAttempt());
+      setCoverPreview(uploaded.url);
+    } catch (err: any) {
+      setErrorMessage('Fotografía de fachada: ' + (err?.message || 'no se pudo subir.'));
+    } finally {
+      coverPending.current -= 1;
+      setIsUploadingCover(coverPending.current > 0);
     }
   };
 
@@ -237,7 +258,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     if (e) e.preventDefault();
     if(registrationBusy.current) return;
-    if (logoPending.current > 0 || galleryPending.current > 0 || isUploadingLogo || isUploadingGallery) {
+    if (logoPending.current > 0 || coverPending.current > 0 || galleryPending.current > 0 || isUploadingLogo || isUploadingCover || isUploadingGallery) {
       setErrorMessage('Espera a que terminen de subir las imágenes antes de enviar el registro.');
       return;
     }
@@ -285,8 +306,9 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
 
       const mediaPayload: Record<string, unknown> = {
         ...(formData.image ? { logo_url: formData.image, image: formData.image } : {}),
+        ...(coverPreview ? { cover_url: coverPreview } : {}),
         ...(galleryImages.length ? { gallery: galleryImages } : {}),
-        ...((formData.image || galleryImages.length) && mediaAttemptId.current ? { mediaAttempt: mediaAttemptId.current } : {})
+        ...((formData.image || coverPreview || galleryImages.length) && mediaAttemptId.current ? { mediaAttempt: mediaAttemptId.current } : {})
       };
       const formattedBizName = formatBusinessName(formData.name.trim());
       const res = await submitBusinessRegistration({
@@ -951,7 +973,7 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
           </h3>
 
           <div className="space-y-3">
-            <label className="text-xs font-bold text-stone-800">Logotipo o Foto de Fachada</label>
+            <label className="text-xs font-bold text-stone-800">Logotipo de la empresa</label>
             <div className="flex items-center gap-4">
               {logoPreview ? (
                 <div
@@ -1010,6 +1032,24 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Fotografía de fachada: independiente del logotipo y de las 10 fotos comerciales. */}
+          <div className="space-y-3 pt-5 border-t border-white/60">
+            <label className="text-xs font-bold text-stone-800">Fotografía de fachada / Imagen de portada</label>
+            <p className="text-xs text-stone-600">Una fotografía exterior del establecimiento. No ocupa espacio en la galería de productos.</p>
+            {coverPreview ? (
+              <div className="relative w-36 h-24 rounded-xl overflow-hidden border border-stone-200">
+                <img src={coverPreview} alt="Vista previa de fachada" className="w-full h-full object-cover" />
+                <button type="button" onClick={() => setCoverPreview(null)} className="absolute top-1 right-1 rounded-full bg-rose-600 text-white p-1" aria-label="Quitar fotografía de fachada"><X className="w-3 h-3" /></button>
+              </div>
+            ) : (
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-amber-400 px-4 py-3 text-xs font-bold text-stone-800">
+                <Upload className="w-4 h-4" /> Subir fotografía de fachada
+                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleCoverUpload} disabled={isUploadingCover || isUploadingLogo || isUploadingGallery || isSubmitting} className="hidden" />
+              </label>
+            )}
+            {isUploadingCover && <p role="status" className="text-xs text-amber-700">Subiendo fotografía de fachada…</p>}
           </div>
 
           {/* Galería de Fotos de Productos o Servicios (Hasta 10 archivos) */}

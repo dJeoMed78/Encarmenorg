@@ -37,7 +37,7 @@ export function createStagingMediaStore(deps: any): any {
   return {
     async saveVerified(input: any): Promise<any> {
       const match = MEDIA_FILENAME.exec(String(input.filename));
-      if (!match || match[1] !== input.prefix || (match[2] === 'l' ? 'logo' : 'gallery') !== input.role) mediaFail(400, 'INVALID_MEDIA_NAME', 'Nombre de archivo no válido.');
+      if (!match || match[1] !== input.prefix || (match[2] === 'l' ? 'logo' : match[2] === 'c' ? 'cover' : 'gallery') !== input.role) mediaFail(400, 'INVALID_MEDIA_NAME', 'Nombre de archivo no válido.');
       if (!Buffer.isBuffer(input.data) || input.data.length === 0 || input.data.length > MEDIA_MAX_BYTES) mediaFail(422, 'IMAGE_UNPROCESSABLE', 'Imagen no válida.');
       const digest = sha256(input.data);
       const conn = await connection();
@@ -50,9 +50,9 @@ export function createStagingMediaStore(deps: any): any {
         try {
           const [hour] = await conn.query("SELECT COUNT(*) AS n FROM uploaded_files WHERE filename LIKE 'pub-%' AND created_at > (NOW() - INTERVAL 1 HOUR)");
           if (Number(hour && hour[0] && hour[0].n) >= hourlyCap) mediaFail(429, 'MEDIA_CAPACITY', 'Se alcanzó el límite temporal de cargas; intenta más tarde.');
-          const [mine] = await conn.query('SELECT filename FROM uploaded_files WHERE filename LIKE ?', ['pub-' + input.prefix + '-' + (input.role === 'logo' ? 'l' : 'g') + '-%']);
+          const [mine] = await conn.query('SELECT filename FROM uploaded_files WHERE filename LIKE ?', ['pub-' + input.prefix + '-' + (input.role === 'logo' ? 'l' : input.role === 'cover' ? 'c' : 'g') + '-%']);
           const used = Array.isArray(mine) ? mine.length : 0;
-          if (used >= perAttempt[input.role]) mediaFail(409, input.role === 'logo' ? 'MEDIA_LOGO_LIMIT' : 'MEDIA_GALLERY_LIMIT', 'Se alcanzó el límite de cargas de este registro.');
+          if (used >= perAttempt[input.role]) mediaFail(409, input.role === 'logo' ? 'MEDIA_LOGO_LIMIT' : input.role === 'cover' ? 'MEDIA_COVER_LIMIT' : 'MEDIA_GALLERY_LIMIT', 'Se alcanzó el límite de cargas de este registro.');
           assertWrite();
           await conn.query('INSERT INTO uploaded_files (filename, mime_type, data) VALUES (?, ?, ?)', [input.filename, input.mimeType, input.data]);
           const [saved] = await conn.query('SELECT mime_type, data FROM uploaded_files WHERE filename = ?', [input.filename]);

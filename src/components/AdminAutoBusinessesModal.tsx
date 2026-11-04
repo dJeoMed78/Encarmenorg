@@ -278,6 +278,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
       instagram: c.instagram || '',
       website: c.website || '',
       image: c.image || '',
+      cover_url: c.cover_url || '',
       gallery: (c as any).gallery || [],
       slug: c.slug || '',
       isRecommended: false,
@@ -316,6 +317,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
       instagram: updatedData.instagram || editingCandidate.instagram,
       website: updatedData.website || editingCandidate.website,
       image: updatedData.image || editingCandidate.image,
+      cover_url: updatedData.cover_url ?? editingCandidate.cover_url,
       gallery: updatedData.gallery || (editingCandidate as any).gallery,
       slug: updatedData.slug || editingCandidate.slug,
       status: 'modified'

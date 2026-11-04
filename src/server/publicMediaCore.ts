@@ -7,11 +7,11 @@ import {createHash, randomBytes} from 'node:crypto';
 
 export const MEDIA_MAX_BYTES = 3 * 1024 * 1024;
 export const MEDIA_MAX_GALLERY = 10;
-export const MEDIA_UPLOADS_PER_ATTEMPT = {logo: 3, gallery: 20};
+export const MEDIA_UPLOADS_PER_ATTEMPT = {logo: 3, cover: 3, gallery: 20};
 export const MEDIA_HOURLY_CAP = 300;
 export const MEDIA_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 export const MEDIA_UUID_V4 = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
-export const MEDIA_FILENAME = /^pub-([a-f0-9]{12})-(l|g)-([a-f0-9]{32})\.webp$/;
+export const MEDIA_FILENAME = /^pub-([a-f0-9]{12})-(l|c|g)-([a-f0-9]{32})\.webp$/;
 
 export class MediaError extends Error {
   status: number;
@@ -49,7 +49,7 @@ export function sniffImage(buffer: any): string | null {
 }
 
 export function newMediaFilename(prefix: string, role: string): string {
-  return 'pub-' + prefix + '-' + (role === 'logo' ? 'l' : 'g') + '-' + randomBytes(16).toString('hex') + '.webp';
+  return 'pub-' + prefix + '-' + (role === 'logo' ? 'l' : role === 'cover' ? 'c' : 'g') + '-' + randomBytes(16).toString('hex') + '.webp';
 }
 
 export function mediaUrl(filename: string): string {
@@ -62,7 +62,7 @@ export function parseMediaUrl(value: any): any {
   const filename = value.slice('/uploads/'.length);
   const match = MEDIA_FILENAME.exec(filename);
   if (!match) return null;
-  return {filename, prefix: match[1], role: match[2] === 'l' ? 'logo' : 'gallery'};
+  return {filename, prefix: match[1], role: match[2] === 'l' ? 'logo' : match[2] === 'c' ? 'cover' : 'gallery'};
 }
 
 export function createPublicMediaService(deps: any): any {
@@ -74,7 +74,7 @@ export function createPublicMediaService(deps: any): any {
       if (!deps.canWrite()) mediaFail(403, 'PUBLIC_MEDIA_DISABLED', 'La carga pública de imágenes no está habilitada.');
       const prefix = attemptPrefix(input.attemptId);
       const role = input.role;
-      if (role !== 'logo' && role !== 'gallery') mediaFail(400, 'INVALID_MEDIA_ROLE', 'El rol de la imagen debe ser logo o gallery.');
+      if (role !== 'logo' && role !== 'cover' && role !== 'gallery') mediaFail(400, 'INVALID_MEDIA_ROLE', 'El rol de la imagen debe ser logo, cover o gallery.');
       const body = input.body;
       if (!Buffer.isBuffer(body) || body.length === 0) mediaFail(400, 'EMPTY_FILE', 'El archivo está vacío.');
       if (body.length > MEDIA_MAX_BYTES) mediaFail(413, 'PAYLOAD_TOO_LARGE', 'La imagen supera el límite de 3 MB.');

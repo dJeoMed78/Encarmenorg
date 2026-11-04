@@ -22,6 +22,8 @@ export interface Business {
   image: string;
   /** Independent company logo, preserved by the existing raw_data contract. */
   logo_url?: string;
+  /** Independent storefront/cover photograph, distinct from logo and gallery. */
+  cover_url?: string;
   imageUrl?: string;
   gallery?: string[];
   subcategory?: string;
@@ -180,6 +182,8 @@ export interface BusinessSubmission {
   deliveryOption?: string;
   hasDelivery?: boolean;
   image?: string;
+  logo_url?: string;
+  cover_url?: string;
   gallery?: string[];
   contactName?: string;
   contactEmail?: string;
@@ -309,6 +313,7 @@ export interface AutoBusinessCandidate {
   schedule?: string;
   payment?: string;
   image: string;
+  cover_url?: string;
   gallery?: string[];
   source: string;
   sourceUrl: string;
