@@ -76,3 +76,25 @@ test('twelve distinct assets persist as one logo, one cover and ten product imag
  assert.equal(mediaPersisted({image:logo,raw_data:JSON.stringify({...validated.draft,cover_url:''})},validated.draft),false);
  assert.throws(() => validatePublicRegistration({...input,gallery:[...gallery, '/uploads/'+newMediaFilename(prefix,'gallery')]}), e => e.code === 'INVALID_REGISTRATION');
 });
+
+
+test('admin quick-create media contract preserves separate logo, storefront cover and ten gallery photos', async () => {
+  const {validateBusinessInput} = await import('../src/server/stagingBusinessRoutes.ts');
+  const {readFileSync} = await import('node:fs');
+  const source = readFileSync(new URL('../src/components/WordPressSyncModal.tsx', import.meta.url), 'utf8');
+  assert.match(source, /uploadRegistrationImage\(file, 'logo', ensureNewBizMediaAttempt\(\)\)/);
+  assert.match(source, /uploadRegistrationImage\(file, 'cover', ensureNewBizMediaAttempt\(\)\)/);
+  assert.match(source, /uploadRegistrationImage\(file, 'gallery', ensureNewBizMediaAttempt\(\)\)/);
+  assert.match(source, /newBizPendingUploads\.current > 0/);
+  assert.match(source, /cover_url: ''/);
+  const prefix = attemptPrefix(goodAttempt());
+  const logo = '/uploads/' + newMediaFilename(prefix, 'logo');
+  const cover = '/uploads/' + newMediaFilename(prefix, 'cover');
+  const gallery = Array.from({length:10}, () => '/uploads/' + newMediaFilename(prefix, 'gallery'));
+  const draft = validateBusinessInput({name:'Empresa de control',category:'Comercio',phone:'9381234567',image:logo,logo_url:logo,cover_url:cover,gallery}, true);
+  assert.equal(draft.logo_url, logo);
+  assert.equal(draft.image, logo);
+  assert.equal(draft.cover_url, cover);
+  assert.deepEqual(draft.gallery, gallery);
+  assert.throws(() => validateBusinessInput({...draft,cover_url:'javascript:alert(1)'},true));
+});
