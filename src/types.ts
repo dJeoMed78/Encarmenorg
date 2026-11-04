@@ -182,6 +182,8 @@ export interface BusinessSubmission {
   deliveryOption?: string;
   hasDelivery?: boolean;
   image?: string;
+  logo_url?: string;
+  cover_url?: string;
   gallery?: string[];
   contactName?: string;
   contactEmail?: string;
