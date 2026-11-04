@@ -96,5 +96,6 @@ test('admin quick-create media contract preserves separate logo, storefront cove
   assert.equal(draft.image, logo);
   assert.equal(draft.cover_url, cover);
   assert.deepEqual(draft.gallery, gallery);
+  assert.throws(() => validateBusinessInput({...draft, gallery:[...gallery,'/uploads/extra.webp']},true));
   assert.throws(() => validateBusinessInput({...draft,cover_url:'javascript:alert(1)'},true));
 });
