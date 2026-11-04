@@ -2851,7 +2851,8 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
 
     
 
-    // WordPress/WooCommerce is retired. Never propagate Staging edits to legacy systems.\n\n    return res.json({ success: true, message: 'Empresa actualizada con éxito', business: updated });
+    // WordPress/WooCommerce is retired. Never propagate Staging edits to legacy systems.
+    return res.json({ success: true, message: 'Empresa actualizada con éxito', business: updated });
   } catch (err: any) {
     if (err instanceof ContactPatchError) return res.status(err.status).json({success:false, message:err.message});
     return res.status(503).json({ success: false, writeMayHaveSucceeded, message: writeMayHaveSucceeded ? 'La escritura fue aceptada, pero no pudo confirmarse. Recarga antes de reintentar.' : 'No fue posible confirmar el guardado en MariaDB.' });
