@@ -14,7 +14,6 @@ backup = home / 'encarmen-staging-backups'
 expected_db = 'u293982346_encarmentest'
 production_db = 'u293982346_encarmenapp'
 production_user = 'u293982346_appuser'
-expected_link = os.environ.get('ENC_EXPECTED_STAGING_LINK', '')
 
 def require(condition, code):
     if not condition:
@@ -43,7 +42,10 @@ def main():
     require(backup.is_dir() and not backup.is_symlink() and backup.stat().st_mode & 0o077 == 0, 'BACKUP_DIRECTORY_INVALID')
     active = staging / 'current'
     require(active.is_symlink() and re.fullmatch(r'versions/[A-Za-z0-9-]+', os.readlink(active)), 'ACTIVE_RELEASE_LINK_INVALID')
-    require(os.readlink(active) == expected_link, 'STAGING_RELEASE_CHANGED_ABORT')
+    expected_link = os.readlink(active)
+    # Freeze this exact link in the GitHub Actions deployment job. The later swap
+    # still fails closed if any other process changes it in the meantime.
+    print('STAGING_PRE_DEPLOY_OLD_LINK='+expected_link)
     resolved = active.resolve()
     require(resolved.is_relative_to((staging/'versions').resolve()), 'ACTIVE_RELEASE_OUTSIDE_STAGING')
     require((resolved/'nodejs/server.js').is_file() and (resolved/'nodejs/dist/index.html').is_file(), 'ACTIVE_RELEASE_FILES_MISSING')
