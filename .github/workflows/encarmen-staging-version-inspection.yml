@@ -29,6 +29,23 @@ jobs:
           echo 'CURRENT'; ls -lah "$root/current"; ls -lah "$root/current/" | head -45
           echo 'CURRENT_FILES'; find -L "$root/current" -maxdepth 2 -type f \( -name server.js -o -name app.js -o -name package.json -o -name index.html \) -print | head -30
           echo 'LAST_SOURCE_GIT'; git -C "$root/last-source" rev-parse --short HEAD || true; git -C "$root/last-source" remote -v 2>/dev/null | sed -E 's#(https?://)[^/@]+@#\1***@#g' | head -5
-          echo 'STAGING_HTACCESS'; sed -n '1,35p' "$HOME/domains/staging.encarmen.org/public_html/.htaccess"
+          # Never expose .htaccess, .env, process arguments containing secrets or database credentials.
+          echo 'ACTIVE_SYMLINK'; readlink "$root/current" || true
+          echo 'RELEASE_MARKER'
+          marker="$root/current/nodejs/dist/encarmen-release.txt"
+          if [ -f "$marker" ]; then
+            value=$(cat "$marker")
+            if printf '%s' "$value" | grep -Eq '^[a-f0-9]{40}          echo 'PROCESS_METADATA'; ps -u "$(id -un)" -o comm,args | grep lsnode | grep staging.encarmen.org | cut -c1-230 | head -6 || true
+          REMOTE
+; then
+              printf 'STAGING_MARKER_SHA=%s\\n' "$value"
+            else
+              echo 'STAGING_MARKER_STATUS=INVALID_FORMAT'
+            fi
+          else
+            echo 'STAGING_MARKER_STATUS=NOT_PRESENT'
+          fi
+          # Existence of a configuration file is not proof of DB isolation.
+          if [ -f "$root/config/.env" ]; then echo 'STAGING_CONFIG_FILE_PRESENT=yes'; else echo 'STAGING_CONFIG_FILE_PRESENT=no'; fi
           echo 'PROCESS_METADATA'; ps -u "$(id -un)" -o comm,args | grep lsnode | grep staging.encarmen.org | cut -c1-230 | head -6 || true
           REMOTE
