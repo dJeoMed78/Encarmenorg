@@ -106,9 +106,13 @@ def main():
     db_dir = backup/'database'
     require(db_dir.is_dir() and db_dir.stat().st_mode & 0o077 == 0, 'PRIVATE_DB_BACKUPS_MISSING')
     files = [p for p in db_dir.glob('staging-db-*.sql.gz') if p.is_file() and not p.is_symlink()]
-    require(bool(files), 'NO_STAGING_DB_BACKUP')
-    latest = max(files,key=lambda p:p.stat().st_mtime)
-    require((pathlib.Path(str(latest)[:-7]+'.json')).is_file(), 'DB_BACKUP_MANIFEST_MISSING')
+    paired = [p for p in files if p.with_name(p.name[:-7]+'.json').is_file()]
+    require(bool(paired), 'NO_STAGING_DB_BACKUP_WITH_MANIFEST')
+    # Ignore older unpaired legacy archives; select only a complete, matching
+    # SQL snapshot + manifest. The official backup step below refreshes it.
+    latest = max(paired, key=lambda p:p.name)
+    import time
+    require(0 <= time.time()-latest.stat().st_mtime <= 14*24*3600, 'STAGING_DB_BACKUP_TOO_OLD')
     test = subprocess.run(['gzip','-t',str(latest)],capture_output=True,timeout=40)
     require(test.returncode==0, 'DB_BACKUP_GZIP_INVALID')
     print('STAGING_DB_BACKUP_EXISTING=PASS')
