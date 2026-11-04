@@ -46,6 +46,26 @@ jobs:
           else
             echo STAGING_MARKER_STATUS=NOT_PRESENT
           fi
+          echo 'STAGING_COMPILED_VERSION'
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          root = Path.home() / 'domains/staging.encarmen.org/hbuilds/current/nodejs/dist'
+          found = set()
+          for asset in (root/'assets').glob('*.js'):
+              try:
+                  content = asset.read_text(encoding='utf-8',errors='replace')
+              except OSError:
+                  continue
+              found.update(re.findall(r'(?<![a-zA-Z0-9])\\d{6}:\\d{4}:(?:[a-f0-9]{12}|SIN-SHA):H(?![a-zA-Z0-9])',content))
+          if found:
+              for stamp in sorted(found)[:4]:
+                  print('STAGING_FRONTEND_STAMP='+stamp)
+          else:
+              print('STAGING_FRONTEND_STAMP=NOT_DETECTED')
+          PY
+          echo 'ACTIVE_INDEX_MTIME_EPOCH'
+          stat -c '%Y' "$root/current/nodejs/dist/index.html"
           if [ -f "$root/config/.env" ]; then
             echo STAGING_CONFIG_FILE_PRESENT=yes
           else
