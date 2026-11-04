@@ -64,6 +64,19 @@ jobs:
           else:
               print('STAGING_FRONTEND_STAMP=NOT_DETECTED')
           PY
+          echo 'STAGING_BACKUP_INVENTORY'
+          python3 - <<'PY'
+          from pathlib import Path
+          import gzip
+          db=Path.home()/'encarmen-staging-backups/database'
+          files=sorted(db.glob('staging-db-*.sql.gz'))
+          paired=[p for p in files if p.with_name(p.name[:-7]+'.json').is_file()]
+          print('STAGING_DB_BACKUP_TOTAL='+str(len(files)))
+          print('STAGING_DB_BACKUP_PAIRED='+str(len(paired)))
+          if files:
+              print('STAGING_DB_BACKUP_NEWEST_FILE='+files[-1].name)
+              print('STAGING_DB_BACKUP_NEWEST_HAS_MANIFEST='+('yes' if files[-1] in paired else 'no'))
+          PY
           echo 'ACTIVE_INDEX_MTIME_EPOCH'
           stat -c '%Y' "$root/current/nodejs/dist/index.html"
           if [ -f "$root/config/.env" ]; then
