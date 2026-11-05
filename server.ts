@@ -4305,33 +4305,15 @@ Devuelve ÚNICAMENTE un array JSON válido:
               const canonical = canonicalClassifiedListingUrl(urlToCheck);
               // Gemini may produce plausible but nonexistent links. Do not accept unobserved URLs.
               if (!c?.title || !canonical || !observedUrls.has(canonical)) return;
-              const siteName = resolveSourceSiteName(urlToCheck, c.source);
-              const catClean = String(c.category || (category !== 'all' ? category : 'compra-venta')).trim();
-              const defaultImg =
-                catClean === 'inmuebles'
-                  ? '/images/classifieds/inmuebles.jpg'
-                  : catClean === 'vehiculos'
-                  ? '/images/classifieds/vehiculos.jpg'
-                  : '/images/classifieds/empleos.jpg';
-
+              // Preserve only fields observed in a scraped/grounded source. Model-generated
+              // prices, phone numbers, descriptions and dates are not verified facts.
+              const observed = [...scrapedCandidates, ...aiGeneratedCandidates]
+                .find((item: any) => canonicalClassifiedListingUrl(item.sourceUrl) === canonical);
+              if (!observed) return;
               aiGeneratedCandidates.push({
+                ...observed,
                 id: `cand-ai-${Date.now()}-${idx + 1}`,
-                title: String(c.title).trim(),
-                category: catClean,
-                subcategory: String(c.subcategory || 'bazar-hogar').trim(),
-                description: String(c.description || '').trim(),
-                price: c.price !== undefined && c.price !== null && Number(c.price) > 0 ? Number(c.price) : null,
-                priceType: c.price ? 'fixed' : 'consult',
-                currency: 'MXN',
-                phone: String(c.phone || '').replace(/\D/g, '').slice(-10),
-                whatsapp: String(c.whatsapp || c.phone || '').replace(/\D/g, '').slice(-10),
-                colonia: String(c.colonia || 'Ciudad del Carmen, Campeche').trim(),
-                location: 'Ciudad del Carmen, Campeche',
-                contactName: String(c.contactName || `Publicado en ${siteName}`).trim(),
-                image: defaultImg,
-                sourceUrl: urlToCheck,
-                source: siteName,
-                createdAt: new Date().toISOString(),
+                sourceUrl: canonical,
                 aiDetected: true,
                 pendingApproval: true
               });
@@ -4342,7 +4324,7 @@ Devuelve ÚNICAMENTE un array JSON válido:
         if (aiGeneratedCandidates.length > 0) {
           aiStatusInfo = {
             usedAi: true,
-            message: `✨ ¡Búsqueda con IA Gemini exitosa! La Inteligencia Artificial estructuró ${aiGeneratedCandidates.length} anuncios reales con enlace directo a su fuente.`
+            message: `Gemini procesó ${aiGeneratedCandidates.length} candidatos con enlaces observados en fuentes de búsqueda. Verifica cada anuncio antes de aprobarlo.`
           };
         } else {
           aiStatusInfo = {
