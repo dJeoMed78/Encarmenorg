@@ -288,3 +288,52 @@ test('los identificadores de origen son deterministas para reintentos', () => {
   const b = prepareRadarClassified({title:'Puesto B',sourceUrl:source + '?utm_source=radar'});
   assert.equal(a.ad.id,b.ad.id);
 });
+
+
+function sourceEvidenceHarness({ status = 200, html = '<html><title>Anuncio verificado</title><h1>Anuncio verificado</h1> Ciudad del Carmen, Campeche</html>', type = 'text/html' } = {}) {
+  const begin = server.indexOf('function canonicalClassifiedListingUrl(');
+  const end = server.indexOf('function buildCandidateFromScrapedItem(', begin);
+  const moduleText = stripTypeScriptTypes(server.slice(begin, end), { mode: 'strip' });
+  const ctx = {
+    URL, AbortSignal,
+    fetch: async () => ({
+      status, headers: { get: key => key === 'content-type' ? type : null },
+      text: async () => html
+    })
+  };
+  return vm.runInNewContext(moduleText + '\nverifyClassifiedListingEvidence', ctx);
+}
+
+const sourceCandidate = { title: 'Anuncio verificado', sourceUrl: 'https://mx.computrabajo.com/ofertas-de-trabajo/123' };
+
+test('prueba aislada: fuente directa con encabezado y Ciudad del Carmen se acepta', async () => {
+  const verify = sourceEvidenceHarness();
+  const result = await verify(sourceCandidate);
+  assert.equal(result.verified, true);
+  assert.ok(result.checkedAt);
+});
+
+test('prueba aislada: fuente HTTP 404 no se acepta', async () => {
+  const verify = sourceEvidenceHarness({ status: 404 });
+  assert.equal((await verify(sourceCandidate)).verified, false);
+});
+
+test('prueba aislada: página no relacionada aunque mencione la ciudad no se acepta', async () => {
+  const verify = sourceEvidenceHarness({ html: '<html><title>Otra propiedad</title><h1>Otra propiedad</h1> Ciudad del Carmen</html>' });
+  assert.equal((await verify(sourceCandidate)).verified, false);
+});
+
+test('prueba aislada: falta de ciudad verificable bloquea anuncio', async () => {
+  const verify = sourceEvidenceHarness({ html: '<html><title>Anuncio verificado</title><h1>Anuncio verificado</h1> Mérida, Yucatán</html>' });
+  assert.equal((await verify(sourceCandidate)).verified, false);
+});
+
+test('prueba aislada: publicación expirada es rechazada', async () => {
+  const verify = sourceEvidenceHarness({ html: '<html><title>Anuncio verificado</title><h1>Anuncio verificado</h1> Ciudad del Carmen. Oferta finalizada.</html>' });
+  assert.equal((await verify(sourceCandidate)).verified, false);
+});
+
+test('prueba aislada: la URL de un dominio desconocido no se consulta', async () => {
+  const verify = sourceEvidenceHarness();
+  assert.equal((await verify({title:'Anuncio verificado',sourceUrl:'https://example.org/ad/1'})).verified, false);
+});
