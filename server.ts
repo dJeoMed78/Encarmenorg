@@ -3846,6 +3846,47 @@ function isDirectListingUrl(rawUrl: string): boolean {
   return canonicalClassifiedListingUrl(rawUrl) !== null;
 }
 
+type ClassifiedEvidence = { verified: boolean; checkedAt?: string; reason?: string };
+
+// A familiar URL pattern or an AI citation is not proof of a currently accessible listing.
+// Fail closed if the direct source cannot confirm both the title and Ciudad del Carmen.
+async function verifyClassifiedListingEvidence(item: { sourceUrl?: string; title?: string }): Promise<ClassifiedEvidence> {
+  const url = canonicalClassifiedListingUrl(String(item?.sourceUrl || ''));
+  const title = String(item?.title || '').trim();
+  if (!url || title.length < 6) return { verified: false, reason: 'URL directa o título inválido.' };
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      redirect: 'manual',
+      headers: {
+        'User-Agent': 'ENCARMEN-Radar/1.0 (+https://encarmen.org)',
+        'Accept': 'text/html'
+      },
+      signal: AbortSignal.timeout(6000)
+    });
+    if (response.status !== 200) return { verified: false, reason: 'El anuncio no respondió HTTP 200.' };
+    const type = response.headers.get('content-type') || '';
+    if (!/text\/html/i.test(type)) return { verified: false, reason: 'El origen no devolvió una página HTML.' };
+    const declaredSize = Number(response.headers.get('content-length') || 0);
+    if (declaredSize > 1024 * 1024) return { verified: false, reason: 'La respuesta excede el límite de revisión.' };
+    const html = (await response.text()).slice(0, 1024 * 1024);
+    const normalize = (text: string): string => decodeHtmlEntities(text)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const pageText = normalize(html);
+    const tokens = normalize(title).split(/\s+/).filter(word => word.length >= 4);
+    const matches = tokens.filter(word => pageText.includes(word));
+    const locationConfirmed = /ciudad del carmen|carmen campeche|carmen camp|cd del carmen/.test(pageText);
+    if (tokens.length < 2 || matches.length < Math.min(2, tokens.length)) {
+      return { verified: false, reason: 'El título no coincide con la página de origen.' };
+    }
+    if (!locationConfirmed) return { verified: false, reason: 'El origen no confirma Ciudad del Carmen.' };
+    return { verified: true, checkedAt: new Date().toISOString() };
+  } catch {
+    return { verified: false, reason: 'No fue posible consultar directamente el anuncio.' };
+  }
+}
+
 function decodeHtmlEntities(str: string): string {
   return (str || '')
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
@@ -3938,7 +3979,7 @@ function buildCandidateFromScrapedItem(
     title: cleanTitle.slice(0, 130),
     category: detectedCat,
     subcategory: detectedSub,
-    description: cleanDesc || `Publicación real en ${siteName} (Ciudad del Carmen). Haz clic en "Ver en ${siteName}" para abrir la fuente exacta.`,
+    description: cleanDesc || '',
     price: priceVal,
     priceType: priceVal ? 'fixed' : 'consult',
     currency: 'MXN',
@@ -3950,7 +3991,8 @@ function buildCandidateFromScrapedItem(
     image: defaultImg,
     sourceUrl: urlRaw,
     source: siteName,
-    createdAt: new Date().toISOString(),
+    discoveredAt: new Date().toISOString(),
+    sourcePublishedAt: null,
     aiDetected: isFromAi,
     pendingApproval: true
   };
@@ -3959,7 +4001,7 @@ function buildCandidateFromScrapedItem(
 // MODO 1 (SIN API DE IA): Rastreador web directo ($0 costo de tokens)
 async function scrapeRealWebClassifieds(searchQuery: string, category: string): Promise<any[]> {
   const browserHeaders = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'User-Agent': 'ENCARMEN-Radar/1.0 (+https://encarmen.org)',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'es-MX,es;q=0.9,en;q=0.8'
   };
@@ -4122,10 +4164,16 @@ async function scrapeRealWebClassifieds(searchQuery: string, category: string): 
 
   await Promise.allSettled(tasks);
 
-  return results.filter(item => {
-    if (category && category !== 'all' && item.category !== category) return false;
-    return true;
-  });
+  const filtered = results.filter(item => !category || category === 'all' || item.category === category);
+  // Verify each direct page; never label a search snippet as an active classified.
+  const checks = await Promise.all(filtered.slice(0, 24).map(async item => ({
+    item, evidence: await verifyClassifiedListingEvidence(item)
+  })));
+  return checks.filter(({ evidence }) => evidence.verified).map(({ item, evidence }) => ({
+    ...item,
+    sourceVerifiedAt: evidence.checkedAt,
+    sourceVerification: 'direct-page'
+  }));
 }
 
 // ENDPOINT DE CLASIFICADOS CON LAS 2 VERSIONES:
@@ -4358,7 +4406,14 @@ Devuelve ÚNICAMENTE un array JSON válido:
       }
     }
 
-    const finalCandidates = Array.from(combinedMap.values());
+    // Grounded links can still be stale or wrong: recheck the actual listing page.
+    const checkedCandidates = await Promise.all(Array.from(combinedMap.values()).slice(0, 24).map(async (item: any) => ({
+      item, evidence: await verifyClassifiedListingEvidence(item)
+    })));
+    const finalCandidates = checkedCandidates.filter(({ evidence }) => evidence.verified)
+      .map(({ item, evidence }) => ({
+        ...item, sourceVerifiedAt: evidence.checkedAt, sourceVerification: 'direct-page'
+      }));
 
     return res.json({
       success: true,
@@ -4421,6 +4476,12 @@ app.post(['/api/classifieds/approve-candidate', '/classifieds/approve-candidate'
     }
     const { ad, error } = prepareRadarClassified(req.body?.candidate);
     if (!ad) return res.status(400).json({ success: false, message: error });
+    const sourceEvidence = await verifyClassifiedListingEvidence(ad);
+    if (!sourceEvidence.verified) return res.status(422).json({
+      success: false, message: 'No se pudo verificar el anuncio original: ' + sourceEvidence.reason
+    });
+    ad.sourceVerifiedAt = sourceEvidence.checkedAt;
+    ad.sourceVerification = 'direct-page';
     if (radarClassifiedAlreadyExists(ad)) {
       return res.status(409).json({ success: false, message: 'Este anuncio ya existe.' });
     }
@@ -4470,6 +4531,13 @@ app.post(['/api/classifieds/batch-approve', '/classifieds/batch-approve'], async
         failed.push({ index, message: error || 'Anuncio inválido.' });
         continue;
       }
+      const sourceEvidence = await verifyClassifiedListingEvidence(ad);
+      if (!sourceEvidence.verified) {
+        failed.push({ index, message: 'Origen no verificable: ' + sourceEvidence.reason });
+        continue;
+      }
+      ad.sourceVerifiedAt = sourceEvidence.checkedAt;
+      ad.sourceVerification = 'direct-page';
       if (radarClassifiedAlreadyExists(ad) || sourceUrlsInBatch.has(ad.sourceUrl)) {
         failed.push({ index, message: 'Anuncio duplicado.' });
         continue;
