@@ -44,6 +44,8 @@ export function createStagingClassifiedStore(deps: {
   return {
     canWrite: enabled,
     async create(ad: any): Promise<ClassifiedCreateResult> {
+      // Public approval always prepares 'active'; diagnostic probe uses only hidden 'trash'.
+      if (!ad || !['active', 'trash'].includes(String(ad.status))) return 'blocked';
       if (!enabled()) return 'blocked';
       let conn: any;
       let began = false;
@@ -79,7 +81,7 @@ export function createStagingClassifiedStore(deps: {
         if (insert?.affectedRows !== 1) return 'error';
         const [rows]: any = await conn.query('SELECT id, raw_data, title, status FROM classifieds WHERE id = ? FOR UPDATE', [String(ad.id)]);
         if (rows?.length !== 1 || String(rows[0].id) !== String(ad.id) ||
-            rows[0].title !== ad.title || rows[0].status !== 'active' ||
+            rows[0].title !== ad.title || rows[0].status !== String(ad.status || 'active') ||
             rows[0].raw_data !== raw) return 'error';
         if (!enabled()) return 'blocked';
         await conn.commit();
