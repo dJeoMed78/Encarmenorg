@@ -4361,93 +4361,145 @@ Devuelve ÚNICAMENTE un array JSON válido:
   }
 });
 
-// Approve a candidate classified and publish it to the live directory
+// Classified radar approvals: never report publication until the SQL write is confirmed.
+// Staging remains protected by the global read-only middleware; this does NOT open a write lane.
+function prepareRadarClassified(candidate: any): { ad?: any; error?: string } {
+  if (!candidate || typeof candidate.title !== 'string' || !candidate.title.trim()) {
+    return { error: 'Título del anuncio inválido.' };
+  }
+  if (candidate.title.trim().length > 200) {
+    return { error: 'El título del anuncio es demasiado largo.' };
+  }
+  if (typeof candidate.sourceUrl !== 'string' || !/^https:\/\//i.test(candidate.sourceUrl)) {
+    return { error: 'El anuncio debe tener una URL de origen HTTPS verificable.' };
+  }
+  let sourceUrl: string;
+  try {
+    const parsed = new URL(candidate.sourceUrl);
+    if (!parsed.hostname || parsed.username || parsed.password) return { error: 'URL de origen inválida.' };
+    parsed.hash = '';
+    sourceUrl = parsed.toString();
+  } catch (_) {
+    return { error: 'URL de origen inválida.' };
+  }
+  const id = `ad-${crypto.randomUUID()}`;
+  const ad = {
+    ...candidate,
+    id,
+    title: candidate.title.trim(),
+    sourceUrl,
+    status: 'active',
+    views: 0,
+    createdAt: new Date().toISOString()
+  };
+  delete ad.pendingApproval;
+  delete ad.alreadyPublished;
+  return { ad };
+}
+
+function radarClassifiedAlreadyExists(ad: any): boolean {
+  return classifiedsCache.some(existing =>
+    (existing.sourceUrl && existing.sourceUrl === ad.sourceUrl) ||
+    (String(existing.title || '').trim().toLowerCase() === ad.title.toLowerCase() &&
+      existing.sourceUrl && existing.sourceUrl.split('#')[0] === ad.sourceUrl.split('#')[0])
+  );
+}
+
 app.post(['/api/classifieds/approve-candidate', '/classifieds/approve-candidate'], async (req: Request, res: Response) => {
   try {
-    const cand = req.body?.candidate;
-    if (!cand || !cand.title) {
-      return res.status(400).json({ success: false, message: 'Datos del anuncio inválidos.' });
+    if (!adminSecurity.isAuthorized(req, 'admin:manage')) {
+      return res.status(403).json({ success: false, message: 'Se requiere autorización administrativa.' });
     }
-
-    const newId = `ad-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const newAd = {
-      ...cand,
-      id: newId,
-      status: 'active',
-      views: 0,
-      createdAt: new Date().toISOString()
-    };
-
-    // Remove candidate-only flag
-    delete newAd.pendingApproval;
-    delete newAd.alreadyPublished;
-
-    classifiedsCache.unshift(newAd);
+    if (!isWritePermitted() || !isMariaDbActive()) {
+      return res.status(503).json({ success: false, message: 'La escritura segura en MariaDB no está disponible.' });
+    }
+    const { ad, error } = prepareRadarClassified(req.body?.candidate);
+    if (!ad) return res.status(400).json({ success: false, message: error });
+    if (radarClassifiedAlreadyExists(ad)) {
+      return res.status(409).json({ success: false, message: 'Este anuncio ya existe.' });
+    }
+    const saved = await dbSaveClassified(ad);
+    if (saved !== true) {
+      return res.status(503).json({ success: false, message: 'MariaDB no confirmó el guardado del anuncio.' });
+    }
+    const persisted = await dbLoadAllClassifieds();
+    const verified = persisted.find((item: any) => String(item.id) === String(ad.id));
+    if (!verified) {
+      return res.status(503).json({ success: false, message: 'No fue posible verificar el anuncio guardado en MariaDB.' });
+    }
+    classifiedsCache.unshift(verified);
     try {
       fs.writeFileSync(path.resolve(__dirname, 'classifieds_db.json'), JSON.stringify(classifiedsCache, null, 2), 'utf8');
-    } catch (_) {}
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveClassified(newAd);
-      } catch (mErr: any) {
-        console.warn('Error saving approved classified to MariaDB:', mErr.message);
-      }
+    } catch (cacheError: any) {
+      console.warn('[Clasificados] Archivo auxiliar no actualizado:', cacheError?.message);
     }
-
-    console.log(`[Clasificados] Anuncio "${newAd.title}" aprobado y publicado exitosamente en el portal.`);
-    res.json({
-      success: true,
-      message: `¡Anuncio "${newAd.title}" verificado y publicado con éxito en Clasificados!`,
-      classified: newAd
-    });
+    return res.json({ success: true, message: 'Anuncio guardado y verificado en MariaDB.', classified: verified });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('[Clasificados] Error de aprobación:', err?.message);
+    return res.status(500).json({ success: false, message: 'No se pudo confirmar la publicación del anuncio.' });
   }
 });
 
-// Batch approve classifieds
 app.post(['/api/classifieds/batch-approve', '/classifieds/batch-approve'], async (req: Request, res: Response) => {
   try {
+    if (!adminSecurity.isAuthorized(req, 'admin:manage')) {
+      return res.status(403).json({ success: false, message: 'Se requiere autorización administrativa.' });
+    }
+    if (!isWritePermitted() || !isMariaDbActive()) {
+      return res.status(503).json({ success: false, message: 'La escritura segura en MariaDB no está disponible.' });
+    }
     const candidates = req.body?.candidates;
-    if (!Array.isArray(candidates) || candidates.length === 0) {
-      return res.status(400).json({ success: false, message: 'No se enviaron anuncios para aprobar.' });
+    if (!Array.isArray(candidates) || candidates.length === 0 || candidates.length > 50) {
+      return res.status(400).json({ success: false, message: 'El lote debe contener entre 1 y 50 anuncios.' });
     }
-
-    let approvedCount = 0;
-    for (const cand of candidates) {
-      if (!cand || !cand.title) continue;
-      const newId = `ad-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-      const newAd = {
-        ...cand,
-        id: newId,
-        status: 'active',
-        views: 0,
-        createdAt: new Date().toISOString()
-      };
-      delete newAd.pendingApproval;
-      delete newAd.alreadyPublished;
-
-      classifiedsCache.unshift(newAd);
-      if (isMariaDbActive()) {
-        try {
-          await dbSaveClassified(newAd);
-        } catch (_) {}
+    const approved: any[] = [];
+    const failed: Array<{ index: number; message: string }> = [];
+    const sourceUrlsInBatch = new Set<string>();
+    for (let index = 0; index < candidates.length; index++) {
+      const { ad, error } = prepareRadarClassified(candidates[index]);
+      if (!ad) {
+        failed.push({ index, message: error || 'Anuncio inválido.' });
+        continue;
       }
-      approvedCount++;
+      if (radarClassifiedAlreadyExists(ad) || sourceUrlsInBatch.has(ad.sourceUrl)) {
+        failed.push({ index, message: 'Anuncio duplicado.' });
+        continue;
+      }
+      let saved = false;
+      try { saved = await dbSaveClassified(ad); } catch (_) { saved = false; }
+      if (!saved) {
+        failed.push({ index, message: 'MariaDB no confirmó el guardado.' });
+        continue;
+      }
+      const persisted = await dbLoadAllClassifieds();
+      const verified = persisted.find((item: any) => String(item.id) === String(ad.id));
+      if (!verified) {
+        failed.push({ index, message: 'No se pudo verificar el anuncio en MariaDB.' });
+        continue;
+      }
+      sourceUrlsInBatch.add(ad.sourceUrl);
+      classifiedsCache.unshift(verified);
+      approved.push(verified);
     }
-
-    try {
-      fs.writeFileSync(path.resolve(__dirname, 'classifieds_db.json'), JSON.stringify(classifiedsCache, null, 2), 'utf8');
-    } catch (_) {}
-
-    res.json({
-      success: true,
-      message: `¡${approvedCount} anuncios verificados y publicados exitosamente en Clasificados!`,
-      count: approvedCount
+    if (approved.length > 0) {
+      try {
+        fs.writeFileSync(path.resolve(__dirname, 'classifieds_db.json'), JSON.stringify(classifiedsCache, null, 2), 'utf8');
+      } catch (cacheError: any) {
+        console.warn('[Clasificados] Archivo auxiliar no actualizado:', cacheError?.message);
+      }
+    }
+    const success = failed.length === 0 && approved.length === candidates.length;
+    return res.status(success ? 200 : 207).json({
+      success,
+      message: success ? `${approved.length} anuncios guardados y verificados.` :
+        `${approved.length} anuncios confirmados, ${failed.length} no confirmados. Actualiza la lista antes de reintentar.`,
+      count: approved.length,
+      approved,
+      failed
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('[Clasificados] Error al aprobar lote:', err?.message);
+    return res.status(500).json({ success: false, message: 'Error al procesar el lote; verifica los registros antes de reintentar.' });
   }
 });
 
