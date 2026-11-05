@@ -91,6 +91,8 @@ import {
   dbLoadAllClassifieds,
   dbSaveClassified,
   dbCreateRadarClassifiedOnce,
+  stagingClassifiedStore,
+  isStagingClassifiedWritePermitted,
   dbDeleteClassified,
   dbLoadAllEmergencyServices,
   dbSaveEmergencyService,
@@ -259,6 +261,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.method.toUpperCase() === 'POST' && (req.path === '/api/ratings/get' || req.path === '/api/events/radar-search')) return next();
     // Authenticated POST search is read-only; classified approvals remain blocked.
     if (req.method === 'POST' && req.path === '/api/classifieds/radar-search' && adminSecurity.isAuthorized(req, 'admin:manage')) return next();
+    // Dedicated classifieds-only write lane; separate short-lived private authorization.
+    if (req.method === 'POST' && ['/api/classifieds/approve-candidate', '/api/classifieds/batch-approve'].includes(req.path) &&
+        adminSecurity.isAuthorized(req, 'admin:manage') && isStagingClassifiedWritePermitted()) return next();
     return res.status(403).json({success:false,error:'STAGING_READ_ONLY',message:'Solo el carril autorizado de registro y edición puede escribir negocios. Las demás operaciones permanecen bloqueadas.'});
   }
   if (!isWritePermitted()) {
@@ -4494,7 +4499,8 @@ app.post(['/api/classifieds/approve-candidate', '/classifieds/approve-candidate'
     if (!adminSecurity.isAuthorized(req, 'admin:manage')) {
       return res.status(403).json({ success: false, message: 'Se requiere autorización administrativa.' });
     }
-    if (!isWritePermitted() || !isMariaDbActive()) {
+    const stagingClassifiedLane = isStagingEnvironment();
+    if (!isMariaDbActive() || (stagingClassifiedLane ? !isStagingClassifiedWritePermitted() : !isWritePermitted())) {
       return res.status(503).json({ success: false, message: 'La escritura segura en MariaDB no está disponible.' });
     }
     const { ad, error } = prepareRadarClassified(req.body?.candidate);
@@ -4508,7 +4514,7 @@ app.post(['/api/classifieds/approve-candidate', '/classifieds/approve-candidate'
     if (radarClassifiedAlreadyExists(ad)) {
       return res.status(409).json({ success: false, message: 'Este anuncio ya existe.' });
     }
-    const saved = await dbCreateRadarClassifiedOnce(ad);
+    const saved = stagingClassifiedLane ? await stagingClassifiedStore.create(ad) : await dbCreateRadarClassifiedOnce(ad);
     if (saved === 'duplicate') {
       return res.status(409).json({ success: false, message: 'Este anuncio ya fue registrado.' });
     }
@@ -4538,7 +4544,8 @@ app.post(['/api/classifieds/batch-approve', '/classifieds/batch-approve'], async
     if (!adminSecurity.isAuthorized(req, 'admin:manage')) {
       return res.status(403).json({ success: false, message: 'Se requiere autorización administrativa.' });
     }
-    if (!isWritePermitted() || !isMariaDbActive()) {
+    const stagingClassifiedLane = isStagingEnvironment();
+    if (!isMariaDbActive() || (stagingClassifiedLane ? !isStagingClassifiedWritePermitted() : !isWritePermitted())) {
       return res.status(503).json({ success: false, message: 'La escritura segura en MariaDB no está disponible.' });
     }
     const candidates = req.body?.candidates;
@@ -4566,7 +4573,7 @@ app.post(['/api/classifieds/batch-approve', '/classifieds/batch-approve'], async
         continue;
       }
       let saved: 'created' | 'duplicate' | 'blocked' | 'error' = 'error';
-      try { saved = await dbCreateRadarClassifiedOnce(ad); } catch (_) { saved = 'error'; }
+      try { saved = stagingClassifiedLane ? await stagingClassifiedStore.create(ad) : await dbCreateRadarClassifiedOnce(ad); } catch (_) { saved = 'error'; }
       if (saved !== 'created') {
         failed.push({ index, message: saved === 'duplicate' ? 'Anuncio previamente registrado.' : 'MariaDB no confirmó el alta.' });
         continue;
