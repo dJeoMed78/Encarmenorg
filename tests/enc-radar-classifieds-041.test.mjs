@@ -70,7 +70,7 @@ test('lote informa fallos parciales y comprueba escritura', () => {
   const code = server.slice(start,server.indexOf('// GUÍA DE EMERGENCIAS',start));
   assert.match(code, /candidates\.length > 50/);
   assert.match(code, /failed\.push/);
-  assert.match(code, /saved = await dbSaveClassified\(ad\)/);
+  assert.match(code, /saved = await dbCreateRadarClassifiedOnce\(ad\)/);
   assert.match(code, /success = failed\.length === 0/);
 });
 
