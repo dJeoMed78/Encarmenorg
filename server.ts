@@ -3807,31 +3807,42 @@ function resolveSourceSiteName(sourceUrl?: string, sourceField?: string): string
   return sourceField || 'Sitio Web';
 }
 
-function isDirectListingUrl(rawUrl: string): boolean {
-  if (!rawUrl || !rawUrl.startsWith('http')) return false;
-  const lower = rawUrl.toLowerCase();
-  if (
-    lower.includes('/search/?q=') ||
-    lower.includes('/search?q=') ||
-    lower.includes('?q=') ||
-    lower.includes('bing.com/') ||
-    lower.includes('yahoo.com/') ||
-    lower.includes('google.com/') ||
-    lower.includes('duckduckgo.com/')
-  ) {
-    return false;
-  }
+// Only a recognizable individual listing from a known portal is a radar candidate.
+// A syntactically valid URL, search-results page or arbitrary website is not evidence.
+function canonicalClassifiedListingUrl(rawUrl: string): string | null {
   try {
-    const parsed = new URL(rawUrl);
-    const cleanPath = parsed.pathname.replace(/\/+$/, '');
-    if (!cleanPath || cleanPath.length < 4) return false;
-    if (lower.includes('facebook.com/groups/506440126097710') && !lower.includes('/posts/') && !lower.includes('/permalink/')) {
-      return false;
+    const url = new URL(rawUrl);
+    if (url.protocol !== 'https:' || url.username || url.password) return null;
+    const host = url.hostname.toLowerCase();
+    const path = url.pathname.toLowerCase();
+    const subdomain = (domain: string): boolean => host === domain || host.endsWith('.' + domain);
+    const supported =
+      (subdomain('computrabajo.com') && /^\/ofertas-de-trabajo\/[^/]+/.test(path)) ||
+      (subdomain('mercadolibre.com.mx') && /^\/(?:articulo\/)?mlm-\d+/.test(path)) ||
+      (subdomain('inmuebles24.com') && /^\/propiedades\/[^/]+/.test(path)) ||
+      (subdomain('propiedades.com') && /^\/inmuebles\/[^/]+/.test(path)) ||
+      (subdomain('occ.com.mx') && /^\/empleo\/oferta\/[^/]+/.test(path)) ||
+      (subdomain('lamudi.com.mx') && /^\/detalle\/[^/]+/.test(path)) ||
+      (subdomain('indeed.com') && path === '/viewjob' && url.searchParams.has('jk')) ||
+      (subdomain('facebook.com') && (
+        /^\/(?:groups\/[^/]+\/(?:posts|permalink)\/[^/]+|marketplace\/item\/[^/]+|[^/]+\/posts\/[^/]+)/.test(path) ||
+        (path === '/permalink.php' && url.searchParams.has('story_fbid'))
+      ));
+    if (!supported) return null;
+    url.hash = '';
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^utm_/i.test(key) || ['fbclid', 'gclid', 'mc_cid', 'mc_eid'].includes(key.toLowerCase())) {
+        url.searchParams.delete(key);
+      }
     }
-    return true;
+    return url.toString();
   } catch {
-    return false;
+    return null;
   }
+}
+
+function isDirectListingUrl(rawUrl: string): boolean {
+  return canonicalClassifiedListingUrl(rawUrl) !== null;
 }
 
 function decodeHtmlEntities(str: string): string {
@@ -3956,7 +3967,7 @@ async function scrapeRealWebClassifieds(searchQuery: string, category: string): 
   const seenUrls = new Set<string>();
 
   const addItem = (title: string, desc: string, url: string, forcedCat?: string) => {
-    const cleanUrl = (url || '').split('#')[0].trim();
+    const cleanUrl = canonicalClassifiedListingUrl((url || '').trim());
     if (!cleanUrl || seenUrls.has(cleanUrl)) return;
     const item = buildCandidateFromScrapedItem(title, desc, cleanUrl, forcedCat, results.length + 1, false);
     if (item) {
@@ -4260,6 +4271,9 @@ Devuelve ÚNICAMENTE un array JSON válido:
           }
         }
 
+        // Structured AI text is not evidence of a live listing. Match against observed URLs.
+        const observedUrls = new Set<string>(scrapedCandidates.map((x: any) => canonicalClassifiedListingUrl(x.sourceUrl)).filter(Boolean) as string[]);
+
         // Extraer enlaces directos adicionales descubiertos por Google Search Grounding
         groundingChunks.forEach((chunk: any, idx: number) => {
           const webUri = chunk?.web?.uri;
@@ -4273,7 +4287,11 @@ Devuelve ÚNICAMENTE un array JSON válido:
               idx + 200,
               true
             );
-            if (built) aiGeneratedCandidates.push(built);
+            if (built) {
+              const canonical = canonicalClassifiedListingUrl(built.sourceUrl);
+              if (canonical) observedUrls.add(canonical);
+              aiGeneratedCandidates.push(built);
+            }
           }
         });
 
@@ -4284,7 +4302,9 @@ Devuelve ÚNICAMENTE un array JSON válido:
           if (Array.isArray(parsed)) {
             parsed.forEach((c: any, idx: number) => {
               const urlToCheck = String(c?.sourceUrl || '').trim();
-              if (!c?.title || !isDirectListingUrl(urlToCheck)) return;
+              const canonical = canonicalClassifiedListingUrl(urlToCheck);
+              // Gemini may produce plausible but nonexistent links. Do not accept unobserved URLs.
+              if (!c?.title || !canonical || !observedUrls.has(canonical)) return;
               const siteName = resolveSourceSiteName(urlToCheck, c.source);
               const catClean = String(c.category || (category !== 'all' ? category : 'compra-venta')).trim();
               const defaultImg =
@@ -4381,10 +4401,9 @@ function prepareRadarClassified(candidate: any): { ad?: any; error?: string } {
   }
   let sourceUrl: string;
   try {
-    const parsed = new URL(candidate.sourceUrl);
-    if (!parsed.hostname || parsed.username || parsed.password) return { error: 'URL de origen inválida.' };
-    parsed.hash = '';
-    sourceUrl = parsed.toString();
+    const canonical = canonicalClassifiedListingUrl(candidate.sourceUrl);
+    if (!canonical) return { error: 'El origen no corresponde a un anuncio individual reconocido.' };
+    sourceUrl = canonical;
   } catch (_) {
     return { error: 'URL de origen inválida.' };
   }
@@ -4405,9 +4424,7 @@ function prepareRadarClassified(candidate: any): { ad?: any; error?: string } {
 
 function radarClassifiedAlreadyExists(ad: any): boolean {
   return classifiedsCache.some(existing =>
-    (existing.sourceUrl && existing.sourceUrl === ad.sourceUrl) ||
-    (String(existing.title || '').trim().toLowerCase() === ad.title.toLowerCase() &&
-      existing.sourceUrl && existing.sourceUrl.split('#')[0] === ad.sourceUrl.split('#')[0])
+    canonicalClassifiedListingUrl(String(existing.sourceUrl || '')) === ad.sourceUrl
   );
 }
 
