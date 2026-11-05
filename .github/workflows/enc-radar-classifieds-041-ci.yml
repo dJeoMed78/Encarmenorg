@@ -29,4 +29,14 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: node --import tsx --test tests/enc-radar-classifieds-041.test.mjs tests/enc-staging-classified-lane-041.test.mjs
+      - name: Existing Staging write and isolation regressions
+        run: node --import tsx --test tests/enc-staging-write-gate-005-unit.test.mjs tests/enc-staging-write-gate-005-http.test.mjs tests/staging-isolation-proof.test.mjs tests/security-containment-003.test.mjs
+      - name: Live probe must fail closed without private Staging authorization
+        run: |
+          if node --import tsx scripts/enc-staging-classified-persistence-041.mjs > probe-check.log 2>&1; then
+            echo "ERROR: live probe executed without explicit authorization"
+            exit 1
+          fi
+          grep -q '"state": "BLOCKED_OR_FAILED"' probe-check.log
+          grep -q 'EXPLICIT_PROBE_CONFIRMATION_MISSING' probe-check.log
       - run: npm run build
