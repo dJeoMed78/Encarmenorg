@@ -1025,6 +1025,41 @@ export async function dbSaveClassified(ad: any): Promise<boolean> {
   }
 }
 
+// INSERT-only for radar approvals. Unlike dbSaveClassified, never overwrite an
+// existing classified on duplicate id; SQL PRIMARY KEY enforces idempotency.
+// The existing Staging guard remains in force and denies this operation there.
+export async function dbCreateRadarClassifiedOnce(ad: any): Promise<'created' | 'duplicate' | 'blocked' | 'error'> {
+  if (!guardWrite('dbCreateRadarClassifiedOnce')) return 'blocked';
+  if (!pool) return 'error';
+  try {
+    const rawData = JSON.stringify(ad);
+    const [result]: any = await pool.query(`
+      INSERT INTO classifieds (
+        id, title, category, subcategory, price, price_type, phone, whatsapp,
+        colonia, status, user_token, raw_data
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      String(ad.id),
+      ad.title || '',
+      ad.category || '',
+      ad.subcategory || '',
+      ad.price !== undefined && ad.price !== null ? Number(ad.price) : null,
+      ad.priceType || 'fixed',
+      ad.phone || '',
+      ad.whatsapp || '',
+      ad.colonia || '',
+      ad.status || 'active',
+      ad.userToken || '',
+      rawData
+    ]);
+    return result?.affectedRows === 1 ? 'created' : 'error';
+  } catch (err: any) {
+    if (err?.code === 'ER_DUP_ENTRY') return 'duplicate';
+    console.warn('[MariaDB] Error de alta exclusiva de clasificado:', err?.code || 'SQL_ERROR');
+    return 'error';
+  }
+}
+
 export async function dbDeleteClassified(id: string): Promise<boolean> {
   if (!guardWrite('dbDeleteClassified')) return false;
   if (!pool) return false;
