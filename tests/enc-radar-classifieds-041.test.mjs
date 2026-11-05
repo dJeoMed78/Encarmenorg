@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import crypto from 'node:crypto';
-import ts from 'typescript';
+import { stripTypeScriptTypes } from 'node:module';
 
 const server = fs.readFileSync(new URL('../server.ts', import.meta.url), 'utf8');
 const api = fs.readFileSync(new URL('../src/services/api.ts', import.meta.url), 'utf8');
@@ -13,9 +13,7 @@ function helpers(cache = []) {
   const begin = server.indexOf('function prepareRadarClassified(');
   const end = server.indexOf("app.post(['/api/classifieds/approve-candidate'", begin);
   assert.ok(begin >= 0 && end > begin, 'Helpers de aprobación no encontrados');
-  const js = ts.transpileModule(server.slice(begin, end), {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
-  }).outputText;
+  const js = stripTypeScriptTypes(server.slice(begin, end), { mode: 'strip' });
   return vm.runInNewContext(js + '\n({ prepareRadarClassified, radarClassifiedAlreadyExists })', {
     crypto, URL, classifiedsCache: cache
   });
