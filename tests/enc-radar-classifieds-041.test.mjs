@@ -60,9 +60,9 @@ test('aprobación individual confirma SQL antes de actualizar caché', () => {
   const end = server.indexOf("app.post(['/api/classifieds/batch-approve'",start);
   const code = server.slice(start,end);
   assert.match(code, /adminSecurity\.isAuthorized\(req, 'admin:manage'\)/);
-  assert.match(code, /saved !== true/);
+  assert.match(code, /saved !== 'created'/);
   assert.match(code, /dbLoadAllClassifieds\(\)/);
-  assert.ok(code.indexOf('dbSaveClassified(ad)') < code.indexOf('classifiedsCache.unshift(verified)'));
+  assert.ok(code.indexOf('dbCreateRadarClassifiedOnce(ad)') < code.indexOf('classifiedsCache.unshift(verified)'));
 });
 
 test('lote informa fallos parciales y comprueba escritura', () => {
@@ -88,7 +88,7 @@ test('Staging permite búsqueda autenticada pero no publicación', () => {
 });
 
 
-function approvalHarness({ authorized = true, writeEnabled = true, dbActive = true, readBack = true, onSave = async () => true } = {}) {
+function approvalHarness({ authorized = true, writeEnabled = true, dbActive = true, readBack = true, onSave = async () => 'created' } = {}) {
   const begin = server.indexOf('function prepareRadarClassified(');
   const end = server.indexOf('// GUÍA DE EMERGENCIAS', begin);
   assert.ok(begin !== -1 && end > begin);
@@ -104,9 +104,9 @@ function approvalHarness({ authorized = true, writeEnabled = true, dbActive = tr
     adminSecurity: { isAuthorized: () => authorized },
     isWritePermitted: () => writeEnabled,
     isMariaDbActive: () => dbActive,
-    dbSaveClassified: async ad => {
+    dbCreateRadarClassifiedOnce: async ad => {
       const result = await onSave(ad);
-      if (result === true) stored.push(ad);
+      if (result === 'created') stored.push(ad);
       return result;
     },
     dbLoadAllClassifieds: async () => readBack ? [...stored] : [],
@@ -137,7 +137,7 @@ const classified = (sourceUrl = 'https://mx.computrabajo.com/ofertas-de-trabajo/
 
 test('HTTP 403: aprobación no autorizada no escribe SQL', async () => {
   let attempts = 0;
-  const h = approvalHarness({ authorized: false, onSave: async () => { attempts++; return true; } });
+  const h = approvalHarness({ authorized: false, onSave: async () => { attempts++; return 'created'; } });
   const result = await h.post('/api/classifieds/approve-candidate', { candidate: classified() });
   assert.equal(result.statusCode, 403);
   assert.equal(result.body.success, false);
@@ -154,7 +154,7 @@ test('HTTP 503: guardia sin permiso de escritura mantiene caché intacta', async
 });
 
 test('HTTP 503: MariaDB rechaza escritura sin anunciar publicación', async () => {
-  const h = approvalHarness({ onSave: async () => false });
+  const h = approvalHarness({ onSave: async () => 'error' });
   const result = await h.post('/api/classifieds/approve-candidate', { candidate: classified() });
   assert.equal(result.statusCode, 503);
   assert.equal(result.body.success, false);
@@ -182,7 +182,7 @@ test('HTTP 409: anuncio repetido no produce una segunda escritura', async () => 
 
 test('HTTP 207: lote informa un éxito y un fallo sin falsear el total', async () => {
   const h = approvalHarness({
-    onSave: async ad => !ad.sourceUrl.includes('/denegado')
+    onSave: async ad => !ad.sourceUrl.includes('/denegado') ? 'created' : 'error'
   });
   const result = await h.post('/api/classifieds/batch-approve', {
     candidates: [classified(), classified('https://mx.computrabajo.com/ofertas-de-trabajo/denegado')]
