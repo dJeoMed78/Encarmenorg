@@ -9,6 +9,10 @@ on:
       - 'src/services/api.ts'
       - 'src/components/AdminClassifiedsTab.tsx'
       - 'tests/enc-radar-classifieds-041.test.mjs'
+      - 'tests/enc-staging-classified-lane-041.test.mjs'
+      - 'src/db/stagingClassifiedStore.ts'
+      - 'src/db/mariadb.ts'
+      - 'src/server/stagingBusinessSecurity.ts'
       - '.github/workflows/enc-radar-classifieds-041-ci.yml'
 permissions:
   contents: read
@@ -24,5 +28,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
-      - run: node --test tests/enc-radar-classifieds-041.test.mjs
+      - run: node --import tsx --test tests/enc-radar-classifieds-041.test.mjs tests/enc-staging-classified-lane-041.test.mjs
       - run: npm run build
