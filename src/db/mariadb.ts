@@ -1,6 +1,7 @@
 import {STAGING_BUSINESS_DATABASE,stagingBusinessConfiguration,privateStagingBusinessWindowOpen,getPrivateStagingSnapshot} from '../server/stagingBusinessSecurity';
 import {verifyStagingIsolation, evaluateGrants} from '../server/stagingIsolationProof';
 import {createStagingBusinessStore} from './stagingBusinessStore';
+import {createStagingClassifiedStore} from './stagingClassifiedStore';
 import mysql from 'mysql2/promise';
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -1388,6 +1389,21 @@ export function isBusinessWritePermitted(): boolean {
   return stagingBusinessConfiguration(process.env, PRODUCTION_DB_USER) &&
     privateStagingBusinessWindowOpen(process.env, { connectionUser: effectiveUser });
 }
+// Dedicated Staging classifieds capability. Never relax isWritePermitted() or
+// the general guardWrite(). This gate requires a real private config snapshot.
+export const stagingClassifiedStore = createStagingClassifiedStore({
+  getConnection: async () => {
+    if (!pool || !isConnected || connectedDatabase !== STAGING_BUSINESS_DATABASE) throw new Error('STAGING_DATABASE_UNAVAILABLE');
+    return pool.getConnection();
+  },
+  getUser: () => connectedUser,
+  getSnapshot: () => getPrivateStagingSnapshot({ connectionUser: connectedUser || undefined })
+});
+export function isStagingClassifiedWritePermitted(): boolean {
+  return isStagingEnvironment() && isConnected && pool !== null &&
+    connectedDatabase === STAGING_BUSINESS_DATABASE && stagingClassifiedStore.canWrite();
+}
+
 export const stagingBusinessStore = createStagingBusinessStore({
   canWrite: isBusinessWritePermitted,
   getConnection: async () => { if (!pool) throw new Error('STAGING_DATABASE_UNAVAILABLE'); return pool.getConnection(); },
