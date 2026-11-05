@@ -337,3 +337,19 @@ test('prueba aislada: la URL de un dominio desconocido no se consulta', async ()
   const verify = sourceEvidenceHarness();
   assert.equal((await verify({title:'Anuncio verificado',sourceUrl:'https://example.org/ad/1'})).verified, false);
 });
+
+
+test('candidatos revisados no heredan precios ni contactos no contrastados', () => {
+  const code = server.slice(server.indexOf('async function scrapeRealWebClassifieds('),server.indexOf('// ENDPOINT DE CLASIFICADOS CON LAS 2 VERSIONES:'));
+  assert.match(code, /sourceVerification: 'direct-page-title-location'/);
+  assert.match(code, /price: null/);
+  assert.match(code, /phone: ''/);
+  assert.match(code, /whatsapp: ''/);
+  assert.match(code, /Consulta la publicación original para confirmar/);
+});
+
+test('el radar no llama vigentes a anuncios con fecha original desconocida', () => {
+  const builder = server.slice(server.indexOf('function buildCandidateFromScrapedItem('),server.indexOf('async function scrapeRealWebClassifieds('));
+  assert.match(builder, /sourcePublishedAt: null/);
+  assert.match(builder, /discoveredAt: new Date\(\).toISOString\(\)/);
+});
