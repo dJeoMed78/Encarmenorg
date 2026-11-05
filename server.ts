@@ -3874,13 +3874,21 @@ async function verifyClassifiedListingEvidence(item: { sourceUrl?: string; title
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const pageText = normalize(html);
-    const tokens = normalize(title).split(/\s+/).filter(word => word.length >= 4);
-    const matches = tokens.filter(word => pageText.includes(word));
+    const headingMatches = [
+      ...html.matchAll(/<h1\\b[^>]*>([\\s\\S]*?)<\\/h1>/gi),
+      ...html.matchAll(/<title\\b[^>]*>([\\s\\S]*?)<\\/title>/gi)
+    ];
+    const headlineText = normalize(headingMatches.map(match => match[1]).join(' '));
+    const tokens = [...new Set(normalize(title).split(/\\s+/).filter(word => word.length >= 4))];
+    const matches = tokens.filter(word => headlineText.includes(word));
     const locationConfirmed = /ciudad del carmen|carmen campeche|carmen camp|cd del carmen/.test(pageText);
     if (tokens.length < 2 || matches.length < Math.min(2, tokens.length)) {
-      return { verified: false, reason: 'El título no coincide con la página de origen.' };
+      return { verified: false, reason: 'El título no coincide con el encabezado del anuncio.' };
     }
     if (!locationConfirmed) return { verified: false, reason: 'El origen no confirma Ciudad del Carmen.' };
+    if (/anuncio (?:no disponible|eliminado|retirado)|oferta (?:finalizada|cerrada|expirada)|vacante (?:cerrada|cubierta)/.test(pageText)) {
+      return { verified: false, reason: 'El origen muestra señales de anuncio retirado o vencido.' };
+    }
     return { verified: true, checkedAt: new Date().toISOString() };
   } catch {
     return { verified: false, reason: 'No fue posible consultar directamente el anuncio.' };
