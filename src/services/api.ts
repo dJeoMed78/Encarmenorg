@@ -590,7 +590,7 @@ export async function deleteClassified(id: string): Promise<{
 export async function searchClassifiedRadarCandidates(
   query: string = '',
   category: string = 'all',
-  useAi: boolean = true
+  useAi: boolean = false
 ): Promise<{
   success: boolean;
   candidates: import('../types').ClassifiedAd[];
@@ -605,16 +605,18 @@ export async function searchClassifiedRadarCandidates(
     const res = await adminFetch(API_BASE + '/classifieds/radar-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, category, useAi: Boolean(useAi), timestamp: Date.now() })
+      body: JSON.stringify({ query, category, useAi: useAi === true, timestamp: Date.now() })
     });
-    if (res.ok) {
-      return await res.json();
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || data.success !== true || !Array.isArray(data.candidates)) {
+      return {
+        success: false,
+        candidates: [],
+        aiInfo: data?.aiInfo,
+        message: typeof data?.message === 'string' ? data.message : `El radar respondió HTTP ${res.status}.`
+      };
     }
-    return {
-      success: false,
-      candidates: [],
-      message: 'Error al consultar el radar en vivo.'
-    };
+    return data;
   } catch (err: any) {
     return {
       success: false,
@@ -635,9 +637,17 @@ export async function approveClassifiedCandidate(candidate: Partial<import('../t
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ candidate })
     });
-    return await parseJsonResponse(res, 'Error al aprobar anuncio');
+    const data = await parseJsonResponse<{
+      success?: boolean;
+      message?: string;
+      classified?: import('../types').ClassifiedAd;
+    }>(res, 'Error al aprobar anuncio');
+    if (!res.ok || data?.success !== true || !data.classified?.id) {
+      return { success: false, message: data?.message || `No se confirmó el guardado (HTTP ${res.status}).` };
+    }
+    return { success: true, message: data.message || 'Anuncio aprobado.', classified: data.classified };
   } catch (err: any) {
-    return { success: false, message: err.message || 'Error al aprobar anuncio' };
+    return { success: false, message: err?.message || 'Error al aprobar anuncio' };
   }
 }
 
@@ -652,9 +662,18 @@ export async function batchApproveClassifiedCandidates(candidates: Partial<impor
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ candidates })
     });
-    return await parseJsonResponse(res, 'Error al aprobar anuncios por lote');
+    const data = await parseJsonResponse<{ success?: boolean; message?: string; count?: number }>(res, 'Error al aprobar anuncios por lote');
+    // Legacy response has only a count. Never call a partial batch a full success.
+    if (!res.ok || data?.success !== true || !Number.isInteger(data.count) || data.count !== candidates.length) {
+      return {
+        success: false,
+        count: Number.isInteger(data?.count) ? data.count : 0,
+        message: data?.message || `No se confirmó la aprobación completa (HTTP ${res.status}).`
+      };
+    }
+    return { success: true, message: data.message || 'Anuncios aprobados.', count: data.count };
   } catch (err: any) {
-    return { success: false, message: err.message || 'Error al aprobar anuncios por lote' };
+    return { success: false, message: err?.message || 'Error al aprobar anuncios por lote' };
   }
 }
 
