@@ -4179,8 +4179,15 @@ async function scrapeRealWebClassifieds(searchQuery: string, category: string): 
   })));
   return checks.filter(({ evidence }) => evidence.verified).map(({ item, evidence }) => ({
     ...item,
+    // Search excerpts and AI output are not authoritative price/contact evidence.
+    description: 'Consulta la publicación original para confirmar descripción, vigencia y condiciones.',
+    price: null,
+    priceType: 'consult',
+    phone: '',
+    whatsapp: '',
+    contactName: item.source || '',
     sourceVerifiedAt: evidence.checkedAt,
-    sourceVerification: 'direct-page'
+    sourceVerification: 'direct-page-title-location'
   }));
 }
 
@@ -4219,7 +4226,7 @@ app.post('/api/classifieds/radar-search', async (req: Request, res: Response) =>
         aiInfo: {
           usedAi: false,
           message: annotatedWeb.length > 0
-            ? `🛡️ Búsqueda Web Sin IA ($0 costo): Se encontraron ${annotatedWeb.length} publicaciones reales en portales con enlace directo.`
+            ? `🛡️ Búsqueda Web Sin IA: ${annotatedWeb.length} enlaces directos revisados. Confirma vigencia y condiciones antes de aprobar.`
             : 'No se encontraron publicaciones directas con esos criterios en el modo Sin IA. Intenta con el botón "Radar IA".'
         }
       });
@@ -4420,7 +4427,15 @@ Devuelve ÚNICAMENTE un array JSON válido:
     })));
     const finalCandidates = checkedCandidates.filter(({ evidence }) => evidence.verified)
       .map(({ item, evidence }) => ({
-        ...item, sourceVerifiedAt: evidence.checkedAt, sourceVerification: 'direct-page'
+        ...item,
+        description: 'Consulta la publicación original para confirmar descripción, vigencia y condiciones.',
+        price: null,
+        priceType: 'consult',
+        phone: '',
+        whatsapp: '',
+        contactName: item.source || '',
+        sourceVerifiedAt: evidence.checkedAt,
+        sourceVerification: 'direct-page-title-location'
       }));
 
     return res.json({
