@@ -1,0 +1,28 @@
+name: ENCARMEN radar clasificados 041 CI
+on:
+  push:
+    branches: [work/enc-radar-clasificados-041-nia]
+  pull_request:
+    branches: [ia-desarrollo]
+    paths:
+      - 'server.ts'
+      - 'src/services/api.ts'
+      - 'src/components/AdminClassifiedsTab.tsx'
+      - 'tests/enc-radar-classifieds-041.test.mjs'
+      - '.github/workflows/enc-radar-classifieds-041-ci.yml'
+permissions:
+  contents: read
+jobs:
+  radar-classifieds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: node --test tests/enc-radar-classifieds-041.test.mjs
+      - run: npm run build
