@@ -90,6 +90,7 @@ import {
   dbDeleteCoupon,
   dbLoadAllClassifieds,
   dbSaveClassified,
+  dbCreateRadarClassifiedOnce,
   dbDeleteClassified,
   dbLoadAllEmergencyServices,
   dbSaveEmergencyService,
@@ -4389,7 +4390,7 @@ function prepareRadarClassified(candidate: any): { ad?: any; error?: string } {
   } catch (_) {
     return { error: 'URL de origen inválida.' };
   }
-  const id = `ad-${crypto.randomUUID()}`;
+  const id = `ad-${crypto.createHash('sha256').update(sourceUrl).digest('hex').slice(0, 40)}`;
   const ad = {
     ...candidate,
     id,
@@ -4423,9 +4424,12 @@ app.post(['/api/classifieds/approve-candidate', '/classifieds/approve-candidate'
     if (radarClassifiedAlreadyExists(ad)) {
       return res.status(409).json({ success: false, message: 'Este anuncio ya existe.' });
     }
-    const saved = await dbSaveClassified(ad);
-    if (saved !== true) {
-      return res.status(503).json({ success: false, message: 'MariaDB no confirmó el guardado del anuncio.' });
+    const saved = await dbCreateRadarClassifiedOnce(ad);
+    if (saved === 'duplicate') {
+      return res.status(409).json({ success: false, message: 'Este anuncio ya fue registrado.' });
+    }
+    if (saved !== 'created') {
+      return res.status(503).json({ success: false, message: 'MariaDB no confirmó el alta del anuncio.' });
     }
     const persisted = await dbLoadAllClassifieds();
     const verified = persisted.find((item: any) => String(item.id) === String(ad.id));
@@ -4470,10 +4474,10 @@ app.post(['/api/classifieds/batch-approve', '/classifieds/batch-approve'], async
         failed.push({ index, message: 'Anuncio duplicado.' });
         continue;
       }
-      let saved = false;
-      try { saved = await dbSaveClassified(ad); } catch (_) { saved = false; }
-      if (!saved) {
-        failed.push({ index, message: 'MariaDB no confirmó el guardado.' });
+      let saved: 'created' | 'duplicate' | 'blocked' | 'error' = 'error';
+      try { saved = await dbCreateRadarClassifiedOnce(ad); } catch (_) { saved = 'error'; }
+      if (saved !== 'created') {
+        failed.push({ index, message: saved === 'duplicate' ? 'Anuncio previamente registrado.' : 'MariaDB no confirmó el alta.' });
         continue;
       }
       const persisted = await dbLoadAllClassifieds();
