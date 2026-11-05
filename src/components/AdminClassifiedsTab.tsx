@@ -125,29 +125,24 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
 
   const handleApprove = async (cand: ClassifiedAd) => {
     setApprovingId(cand.id);
-    // Optimistic removal: remove immediately from radar candidates list so user sees instant reaction!
-    setRadarCandidates(prev => prev.filter(c => c.id !== cand.id));
-    setSelectedCandidateIds(prev => {
-      const next = new Set(prev);
-      next.delete(cand.id);
-      return next;
-    });
-
-    setNotification({
-      type: 'success',
-      text: `¡Anuncio "${cand.title}" verificado y publicado con éxito!`
-    });
-
+    setModalError(null);
     try {
       const res = await approveClassifiedCandidate(cand);
-      if (res.success) {
-        if (onRefresh) onRefresh();
-      } else {
-        // Keep it published locally in view
-        if (onRefresh) onRefresh();
+      if (!res.success || !res.classified?.id) {
+        setModalError(res.message || 'No fue posible confirmar la publicación.');
+        setNotification({ type: 'error', text: res.message || 'No se publicó el anuncio.' });
+        return;
       }
-    } catch (_err: any) {
+      setRadarCandidates(prev => prev.filter(c => c.id !== cand.id));
+      setSelectedCandidateIds(prev => {
+        const next = new Set(prev);
+        next.delete(cand.id);
+        return next;
+      });
+      setNotification({ type: 'success', text: `Anuncio "${cand.title}" publicado y confirmado.` });
       if (onRefresh) onRefresh();
+    } catch (err: any) {
+      setModalError(err?.message || 'Error al publicar anuncio.');
     } finally {
       setApprovingId(null);
       setTimeout(() => setNotification(null), 4000);
@@ -159,21 +154,22 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
     if (toApprove.length === 0) return;
 
     setIsBatchApproving(true);
-    const approvedIds = new Set(toApprove.map(c => c.id));
-    // Optimistic removal from radar
-    setRadarCandidates(prev => prev.filter(c => !approvedIds.has(c.id)));
-    setSelectedCandidateIds(new Set());
-
-    setNotification({
-      type: 'success',
-      text: `¡${toApprove.length} anuncios verificados y publicados en Clasificados!`
-    });
-
+    setModalError(null);
     try {
-      await batchApproveClassifiedCandidates(toApprove);
+      const res = await batchApproveClassifiedCandidates(toApprove);
+      if (!res.success || res.count !== toApprove.length) {
+        setModalError(res.message || 'No se confirmó la publicación del lote. Recarga para comprobar los anuncios guardados.');
+        setNotification({ type: 'error', text: 'No se confirmó la publicación completa.' });
+        if (onRefresh) onRefresh();
+        return;
+      }
+      const approvedIds = new Set(toApprove.map(c => c.id));
+      setRadarCandidates(prev => prev.filter(c => !approvedIds.has(c.id)));
+      setSelectedCandidateIds(new Set());
+      setNotification({ type: 'success', text: `${res.count} anuncios publicados y confirmados.` });
       if (onRefresh) onRefresh();
-    } catch (_err: any) {
-      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      setModalError(err?.message || 'Error al publicar anuncios.');
     } finally {
       setIsBatchApproving(false);
       setTimeout(() => setNotification(null), 4000);
