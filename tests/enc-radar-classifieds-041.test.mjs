@@ -13,7 +13,7 @@ function helpers(cache = []) {
   const begin = server.indexOf('function prepareRadarClassified(');
   const end = server.indexOf("app.post(['/api/classifieds/approve-candidate'", begin);
   assert.ok(begin >= 0 && end > begin, 'Helpers de aprobación no encontrados');
-  const js = stripTypeScriptTypes(server.slice(begin, end), { mode: 'strip' });
+  const js = stripTypeScriptTypes(server.slice(server.indexOf('function canonicalClassifiedListingUrl('), server.indexOf('function decodeHtmlEntities(')) + '\n' + server.slice(begin, end), { mode: 'strip' });
   return vm.runInNewContext(js + '\n({ prepareRadarClassified, radarClassifiedAlreadyExists })', {
     crypto, URL, classifiedsCache: cache
   });
@@ -34,14 +34,14 @@ test('el cliente conserva los errores HTTP del radar', () => {
 
 test('valida el anuncio y evita candidatos sin fuente HTTPS', () => {
   const { prepareRadarClassified } = helpers();
-  assert.ok(prepareRadarClassified({title:'',sourceUrl:'https://example.com/123'}).error);
-  assert.ok(prepareRadarClassified({title:'Aviso',sourceUrl:'http://example.com/123'}).error);
+  assert.ok(prepareRadarClassified({title:'',sourceUrl:'https://mx.computrabajo.com/ofertas-de-trabajo/123'}).error);
+  assert.ok(prepareRadarClassified({title:'Aviso',sourceUrl:'http://mx.computrabajo.com/ofertas-de-trabajo/123'}).error);
   const { ad } = prepareRadarClassified({
-    title: '  Aviso  ', sourceUrl:'https://example.com/123#foo',
+    title: '  Aviso  ', sourceUrl:'https://mx.computrabajo.com/ofertas-de-trabajo/123#foo',
     pendingApproval:true, alreadyPublished:false
   });
   assert.equal(ad.title, 'Aviso');
-  assert.equal(ad.sourceUrl, 'https://example.com/123');
+  assert.equal(ad.sourceUrl, 'https://mx.computrabajo.com/ofertas-de-trabajo/123');
   assert.equal(ad.pendingApproval, undefined);
   assert.equal(ad.alreadyPublished, undefined);
   assert.ok(ad.id.startsWith('ad-'));
@@ -49,9 +49,9 @@ test('valida el anuncio y evita candidatos sin fuente HTTPS', () => {
 
 test('detecta duplicados ya presentes en caché', () => {
   const {prepareRadarClassified, radarClassifiedAlreadyExists} = helpers([
-    {title:'Aviso',sourceUrl:'https://example.com/123'}
+    {title:'Aviso',sourceUrl:'https://mx.computrabajo.com/ofertas-de-trabajo/123'}
   ]);
-  const {ad} = prepareRadarClassified({title:'Aviso',sourceUrl:'https://example.com/123'});
+  const {ad} = prepareRadarClassified({title:'Aviso',sourceUrl:'https://mx.computrabajo.com/ofertas-de-trabajo/123'});
   assert.equal(radarClassifiedAlreadyExists(ad), true);
 });
 
@@ -92,7 +92,7 @@ function approvalHarness({ authorized = true, writeEnabled = true, dbActive = tr
   const begin = server.indexOf('function prepareRadarClassified(');
   const end = server.indexOf('// GUÍA DE EMERGENCIAS', begin);
   assert.ok(begin !== -1 && end > begin);
-  const code = stripTypeScriptTypes(server.slice(begin, end), { mode: 'strip' });
+  const code = stripTypeScriptTypes(server.slice(server.indexOf('function canonicalClassifiedListingUrl('), server.indexOf('function decodeHtmlEntities(')) + '\n' + server.slice(begin, end), { mode: 'strip' });
   const handlers = new Map();
   const cache = [];
   const stored = [];
@@ -131,7 +131,7 @@ function approvalHarness({ authorized = true, writeEnabled = true, dbActive = tr
   return { post, cache, stored };
 }
 
-const classified = (sourceUrl = 'https://example.com/anuncio/1') => ({
+const classified = (sourceUrl = 'https://mx.computrabajo.com/ofertas-de-trabajo/1') => ({
   title: 'Anuncio verificado', sourceUrl, category: 'ventas'
 });
 
@@ -185,7 +185,7 @@ test('HTTP 207: lote informa un éxito y un fallo sin falsear el total', async (
     onSave: async ad => !ad.sourceUrl.includes('/denegado')
   });
   const result = await h.post('/api/classifieds/batch-approve', {
-    candidates: [classified(), classified('https://example.com/denegado')]
+    candidates: [classified(), classified('https://mx.computrabajo.com/ofertas-de-trabajo/denegado')]
   });
   assert.equal(result.statusCode, 207);
   assert.equal(result.body.success, false);
@@ -193,4 +193,25 @@ test('HTTP 207: lote informa un éxito y un fallo sin falsear el total', async (
   assert.equal(result.body.approved.length, 1);
   assert.equal(result.body.failed.length, 1);
   assert.equal(h.cache.length, 1);
+});
+
+test('enlaces externos arbitrarios, búsquedas y raíz no son anuncios verificables', () => {
+  const source = server.slice(server.indexOf('function canonicalClassifiedListingUrl('),server.indexOf('function decodeHtmlEntities('));
+  const { isDirectListingUrl, canonicalClassifiedListingUrl } = vm.runInNewContext(
+    stripTypeScriptTypes(source, { mode: 'strip' }) + '\n({isDirectListingUrl, canonicalClassifiedListingUrl})',
+    { URL }
+  );
+  assert.equal(isDirectListingUrl('https://example.com/articulo/123'), false);
+  assert.equal(isDirectListingUrl('https://www.bing.com/search?q=vacante'), false);
+  assert.equal(isDirectListingUrl('https://mx.computrabajo.com/empleos'), false);
+  assert.equal(isDirectListingUrl('https://mx.computrabajo.com/ofertas-de-trabajo/123'), true);
+  assert.equal(canonicalClassifiedListingUrl('https://mx.computrabajo.com/ofertas-de-trabajo/123?utm_source=x#foto'),
+    'https://mx.computrabajo.com/ofertas-de-trabajo/123');
+});
+
+test('el texto de Gemini no se acepta como evidencia por sí solo', () => {
+  const route = server.slice(server.indexOf("app.post('/api/classifieds/radar-search'"),
+    server.indexOf('// Classified radar approvals:'));
+  assert.match(route, /observedUrls\.has\(canonical\)/);
+  assert.match(route, /canonicalClassifiedListingUrl\(urlToCheck\)/);
 });
