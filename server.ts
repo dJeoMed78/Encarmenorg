@@ -256,12 +256,15 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     const publicMediaMutation = req.method === 'POST' && req.path === '/api/public/registration-media';
     if ((businessMutation || adminBusinessDelete || publicMediaMutation) && isBusinessWritePermitted()) return next();
     if (req.method.toUpperCase() === 'POST' && (req.path === '/api/ratings/get' || req.path === '/api/events/radar-search')) return next();
+    // Authenticated POST search is read-only; classified approvals remain blocked.
+    if (req.method === 'POST' && req.path === '/api/classifieds/radar-search' && adminSecurity.isAuthorized(req, 'admin:manage')) return next();
     return res.status(403).json({success:false,error:'STAGING_READ_ONLY',message:'Solo el carril autorizado de registro y edición puede escribir negocios. Las demás operaciones permanecen bloqueadas.'});
   }
   if (!isWritePermitted()) {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
       // Excepción para búsquedas o consultas enviadas por POST que no modifican datos
-      if (req.method.toUpperCase() === 'POST' && (req.path === '/api/events/radar-search' || req.path === '/api/ratings/get')) {
+      if (req.method.toUpperCase() === 'POST' && (req.path === '/api/events/radar-search' || req.path === '/api/ratings/get' ||
+        (req.path === '/api/classifieds/radar-search' && adminSecurity.isAuthorized(req, 'admin:manage')))) {
         return next();
       }
       return res.status(403).json({
@@ -4118,6 +4121,9 @@ async function scrapeRealWebClassifieds(searchQuery: string, category: string): 
 // - useAi = true  -> Búsqueda Con API de IA (Gemini + Google Search Grounding)
 app.post('/api/classifieds/radar-search', async (req: Request, res: Response) => {
   try {
+    if (!adminSecurity.isAuthorized(req, 'admin:manage')) {
+      return res.status(403).json({ success: false, candidates: [], message: 'Se requiere autorización administrativa para consultar el radar.' });
+    }
     const userQuery = String(req.body?.query || '').trim();
     const category = String(req.body?.category || 'all').toLowerCase().trim();
     const useAi = Boolean(req.body?.useAi);
