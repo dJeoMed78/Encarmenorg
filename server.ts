@@ -3875,8 +3875,8 @@ async function verifyClassifiedListingEvidence(item: { sourceUrl?: string; title
       .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const pageText = normalize(html);
     const headingMatches = [
-      ...html.matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi),
-      ...html.matchAll(/<title\b[^>]*>([\s\S]*?)<\/title>/gi)
+      ...html.matchAll(/<h1\b[^>]*>([\s\S]*?)<[/]h1>/gi),
+      ...html.matchAll(/<title\b[^>]*>([\s\S]*?)<[/]title>/gi)
     ];
     const headlineText = normalize(headingMatches.map(match => match[1]).join(' '));
     const tokens = [...new Set(normalize(title).split(/\s+/).filter(word => word.length >= 4))];
