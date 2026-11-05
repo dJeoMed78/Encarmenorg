@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import crypto from 'node:crypto';
 import { stripTypeScriptTypes } from 'node:module';
 
+const mariadb = fs.readFileSync(new URL('../src/db/mariadb.ts', import.meta.url), 'utf8');
 const server = fs.readFileSync(new URL('../server.ts', import.meta.url), 'utf8');
 const api = fs.readFileSync(new URL('../src/services/api.ts', import.meta.url), 'utf8');
 const ui = fs.readFileSync(new URL('../src/components/AdminClassifiedsTab.tsx', import.meta.url), 'utf8');
@@ -233,4 +234,54 @@ test('HTTP 400: candidatos sin enlace individual válido se rechazan antes de SQ
   assert.equal(result.statusCode, 400);
   assert.equal(result.body.success, false);
   assert.equal(h.stored.length, 0);
+});
+
+function sqlInsertHarness({ allowed = true, queryImpl = async () => [{ affectedRows: 1 }] } = {}) {
+  const start = mariadb.indexOf('export async function dbCreateRadarClassifiedOnce(');
+  const end = mariadb.indexOf('export async function dbDeleteClassified(', start);
+  assert.ok(start >= 0 && end > start);
+  const isolated = stripTypeScriptTypes(mariadb.slice(start,end).replace(/^export /,''), {mode:'strip'});
+  const queries = [];
+  const context = {
+    guardWrite: () => allowed,
+    pool: { query: async (sql, params) => {
+      queries.push({ sql, params });
+      return queryImpl(sql, params);
+    } },
+    console: { warn() {} },
+    JSON
+  };
+  const fn = vm.runInNewContext(isolated + '\n dbCreateRadarClassifiedOnce', context);
+  return { fn, queries };
+}
+
+test('alta SQL: INSERT exclusivo no ejecuta UPSERT sobre un anuncio existente', async () => {
+  const h = sqlInsertHarness();
+  const result = await h.fn({ id:'ad-abc', title:'Aviso', sourceUrl:'https://mx.computrabajo.com/ofertas-de-trabajo/123' });
+  assert.equal(result,'created');
+  assert.equal(h.queries.length,1);
+  assert.match(h.queries[0].sql,/INSERT INTO classifieds/);
+  assert.doesNotMatch(h.queries[0].sql,/ON DUPLICATE KEY UPDATE/);
+});
+
+test('alta SQL: colisión de clave primaria devuelve duplicate y no sobrescribe', async () => {
+  const h = sqlInsertHarness({ queryImpl: async () => { throw {code:'ER_DUP_ENTRY'}; } });
+  assert.equal(await h.fn({id:'ad-abc',title:'Aviso'}),'duplicate');
+  assert.equal(h.queries.length,1);
+});
+
+test('alta SQL: fallo o guardia de escritura no simulan persistencia', async () => {
+  const denied = sqlInsertHarness({allowed:false});
+  assert.equal(await denied.fn({id:'ad-abc',title:'Aviso'}),'blocked');
+  assert.equal(denied.queries.length,0);
+  const failed = sqlInsertHarness({queryImpl: async () => { throw {code:'ER_LOCK_DEADLOCK'}; }});
+  assert.equal(await failed.fn({id:'ad-abc',title:'Aviso'}),'error');
+});
+
+test('los identificadores de origen son deterministas para reintentos', () => {
+  const { prepareRadarClassified } = helpers();
+  const source = 'https://mx.computrabajo.com/ofertas-de-trabajo/123';
+  const a = prepareRadarClassified({title:'Puesto A',sourceUrl:source});
+  const b = prepareRadarClassified({title:'Puesto B',sourceUrl:source + '?utm_source=radar'});
+  assert.equal(a.ad.id,b.ad.id);
 });
