@@ -86,3 +86,111 @@ test('Staging permite búsqueda autenticada pero no publicación', () => {
   assert.doesNotMatch(guard, /req\.path === '\/api\/classifieds\/approve-candidate'/);
   assert.doesNotMatch(guard, /req\.path === '\/api\/classifieds\/batch-approve'/);
 });
+
+
+function approvalHarness({ authorized = true, writeEnabled = true, dbActive = true, onSave = async () => true } = {}) {
+  const begin = server.indexOf('function prepareRadarClassified(');
+  const end = server.indexOf('// GUÍA DE EMERGENCIAS', begin);
+  assert.ok(begin !== -1 && end > begin);
+  const code = stripTypeScriptTypes(server.slice(begin, end), { mode: 'strip' });
+  const handlers = new Map();
+  const cache = [];
+  const stored = [];
+  const context = {
+    app: { post(routes, handler) { for (const route of routes) handlers.set(route, handler); } },
+    crypto,
+    URL,
+    classifiedsCache: cache,
+    adminSecurity: { isAuthorized: () => authorized },
+    isWritePermitted: () => writeEnabled,
+    isMariaDbActive: () => dbActive,
+    dbSaveClassified: async ad => {
+      const result = await onSave(ad);
+      if (result === true) stored.push(ad);
+      return result;
+    },
+    dbLoadAllClassifieds: async () => [...stored],
+    fs: { writeFileSync() {} },
+    path: { resolve: () => '/tmp/not-written.json' },
+    __dirname: '/tmp',
+    console: { log() {}, warn() {}, error() {} }
+  };
+  vm.runInNewContext(code, context);
+  async function post(url, body) {
+    const handler = handlers.get(url);
+    assert.ok(handler, 'No está registrada la ruta ' + url);
+    const res = {
+      statusCode: 200,
+      body: null,
+      status(code) { this.statusCode = code; return this; },
+      json(value) { this.body = value; return this; }
+    };
+    await handler({ body }, res);
+    return res;
+  }
+  return { post, cache, stored };
+}
+
+const classified = (sourceUrl = 'https://example.com/anuncio/1') => ({
+  title: 'Anuncio verificado', sourceUrl, category: 'ventas'
+});
+
+test('HTTP 403: aprobación no autorizada no escribe SQL', async () => {
+  let attempts = 0;
+  const h = approvalHarness({ authorized: false, onSave: async () => { attempts++; return true; } });
+  const result = await h.post('/api/classifieds/approve-candidate', { candidate: classified() });
+  assert.equal(result.statusCode, 403);
+  assert.equal(result.body.success, false);
+  assert.equal(attempts, 0);
+  assert.equal(h.cache.length, 0);
+});
+
+test('HTTP 503: guardia sin permiso de escritura mantiene caché intacta', async () => {
+  const h = approvalHarness({ writeEnabled: false });
+  const result = await h.post('/api/classifieds/approve-candidate', { candidate: classified() });
+  assert.equal(result.statusCode, 503);
+  assert.equal(result.body.success, false);
+  assert.equal(h.cache.length, 0);
+});
+
+test('HTTP 503: MariaDB rechaza escritura sin anunciar publicación', async () => {
+  const h = approvalHarness({ onSave: async () => false });
+  const result = await h.post('/api/classifieds/approve-candidate', { candidate: classified() });
+  assert.equal(result.statusCode, 503);
+  assert.equal(result.body.success, false);
+  assert.equal(h.cache.length, 0);
+});
+
+test('HTTP 200: éxito exige escritura y readback', async () => {
+  const h = approvalHarness();
+  const result = await h.post('/api/classifieds/approve-candidate', { candidate: classified() });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.body.success, true);
+  assert.equal(h.stored.length, 1);
+  assert.equal(h.cache.length, 1);
+  assert.equal(result.body.classified.id, h.stored[0].id);
+});
+
+test('HTTP 409: anuncio repetido no produce una segunda escritura', async () => {
+  const h = approvalHarness();
+  await h.post('/api/classifieds/approve-candidate', { candidate: classified() });
+  const second = await h.post('/api/classifieds/approve-candidate', { candidate: classified() });
+  assert.equal(second.statusCode, 409);
+  assert.equal(second.body.success, false);
+  assert.equal(h.stored.length, 1);
+});
+
+test('HTTP 207: lote informa un éxito y un fallo sin falsear el total', async () => {
+  const h = approvalHarness({
+    onSave: async ad => !ad.sourceUrl.includes('/denegado')
+  });
+  const result = await h.post('/api/classifieds/batch-approve', {
+    candidates: [classified(), classified('https://example.com/denegado')]
+  });
+  assert.equal(result.statusCode, 207);
+  assert.equal(result.body.success, false);
+  assert.equal(result.body.count, 1);
+  assert.equal(result.body.approved.length, 1);
+  assert.equal(result.body.failed.length, 1);
+  assert.equal(h.cache.length, 1);
+});
