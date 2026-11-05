@@ -107,6 +107,8 @@ function approvalHarness({ authorized = true, writeEnabled = true, dbActive = tr
     classifiedsCache: cache,
     adminSecurity: { isAuthorized: () => authorized },
     isWritePermitted: () => writeEnabled,
+    isStagingEnvironment: () => false,
+    isStagingClassifiedWritePermitted: () => false,
     isMariaDbActive: () => dbActive,
     dbCreateRadarClassifiedOnce: async ad => {
       const result = await onSave(ad);
