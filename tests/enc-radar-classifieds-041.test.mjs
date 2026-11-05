@@ -88,7 +88,7 @@ test('Staging permite búsqueda autenticada pero no publicación', () => {
 });
 
 
-function approvalHarness({ authorized = true, writeEnabled = true, dbActive = true, onSave = async () => true } = {}) {
+function approvalHarness({ authorized = true, writeEnabled = true, dbActive = true, readBack = true, onSave = async () => true } = {}) {
   const begin = server.indexOf('function prepareRadarClassified(');
   const end = server.indexOf('// GUÍA DE EMERGENCIAS', begin);
   assert.ok(begin !== -1 && end > begin);
@@ -109,7 +109,7 @@ function approvalHarness({ authorized = true, writeEnabled = true, dbActive = tr
       if (result === true) stored.push(ad);
       return result;
     },
-    dbLoadAllClassifieds: async () => [...stored],
+    dbLoadAllClassifieds: async () => readBack ? [...stored] : [],
     fs: { writeFileSync() {} },
     path: { resolve: () => '/tmp/not-written.json' },
     __dirname: '/tmp',
@@ -214,4 +214,23 @@ test('el texto de Gemini no se acepta como evidencia por sí solo', () => {
     server.indexOf('// Classified radar approvals:'));
   assert.match(route, /observedUrls\.has\(canonical\)/);
   assert.match(route, /canonicalClassifiedListingUrl\(urlToCheck\)/);
+});
+
+test('HTTP 503: ausencia de readback no confirma la publicación ni modifica caché', async () => {
+  const h = approvalHarness({ readBack: false });
+  const result = await h.post('/api/classifieds/approve-candidate', { candidate: classified() });
+  assert.equal(result.statusCode, 503);
+  assert.equal(result.body.success, false);
+  assert.equal(h.cache.length, 0);
+  assert.equal(h.stored.length, 1, 'El guardado simuló éxito; requiere conciliación antes de reintentar');
+});
+
+test('HTTP 400: candidatos sin enlace individual válido se rechazan antes de SQL', async () => {
+  const h = approvalHarness();
+  const result = await h.post('/api/classifieds/approve-candidate', {
+    candidate: { title: 'Publicidad no validada', sourceUrl: 'https://example.com/anuncio/1' }
+  });
+  assert.equal(result.statusCode, 400);
+  assert.equal(result.body.success, false);
+  assert.equal(h.stored.length, 0);
 });
