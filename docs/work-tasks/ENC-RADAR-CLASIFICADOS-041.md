@@ -34,3 +34,35 @@ Estado: IMPLEMENTACIÓN PARCIAL EN RAMA; PENDIENTE VALIDACIÓN FUNCIONAL Y AISLA
 - **Bloqueo material para E2E de aprobación:** `src/db/mariadb.ts` implementa `isWritePermitted()` de forma que siempre retorna false en Staging; `dbSaveClassified` retorna false por `guardWrite`. El middleware HTTP también mantiene bloqueadas las aprobaciones de clasificados. No se debe eliminar ninguna de esas protecciones ni hacer pruebas SQL de escritura a ciegas.
 - **Pendientes antes de publicar el flujo completo:** diseñar autorización de escritura de clasificados exclusivamente Staging con snapshot privado validado, identidad de DB efectiva y permisos SQL mínimos; prueba de aislamiento y respaldos completos; idempotencia/duplicados transaccionales de fuente; pruebas de escritura/readback/rollback y cierre seguro; verificar legalidad/operatividad de fuentes web reales.
 - `main`, Staging y producción no se han modificado. PR #54 debe permanecer en borrador, no integrar ni desplegar todavía.
+
+
+## ENC-STAGING-CLASSIFIED-REAL-SQL-041 — Autorización y preparación
+
+**Autorización recibida:** propietario autorizó preparar y probar un carril de escritura de clasificados para demostrar persistencia real. NO autoriza tocar producción ni desactivar protecciones generales.
+
+### Código implementado en rama aislada
+- `src/db/stagingClassifiedStore.ts`: capacidad SQL propia de clasificados, verificación de snapshot privado de Staging, ventana corta, identidad SQL y base exacta, InnoDB/PRIMARY KEY, aislamiento `verifyStagingIsolation`, INSERT exclusivo, lectura dentro de transacción, COMMIT o ROLLBACK, cierre de conexión.
+- `src/db/mariadb.ts`: proveedor del pool efectivo en Staging; **`isWritePermitted()` permanece sin cambios**, bloqueando las escrituras generales.
+- `src/server/stagingBusinessSecurity.ts`: claves nuevas del carril como críticas para detectar duplicación de configuración privada.
+- `server.ts`: las rutas `/api/classifieds/approve-candidate` y `/api/classifieds/batch-approve` solo pueden usar la excepción Staging con administración autenticada y `isStagingClassifiedWritePermitted()`. Las demás rutas no obtienen permiso de escritura.
+- `scripts/enc-staging-classified-persistence-041.mjs`: prueba presencial para el servidor Staging con preflight, respaldo lógico privado de la tabla, registro sintético oculto, COMMIT, lectura independiente, eliminación exclusiva del registro de prueba y lectura final. Sin credenciales en código ni logs.
+
+### Puerta privada necesaria
+Se exige en el archivo privado validado por el servidor (`0600`) `APP_ENV=staging`, base exacta `u293982346_encarmentest`, usuario distinto al productivo, `STAGING_READ_ONLY=true`, `STAGING_DB_CONFIRMED=true`, `STAGING_CLASSIFIED_WRITES_ENABLED=true`, `STAGING_CLASSIFIED_BACKUP_ID` de al menos 12 caracteres, `STAGING_CLASSIFIED_BACKUP_CHECKED_AT` de menos de 30 minutos y `STAGING_CLASSIFIED_WRITE_EXPIRES_AT` próximo, máximo una hora. No colocar contraseñas ni evidencia con datos personales en GitHub.
+
+**El identificador de respaldo es una declaración operativa, no demuestra por sí solo que se realizó el backup.** El operador debe comprobar externamente el respaldo completo de Staging y su restaurabilidad antes de activar esta ventana. La prueba genera además un snapshot lógico privado de `classifieds` antes de escribir, pero no sustituye un respaldo completo.
+
+La prueba presencial exige `ENC_CLASSIFIED_PROBE_EXECUTE=CONFIRM_STAGING_041` y `ENC_STAGING_CLASSIFIED_BACKUP_DIR` privado `0700`, fuera de rutas públicas. El registro de prueba tiene `status=trash` (oculto), y únicamente su ID y `raw_data` pueden usarse para borrarlo. Si falla la limpieza, informar el ID sintético al operador; nunca borrar clasificados históricos.
+
+### Evidencias obtenidas desde GitHub Actions
+- https://github.com/dJeoMed78/Encarmenorg/actions/runs/42128363509 — PASS.
+- 41 pruebas de radar y carril aislado con mocks PASS; 44 regresiones existentes de seguridad/aislamiento PASS; `npm ci`, TypeScript y compilación PASS.
+- El probe real falla cerrado deliberadamente en CI sin autorización/configuración privada, según prueba del workflow.
+
+### Evidencia NO obtenida
+- No hay conexión desde esta sesión al servidor Hostinger ni a su MariaDB; el DNS de Staging no resuelve desde el entorno disponible y la consulta web al sitio no está accesible. No se ejecutó el probe contra MariaDB real ni se comprobó una copia de seguridad real.
+- No hay SHA de despliegue de estos cambios, ni prueba HTTP con sesión real, ni captura de readback real en SQL. Por tanto **persistencia real NO DEMOSTRADA**.
+- PR #54 abierta en borrador, no integrada, Staging y producción sin cambios por este trabajo.
+
+### Siguiente paso seguro
+Ejecutar preflight de aislamiento y respaldo en infraestructura Staging autorizada; activar temporalmente solo el carril de clasificados en configuración privada; publicar candidato Staging únicamente tras autorizar su SHA; ejecutar el probe real y E2E HTTP con sesión administrativa; verificar persistencia/reinicio/duplicados/cierre de ventana; presentar evidencias a Jeo para aceptación. No ejecutar SQL si cualquiera de los controles falla.
