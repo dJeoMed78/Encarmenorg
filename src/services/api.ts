@@ -605,7 +605,7 @@ export async function searchClassifiedRadarCandidates(
     const res = await adminFetch(API_BASE + '/classifieds/radar-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, category, useAi: true, timestamp: Date.now() })
+      body: JSON.stringify({ query, category, useAi: Boolean(useAi), timestamp: Date.now() })
     });
     if (res.ok) {
       return await res.json();
