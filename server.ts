@@ -1508,10 +1508,10 @@ async function pruneExpiredEvents(): Promise<number> {
 }
 
 // Limpieza automática preventiva de eventos vencidos al inicio y cada hora (Cambio 4)
-pruneExpiredEvents().catch(() => {});
+if (process.env.NODE_ENV !== 'test') pruneExpiredEvents().catch(() => {});
 setInterval(() => {
-  pruneExpiredEvents().catch(() => {});
-}, 60 * 60 * 1000);
+  if (process.env.NODE_ENV !== 'test') pruneExpiredEvents().catch(() => {});
+}, 60 * 60 * 1000).unref();
 
 // Almacén persistente de candidatos de búsqueda automática descartados permanentemente
 const dismissedCandidatesPath = path.resolve(__dirname, 'auto_candidates_dismissed.json');
@@ -1553,8 +1553,8 @@ if (isStagingEnvironment()) {
   }
 }
 
-// Initialize Hostinger MariaDB if configured
-initMariaDb().then(async (active) => {
+// Initialize Hostinger MariaDB if configured (never on isolated test import)
+if (process.env.NODE_ENV !== 'test') initMariaDb().then(async (active) => {
   if (active) {
     console.log('[MariaDB] Conexión establecida con Hostinger MariaDB.');
     const canSyncStartupWrites = isWritePermitted();
@@ -1682,8 +1682,8 @@ initMariaDb().then(async (active) => {
 
 // Limpieza automática periódica de eventos cuya fecha y hora ya son pasadas (cada 15 minutos)
 setInterval(() => {
-  pruneExpiredEvents().catch(() => {});
-}, 15 * 60 * 1000);
+  if (process.env.NODE_ENV !== 'test') pruneExpiredEvents().catch(() => {});
+}, 15 * 60 * 1000).unref();
 
 // -------------------------------------------------------------
 // API ENDPOINTS
@@ -3624,10 +3624,10 @@ function pruneExpiredClassifieds(): number {
 }
 
 // Ejecutar limpieza al iniciar y cada hora
-pruneExpiredClassifieds();
+if (process.env.NODE_ENV !== 'test') pruneExpiredClassifieds();
 setInterval(() => {
-  pruneExpiredClassifieds();
-}, 60 * 60 * 1000);
+  if (process.env.NODE_ENV !== 'test') pruneExpiredClassifieds();
+}, 60 * 60 * 1000).unref();
 
 app.get('/api/classifieds', (req: Request, res: Response) => {
   try {
