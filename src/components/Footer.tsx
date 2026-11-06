@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { getSavedPortalLinks, getSavedFooterAd } from './AdminLinksAndAdsManager';
 import { APP_COMMIT_SHA, APP_BUILD_TIMESTAMP } from '../constants/version';
 
@@ -10,12 +10,30 @@ interface FooterProps {
 }
 
 export function Footer({ onAdminClick }: FooterProps) {
-  // Display the exact build's Git revision only when it was verified at build time.
-  // Timestamp alone is not proof that a particular commit was deployed.
-  const footerCommit = typeof APP_COMMIT_SHA === 'string' && /^[a-f0-9]{40}$/.test(APP_COMMIT_SHA)
-    ? APP_COMMIT_SHA.slice(0, 12)
-    : null;
-  const buildDate = APP_BUILD_TIMESTAMP ? new Date(APP_BUILD_TIMESTAMP) : null;
+  // Staging reads the active release identity, not the tracked source version.ts.
+  // The deployment publishes this manifest atomically with the compiled bundle.
+  const [release, setRelease] = useState<{sha: string; updatedAt: string} | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.location.hostname !== 'staging.encarmen.org') return;
+    const controller = new AbortController();
+    fetch('/encarmen-release.json', { cache: 'no-store', signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error('Release manifest unavailable');
+        return response.json();
+      })
+      .then(data => {
+        if (typeof data?.sha !== 'string' || !/^[a-f0-9]{40}$/.test(data.sha) ||
+            typeof data?.updatedAt !== 'string' || Number.isNaN(Date.parse(data.updatedAt))) return;
+        setRelease({ sha: data.sha, updatedAt: data.updatedAt });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+  const sha = release?.sha || APP_COMMIT_SHA;
+  const stamp = release?.updatedAt || APP_BUILD_TIMESTAMP;
+  const footerCommit = typeof sha === 'string' && /^[a-f0-9]{40}$/.test(sha)
+    ? sha.slice(0, 12) : null;
+  const buildDate = stamp ? new Date(stamp) : null;
   const footerUpdatedAt = buildDate && !Number.isNaN(buildDate.getTime())
     ? new Intl.DateTimeFormat('es-MX', {
         timeZone: 'America/Merida', day: '2-digit', month: '2-digit', year: 'numeric',
