@@ -225,6 +225,13 @@ const adminSecurity = registerAdminSecurity(app, {
       ? (businessWrites && Boolean(snapshot && snapshot.ENC_ADMIN_MUTATIONS_ENABLED === 'true'))
       : (process.env.ENC_ADMIN_MUTATIONS_ENABLED === 'true');
     if (administrativeWritesReady(req, { mutationsEnabled, isStaging, businessWrites })) return true;
+    // La autorización de clasificados tiene su propio carril privado, no depende
+    // del interruptor de mutaciones empresariales. No ampliar a otras rutas.
+    const classifiedPath = (req.path || '').replace(/\/+$/, '') || '/';
+    if (req.method === 'POST' &&
+        ['/api/classifieds/approve-candidate', '/api/classifieds/batch-approve'].includes(classifiedPath)) {
+      return isStaging ? isStagingClassifiedWritePermitted() : (isMariaDbActive() && isWritePermitted());
+    }
     const cleanPath = (req.path || '').replace(/\/+$/, '') || '/';
     if (req.method === 'POST' && (cleanPath === '/api/businesses/approve-candidate' || cleanPath === '/api/businesses/approve-multiple-candidates')) {
       return isStaging ? (businessWrites && mutationsEnabled) : (isMariaDbActive() && isWritePermitted());
