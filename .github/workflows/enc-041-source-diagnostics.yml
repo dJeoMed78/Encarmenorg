@@ -55,7 +55,7 @@ jobs:
               req=urllib.request.Request(rssurl,headers={'User-Agent':'ENCARMEN-Radar/1.0 (+https://encarmen.org)'})
               with urllib.request.urlopen(req,timeout=12) as resp:
                   raw=resp.read(1048576)
-              items=ET.fromstring(raw).findall('.//item')
+              items=[item for item in ET.fromstring(raw).iter() if item.tag.rsplit('}',1)[-1].lower()=='item']
               pattern=[
                 ('computrabajo.com','/ofertas-de-trabajo/'),
                 ('occ.com.mx','/empleo/oferta/'),
@@ -65,7 +65,7 @@ jobs:
               valid=0
               other=0
               for item in items:
-                  link=(item.findtext('link') or '').strip()
+                  link=next((child.text or '' for child in item if child.tag.rsplit('}',1)[-1].lower()=='link'),'').strip()
                   u=urlparse(link)
                   if u.scheme!='https' or not u.hostname:
                       other+=1
@@ -76,6 +76,7 @@ jobs:
               print('ENC041_RSS_ITEMS='+str(len(items)))
               print('ENC041_RSS_DIRECT_RECOGNIZED='+str(valid))
               print('ENC041_RSS_LINKS_NOT_RECOGNIZED='+str(other))
+              print('ENC041_RSS_ROOT_NAMESPACED='+('yes' if b'xmlns' in raw[:700] else 'no'))
           except Exception as error:
               print('ENC041_RSS_PARSE_ERROR='+type(error).__name__)
           PY
