@@ -39,6 +39,7 @@ jobs:
           npm run lint
           node --import tsx --test tests/enc-radar-classifieds-041.test.mjs tests/enc-staging-classified-lane-041.test.mjs
           npm run build
+          ENCARMEN_EXPECTED_SHA="$GITHUB_SHA" node scripts/verify_footer_release.cjs
           test -f server.js && test -f api/server.bundle.js && test -f dist/index.html
           printf '%s\n' "$GITHUB_SHA" > dist/encarmen-release.txt
           tar -czf ../enc041-payload.tar.gz server.js dist api/server.bundle.js

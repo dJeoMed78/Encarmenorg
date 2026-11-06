@@ -1,0 +1,37 @@
+name: ENC footer SHA release gate (isolated)
+on:
+  pull_request:
+    branches: [ia-desarrollo]
+    paths:
+      - 'scripts/verify_footer_release.cjs'
+      - '.github/workflows/enc-radars-041-043-staging-deploy.yml'
+      - '.github/workflows/enc-footer-release-gate.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Build with verified source SHA
+        run: |
+          set -euo pipefail
+          SHA="$(git rev-parse HEAD)"
+          test "${#SHA}" -eq 40
+          npm run build
+          ENCARMEN_EXPECTED_SHA="$SHA" node scripts/verify_footer_release.cjs
+      - name: Negative tests reject unverified and wrong SHA
+        run: |
+          set -euo pipefail
+          if ENCARMEN_EXPECTED_SHA=0000000000000000000000000000000000000000 node scripts/verify_footer_release.cjs; then
+            echo "ERROR: wrong SHA accepted"; exit 1
+          fi
+          if ENCARMEN_EXPECTED_SHA=INVALID node scripts/verify_footer_release.cjs; then
+            echo "ERROR: invalid SHA accepted"; exit 1
+          fi
