@@ -4119,6 +4119,41 @@ async function scrapeRealWebClassifieds(searchQuery: string, category: string): 
     }
   }
 
+  // Local portals: discover actual listing links on their public Carmen landing pages.
+  // Do not use guessed titles, fabricate posts, bypass authentication or publish automatically.
+  for (const portal of [
+    { url: 'https://www.locanto.com.mx/ciudaddelcarmen/', host: 'www.locanto.com.mx' },
+    { url: 'https://carmen.ciudadanuncios.com.mx/', host: 'carmen.ciudadanuncios.com.mx' }
+  ]) {
+    tasks.push((async () => {
+      try {
+        const response = await fetch(portal.url, {
+          headers: browserHeaders, redirect: 'manual', signal: AbortSignal.timeout(6500)
+        });
+        if (response.status !== 200 || !/text\/html/i.test(response.headers.get('content-type') || '')) return;
+        if (Number(response.headers.get('content-length') || 0) > 1024 * 1024) return;
+        const html = (await response.text()).slice(0, 1024 * 1024);
+        const links = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+        let match: RegExpExecArray | null;
+        let scanned = 0;
+        while ((match = links.exec(html)) !== null && scanned < 45) {
+          let candidateUrl: string;
+          try { candidateUrl = new URL(decodeHtmlEntities(match[1]), portal.url).toString(); }
+          catch { continue; }
+          if (!canonicalClassifiedListingUrl(candidateUrl)) continue;
+          if (new URL(candidateUrl).hostname !== portal.host) continue;
+          const title = decodeHtmlEntities(match[2]);
+          if (title.length < 6) continue;
+          if (searchQuery && !title.toLowerCase().includes(searchQuery.toLowerCase())) continue;
+          scanned++;
+          addItem(title, '', candidateUrl);
+        }
+      } catch {
+        // Network access can be blocked by the source; never report a false candidate.
+      }
+    })());
+  }
+
   // 3. Canales RSS por Portal (Inmuebles24, Propiedades.com, OCC Mundial, Computrabajo, Lamudi, Facebook, Locanto, Ciudad Anuncios)
   const rssQueries: { q: string; cat: string }[] = [];
   // Nuevas fuentes locales verificadas. Solo se aceptan URL de anuncios individuales,
