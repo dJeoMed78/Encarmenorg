@@ -47,4 +47,39 @@ jobs:
                   print('ENC041_SOURCE_'+name.upper()+'_HTTP='+str(error.code))
               except Exception as error:
                   print('ENC041_SOURCE_'+name.upper()+'_ERROR='+type(error).__name__)
+          # RSS evaluation does not fetch or publish any classifieds.
+          import xml.etree.ElementTree as ET
+          from urllib.parse import urlparse
+          rssurl=urls['bing_rss']
+          try:
+              req=urllib.request.Request(rssurl,headers={'User-Agent':'ENCARMEN-Radar/1.0 (+https://encarmen.org)'})
+              with urllib.request.urlopen(req,timeout=12) as resp:
+                  raw=resp.read(1048576)
+              items=ET.fromstring(raw).findall('.//item')
+              pattern=[
+                (r'(^|\.)computrabajo\.com
+,r'^/ofertas-de-trabajo/'),
+                (r'(^|\.)occ\.com\.mx
+,r'^/empleo/oferta/'),
+                (r'(^|\.)inmuebles24\.com
+,r'^/propiedades/'),
+                (r'(^|\.)facebook\.com
+,r'^/(groups/[^/]+/posts/|marketplace/item/)'),
+              ]
+              valid=0
+              other=0
+              for item in items:
+                  link=(item.findtext('link') or '').strip()
+                  u=urlparse(link)
+                  if u.scheme!='https' or not u.hostname:
+                      other+=1
+                      continue
+                  if any(re.search(domain,u.hostname,re.I) and re.search(route,u.path,re.I) for domain,route in pattern):
+                      valid+=1
+                  else:other+=1
+              print('ENC041_RSS_ITEMS='+str(len(items)))
+              print('ENC041_RSS_DIRECT_RECOGNIZED='+str(valid))
+              print('ENC041_RSS_LINKS_NOT_RECOGNIZED='+str(other))
+          except Exception as error:
+              print('ENC041_RSS_PARSE_ERROR='+type(error).__name__)
           PY
