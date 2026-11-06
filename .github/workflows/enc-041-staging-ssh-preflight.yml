@@ -62,11 +62,33 @@ jobs:
             envmode=$(stat -c '%a' "$root/config/.env")
             if [ "$envmode" = 600 ]; then
               echo "STAGING_PRIVATE_ENV_PERMISSIONS=600"
-              if grep -Eq '^DB_NAME=u293982346_encarmentest$' "$root/config/.env"; then
-                echo "STAGING_PRIVATE_DB_NAME_MATCH=yes"
-              else
-                echo "STAGING_PRIVATE_DB_NAME_MATCH=no"
-              fi
+              python3 - "$root/config/.env" <<'PY'
+          import sys, re
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          values = {}
+          duplicates = []
+          for original in path.read_text(encoding='utf8').splitlines():
+              line = re.sub(r'^export\s+', '', original.strip())
+              if not line or line.startswith('#') or '=' not in line:
+                  continue
+              key, value = line.split('=', 1)
+              key = key.strip()
+              if key in values:
+                  duplicates.append(key)
+              values[key] = value.strip().strip('"').strip("'")
+          db = values.get('DB_NAME', '')
+          user = values.get('DB_USER', '')
+          env = values.get('APP_ENV', '')
+          print('STAGING_PRIVATE_DB_NAME_MATCH=' + ('yes' if db=='u293982346_encarmentest' else 'no'))
+          print('STAGING_PRIVATE_DB_NAME_KEY_PRESENT=' + ('yes' if 'DB_NAME' in values else 'no'))
+          print('STAGING_PRIVATE_DB_NAME_FORMAT=' + ('quoted' if any('DB_NAME=' in ln and ('"' in ln or "'" in ln) for ln in path.read_text(encoding='utf8').splitlines()) else 'plain_or_other'))
+          print('STAGING_PRIVATE_APP_ENV_STAGING=' + ('yes' if env=='staging' else 'no'))
+          print('STAGING_PRIVATE_DB_USER_IS_PRODUCTION=' + ('yes' if user=='u293982346_appuser' else 'no'))
+          print('STAGING_PRIVATE_DB_USER_PRESENT=' + ('yes' if bool(user) else 'no'))
+          print('STAGING_PRIVATE_CRITICAL_DUPLICATES=' + ('yes' if any(x in duplicates for x in ('DB_NAME','DB_USER','DB_PASSWORD','APP_ENV')) else 'no'))
+          print('STAGING_PRIVATE_CLASSIFIED_GATE_PRESENT=' + ('yes' if 'STAGING_CLASSIFIED_WRITES_ENABLED' in values else 'no'))
+          PY
             else
               echo "STAGING_PRIVATE_ENV_PERMISSIONS=unexpected"
             fi
