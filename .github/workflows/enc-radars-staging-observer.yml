@@ -15,4 +15,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api repos/${{ github.repository }}/actions/workflows/enc-radars-041-043-staging-deploy.yml/runs --jq '.workflow_runs[:5][] | "RUN_ID=\\(.id) STATUS=\\(.status) CONCLUSION=\\(.conclusion) SHA=\\(.head_sha)"'
+          gh api repos/${{ github.repository }}/actions/workflows/enc-radars-041-043-staging-deploy.yml/runs --jq '.workflow_runs[:5][] | [.id,.status,.conclusion,.head_sha] | @tsv'
