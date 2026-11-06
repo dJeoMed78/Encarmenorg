@@ -8402,7 +8402,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-const isProduction = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test' || !!process.env.VERCEL;
+// Staging must serve the exact release's dist/ bundle. A missing NODE_ENV=production
+// must never silently start Vite's development middleware and source version.ts.
+const isProduction = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test' ||
+  process.env.APP_ENV === 'staging' || !!process.env.VERCEL;
 
 if (!isProduction && !process.env.VERCEL) {
   // Vite Dev Server middleware for dynamic TypeScript compilation, HMR, and React SPA preview
