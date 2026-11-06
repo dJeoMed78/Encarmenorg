@@ -77,6 +77,10 @@ jobs:
               print('ENC041_RSS_DIRECT_RECOGNIZED='+str(valid))
               print('ENC041_RSS_LINKS_NOT_RECOGNIZED='+str(other))
               print('ENC041_RSS_ROOT_NAMESPACED='+('yes' if b'xmlns' in raw[:700] else 'no'))
+              from collections import Counter
+              hosts=Counter(urlparse(next((child.text or '' for child in item if child.tag.rsplit('}',1)[-1].lower()=='link'),'')).hostname or 'none' for item in items)
+              for host,count in hosts.most_common(8):
+                  print('ENC041_RSS_DOMAIN_'+re.sub(r'[^A-Z0-9_]', '_', host.upper())[:55]+'='+str(count))
           except Exception as error:
               print('ENC041_RSS_PARSE_ERROR='+type(error).__name__)
           PY
