@@ -3888,7 +3888,7 @@ function extractClassifiedOriginFields(html: string): NonNullable<ClassifiedEvid
   const contactName = nameMatch ? nameMatch[1].trim().slice(0, 65) : '';
   const locationMatch = plain.match(/(?:ubicaci[oó]n|ciudad|localidad)\s*:\s*(Ciudad del Carmen|Carmen,? Campeche)/i);
   const location = locationMatch ? 'Ciudad del Carmen, Campeche' : '';
-  return { description, price: Number.isFinite(price) && price > 0 ? price : null,
+  return { description, price: price !== null && Number.isFinite(price) && price > 0 ? price : null,
     phone: phone.length === 10 ? phone : '', contactName, colonia: '', location };
 }
 
