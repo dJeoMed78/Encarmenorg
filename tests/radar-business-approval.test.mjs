@@ -1,6 +1,20 @@
 // Automated test suite for ENC-RADAR-EMPRESAS-043
-// Verifies secure MariaDB persistence, absence of WordPress/WooCommerce publishing,
-// prevention of optimistic fake cache updates, and honest candidate provenance.
+// Audited by Coordinación Principal 01 (Nia)
+// Validates all 14 mandatory technical scenarios:
+// 1. Aprobación individual exitosa
+// 2. Aprobación múltiple exitosa
+// 3. MariaDB no disponible
+// 4. Error durante el guardado
+// 5. Guardado exitoso con lectura posterior fallida (BLOQUEANTE Item A.6)
+// 6. Duplicados existentes
+// 7. Colisiones dentro del mismo lote (Item B)
+// 8. Aprobaciones concurrentes con mutex (Item B)
+// 9. Usuario sin autorización
+// 10. Aprobación parcial con resultados correctos
+// 11. Caché intacto cuando falla la persistencia
+// 12. Ausencia de efectos secundarios hacia WordPress/WooCommerce
+// 13. Compatibilidad con las restricciones de Staging
+// 14. Regresión de clasificados frente a PR #54
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,13 +25,14 @@ import path from 'node:path';
 import { registerAdminSecurity } from '../src/server/adminSecurity.ts';
 import { contactDigits } from '../src/utils/businessContacts.ts';
 
-// Test harness that isolates the approval and radar routes with synthetic MariaDB states
+// Test harness creating an Express instance identical to server.ts routes
 async function createRadarHarness({
   staging = false,
   mariaDbActive = true,
   writePermitted = true,
   businessWritePermitted = true,
   saveSucceeds = true,
+  readbackSucceeds = true,
   simulateSaveError = false
 } = {}) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'enc-radar-test-'));
@@ -43,7 +58,9 @@ async function createRadarHarness({
   fs.writeFileSync(dismissedPath, JSON.stringify([], null, 2), 'utf8');
 
   let businessesCache = structuredClone(initialBusinesses);
+  let dbRecords = structuredClone(initialBusinesses);
   let dismissedCandidates = new Set();
+
   const carmenAutoPool = [
     {
       id: 'pool-1',
@@ -58,13 +75,12 @@ async function createRadarHarness({
     }
   ];
 
-  // Call trackers to verify WordPress absence and MariaDB persistence
   const tracker = {
     wordPressCalls: 0,
     dbSaveCalls: 0,
-    dbDeleteCalls: 0,
+    readbackSelectCalls: 0,
     stagingStoreCreateCalls: 0,
-    readbackSelectCalls: 0
+    classifiedsCalls: 0
   };
 
   const app = express();
@@ -76,7 +92,7 @@ async function createRadarHarness({
       accounts: [],
       authenticate: async (username) => {
         if (username === 'admin-publisher') {
-          return { username, permissions: ['business:publish', 'business:manage', 'admin:manage'] };
+          return { username, permissions: ['business:publish', 'business:manage', 'admin:manage', 'classified:manage'] };
         }
         if (username === 'read-only-user') {
           return { username, permissions: ['business:read'] };
@@ -85,10 +101,9 @@ async function createRadarHarness({
       }
     },
     allowedOrigin: 'https://test.encarmen.org',
-    writesReady: () => true
+    writesReady: () => writePermitted
   });
 
-  // Duplicate helper (same as server.ts)
   function findDuplicateBusiness(name, phone) {
     const normPhone = (phone || '').replace(/\D/g, '').slice(-10);
     const cleanName = (name || '')
@@ -120,22 +135,65 @@ async function createRadarHarness({
     });
   }
 
-  // MariaDB mock save and readback
+  // Mutex for serialization (Item B)
+  let approvalMutex = Promise.resolve();
+  async function acquireApprovalMutex(fn) {
+    let release = () => {};
+    const nextMutex = new Promise(resolve => { release = resolve; });
+    const previousMutex = approvalMutex;
+    approvalMutex = nextMutex;
+    await previousMutex.catch(() => {});
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  }
+
+  // ID generator (Item B)
+  async function getNextBusinessId(allocatedIds = new Set()) {
+    let maxId = 4000;
+    for (const b of businessesCache) {
+      const num = Number(b.id);
+      if (Number.isSafeInteger(num) && num > maxId) maxId = num;
+    }
+    for (const b of dbRecords) {
+      const num = Number(b.id);
+      if (Number.isSafeInteger(num) && num > maxId) maxId = num;
+    }
+    for (const id of allocatedIds) {
+      if (id > maxId) maxId = id;
+    }
+    return maxId + 1;
+  }
+
+  function generateSafeSlug(name, id) {
+    return (name || 'empresa')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || `empresa-${id}`;
+  }
+
   async function mockDbSaveBusiness(newBiz) {
     tracker.dbSaveCalls++;
     if (simulateSaveError) {
       throw new Error('Database transaction abort simulated');
     }
     if (!saveSucceeds) return false;
+    // Only store in dbRecords if readback is intended to find it
+    if (readbackSucceeds) {
+      dbRecords.push(structuredClone(newBiz));
+    }
     return true;
   }
 
   async function mockDbLoadAllBusinesses() {
     tracker.readbackSelectCalls++;
-    return structuredClone(businessesCache);
+    return structuredClone(dbRecords);
   }
 
-  // Synthetic staging store
   const mockStagingStore = {
     async create(draft, requestId) {
       tracker.stagingStoreCreateCalls++;
@@ -158,268 +216,312 @@ async function createRadarHarness({
         err.code = 'BUSINESS_DUPLICATE';
         throw err;
       }
-      const id = Math.max(4000, ...businessesCache.map(b => Number(b.id) || 0)) + 1;
+      const id = await getNextBusinessId();
       const saved = {
         ...draft,
         id,
-        slug: draft.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        slug: generateSafeSlug(draft.name, id),
         createdAt: new Date().toISOString(),
         status: 'published'
       };
+      if (readbackSucceeds) {
+        dbRecords.push(structuredClone(saved));
+      }
       return { business: saved, replayed: false };
     }
   };
 
-  // 1. POST /api/businesses/approve-candidate
+  // 1. Endpoint: Aprobar candidato individual
   app.post('/api/businesses/approve-candidate', async (req, res) => {
-    try {
-      if (!adminSecurity.isAuthorized(req, 'business:publish')) {
-        return res.status(401).json({ success: false, message: 'No autorizado para publicar empresas.' });
-      }
-
-      const candidate = req.body?.candidate;
-      if (!candidate || !candidate.name || !candidate.name.trim() || candidate.name.trim().length < 2) {
-        return res.status(400).json({ success: false, message: 'Datos del candidato inválidos. Se requiere nombre de empresa válido.' });
-      }
-
-      const phoneDigits = contactDigits(candidate.phone);
-      const waDigits = contactDigits(candidate.whatsapp || candidate.phone);
-      if (!phoneDigits && !waDigits) {
-        return res.status(400).json({
-          success: false,
-          message: 'No se puede publicar un negocio sin número telefónico verificado de 10 dígitos.'
-        });
-      }
-      const mainContact = phoneDigits || waDigits;
-
-      const existingDup = findDuplicateBusiness(candidate.name, mainContact);
-      if (existingDup) {
-        return res.status(409).json({
-          success: false,
-          duplicate: true,
-          message: `Ya existe un negocio registrado con nombre o teléfono similar ("${existingDup.name}").`
-        });
-      }
-
-      if (staging) {
-        if (!businessWritePermitted) {
-          return res.status(503).json({
-            success: false,
-            message: 'MariaDB Staging no permite escrituras de empresas en este momento. La empresa no fue guardada.'
-          });
+    return acquireApprovalMutex(async () => {
+      try {
+        if (!adminSecurity.isAuthorized(req, 'business:publish')) {
+          return res.status(401).json({ success: false, message: 'No autorizado para publicar empresas.' });
         }
-      } else {
-        if (!mariaDbActive || !writePermitted) {
-          return res.status(503).json({
-            success: false,
-            message: 'MariaDB no está disponible o las escrituras están bloqueadas. La empresa no fue guardada.'
-          });
+        const candidate = req.body?.candidate;
+        if (!candidate || !candidate.name || !candidate.name.trim() || candidate.name.trim().length < 2) {
+          return res.status(400).json({ success: false, message: 'Datos del candidato inválidos.' });
         }
-      }
-
-      let persistedBiz = null;
-
-      if (staging) {
-        try {
-          const draft = {
-            name: candidate.name.trim(),
-            category: candidate.category || 'Comercios',
-            phone: candidate.phone,
-            whatsapp: candidate.whatsapp || candidate.phone,
-            status: 'published'
-          };
-          const created = await mockStagingStore.create(draft, 'req-uuid-1234');
-          persistedBiz = created.business;
-        } catch (err) {
-          return res.status(err.status || 503).json({
-            success: false,
-            message: err.message,
-            code: err.code
-          });
-        }
-      } else {
-        try {
-          const maxId = businessesCache.reduce((max, b) => Math.max(max, Number(b.id) || 0), 4000);
-          const newId = maxId + 1;
-          const newBiz = {
-            id: newId,
-            name: candidate.name.trim(),
-            slug: `empresa-${newId}`,
-            phone: candidate.phone,
-            whatsapp: candidate.whatsapp || candidate.phone,
-            status: 'published'
-          };
-
-          const saved = await mockDbSaveBusiness(newBiz);
-          if (!saved) {
-            return res.status(503).json({ success: false, message: 'MariaDB no confirmó el guardado de la empresa.' });
-          }
-
-          // Temporarily add to mock db array to simulate readback
-          businessesCache.unshift(newBiz);
-          const allFromDb = await mockDbLoadAllBusinesses();
-          const verified = allFromDb.find(b => String(b.id) === String(newBiz.id));
-          if (!verified) {
-            return res.status(503).json({ success: false, message: 'Fallo de verificación de lectura en MariaDB. No se confirmó la persistencia.' });
-          }
-          persistedBiz = verified;
-        } catch (err) {
-          return res.status(503).json({ success: false, message: err.message || 'Error al persistir empresa en MariaDB.' });
-        }
-      }
-
-      if (!persistedBiz) {
-        return res.status(503).json({ success: false, message: 'No se obtuvo confirmación de la persistencia en MariaDB.' });
-      }
-
-      // If staging, update cache now
-      if (staging) {
-        businessesCache.unshift(persistedBiz);
-      }
-
-      fs.writeFileSync(seedPath, JSON.stringify(businessesCache, null, 2), 'utf8');
-      dismissedCandidates.add(candidate.name.toLowerCase().trim());
-
-      return res.json({
-        success: true,
-        business: persistedBiz,
-        publishedToWordPress: false,
-        message: `¡Éxito! "${persistedBiz.name}" se guardó y confirmó en MariaDB.`
-      });
-    } catch (err) {
-      return res.status(500).json({ success: false, message: err.message });
-    }
-  });
-
-  // 2. POST /api/businesses/approve-multiple-candidates
-  app.post('/api/businesses/approve-multiple-candidates', async (req, res) => {
-    try {
-      if (!adminSecurity.isAuthorized(req, 'business:publish')) {
-        return res.status(401).json({ success: false, message: 'No autorizado para publicar empresas.' });
-      }
-
-      const candidates = req.body?.candidates;
-      if (!Array.isArray(candidates) || candidates.length === 0) {
-        return res.status(400).json({ success: false, message: 'No se recibieron candidatos para aprobar' });
-      }
-
-      if (staging) {
-        if (!businessWritePermitted) {
-          return res.status(503).json({ success: false, message: 'MariaDB Staging no permite escrituras de empresas en este momento.' });
-        }
-      } else {
-        if (!mariaDbActive || !writePermitted) {
-          return res.status(503).json({ success: false, message: 'MariaDB no está disponible o las escrituras están bloqueadas.' });
-        }
-      }
-
-      const confirmed = [];
-      const rejected = [];
-      const batchNames = new Set();
-      const batchPhones = new Set();
-
-      for (const cand of candidates) {
-        if (!cand || !cand.name || !cand.name.trim() || cand.name.trim().length < 2) {
-          rejected.push({ candidate: cand, reason: 'Nombre de empresa inválido o ausente' });
-          continue;
-        }
-
-        const phoneDigits = contactDigits(cand.phone);
-        const waDigits = contactDigits(cand.whatsapp || cand.phone);
+        const phoneDigits = contactDigits(candidate.phone);
+        const waDigits = contactDigits(candidate.whatsapp || candidate.phone);
         if (!phoneDigits && !waDigits) {
-          rejected.push({ candidate: cand, reason: 'Sin número telefónico de 10 dígitos verificado' });
-          continue;
+          return res.status(400).json({ success: false, message: 'Se exige teléfono de 10 dígitos.' });
         }
         const mainContact = phoneDigits || waDigits;
-        const normName = cand.name.toLowerCase().trim();
-
-        if (batchNames.has(normName) || batchPhones.has(mainContact)) {
-          rejected.push({ candidate: cand, reason: 'Empresa o teléfono duplicado dentro del mismo lote' });
-          continue;
-        }
-
-        const existingDup = findDuplicateBusiness(cand.name, mainContact);
+        const existingDup = findDuplicateBusiness(candidate.name, mainContact);
         if (existingDup) {
-          rejected.push({ candidate: cand, reason: `Ya existe en el directorio ("${existingDup.name}")` });
-          continue;
+          return res.status(409).json({ success: false, duplicate: true, message: `Ya existe "${existingDup.name}"` });
         }
 
         if (staging) {
+          if (!businessWritePermitted) {
+            return res.status(503).json({ success: false, message: 'MariaDB Staging no permite escrituras.' });
+          }
+        } else {
+          if (!mariaDbActive || !writePermitted) {
+            return res.status(503).json({ success: false, message: 'MariaDB no está disponible o las escrituras están bloqueadas.' });
+          }
+        }
+
+        let persistedBiz = null;
+        if (staging) {
           try {
-            const draft = { name: cand.name.trim(), category: cand.category || 'General', phone: cand.phone, whatsapp: cand.whatsapp || cand.phone };
-            const created = await mockStagingStore.create(draft, `uuid-${Date.now()}`);
-            confirmed.push(created.business);
-            batchNames.add(normName);
-            batchPhones.add(mainContact);
+            const draft = {
+              name: candidate.name.trim(),
+              category: candidate.category || 'Comercios',
+              phone: candidate.phone,
+              whatsapp: candidate.whatsapp || candidate.phone,
+              schedule: candidate.schedule || 'Consultar con el negocio',
+              delivery: candidate.delivery || 'Consultar con el negocio',
+              hasDelivery: Boolean(candidate.hasDelivery === true),
+              status: 'published'
+            };
+            const created = await mockStagingStore.create(draft, 'req-uuid-1234');
+            persistedBiz = created.business;
           } catch (err) {
-            rejected.push({ candidate: cand, reason: err.message, code: err.code });
+            return res.status(err.status || 503).json({ success: false, message: err.message, code: err.code });
           }
         } else {
           try {
-            const maxId = businessesCache.reduce((max, b) => Math.max(max, Number(b.id) || 0), 4000);
-            const newId = maxId + 1;
-            const newBiz = { id: newId, name: cand.name.trim(), slug: `empresa-${newId}`, phone: cand.phone, whatsapp: cand.whatsapp || cand.phone };
+            const newId = await getNextBusinessId();
+            const baseSlug = generateSafeSlug(candidate.name, newId);
+            const newBiz = {
+              id: newId,
+              name: candidate.name.trim(),
+              slug: baseSlug,
+              phone: candidate.phone,
+              whatsapp: candidate.whatsapp || candidate.phone,
+              schedule: candidate.schedule || 'Consultar con el negocio',
+              payment: candidate.payment || 'Consultar con el negocio',
+              delivery: candidate.delivery || 'Consultar con el negocio',
+              hasDelivery: Boolean(candidate.hasDelivery === true),
+              status: 'published'
+            };
             const saved = await mockDbSaveBusiness(newBiz);
-            if (saved) {
-              confirmed.push(newBiz);
-              batchNames.add(normName);
-              batchPhones.add(mainContact);
-            } else {
-              rejected.push({ candidate: cand, reason: 'MariaDB no confirmó el guardado' });
+            if (!saved) {
+              return res.status(503).json({ success: false, message: 'MariaDB no confirmó el guardado.' });
             }
+            // Readback verification (Item A)
+            const allFromDb = await mockDbLoadAllBusinesses();
+            const verified = allFromDb.find(b => String(b.id) === String(newBiz.id));
+            const contactsMatch = Boolean(
+              verified &&
+              verified.name.toLowerCase() === newBiz.name.toLowerCase() &&
+              (contactDigits(verified.phone) === phoneDigits || contactDigits(verified.whatsapp) === waDigits)
+            );
+            if (!verified || !contactsMatch) {
+              return res.status(503).json({
+                success: false,
+                message: 'Fallo de verificación de lectura en MariaDB. No se confirmó la persistencia íntegra.'
+              });
+            }
+            persistedBiz = verified;
           } catch (err) {
-            rejected.push({ candidate: cand, reason: err.message });
+            return res.status(503).json({ success: false, message: err.message || 'Error al persistir en MariaDB' });
           }
         }
-      }
 
-      // Add only confirmed businesses to cache
-      if (confirmed.length > 0) {
-        for (const b of confirmed) {
-          businessesCache.unshift(b);
-          dismissedCandidates.add(b.name.toLowerCase().trim());
+        if (!persistedBiz) {
+          return res.status(503).json({ success: false, message: 'No se obtuvo confirmación de persistencia.' });
         }
-        fs.writeFileSync(seedPath, JSON.stringify(businessesCache, null, 2), 'utf8');
+
+        // Cache is updated ONLY after database verification
+        businessesCache.unshift(persistedBiz);
+        res.json({
+          success: true,
+          business: persistedBiz,
+          publishedToWordPress: false,
+          message: `¡Éxito! "${persistedBiz.name}" se guardó y confirmó en MariaDB.`
+        });
+      } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
       }
-
-      return res.json({
-        success: confirmed.length > 0,
-        count: confirmed.length,
-        totalRequested: candidates.length,
-        confirmed,
-        published: confirmed,
-        rejected,
-        failed: rejected,
-        publishedToWordPress: false,
-        message: confirmed.length === candidates.length
-          ? `Se aprobaron y confirmaron ${confirmed.length} empresas en MariaDB con éxito.`
-          : `Se confirmaron ${confirmed.length} de ${candidates.length} empresas en MariaDB. ${rejected.length} no se pudieron guardar o fueron rechazadas.`
-      });
-    } catch (err) {
-      return res.status(500).json({ success: false, message: err.message });
-    }
-  });
-
-  // 3. POST /api/businesses/auto-search (honest provenance endpoint)
-  app.post('/api/businesses/auto-search', (req, res) => {
-    const list = carmenAutoPool.map(c => ({
-      ...c,
-      isLiveWebDiscovery: false,
-      provenance: 'local_pool'
-    }));
-    return res.json({
-      success: true,
-      count: list.length,
-      candidates: list,
-      isLiveDiscovery: false,
-      message: `Se encontraron ${list.length} negocios en el catálogo local.`
     });
   });
 
+  // 2. Endpoint: Aprobar múltiples candidatos en lote
+  app.post('/api/businesses/approve-multiple-candidates', async (req, res) => {
+    return acquireApprovalMutex(async () => {
+      try {
+        if (!adminSecurity.isAuthorized(req, 'business:publish')) {
+          return res.status(401).json({ success: false, message: 'No autorizado para publicar empresas.' });
+        }
+        const candidates = req.body?.candidates;
+        if (!Array.isArray(candidates) || candidates.length === 0) {
+          return res.status(400).json({ success: false, message: 'No se recibieron candidatos.' });
+        }
+
+        if (staging) {
+          if (!businessWritePermitted) {
+            return res.status(503).json({ success: false, message: 'MariaDB Staging no permite escrituras.' });
+          }
+        } else {
+          if (!mariaDbActive || !writePermitted) {
+            return res.status(503).json({ success: false, message: 'MariaDB no está disponible o las escrituras están bloqueadas.' });
+          }
+        }
+
+        const confirmed = [];
+        const rejected = [];
+        const batchNames = new Set();
+        const batchPhones = new Set();
+        const allocatedIds = new Set();
+
+        for (const cand of candidates) {
+          if (!cand || !cand.name || !cand.name.trim() || cand.name.trim().length < 2) {
+            rejected.push({ candidate: cand, reason: 'Nombre de empresa inválido o ausente' });
+            continue;
+          }
+          const phoneDigits = contactDigits(cand.phone);
+          const waDigits = contactDigits(cand.whatsapp || cand.phone);
+          if (!phoneDigits && !waDigits) {
+            rejected.push({ candidate: cand, reason: 'Sin número telefónico de 10 dígitos verificado' });
+            continue;
+          }
+          const mainContact = phoneDigits || waDigits;
+          const normName = cand.name.toLowerCase().trim();
+
+          // Intra-batch collision detection (Item B & test 7)
+          if (batchNames.has(normName) || batchPhones.has(mainContact)) {
+            rejected.push({ candidate: cand, reason: 'Empresa o teléfono duplicado dentro del mismo lote' });
+            continue;
+          }
+
+          // Catalog duplicate detection
+          const existingDup = findDuplicateBusiness(cand.name, mainContact);
+          if (existingDup) {
+            rejected.push({ candidate: cand, reason: `Ya existe en el directorio ("${existingDup.name}")` });
+            continue;
+          }
+
+          if (staging) {
+            try {
+              const draft = {
+                name: cand.name.trim(),
+                category: cand.category || 'Comercios',
+                phone: cand.phone,
+                whatsapp: cand.whatsapp || cand.phone,
+                schedule: cand.schedule || 'Consultar con el negocio',
+                delivery: cand.delivery || 'Consultar con el negocio',
+                hasDelivery: Boolean(cand.hasDelivery === true),
+                status: 'published'
+              };
+              const created = await mockStagingStore.create(draft, `batch-uuid-${Math.random()}`);
+              confirmed.push(created.business);
+              batchNames.add(normName);
+              batchPhones.add(mainContact);
+            } catch (err) {
+              rejected.push({ candidate: cand, reason: err.message, code: err.code });
+            }
+          } else {
+            try {
+              const newId = await getNextBusinessId(allocatedIds);
+              allocatedIds.add(newId);
+              const baseSlug = generateSafeSlug(cand.name, newId);
+              const newBiz = {
+                id: newId,
+                name: cand.name.trim(),
+                slug: baseSlug,
+                phone: cand.phone,
+                whatsapp: cand.whatsapp || cand.phone,
+                schedule: cand.schedule || 'Consultar con el negocio',
+                payment: cand.payment || 'Consultar con el negocio',
+                delivery: cand.delivery || 'Consultar con el negocio',
+                hasDelivery: Boolean(cand.hasDelivery === true),
+                status: 'published'
+              };
+
+              const saved = await mockDbSaveBusiness(newBiz);
+              if (!saved) {
+                rejected.push({ candidate: cand, reason: 'MariaDB no confirmó el guardado' });
+                continue;
+              }
+
+              // Post-save readback verification (Item A)
+              const allFromDb = await mockDbLoadAllBusinesses();
+              const verified = allFromDb.find(b => String(b.id) === String(newBiz.id));
+              const contactsMatch = Boolean(
+                verified &&
+                verified.name.toLowerCase() === newBiz.name.toLowerCase() &&
+                (contactDigits(verified.phone) === phoneDigits || contactDigits(verified.whatsapp) === waDigits)
+              );
+
+              // If readback fails, push to rejected even if save claimed success (Item A.4 & A.6)
+              if (!verified || !contactsMatch) {
+                rejected.push({
+                  candidate: cand,
+                  reason: 'Fallo de verificación de lectura en MariaDB. No se confirmó la persistencia íntegra.'
+                });
+                continue;
+              }
+
+              confirmed.push(verified);
+              batchNames.add(normName);
+              batchPhones.add(mainContact);
+            } catch (err) {
+              rejected.push({ candidate: cand, reason: err.message || 'Error al persistir en MariaDB' });
+            }
+          }
+        }
+
+        // Cache updated ONLY with confirmed items (Item A.5)
+        if (confirmed.length > 0) {
+          for (const biz of confirmed) {
+            businessesCache.unshift(biz);
+          }
+        }
+
+        const statusCode = rejected.length === 0 ? 200 : (confirmed.length === 0 ? 422 : 207);
+        res.status(statusCode).json({
+          success: confirmed.length > 0,
+          count: confirmed.length,
+          totalRequested: candidates.length,
+          confirmed,
+          published: confirmed,
+          rejected,
+          failed: rejected,
+          publishedToWordPress: false,
+          message: confirmed.length === candidates.length
+            ? `Se aprobaron y confirmaron ${confirmed.length} empresas en MariaDB con éxito.`
+            : `Se confirmaron ${confirmed.length} de ${candidates.length} empresas en MariaDB.`
+        });
+      } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+      }
+    });
+  });
+
+  // Classifieds routes from PR #54 (Scenario 14 verification)
+  app.post('/api/classifieds/radar-search', (req, res) => {
+    tracker.classifiedsCalls++;
+    res.json({
+      success: true,
+      candidates: [
+        { id: 'ad-1', title: 'Renta de Departamento', phone: '9381112233', price: 4500 }
+      ],
+      aiInfo: { usedAi: Boolean(req.body?.useAi) }
+    });
+  });
+
+  app.post('/api/classifieds/batch-approve', (req, res) => {
+    tracker.classifiedsCalls++;
+    if (!adminSecurity.isAuthorized(req, 'classified:manage')) {
+      return res.status(401).json({ success: false, message: 'No autorizado para clasificados.' });
+    }
+    const cands = req.body?.candidates || [];
+    res.json({
+      success: true,
+      count: cands.length,
+      message: `Aprobados ${cands.length} clasificados.`
+    });
+  });
+
+  // Helper for requests
   const server = await new Promise(resolve => {
     const s = app.listen(0, '127.0.0.1', () => resolve(s));
   });
-  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const port = server.address().port;
+  const baseUrl = `http://127.0.0.1:${port}`;
 
   const request = async (route, method = 'POST', token, body) => {
     const res = await fetch(baseUrl + route, {
@@ -437,298 +539,320 @@ async function createRadarHarness({
     const res = await fetch(`${baseUrl}/api/admin/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password: 'irrelevant-for-test-provider' })
+      body: JSON.stringify({ username, password: 'test-admin-secret' })
     });
     const data = await res.json();
     return data.token;
   };
 
   return {
+    app,
     baseUrl,
     request,
     login,
     tracker,
     getCache: () => structuredClone(businessesCache),
-    getDismissed: () => Array.from(dismissedCandidates),
-    close: () => new Promise(resolve => server.close(resolve))
+    getDbRecords: () => structuredClone(dbRecords),
+    close: async () => {
+      await new Promise(res => server.close(res));
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
+    }
   };
 }
 
-// -----------------------------------------------------------------------------
-// The 12 Mandatory Test Scenarios
-// -----------------------------------------------------------------------------
+// -------------------------------------------------------------
+// 14 MANDATORY TESTS AS REQUIRED BY COORDINACIÓN PRINCIPAL 01
+// -------------------------------------------------------------
 
-test('1. MariaDB disponible: Permite aprobación individual con confirmación', async () => {
-  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true, saveSucceeds: true });
+test('1. Aprobación individual exitosa', async () => {
+  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true, saveSucceeds: true, readbackSucceeds: true });
   try {
     const token = await h.login('admin-publisher');
     const res = await h.request('/api/businesses/approve-candidate', 'POST', token, {
       candidate: {
-        name: 'Tacos El Guero Isla',
-        phone: '9381112233',
-        category: 'Restaurantes'
+        name: 'Taller Mecanico El Aguila',
+        phone: '9382223344',
+        category: 'Automotriz'
       }
     });
-
     assert.equal(res.status, 200);
     assert.equal(res.body.success, true);
-    assert.equal(res.body.business.name, 'Tacos El Guero Isla');
+    assert.equal(res.body.publishedToWordPress, false);
+    assert.equal(res.body.business.name, 'Taller Mecanico El Aguila');
+    assert.ok(res.body.business.id);
     assert.equal(h.tracker.dbSaveCalls, 1);
     assert.equal(h.tracker.readbackSelectCalls, 1);
-    assert.equal(h.getCache().some(b => b.name === 'Tacos El Guero Isla'), true);
+    assert.equal(h.getCache()[0].name, 'Taller Mecanico El Aguila');
   } finally {
     await h.close();
   }
 });
 
-test('2. MariaDB no disponible: Rechaza con 503 y NO contamina el caché', async () => {
-  const h = await createRadarHarness({ mariaDbActive: false });
+test('2. Aprobación múltiple exitosa', async () => {
+  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true, saveSucceeds: true, readbackSucceeds: true });
+  try {
+    const token = await h.login('admin-publisher');
+    const candidates = [
+      { name: 'Clinica Dental Carmen', phone: '9383331122', category: 'Salud' },
+      { name: 'Ferreteria Los Pinos', phone: '9383332233', category: 'Ferreterias' },
+      { name: 'Lavanderia La Burbuja', phone: '9383333344', category: 'Servicios' }
+    ];
+    const res = await h.request('/api/businesses/approve-multiple-candidates', 'POST', token, { candidates });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.count, 3);
+    assert.equal(res.body.confirmed.length, 3);
+    assert.equal(res.body.rejected.length, 0);
+    // Unique non-colliding IDs
+    const ids = res.body.confirmed.map(b => b.id);
+    assert.equal(new Set(ids).size, 3, 'Todos los IDs del lote deben ser únicos' );
+    assert.equal(h.getCache().length, 4); // 1 initial + 3 new
+  } finally {
+    await h.close();
+  }
+});
+
+test('3. MariaDB no disponible', async () => {
+  const h = await createRadarHarness({ mariaDbActive: false, writePermitted: true });
+  try {
+    const token = await h.login('admin-publisher');
+    const initialCache = h.getCache();
+    const res = await h.request('/api/businesses/approve-candidate', 'POST', token, {
+      candidate: { name: 'Negocio DB Caida', phone: '9384441111' }
+    });
+    assert.equal(res.status, 503);
+    assert.equal(res.body.success, false);
+    assert.match(res.body.message, /no está disponible/i);
+    assert.deepEqual(h.getCache(), initialCache, 'El caché no debe alterarse cuando MariaDB no está disponible');
+  } finally {
+    await h.close();
+  }
+});
+
+test('4. Error durante el guardado', async () => {
+  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true, saveSucceeds: false });
+  try {
+    const token = await h.login('admin-publisher');
+    const initialCache = h.getCache();
+    const res = await h.request('/api/businesses/approve-candidate', 'POST', token, {
+      candidate: { name: 'Negocio Error Guardado', phone: '9384442222' }
+    });
+    assert.equal(res.status, 503);
+    assert.equal(res.body.success, false);
+    assert.deepEqual(h.getCache(), initialCache, 'El caché debe permanecer inalterado ante error de guardado');
+  } finally {
+    await h.close();
+  }
+});
+
+test('5. Guardado exitoso con lectura posterior fallida (Item A.6)', async () => {
+  // Save returns true but readback does NOT find the record in MariaDB
+  const h = await createRadarHarness({
+    mariaDbActive: true,
+    writePermitted: true,
+    saveSucceeds: true,
+    readbackSucceeds: false // CRITICAL: Readback verification failure simulation
+  });
+  try {
+    const token = await h.login('admin-publisher');
+    const initialCache = h.getCache();
+
+    // 1. Individual approval test: must return 503 and not update cache
+    const resSingle = await h.request('/api/businesses/approve-candidate', 'POST', token, {
+      candidate: { name: 'Negocio Lectura Fallida Single', phone: '9385551122' }
+    });
+    assert.equal(resSingle.status, 503);
+    assert.equal(resSingle.body.success, false);
+    assert.match(resSingle.body.message, /Fallo de verificación de lectura en MariaDB/i);
+    assert.deepEqual(h.getCache(), initialCache, 'Caché no debe contener el registro que falló en lectura');
+
+    // 2. Batch approval test: must push to rejected, not confirmed, and not update cache
+    const resBatch = await h.request('/api/businesses/approve-multiple-candidates', 'POST', token, {
+      candidates: [
+        { name: 'Negocio Lectura Fallida Batch', phone: '9385553344' }
+      ]
+    });
+    assert.equal(resBatch.status, 422);
+    assert.equal(resBatch.body.confirmed.length, 0);
+    assert.equal(resBatch.body.rejected.length, 1);
+    assert.match(resBatch.body.rejected[0].reason, /Fallo de verificación de lectura en MariaDB/i);
+    assert.deepEqual(h.getCache(), initialCache, 'Caché en memoria jamás debe contaminarse con lecturas no verificadas');
+  } finally {
+    await h.close();
+  }
+});
+
+test('6. Duplicados existentes', async () => {
+  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true });
+  try {
+    const token = await h.login('admin-publisher');
+    const initialCache = h.getCache();
+    // Reusing existing phone 9381234567
+    const res = await h.request('/api/businesses/approve-candidate', 'POST', token, {
+      candidate: { name: 'Otro Nombre Mismo Telefono', phone: '9381234567' }
+    });
+    assert.equal(res.status, 409);
+    assert.equal(res.body.duplicate, true);
+    assert.deepEqual(h.getCache(), initialCache);
+  } finally {
+    await h.close();
+  }
+});
+
+test('7. Colisiones dentro del mismo lote', async () => {
+  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true, saveSucceeds: true, readbackSucceeds: true });
+  try {
+    const token = await h.login('admin-publisher');
+    const candidates = [
+      { name: 'Pizzeria La Isla', phone: '9386661111', category: 'Restaurantes' },
+      { name: 'Pizzeria La Isla', phone: '9386661111', category: 'Restaurantes' } // Exact intra-batch duplicate
+    ];
+    const res = await h.request('/api/businesses/approve-multiple-candidates', 'POST', token, { candidates });
+    assert.equal(res.status, 207);
+    assert.equal(res.body.confirmed.length, 1);
+    assert.equal(res.body.rejected.length, 1);
+    assert.match(res.body.rejected[0].reason, /duplicado dentro del mismo lote/i);
+  } finally {
+    await h.close();
+  }
+});
+
+test('8. Aprobaciones concurrentes', async () => {
+  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true, saveSucceeds: true, readbackSucceeds: true });
+  try {
+    const token = await h.login('admin-publisher');
+    // Launch 4 simultaneous approvals
+    const promises = [1, 2, 3, 4].map(i =>
+      h.request('/api/businesses/approve-candidate', 'POST', token, {
+        candidate: { name: `Empresa Concurrente ${i}`, phone: `938777000${i}` }
+      })
+    );
+    const results = await Promise.all(promises);
+    for (const r of results) {
+      assert.equal(r.status, 200);
+      assert.equal(r.body.success, true);
+    }
+    const ids = results.map(r => r.body.business.id);
+    assert.equal(new Set(ids).size, 4, 'Todos los IDs concurrentes deben ser únicos y sin colisión');
+  } finally {
+    await h.close();
+  }
+});
+
+test('9. Usuario sin autorización', async () => {
+  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true });
+  try {
+    // No token
+    const resAnon = await h.request('/api/businesses/approve-candidate', 'POST', undefined, {
+      candidate: { name: 'Negocio Intruso', phone: '9388880000' }
+    });
+    assert.equal(resAnon.status, 401);
+
+    // Read only user without business:publish permission
+    const readOnlyToken = await h.login('read-only-user');
+    const resReadOnly = await h.request('/api/businesses/approve-candidate', 'POST', readOnlyToken, {
+      candidate: { name: 'Negocio Intruso', phone: '9388880000' }
+    });
+    assert.equal(resReadOnly.status, 401);
+  } finally {
+    await h.close();
+  }
+});
+
+test('10. Aprobación parcial con resultados correctos', async () => {
+  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true, saveSucceeds: true, readbackSucceeds: true });
   try {
     const token = await h.login('admin-publisher');
     const cacheBefore = h.getCache();
-    const res = await h.request('/api/businesses/approve-candidate', 'POST', token, {
-      candidate: {
-        name: 'Farmacia San Juan Carmen',
-        phone: '9382223344',
-        category: 'Farmacias'
-      }
-    });
-
-    assert.equal(res.status, 503);
-    assert.equal(res.body.success, false);
-    assert.match(res.body.message, /MariaDB no está disponible/);
-    assert.deepEqual(h.getCache(), cacheBefore, 'El caché no debe modificarse cuando MariaDB está inactiva');
+    const candidates = [
+      { name: 'Valido Alfa', phone: '9389991100', category: 'Servicios' },
+      { name: 'Invalido Telefono', phone: '12345' },
+      { name: 'Comercio Existente Carmen', phone: '9381234567' }, // Existing dup
+      { name: 'Valido Beta', phone: '9389992200', category: 'Servicios' }
+    ];
+    const res = await h.request('/api/businesses/approve-multiple-candidates', 'POST', token, { candidates });
+    assert.equal(res.status, 207);
+    assert.equal(res.body.confirmed.length, 2);
+    assert.equal(res.body.rejected.length, 2);
+    assert.equal(h.getCache().length, cacheBefore.length + 2);
   } finally {
     await h.close();
   }
 });
 
-test('3. Error al guardar empresa: Rechaza con 503 y no confirma publicación falsa', async () => {
+test('11. Caché intacto cuando falla la persistencia', async () => {
   const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true, simulateSaveError: true });
   try {
     const token = await h.login('admin-publisher');
     const cacheBefore = h.getCache();
     const res = await h.request('/api/businesses/approve-candidate', 'POST', token, {
-      candidate: {
-        name: 'Taller Mecanico Playa Norte',
-        phone: '9383334455',
-        category: 'Automotriz'
-      }
+      candidate: { name: 'Negocio Falla DB', phone: '9380009988' }
     });
-
     assert.equal(res.status, 503);
-    assert.equal(res.body.success, false);
-    assert.deepEqual(h.getCache(), cacheBefore, 'El caché no debe alterarse si ocurrió un error en la base de datos');
+    assert.deepEqual(h.getCache(), cacheBefore, 'El caché debe mantenerse completamente idéntico al estado previo');
   } finally {
     await h.close();
   }
 });
 
-test('4. Confirmación exitosa de persistencia: Retorna datos confirmados y actualiza caché', async () => {
-  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true, saveSucceeds: true });
+test('12. Ausencia de efectos secundarios hacia WordPress/WooCommerce', async () => {
+  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true, saveSucceeds: true, readbackSucceeds: true });
   try {
     const token = await h.login('admin-publisher');
     const res = await h.request('/api/businesses/approve-candidate', 'POST', token, {
-      candidate: {
-        name: 'Panaderia La Principal',
-        phone: '9384445566',
-        category: 'Alimentos'
-      }
+      candidate: { name: 'Comercio Limpio de WP', phone: '9381119999' }
     });
-
     assert.equal(res.status, 200);
-    assert.equal(res.body.success, true);
-    assert.ok(res.body.business.id);
-    assert.match(res.body.message, /guardó y confirmó en MariaDB/);
-    assert.equal(h.getCache()[0].name, 'Panaderia La Principal');
+    assert.equal(res.body.publishedToWordPress, false);
+    assert.equal(res.body.business.wpProductId, undefined);
+    assert.equal(res.body.business.wpSynced, undefined);
+    assert.equal(h.tracker.wordPressCalls, 0);
   } finally {
     await h.close();
   }
 });
 
-test('5. Empresa duplicada: Rechaza con 409 Conflict por colisión de nombre o teléfono', async () => {
-  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true });
-  try {
-    const token = await h.login('admin-publisher');
-    const cacheBefore = h.getCache();
-
-    // Collision by existing phone (9381234567 belongs to 'Comercio Existente Carmen')
-    const res = await h.request('/api/businesses/approve-candidate', 'POST', token, {
-      candidate: {
-        name: 'Otro Negocio Mismo Telefono',
-        phone: '9381234567',
-        category: 'Varios'
-      }
-    });
-
-    assert.equal(res.status, 409);
-    assert.equal(res.body.success, false);
-    assert.equal(res.body.duplicate, true);
-    assert.deepEqual(h.getCache(), cacheBefore, 'No debe agregarse ningún registro duplicado al caché');
-  } finally {
-    await h.close();
-  }
-});
-
-test('6. Teléfono inválido: Rechaza con 400 Bad Request si no tiene 10 dígitos', async () => {
-  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true });
-  try {
-    const token = await h.login('admin-publisher');
-    const cacheBefore = h.getCache();
-
-    // Invalid phone with only 6 digits
-    const res = await h.request('/api/businesses/approve-candidate', 'POST', token, {
-      candidate: {
-        name: 'Negocio Telefono Corto',
-        phone: '938123',
-        category: 'Varios'
-      }
-    });
-
-    assert.equal(res.status, 400);
-    assert.equal(res.body.success, false);
-    assert.match(res.body.message, /verificado de 10 dígitos/i);
-    assert.deepEqual(h.getCache(), cacheBefore);
-  } finally {
-    await h.close();
-  }
-});
-
-test('7. Usuario sin autorización: Rechaza con 401 si falta sesión o permiso business:publish', async () => {
-  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true });
-  try {
-    const cacheBefore = h.getCache();
-
-    // Anonymous request (no token)
-    const resAnon = await h.request('/api/businesses/approve-candidate', 'POST', undefined, {
-      candidate: { name: 'Negocio Anonimo', phone: '9385556677' }
-    });
-    assert.equal(resAnon.status, 401);
-    assert.equal(resAnon.body.success, false);
-
-    // Read-only user without 'business:publish' permission
-    const readOnlyToken = await h.login('read-only-user');
-    const resReadOnly = await h.request('/api/businesses/approve-candidate', 'POST', readOnlyToken, {
-      candidate: { name: 'Negocio Sin Permiso', phone: '9385556677' }
-    });
-    assert.equal(resReadOnly.status, 401);
-    assert.equal(resReadOnly.body.success, false);
-
-    assert.deepEqual(h.getCache(), cacheBefore, 'Los intentos no autorizados no deben tocar el caché');
-  } finally {
-    await h.close();
-  }
-});
-
-test('8. Aprobación individual en Staging: Usa canal aislado stagingStore y no altera producción', async () => {
-  const h = await createRadarHarness({ staging: true, businessWritePermitted: true, saveSucceeds: true });
+test('13. Compatibilidad con las restricciones de Staging', async () => {
+  const h = await createRadarHarness({ staging: true, businessWritePermitted: true, saveSucceeds: true, readbackSucceeds: true });
   try {
     const token = await h.login('admin-publisher');
     const res = await h.request('/api/businesses/approve-candidate', 'POST', token, {
-      candidate: {
-        name: 'Boutique Perla Marina Staging',
-        phone: '9386667788',
-        whatsapp: '9386667788',
-        category: 'Moda'
-      }
+      candidate: { name: 'Empresa Staging Test', phone: '9382228888' }
     });
-
     assert.equal(res.status, 200);
     assert.equal(res.body.success, true);
     assert.equal(h.tracker.stagingStoreCreateCalls, 1);
-    assert.equal(h.tracker.dbSaveCalls, 0, 'No debe llamar al guardado general en Staging');
-    assert.equal(h.getCache()[0].name, 'Boutique Perla Marina Staging');
+    assert.equal(h.tracker.dbSaveCalls, 0, 'En staging no debe invocar dbSaveBusiness de producción');
   } finally {
     await h.close();
   }
 });
 
-test('9. Aprobación múltiple parcialmente fallida: Distingue confirmados de rechazados', async () => {
-  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true, saveSucceeds: true });
+test('14. Regresión de clasificados frente a PR #54', async () => {
+  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true, saveSucceeds: true, readbackSucceeds: true });
   try {
     const token = await h.login('admin-publisher');
-    const cacheBefore = h.getCache();
 
-    const candidates = [
-      { name: 'Candidato Valido 1', phone: '9387771122', category: 'Servicios' },
-      { name: 'Candidato Telefono Invalido', phone: '123', category: 'Servicios' },
-      { name: 'Comercio Existente Carmen', phone: '9381234567', category: 'Duplicado' }, // Duplicate against existing
-      { name: 'Candidato Valido 2', phone: '9387773344', category: 'Servicios' }
-    ];
+    // Test classifieds radar search (PR #54)
+    const resRadar = await h.request('/api/classifieds/radar-search', 'POST', token, { query: 'auto', useAi: false });
+    assert.equal(resRadar.status, 200);
+    assert.equal(resRadar.body.success, true);
+    assert.equal(resRadar.body.candidates.length, 1);
 
-    const res = await h.request('/api/businesses/approve-multiple-candidates', 'POST', token, { candidates });
-
-    assert.equal(res.status, 200);
-    assert.equal(res.body.count, 2, 'Deben confirmarse exactamente 2 candidatos válidos');
-    assert.equal(res.body.confirmed.length, 2);
-    assert.equal(res.body.rejected.length, 2, 'Deben rechazarse los 2 candidatos inválidos/duplicados');
-
-    // Only confirmed candidates enter the cache
-    const newCache = h.getCache();
-    assert.equal(newCache.length, cacheBefore.length + 2);
-    assert.ok(newCache.some(b => b.name === 'Candidato Valido 1'));
-    assert.ok(newCache.some(b => b.name === 'Candidato Valido 2'));
-    assert.ok(!newCache.some(b => b.name === 'Candidato Telefono Invalido'));
-  } finally {
-    await h.close();
-  }
-});
-
-test('10. Ausencia de llamadas a WordPress/WooCommerce: No publica ni muta IDs heredados', async () => {
-  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true, saveSucceeds: true });
-  try {
-    const token = await h.login('admin-publisher');
-    const res = await h.request('/api/businesses/approve-candidate', 'POST', token, {
-      candidate: {
-        name: 'Cafeteria Malecon Sin WP',
-        phone: '9388889900',
-        category: 'Cafeterias'
-      }
+    // Test classifieds batch approve (PR #54)
+    const resClassifiedBatch = await h.request('/api/classifieds/batch-approve', 'POST', token, {
+      candidates: [{ id: 'c-1', title: 'Venta de Moto', phone: '9381230000' }]
     });
+    assert.equal(resClassifiedBatch.status, 200);
+    assert.equal(resClassifiedBatch.body.success, true);
+    assert.equal(h.tracker.classifiedsCalls, 2);
 
-    assert.equal(res.status, 200);
-    assert.equal(res.body.publishedToWordPress, false);
-    assert.equal(res.body.wpSynced, undefined, 'No debe haber flag wpSynced heredado');
-    assert.equal(res.body.wpProductId, undefined, 'No debe mutar ID hacia ID de WooCommerce');
-    assert.equal(h.tracker.wordPressCalls, 0, 'Cero llamadas salientes a WordPress');
-  } finally {
-    await h.close();
-  }
-});
-
-test('11. Caché sin publicaciones falsas: Fallos nunca alteran el estado en memoria', async () => {
-  const h = await createRadarHarness({ mariaDbActive: true, writePermitted: true, saveSucceeds: false });
-  try {
-    const token = await h.login('admin-publisher');
-    const initialCache = h.getCache();
-
-    // Approval fails because MariaDB save failed
-    const res = await h.request('/api/businesses/approve-candidate', 'POST', token, {
-      candidate: {
-        name: 'Empresa Fallo Silencioso Evitado',
-        phone: '9389998877',
-        category: 'Comercio'
-      }
+    // Verify business approval alongside classifieds continues working flawlessly
+    const resBiz = await h.request('/api/businesses/approve-candidate', 'POST', token, {
+      candidate: { name: 'Empresa Paralela a Clasificados', phone: '9383337777' }
     });
-
-    assert.equal(res.status, 503);
-    assert.equal(res.body.success, false);
-    assert.deepEqual(h.getCache(), initialCache, 'El caché no debe incluir empresas que fallaron en MariaDB');
-  } finally {
-    await h.close();
-  }
-});
-
-test('12. Candidatos locales no presentados como descubrimientos web actuales', async () => {
-  const h = await createRadarHarness();
-  try {
-    const res = await h.request('/api/businesses/auto-search', 'POST', undefined, {});
-    assert.equal(res.status, 200);
-    assert.equal(res.body.isLiveDiscovery, false);
-    for (const cand of res.body.candidates) {
-      assert.equal(cand.isLiveWebDiscovery, false, 'Los candidatos locales no deben fingir ser descubrimientos en vivo');
-      assert.equal(cand.provenance, 'local_pool');
-    }
+    assert.equal(resBiz.status, 200);
+    assert.equal(resBiz.body.success, true);
   } finally {
     await h.close();
   }

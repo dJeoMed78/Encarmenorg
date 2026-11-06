@@ -6690,14 +6690,20 @@ const VERIFIED_CARMEN_REAL_BUSINESSES: CarmenAutoBusinessCandidate[] = [
 const CARMEN_AUTO_BUSINESSES_POOL: CarmenAutoBusinessCandidate[] = [...VERIFIED_CARMEN_REAL_BUSINESSES];
 
 
-// Helper: Generador de texto publicitario autónomo sin usar IA
-function generateAutonomousAdCopy(name: string, category: string, deliveryOption: string, address?: string): string {
+// Helper: Generador de texto descriptivo verificado sin afirmaciones especulativas (Item D)
+function generateAutonomousAdCopy(name: string, category: string, deliveryOption?: string, address?: string): string {
   const cleanName = (name || 'Este negocio').trim();
   const cleanCat = (category || 'comercio local').trim();
-  const delivTxt = deliveryOption ? `🚚 ${deliveryOption}.` : '🚚 Servicio a domicilio disponible en toda la isla.';
+  const delivTxt = deliveryOption && deliveryOption !== 'Consultar con el negocio' ? `🚚 ${deliveryOption}.` : '';
   const locTxt = address ? `📍 Ubicado en ${address}, Ciudad del Carmen, Campeche.` : '📍 Atención en Ciudad del Carmen, Campeche.';
   
-  return `¡Bienvenido a ${cleanName}! Tu mejor opción en ${cleanCat} en Ciudad del Carmen. Destacamos por brindar una atención cercana, puntual y productos o servicios de la más alta calidad con garantía. ${delivTxt} ${locTxt} ¡Contáctanos vía telefónica o WhatsApp para brindarte atención inmediata y promociones especiales! 💳 Aceptamos Efectivo y Transferencias.`;
+  const parts = [
+    `${cleanName} ofrece atención en ${cleanCat} en Ciudad del Carmen.`,
+    locTxt,
+    delivTxt,
+    'Para información sobre horarios, pedidos o cotizaciones, contactar directamente por teléfono o WhatsApp.'
+  ].filter(Boolean);
+  return parts.join(' ');
 }
 
 // 1. Endpoint: Búsqueda Automática de Empresas en Ciudad del Carmen (Sin IA)
@@ -6991,6 +6997,12 @@ app.post('/api/businesses/auto-search-ai', async (req: Request, res: Response) =
               .map((p, idx) => {
                 const phoneDigits = contactDigits(p.phone || p.whatsapp);
                 const waDigits = contactDigits(p.whatsapp || p.phone);
+                const rawSourceUrl = String(p.sourceUrl || '').trim();
+                const isVerifiableUrl = /^https?:\/\/[a-z0-9.-]+\.[a-z]{2,}/i.test(rawSourceUrl);
+                const isLiveWebDiscovery = isVerifiableUrl;
+                const provenance = isVerifiableUrl ? 'web_search_ai' : 'ai_unverified';
+                const requiresAdminVerification = !isVerifiableUrl;
+
                 return {
                   id: 'biz-ai-' + Date.now() + '-' + idx,
                   name: String(p.name).trim(),
@@ -7002,15 +7014,16 @@ app.post('/api/businesses/auto-search-ai', async (req: Request, res: Response) =
                   address: String(p.address || '').trim(),
                   colonia: String(p.colonia || 'Ciudad del Carmen Centro').trim(),
                   description: String(p.description || '').trim(),
-                  delivery: String(p.delivery || 'Servicio a Domicilio disponible').trim(),
-                  hasDelivery: Boolean(p.hasDelivery !== false),
-                  schedule: String(p.schedule || 'Lunes a Sábado').trim(),
-                  payment: String(p.payment || 'Efectivo y Transferencia').trim(),
+                  delivery: p.delivery && String(p.delivery).trim() ? String(p.delivery).trim() : 'Consultar con el negocio',
+                  hasDelivery: Boolean(p.hasDelivery === true),
+                  schedule: p.schedule && String(p.schedule).trim() ? String(p.schedule).trim() : 'Consultar con el negocio',
+                  payment: p.payment && String(p.payment).trim() ? String(p.payment).trim() : 'Consultar con el negocio',
                   image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
-                  source: '✨ Detección con IA (Google Search Grounding)',
-                  sourceUrl: String(p.sourceUrl || '').trim(),
-                  isLiveWebDiscovery: true,
-                  provenance: 'ai_grounding',
+                  source: isVerifiableUrl ? '✨ Detección con IA (Google Search Grounding)' : '💡 Sugerencia IA sin verificar',
+                  sourceUrl: rawSourceUrl,
+                  isLiveWebDiscovery,
+                  provenance,
+                  requiresAdminVerification,
                   status: 'pending' as const
                 };
               })
@@ -7274,404 +7287,262 @@ app.post('/api/businesses/parse-whatsapp-group', (req: Request, res: Response) =
   }
 });
 
+// Mutex to serialize business approval requests and prevent concurrent ID collisions (Item B)
+let approvalMutex: Promise<void> = Promise.resolve();
+async function acquireApprovalMutex<T>(fn: () => Promise<T>): Promise<T> {
+  let release: () => void = () => {};
+  const nextMutex = new Promise<void>(resolve => { release = resolve; });
+  const previousMutex = approvalMutex;
+  approvalMutex = nextMutex;
+  await previousMutex.catch(() => {});
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
+// Thread-safe next business ID generator querying MariaDB, in-memory cache, and batch allocations (Item B)
+async function getNextBusinessId(allocatedIds: Set<number> = new Set()): Promise<number> {
+  let maxId = 4000;
+  for (const b of businessesCache) {
+    const num = Number(b.id);
+    if (Number.isSafeInteger(num) && num > maxId) {
+      maxId = num;
+    }
+  }
+  for (const id of allocatedIds) {
+    if (id > maxId) {
+      maxId = id;
+    }
+  }
+  if (isMariaDbActive()) {
+    try {
+      const pool = getPool();
+      if (pool) {
+        const [rows] = await pool.query<any[]>(
+          "SELECT MAX(CAST(id AS UNSIGNED)) AS max_id FROM businesses WHERE id REGEXP '^[0-9]+$"
+        );
+        const dbMax = Number(rows?.[0]?.max_id);
+        if (Number.isSafeInteger(dbMax) && dbMax > maxId) {
+          maxId = dbMax;
+        }
+      }
+    } catch (_) {}
+  }
+  return maxId + 1;
+}
+
+function generateSafeSlug(name: string, id: number): string {
+  return (name || 'empresa')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || `empresa-${id}`;
+}
+
 // 2. Endpoint: Aprobar y Publicar Candidato (Persistencia verificada en MariaDB, sin dependencias de WordPress)
 app.post('/api/businesses/approve-candidate', async (req: Request, res: Response) => {
-  try {
-    if (!adminSecurity.isAuthorized(req, 'business:publish')) {
-      return res.status(401).json({ success: false, message: 'No autorizado para publicar empresas.' });
-    }
-
-    const candidate: CarmenAutoBusinessCandidate = req.body?.candidate;
-    if (!candidate || !candidate.name || !candidate.name.trim() || candidate.name.trim().length < 2) {
-      return res.status(400).json({ success: false, message: 'Datos del candidato inválidos. Se requiere nombre de empresa válido.' });
-    }
-
-    // Validación rigurosa de teléfono: se exige formato de 10 dígitos verificables
-    const phoneDigits = contactDigits(candidate.phone);
-    const waDigits = contactDigits(candidate.whatsapp || candidate.phone);
-    if (!phoneDigits && !waDigits) {
-      return res.status(400).json({
-        success: false,
-        message: 'No se puede publicar un negocio sin número telefónico verificado de 10 dígitos.'
-      });
-    }
-    const mainContact = phoneDigits || waDigits;
-
-    // Verificación de duplicado en el catálogo existente
-    const existingDup = findDuplicateBusiness(candidate.name, mainContact);
-    if (existingDup) {
-      return res.status(409).json({
-        success: false,
-        duplicate: true,
-        message: `Ya existe un negocio registrado con nombre o teléfono similar ("${existingDup.name}").`
-      });
-    }
-
-    const isStaging = isStagingEnvironment();
-    if (isStaging) {
-      if (!isBusinessWritePermitted()) {
-        return res.status(503).json({
-          success: false,
-          message: 'MariaDB Staging no permite escrituras de empresas en este momento. La empresa no fue guardada.'
-        });
-      }
-    } else {
-      if (!isMariaDbActive() || !isWritePermitted()) {
-        return res.status(503).json({
-          success: false,
-          message: 'MariaDB no está disponible o las escrituras están bloqueadas. La empresa no fue guardada.'
-        });
-      }
-    }
-
-    console.log(`[Aprobar Candidato] Guardando y confirmando "${candidate.name}" en MariaDB...`);
-
-    const cats = Array.isArray(candidate.categories) && candidate.categories.length > 0 
-      ? candidate.categories 
-      : [candidate.category || 'Comercios y Servicios'];
-
-    const description = candidate.description && candidate.description.trim()
-      ? candidate.description.trim()
-      : generateAutonomousAdCopy(candidate.name, candidate.category, candidate.delivery, candidate.address);
-
-    let persistedBiz: any = null;
-
-    if (isStaging) {
-      try {
-        const draft = {
-          name: candidate.name.trim(),
-          category: candidate.category || cats[0] || 'Comercios y Servicios',
-          subcategory: (candidate as any).subcategory || '',
-          description,
-          address: candidate.address || '',
-          colonia: candidate.colonia || 'Ciudad del Carmen Centro',
-          phone: candidate.phone ? candidate.phone.trim() : (phoneDigits || ''),
-          whatsapp: candidate.whatsapp ? candidate.whatsapp.trim() : (candidate.phone ? candidate.phone.trim() : (waDigits || '')),
-          email: (candidate as any).email || '',
-          website: candidate.website || '',
-          facebook: candidate.facebook || '',
-          instagram: candidate.instagram || '',
-          schedule: candidate.schedule || 'Lunes a Sábado',
-          delivery: candidate.delivery || 'Servicio a Domicilio disponible en toda la isla',
-          hasDelivery: Boolean(candidate.hasDelivery || (candidate.delivery && !candidate.delivery.toLowerCase().includes('solo en sucursal'))),
-          image: candidate.image || '/icons/icon-512.svg',
-          gallery: Array.isArray((candidate as any).gallery) ? (candidate as any).gallery : [],
-          categories: cats,
-          categorySlugs: generateCategorySlugs(cats),
-          status: 'published'
-        };
-        const requestId = crypto.randomUUID();
-        const created = await stagingBusinessStore.create(draft, requestId);
-        persistedBiz = created.business;
-      } catch (err: any) {
-        console.error('[Staging Store Create Error]:', err);
-        return res.status(err.status || 503).json({
-          success: false,
-          message: err.message || 'Error al persistir empresa en MariaDB Staging.',
-          code: err.code
-        });
-      }
-    } else {
-      try {
-        const maxId = businessesCache.reduce((max, b) => Math.max(max, Number(b.id) || 0), 4000);
-        const newId = maxId + 1;
-        const baseSlug = (candidate.name || 'empresa')
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '') || `empresa-${newId}`;
-
-        const newBiz: any = {
-          id: newId,
-          name: candidate.name.trim(),
-          slug: baseSlug,
-          description,
-          phone: candidate.phone ? candidate.phone.trim() : (phoneDigits || ''),
-          whatsapp: candidate.whatsapp ? candidate.whatsapp.trim() : (candidate.phone ? candidate.phone.trim() : (waDigits || '')),
-          address: candidate.address || '',
-          colonia: candidate.colonia || 'Ciudad del Carmen Centro',
-          mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(candidate.name + ', Ciudad del Carmen, Campeche')}`,
-          schedule: candidate.schedule || 'Lunes a Sábado',
-          payment: candidate.payment || 'Efectivo y Transferencia',
-          delivery: candidate.delivery || 'Servicio a Domicilio disponible en toda la isla',
-          hasDelivery: Boolean(candidate.hasDelivery || (candidate.delivery && !candidate.delivery.toLowerCase().includes('solo en sucursal'))),
-          image: candidate.image || '/icons/icon-512.svg',
-          gallery: Array.isArray((candidate as any).gallery) ? (candidate as any).gallery : [],
-          website: candidate.website || '',
-          facebook: candidate.facebook || '',
-          instagram: candidate.instagram || '',
-          categories: cats,
-          categorySlugs: generateCategorySlugs(cats),
-          rating: 0,
-          reviewCount: 0,
-          permalink: `/empresa/${baseSlug}/`,
-          isTopBusiness: Boolean(candidate.isTopBusiness),
-          isRecommended: Boolean(candidate.isRecommended),
-          source: 'radar_auto_carmen',
-          createdAt: new Date().toISOString()
-        };
-
-        const saved = await dbSaveBusiness(newBiz);
-        if (!saved) {
-          return res.status(503).json({
-            success: false,
-            message: 'MariaDB no confirmó el guardado de la empresa.'
-          });
-        }
-
-        const allFromDb = await dbLoadAllBusinesses(true);
-        const verified = allFromDb.find(b => String(b.id) === String(newBiz.id));
-        if (!verified) {
-          return res.status(503).json({
-            success: false,
-            message: 'Fallo de verificación de lectura en MariaDB. No se confirmó la persistencia.'
-          });
-        }
-        persistedBiz = verified;
-      } catch (err: any) {
-        console.error('[MariaDB Save Error]:', err);
-        return res.status(503).json({
-          success: false,
-          message: err.message || 'Error al persistir empresa en MariaDB.'
-        });
-      }
-    }
-
-    if (!persistedBiz) {
-      return res.status(503).json({
-        success: false,
-        message: 'No se obtuvo confirmación de la persistencia en MariaDB.'
-      });
-    }
-
-    // Actualizar caché en memoria ÚNICAMENTE tras confirmación en base de datos
-    businessesCache.unshift(persistedBiz);
-
+  return acquireApprovalMutex(async () => {
     try {
-      const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
-      fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
-    } catch (e) {
-      console.warn('[Storage] Error actualizando businesses_seed.json:', e);
-    }
-
-    // Actualizar pool y candidatos descartados
-    dismissedCandidates.add(candidate.name.toLowerCase().trim());
-    if (candidate.id) dismissedCandidates.add(String(candidate.id).toLowerCase().trim());
-    if (mainContact) dismissedCandidates.add(mainContact);
-    const poolIdx = CARMEN_AUTO_BUSINESSES_POOL.findIndex(
-      c => c.name.toLowerCase().trim() === candidate.name.toLowerCase().trim() ||
-           (mainContact && (contactDigits(c.phone) === mainContact || contactDigits(c.whatsapp) === mainContact))
-    );
-    if (poolIdx !== -1) CARMEN_AUTO_BUSINESSES_POOL.splice(poolIdx, 1);
-
-    try {
-      const arr = Array.from(dismissedCandidates).map(key => ({ id: key }));
-      fs.writeFileSync(dismissedCandidatesPath, JSON.stringify(arr, null, 2), 'utf8');
-    } catch (_) {}
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveDismissedCandidate(candidate.id || candidate.name, candidate.name, mainContact);
-      } catch (_) {}
-    }
-
-    res.json({
-      success: true,
-      business: persistedBiz,
-      publishedToWordPress: false,
-      message: `¡Éxito! "${persistedBiz.name}" se guardó y confirmó en MariaDB.`
-    });
-  } catch (err: any) {
-    console.error('[Approve Candidate Error]:', err);
-    res.status(500).json({
-      success: false,
-      message: err.message || 'Error al procesar la aprobación de la empresa.'
-    });
-  }
-});
-
-// 3. Endpoint: Aprobar Múltiples Candidatos en Lote (Persistencia atómica y verificable individualmente)
-app.post('/api/businesses/approve-multiple-candidates', async (req: Request, res: Response) => {
-  try {
-    if (!adminSecurity.isAuthorized(req, 'business:publish')) {
-      return res.status(401).json({ success: false, message: 'No autorizado para publicar empresas.' });
-    }
-
-    const candidates: CarmenAutoBusinessCandidate[] = req.body?.candidates;
-    if (!Array.isArray(candidates) || candidates.length === 0) {
-      return res.status(400).json({ success: false, message: 'No se recibieron candidatos para aprobar' });
-    }
-
-    const isStaging = isStagingEnvironment();
-    if (isStaging) {
-      if (!isBusinessWritePermitted()) {
-        return res.status(503).json({
-          success: false,
-          message: 'MariaDB Staging no permite escrituras de empresas en este momento.'
-        });
-      }
-    } else {
-      if (!isMariaDbActive() || !isWritePermitted()) {
-        return res.status(503).json({
-          success: false,
-          message: 'MariaDB no está disponible o las escrituras están bloqueadas.'
-        });
-      }
-    }
-
-    const confirmed: any[] = [];
-    const rejected: { candidate: CarmenAutoBusinessCandidate; reason: string; code?: string }[] = [];
-    const batchNames = new Set<string>();
-    const batchPhones = new Set<string>();
-
-    for (const cand of candidates) {
-      if (!cand || !cand.name || !cand.name.trim() || cand.name.trim().length < 2) {
-        rejected.push({ candidate: cand, reason: 'Nombre de empresa inválido o ausente' });
-        continue;
+      if (!adminSecurity.isAuthorized(req, 'business:publish')) {
+        return res.status(401).json({ success: false, message: 'No autorizado para publicar empresas.' });
       }
 
-      const phoneDigits = contactDigits(cand.phone);
-      const waDigits = contactDigits(cand.whatsapp || cand.phone);
+      const candidate: CarmenAutoBusinessCandidate = req.body?.candidate;
+      if (!candidate || !candidate.name || !candidate.name.trim() || candidate.name.trim().length < 2) {
+        return res.status(400).json({ success: false, message: 'Datos del candidato inválidos. Se requiere nombre de empresa válido.' });
+      }
+
+      // Validación rigurosa de teléfono: se exige formato de 10 dígitos verificables
+      const phoneDigits = contactDigits(candidate.phone);
+      const waDigits = contactDigits(candidate.whatsapp || candidate.phone);
       if (!phoneDigits && !waDigits) {
-        rejected.push({ candidate: cand, reason: 'Sin número telefónico de 10 dígitos verificado' });
-        continue;
+        return res.status(400).json({
+          success: false,
+          message: 'No se puede publicar un negocio sin número telefónico verificado de 10 dígitos.'
+        });
       }
+
       const mainContact = phoneDigits || waDigits;
-      const normName = cand.name.toLowerCase().trim();
 
-      // Control de colisiones intra-lote
-      if (batchNames.has(normName) || batchPhones.has(mainContact)) {
-        rejected.push({ candidate: cand, reason: 'Empresa o teléfono duplicado dentro del mismo lote' });
-        continue;
-      }
-
-      // Control de duplicados contra catálogo existente
-      const existingDup = findDuplicateBusiness(cand.name, mainContact);
+      // Verificación de duplicado en el catálogo existente
+      const existingDup = findDuplicateBusiness(candidate.name, mainContact);
       if (existingDup) {
-        rejected.push({ candidate: cand, reason: `Ya existe en el directorio ("${existingDup.name}")` });
-        continue;
+        return res.status(409).json({
+          success: false,
+          duplicate: true,
+          message: `Ya existe un negocio registrado con nombre o teléfono similar ("${existingDup.name}").`
+        });
       }
 
-      const cats = Array.isArray(cand.categories) && cand.categories.length > 0 
-        ? cand.categories 
-        : [cand.category || 'Comercios y Servicios'];
+      const isStaging = isStagingEnvironment();
+      if (isStaging) {
+        if (!isBusinessWritePermitted()) {
+          return res.status(503).json({
+            success: false,
+            message: 'MariaDB Staging no permite escrituras de empresas en este momento. La empresa no fue guardada.'
+          });
+        }
+      } else {
+        if (!isMariaDbActive() || !isWritePermitted()) {
+          return res.status(503).json({
+            success: false,
+            message: 'MariaDB no está disponible o las escrituras están bloqueadas. La empresa no fue guardada.'
+          });
+        }
+      }
 
-      const description = cand.description && cand.description.trim()
-        ? cand.description.trim()
-        : generateAutonomousAdCopy(cand.name, cand.category, cand.delivery, cand.address);
+      console.log(`[Aprobar Candidato] Guardando y confirmando "${candidate.name}" en MariaDB...`);
+
+      const cats = Array.isArray(candidate.categories) && candidate.categories.length > 0 
+        ? candidate.categories 
+        : [candidate.category || 'Comercios y Servicios'];
+
+      const description = candidate.description && candidate.description.trim()
+        ? candidate.description.trim()
+        : generateAutonomousAdCopy(candidate.name, candidate.category, candidate.delivery, candidate.address);
+
+      // Honest commercial defaults (Item D): no fictitious claims
+      const schedule = candidate.schedule && candidate.schedule.trim() ? candidate.schedule.trim() : 'Consultar con el negocio';
+      const payment = (candidate as any).payment && (candidate as any).payment.trim() ? (candidate as any).payment.trim() : 'Consultar con el negocio';
+      const delivery = candidate.delivery && candidate.delivery.trim() ? candidate.delivery.trim() : 'Consultar con el negocio';
+      const hasDelivery = Boolean(candidate.hasDelivery === true);
+
+      let persistedBiz: any = null;
 
       if (isStaging) {
         try {
           const draft = {
-            name: cand.name.trim(),
-            category: cand.category || cats[0] || 'Comercios y Servicios',
-            subcategory: (cand as any).subcategory || '',
+            name: candidate.name.trim(),
+            category: candidate.category || cats[0] || 'Comercios y Servicios',
+            subcategory: (candidate as any).subcategory || '',
             description,
-            address: cand.address || '',
-            colonia: cand.colonia || 'Ciudad del Carmen Centro',
-            phone: cand.phone ? cand.phone.trim() : (phoneDigits || ''),
-            whatsapp: cand.whatsapp ? cand.whatsapp.trim() : (cand.phone ? cand.phone.trim() : (waDigits || '')),
-            email: (cand as any).email || '',
-            website: cand.website || '',
-            facebook: cand.facebook || '',
-            instagram: cand.instagram || '',
-            schedule: cand.schedule || 'Lunes a Sábado',
-            delivery: cand.delivery || 'Servicio a Domicilio disponible en toda la isla',
-            hasDelivery: Boolean(cand.hasDelivery || (cand.delivery && !cand.delivery.toLowerCase().includes('solo en sucursal'))),
-            image: cand.image || '/icons/icon-512.svg',
-            gallery: Array.isArray((cand as any).gallery) ? (cand as any).gallery : [],
+            address: candidate.address || '',
+            colonia: candidate.colonia || 'Ciudad del Carmen Centro',
+            phone: candidate.phone ? candidate.phone.trim() : (phoneDigits || ''),
+            whatsapp: candidate.whatsapp ? candidate.whatsapp.trim() : (candidate.phone ? candidate.phone.trim() : (waDigits || '')),
+            email: (candidate as any).email || '',
+            website: candidate.website || '',
+            facebook: candidate.facebook || '',
+            instagram: candidate.instagram || '',
+            schedule,
+            delivery,
+            hasDelivery,
+            image: candidate.image || '/icons/icon-512.svg',
+            gallery: Array.isArray((candidate as any).gallery) ? (candidate as any).gallery : [],
             categories: cats,
             categorySlugs: generateCategorySlugs(cats),
             status: 'published'
           };
           const requestId = crypto.randomUUID();
           const created = await stagingBusinessStore.create(draft, requestId);
-          confirmed.push(created.business);
-          batchNames.add(normName);
-          batchPhones.add(mainContact);
+          persistedBiz = created.business;
         } catch (err: any) {
-          console.warn(`[Batch Staging Save Error] "${cand.name}":`, err.message);
-          rejected.push({ candidate: cand, reason: err.message || 'Error al persistir en MariaDB Staging', code: err.code });
+          console.error('[Staging Store Create Error]:', err);
+          return res.status(err.status || 503).json({
+            success: false,
+            message: err.message || 'Error al persistir empresa en MariaDB Staging.',
+            code: err.code
+          });
         }
       } else {
         try {
-          const maxId = businessesCache.reduce((max, b) => Math.max(max, Number(b.id) || 0), 4000);
-          const newId = maxId + 1;
-          const baseSlug = (cand.name || 'empresa')
-            .toLowerCase()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '') || `empresa-${newId}`;
+          const newId = await getNextBusinessId();
+          const baseSlug = generateSafeSlug(candidate.name, newId);
 
           const newBiz: any = {
             id: newId,
-            name: cand.name.trim(),
+            name: candidate.name.trim(),
             slug: baseSlug,
             description,
-            phone: cand.phone ? cand.phone.trim() : (phoneDigits || ''),
-            whatsapp: cand.whatsapp ? cand.whatsapp.trim() : (cand.phone ? cand.phone.trim() : (waDigits || '')),
-            address: cand.address || '',
-            colonia: cand.colonia || 'Ciudad del Carmen Centro',
-            mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cand.name + ', Ciudad del Carmen, Campeche')}`,
-            schedule: cand.schedule || 'Lunes a Sábado',
-            payment: cand.payment || 'Efectivo y Transferencia',
-            delivery: cand.delivery || 'Servicio a Domicilio disponible en toda la isla',
-            hasDelivery: Boolean(cand.hasDelivery || (cand.delivery && !cand.delivery.toLowerCase().includes('solo en sucursal'))),
-            image: cand.image || '/icons/icon-512.svg',
-            gallery: Array.isArray((cand as any).gallery) ? (cand as any).gallery : [],
-            website: cand.website || '',
-            facebook: cand.facebook || '',
-            instagram: cand.instagram || '',
+            phone: candidate.phone ? candidate.phone.trim() : (phoneDigits || ''),
+            whatsapp: candidate.whatsapp ? candidate.whatsapp.trim() : (candidate.phone ? candidate.phone.trim() : (waDigits || '')),
+            address: candidate.address || '',
+            colonia: candidate.colonia || 'Ciudad del Carmen Centro',
+            mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(candidate.name + ', Ciudad del Carmen, Campeche')}`,
+            schedule,
+            payment,
+            delivery,
+            hasDelivery,
+            image: candidate.image || '/icons/icon-512.svg',
+            gallery: Array.isArray((candidate as any).gallery) ? (candidate as any).gallery : [],
+            website: candidate.website || '',
+            facebook: candidate.facebook || '',
+            instagram: candidate.instagram || '',
             categories: cats,
             categorySlugs: generateCategorySlugs(cats),
             rating: 0,
             reviewCount: 0,
             permalink: `/empresa/${baseSlug}/`,
-            isTopBusiness: Boolean(cand.isTopBusiness),
-            isRecommended: Boolean(cand.isRecommended),
+            isTopBusiness: Boolean(candidate.isTopBusiness),
+            isRecommended: Boolean(candidate.isRecommended),
             source: 'radar_auto_carmen',
             createdAt: new Date().toISOString()
           };
 
           const saved = await dbSaveBusiness(newBiz);
-          if (saved) {
-            confirmed.push(newBiz);
-            batchNames.add(normName);
-            batchPhones.add(mainContact);
-          } else {
-            rejected.push({ candidate: cand, reason: 'MariaDB no confirmó el guardado' });
+          if (!saved) {
+            return res.status(503).json({
+              success: false,
+              message: 'MariaDB no confirmó el guardado de la empresa.'
+            });
           }
+
+          // Verificación de lectura real posterior al guardado en MariaDB (Item A)
+          const allFromDb = await dbLoadAllBusinesses(true);
+          const verified = allFromDb.find(b => String(b.id) === String(newBiz.id));
+          const contactsMatch = Boolean(
+            verified &&
+            verified.name?.trim().toLowerCase() === newBiz.name.trim().toLowerCase() &&
+            (contactDigits(verified.phone) === phoneDigits || contactDigits(verified.whatsapp) === waDigits)
+          );
+
+          if (!verified || !contactsMatch) {
+            console.error(`[Aprobar Candidato Error] Verificación de lectura falló para ID ${newBiz.id}`);
+            return res.status(503).json({
+              success: false,
+              message: 'Fallo de verificación de lectura en MariaDB. No se confirmó la persistencia íntegra.'
+            });
+          }
+
+          persistedBiz = verified;
         } catch (err: any) {
-          console.warn(`[Batch MariaDB Save Error] "${cand.name}":`, err.message);
-          rejected.push({ candidate: cand, reason: err.message || 'Error al persistir en MariaDB' });
+          console.error('[MariaDB Save Error]:', err);
+          return res.status(503).json({
+            success: false,
+            message: err.message || 'Error al persistir empresa en MariaDB.'
+          });
         }
       }
-    }
 
-    // Agregar al caché en memoria ÚNICAMENTE las empresas confirmadas en MariaDB
-    if (confirmed.length > 0) {
-      for (const biz of confirmed) {
-        businessesCache.unshift(biz);
-        dismissedCandidates.add(biz.name.toLowerCase().trim());
-        if (biz.id) dismissedCandidates.add(String(biz.id).toLowerCase().trim());
-        const ph = contactDigits(biz.phone);
-        const wa = contactDigits(biz.whatsapp);
-        if (ph) dismissedCandidates.add(ph);
-        if (wa) dismissedCandidates.add(wa);
-
-        const poolIdx = CARMEN_AUTO_BUSINESSES_POOL.findIndex(
-          c => c.name.toLowerCase().trim() === biz.name.toLowerCase().trim() ||
-               (ph && (contactDigits(c.phone) === ph || contactDigits(c.whatsapp) === ph))
-        );
-        if (poolIdx !== -1) CARMEN_AUTO_BUSINESSES_POOL.splice(poolIdx, 1);
+      if (!persistedBiz) {
+        return res.status(503).json({
+          success: false,
+          message: 'No se obtuvo confirmación de la persistencia en MariaDB.'
+        });
       }
 
+      // Actualizar caché en memoria ÚNICAMENTE tras confirmación y verificación en base de datos
+      businessesCache.unshift(persistedBiz);
       try {
         const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
         fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
-      } catch (_) {}
+      } catch (e) {
+        console.warn('[Storage] Error actualizando businesses_seed.json:', e);
+      }
+
+      // Actualizar pool y candidatos descartados
+      dismissedCandidates.add(candidate.name.toLowerCase().trim());
+      if (candidate.id) dismissedCandidates.add(String(candidate.id).toLowerCase().trim());
+      if (mainContact) dismissedCandidates.add(mainContact);
+
+      const poolIdx = CARMEN_AUTO_BUSINESSES_POOL.findIndex(
+        c => c.name.toLowerCase().trim() === candidate.name.toLowerCase().trim() || 
+             (mainContact && (contactDigits(c.phone) === mainContact || contactDigits(c.whatsapp) === mainContact))
+      );
+      if (poolIdx !== -1) CARMEN_AUTO_BUSINESSES_POOL.splice(poolIdx, 1);
 
       try {
         const arr = Array.from(dismissedCandidates).map(key => ({ id: key }));
@@ -7679,35 +7550,269 @@ app.post('/api/businesses/approve-multiple-candidates', async (req: Request, res
       } catch (_) {}
 
       if (isMariaDbActive()) {
-        for (const biz of confirmed) {
-          try {
-            await dbSaveDismissedCandidate(biz.id || biz.name, biz.name, contactDigits(biz.phone) || contactDigits(biz.whatsapp) || '');
-          } catch (_) {}
+        try {
+          await dbSaveDismissedCandidate(candidate.id || candidate.name, candidate.name, mainContact);
+        } catch (_) {}
+      }
+
+      res.json({
+        success: true,
+        business: persistedBiz,
+        publishedToWordPress: false,
+        message: `¡Éxito! "${persistedBiz.name}" se guardó y confirmó en MariaDB.`
+      });
+    } catch (err: any) {
+      console.error('[Approve Candidate Error]:', err);
+      res.status(500).json({
+        success: false,
+        message: err.message || 'Error al procesar la aprobación de la empresa.'
+      });
+    }
+  });
+});
+
+// 3. Endpoint: Aprobar Múltiples Candidatos en Lote (Persistencia atómica y verificable individualmente)
+app.post('/api/businesses/approve-multiple-candidates', async (req: Request, res: Response) => {
+  return acquireApprovalMutex(async () => {
+    try {
+      if (!adminSecurity.isAuthorized(req, 'business:publish')) {
+        return res.status(401).json({ success: false, message: 'No autorizado para publicar empresas.' });
+      }
+
+      const candidates: CarmenAutoBusinessCandidate[] = req.body?.candidates;
+      if (!Array.isArray(candidates) || candidates.length === 0) {
+        return res.status(400).json({ success: false, message: 'No se recibieron candidatos para aprobar' });
+      }
+
+      const isStaging = isStagingEnvironment();
+      if (isStaging) {
+        if (!isBusinessWritePermitted()) {
+          return res.status(503).json({
+            success: false,
+            message: 'MariaDB Staging no permite escrituras de empresas en este momento.'
+          });
+        }
+      } else {
+        if (!isMariaDbActive() || !isWritePermitted()) {
+          return res.status(503).json({
+            success: false,
+            message: 'MariaDB no está disponible o las escrituras están bloqueadas.'
+          });
         }
       }
-    }
 
-    res.json({
-      success: confirmed.length > 0,
-      count: confirmed.length,
-      totalRequested: candidates.length,
-      confirmed,
-      published: confirmed,
-      rejected,
-      failed: rejected,
-      publishedToWordPress: false,
-      message: confirmed.length === candidates.length
-        ? `Se aprobaron y confirmaron ${confirmed.length} empresas en MariaDB con éxito.`
-        : `Se confirmaron ${confirmed.length} de ${candidates.length} empresas en MariaDB. ${rejected.length} no se pudieron guardar o fueron rechazadas.`
-    });
-  } catch (err: any) {
-    console.error('[Bulk Approve Error]:', err);
-    res.status(500).json({ success: false, message: err.message || 'Error en publicación múltiple' });
-  }
+      const confirmed: any[] = [];
+      const rejected: { candidate: CarmenAutoBusinessCandidate; reason: string; code?: string }[] = [];
+      const batchNames = new Set<string>();
+      const batchPhones = new Set<string>();
+      const allocatedIds = new Set<number>();
+
+      for (const cand of candidates) {
+        if (!cand || !cand.name || !cand.name.trim() || cand.name.trim().length < 2) {
+          rejected.push({ candidate: cand, reason: 'Nombre de empresa inválido o ausente' });
+          continue;
+        }
+
+        const phoneDigits = contactDigits(cand.phone);
+        const waDigits = contactDigits(cand.whatsapp || cand.phone);
+        if (!phoneDigits && !waDigits) {
+          rejected.push({ candidate: cand, reason: 'Sin número telefónico de 10 dígitos verificado' });
+          continue;
+        }
+
+        const mainContact = phoneDigits || waDigits;
+        const normName = cand.name.toLowerCase().trim();
+
+        // Control de colisiones intra-lote (Item B y Matrix 7)
+        if (batchNames.has(normName) || batchPhones.has(mainContact)) {
+          rejected.push({ candidate: cand, reason: 'Empresa o teléfono duplicado dentro del mismo lote' });
+          continue;
+        }
+
+        // Control de duplicados contra catálogo existente
+        const existingDup = findDuplicateBusiness(cand.name, mainContact);
+        if (existingDup) {
+          rejected.push({ candidate: cand, reason: `Ya existe en el directorio ("${existingDup.name}")` });
+          continue;
+        }
+
+        const cats = Array.isArray(cand.categories) && cand.categories.length > 0 
+          ? cand.categories 
+          : [cand.category || 'Comercios y Servicios'];
+
+        const description = cand.description && cand.description.trim()
+          ? cand.description.trim()
+          : generateAutonomousAdCopy(cand.name, cand.category, cand.delivery, cand.address);
+
+        // Honest commercial defaults (Item D): no fictitious claims
+        const schedule = cand.schedule && cand.schedule.trim() ? cand.schedule.trim() : 'Consultar con el negocio';
+        const payment = (cand as any).payment && (cand as any).payment.trim() ? (cand as any).payment.trim() : 'Consultar con el negocio';
+        const delivery = cand.delivery && cand.delivery.trim() ? cand.delivery.trim() : 'Consultar con el negocio';
+        const hasDelivery = Boolean(cand.hasDelivery === true);
+
+        if (isStaging) {
+          try {
+            const draft = {
+              name: cand.name.trim(),
+              category: cand.category || cats[0] || 'Comercios y Servicios',
+              subcategory: (cand as any).subcategory || '',
+              description,
+              address: cand.address || '',
+              colonia: cand.colonia || 'Ciudad del Carmen Centro',
+              phone: cand.phone ? cand.phone.trim() : (phoneDigits || ''),
+              whatsapp: cand.whatsapp ? cand.whatsapp.trim() : (cand.phone ? cand.phone.trim() : (waDigits || '')),
+              email: (cand as any).email || '',
+              website: cand.website || '',
+              facebook: cand.facebook || '',
+              instagram: cand.instagram || '',
+              schedule,
+              delivery,
+              hasDelivery,
+              image: cand.image || '/icons/icon-512.svg',
+              gallery: Array.isArray((cand as any).gallery) ? (cand as any).gallery : [],
+              categories: cats,
+              categorySlugs: generateCategorySlugs(cats),
+              status: 'published'
+            };
+            const requestId = crypto.randomUUID();
+            const created = await stagingBusinessStore.create(draft, requestId);
+            confirmed.push(created.business);
+            batchNames.add(normName);
+            batchPhones.add(mainContact);
+          } catch (err: any) {
+            console.warn(`[Batch Staging Save Error] "${cand.name}":`, err.message);
+            rejected.push({ candidate: cand, reason: err.message || 'Error al persistir en MariaDB Staging', code: err.code });
+          }
+        } else {
+          try {
+            // Generación segura de ID consultando MariaDB y IDs ya reservados en el lote (Item B)
+            const newId = await getNextBusinessId(allocatedIds);
+            allocatedIds.add(newId);
+
+            const baseSlug = generateSafeSlug(cand.name, newId);
+
+            const newBiz: any = {
+              id: newId,
+              name: cand.name.trim(),
+              slug: baseSlug,
+              description,
+              phone: cand.phone ? cand.phone.trim() : (phoneDigits || ''),
+              whatsapp: cand.whatsapp ? cand.whatsapp.trim() : (cand.phone ? cand.phone.trim() : (waDigits || '')),
+              address: cand.address || '',
+              colonia: cand.colonia || 'Ciudad del Carmen Centro',
+              mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cand.name + ', Ciudad del Carmen, Campeche')}`,
+              schedule,
+              payment,
+              delivery,
+              hasDelivery,
+              image: cand.image || '/icons/icon-512.svg',
+              gallery: Array.isArray((cand as any).gallery) ? (cand as any).gallery : [],
+              website: cand.website || '',
+              facebook: cand.facebook || '',
+              instagram: cand.instagram || '',
+              categories: cats,
+              categorySlugs: generateCategorySlugs(cats),
+              rating: 0,
+              reviewCount: 0,
+              permalink: `/empresa/${baseSlug}/`,
+              isTopBusiness: Boolean(cand.isTopBusiness),
+              isRecommended: Boolean(cand.isRecommended),
+              source: 'radar_auto_carmen',
+              createdAt: new Date().toISOString()
+            };
+
+            const saved = await dbSaveBusiness(newBiz);
+            if (!saved) {
+              rejected.push({ candidate: cand, reason: 'MariaDB no confirmó el guardado' });
+              continue;
+            }
+
+            // A.1 & A.2: Ejecutar lectura real posterior al guardado en MariaDB y verificar concordancia
+            const allFromDb = await dbLoadAllBusinesses(true);
+            const verified = allFromDb.find(b => String(b.id) === String(newBiz.id));
+            const contactsMatch = Boolean(
+              verified &&
+              verified.name?.trim().toLowerCase() === newBiz.name.trim().toLowerCase() &&
+              (contactDigits(verified.phone) === phoneDigits || contactDigits(verified.whatsapp) === waDigits)
+            );
+
+            // A.4: Si la verificación de lectura falla (incluso tras guardado exitoso), rechazar
+            if (!verified || !contactsMatch) {
+              console.warn(`[Batch MariaDB Readback Failed] "${cand.name}" (ID ${newId}) no se confirmó en lectura.`);
+              rejected.push({ candidate: cand, reason: 'Fallo de verificación de lectura en MariaDB. No se confirmó la persistencia íntegra.' });
+              continue;
+            }
+
+            // A.3: Incorporar a confirmed únicamente registros cuya persistencia haya sido verificada en lectura
+            confirmed.push(verified);
+            batchNames.add(normName);
+            batchPhones.add(mainContact);
+          } catch (err: any) {
+            console.warn(`[Batch MariaDB Save Error] "${cand.name}":`, err.message);
+            rejected.push({ candidate: cand, reason: err.message || 'Error al persistir en MariaDB' });
+          }
+        }
+      }
+
+      // A.5: Agregar al caché en memoria ÚNICAMENTE las empresas confirmadas y verificadas en MariaDB
+      if (confirmed.length > 0) {
+        for (const biz of confirmed) {
+          businessesCache.unshift(biz);
+          dismissedCandidates.add(biz.name.toLowerCase().trim());
+          if (biz.id) dismissedCandidates.add(String(biz.id).toLowerCase().trim());
+          const ph = contactDigits(biz.phone);
+          const wa = contactDigits(biz.whatsapp);
+          if (ph) dismissedCandidates.add(ph);
+          if (wa) dismissedCandidates.add(wa);
+
+          const poolIdx = CARMEN_AUTO_BUSINESSES_POOL.findIndex(
+            c => c.name.toLowerCase().trim() === biz.name.toLowerCase().trim() || 
+                 (ph && (contactDigits(c.phone) === ph || contactDigits(c.whatsapp) === ph))
+          );
+          if (poolIdx !== -1) CARMEN_AUTO_BUSINESSES_POOL.splice(poolIdx, 1);
+        }
+
+        try {
+          const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
+          fs.writeFileSync(bizPath, JSON.stringify(businessesCache, null, 2), 'utf8');
+        } catch (_) {}
+
+        try {
+          const arr = Array.from(dismissedCandidates).map(key => ({ id: key }));
+          fs.writeFileSync(dismissedCandidatesPath, JSON.stringify(arr, null, 2), 'utf8');
+        } catch (_) {}
+
+        if (isMariaDbActive()) {
+          for (const biz of confirmed) {
+            try {
+              await dbSaveDismissedCandidate(biz.id || biz.name, biz.name, contactDigits(biz.phone) || contactDigits(biz.whatsapp) || '');
+            } catch (_) {}
+          }
+        }
+      }
+
+      const statusCode = rejected.length === 0 ? 200 : (confirmed.length === 0 ? 422 : 207);
+      res.status(statusCode).json({
+        success: confirmed.length > 0,
+        count: confirmed.length,
+        totalRequested: candidates.length,
+        confirmed,
+        published: confirmed,
+        rejected,
+        failed: rejected,
+        publishedToWordPress: false,
+        message: confirmed.length === candidates.length
+          ? `Se aprobaron y confirmaron ${confirmed.length} empresas en MariaDB con éxito.`
+          : `Se confirmaron ${confirmed.length} de ${candidates.length} empresas en MariaDB. ${rejected.length} no se pudieron guardar o fueron rechazadas.`
+      });
+    } catch (err: any) {
+      console.error('[Bulk Approve Error]:', err);
+      res.status(500).json({ success: false, message: err.message || 'Error en publicación múltiple' });
+    }
+  });
 });
 
 // Login, session, logout and credentials are owned by adminSecurity.
-
 // Upload Logo / Image
 app.post('/api/upload-logo', async (req: Request, res: Response) => {
   try {

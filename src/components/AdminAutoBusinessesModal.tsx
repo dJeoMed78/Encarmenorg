@@ -1038,19 +1038,32 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                             )}
                           </div>
 
-                          {/* Source badge */}
+                          {/* Source badge (Item C & D) */}
                           <div className="flex items-center gap-1.5 text-[11px] text-stone-400 pt-1 flex-wrap">
                             <span className="font-semibold text-stone-500">Procedencia:</span>
                             <span className="text-sky-300 font-medium">{candidate.source}</span>
-                            {(candidate as any).isLiveWebDiscovery === false && (
+                            {(candidate as any).provenance === 'ai_unverified' || (candidate as any).requiresAdminVerification ? (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-950/80 text-amber-300 border border-amber-700/50 font-medium">
+                                IA sin verificar (Requiere revisión manual)
+                              </span>
+                            ) : (candidate as any).isLiveWebDiscovery === true ? (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-700/50 font-medium">
+                                Detección web activa (Verificada)
+                              </span>
+                            ) : (
                               <span className="px-1.5 py-0.5 rounded text-[10px] bg-stone-800 text-stone-300 border border-stone-700">
                                 Catálogo local
                               </span>
                             )}
-                            {(candidate as any).isLiveWebDiscovery === true && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-700/50">
-                                Detección web activa
-                              </span>
+                            {candidate.sourceUrl && (
+                              <a
+                                href={candidate.sourceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-1.5 py-0.5 rounded text-[10px] bg-sky-950/80 text-sky-300 border border-sky-700/50 hover:underline"
+                              >
+                                Ver fuente ↗
+                              </a>
                             )}
                           </div>
                         </div>
