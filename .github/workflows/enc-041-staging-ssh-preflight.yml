@@ -162,6 +162,12 @@ jobs:
               print('ENC041_CLASSIFIEDS_INNODB='+('yes' if engine==[['InnoDB']] else 'no'))
               pk=sql("SELECT COLUMN_NAME, NON_UNIQUE, SEQ_IN_INDEX FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='classifieds' AND INDEX_NAME='PRIMARY'")
               print('ENC041_CLASSIFIEDS_PRIMARY_ID='+('yes' if pk==[['id','0','1']] else 'no'))
+              cols={row[0] for row in sql('SHOW COLUMNS FROM classifieds') if row}
+              expected={'id','title','category','subcategory','price','price_type','phone','whatsapp','colonia','status','user_token','raw_data'}
+              missing=sorted(expected-cols)
+              print('ENC041_CLASSIFIEDS_SCHEMA_MISSING_COUNT='+str(len(missing)))
+              print('ENC041_CLASSIFIEDS_SCHEMA_MISSING='+(','.join(missing) if missing else 'none'))
+
               count=sql('SELECT COUNT(*) FROM classifieds')
               print('ENC041_SQL_CLASSIFIEDS_READABLE='+('yes' if len(count)==1 and count[0][0].isdigit() else 'no'))
           except Exception as err:
