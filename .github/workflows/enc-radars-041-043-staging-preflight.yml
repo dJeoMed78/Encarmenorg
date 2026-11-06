@@ -1,0 +1,207 @@
+name: ENC radars 041+043 staging read-only preflight
+on:
+  push:
+    branches: [ia-desarrollo]
+    paths: [.github/workflows/enc-radars-041-043-staging-preflight.yml]
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Verify credential availability without disclosure
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS" || { echo "STAGING_SSH_SECRET_UNAVAILABLE"; exit 2; }
+          echo "STAGING_SSH_SECRET_PRESENT=yes"
+      - name: Check pinned Hostinger SSH identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test -s "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          test "$fp" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' || { echo "STAGING_SSH_FINGERPRINT_MISMATCH"; exit 3; }
+          echo "STAGING_SSH_FINGERPRINT_VERIFIED=yes"
+      - name: Inspect current staging and backup without changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o BatchMode=no -o ConnectTimeout=12 u293982346@45.137.159.114 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          root="$HOME/domains/staging.encarmen.org/hbuilds"
+          test -d "$root" || { echo "STAGING_ROOT_MISSING"; exit 10; }
+          test -L "$root/current" || { echo "STAGING_RELEASE_SYMLINK_MISSING"; exit 11; }
+          release=$(readlink "$root/current")
+          case "$release" in versions/*) ;; *) echo "STAGING_RELEASE_UNEXPECTED"; exit 12;; esac
+          test -f "$root/current/nodejs/server.js" || { echo "STAGING_SERVER_BUNDLE_MISSING"; exit 13; }
+          echo "STAGING_RELEASE_PATH_VALID=yes"
+          if [ -f "$root/current/nodejs/dist/encarmen-release.txt" ]; then
+            rev=$(head -c 80 "$root/current/nodejs/dist/encarmen-release.txt" | tr -cd 'a-fA-F0-9')
+            echo "STAGING_BUNDLE_SHA=${rev:-unknown}"
+          else
+            echo "STAGING_BUNDLE_SHA=not_available"
+          fi
+          dir="$HOME/encarmen-staging-backups/database"
+          test -d "$dir" && test ! -L "$dir" || { echo "STAGING_DB_BACKUP_DIR_MISSING"; exit 14; }
+          mode=$(stat -c '%a' "$dir")
+          test "$mode" = 700 || { echo "STAGING_DB_BACKUP_DIR_PERMISSION_INVALID"; exit 15; }
+          file=$(find "$dir" -maxdepth 1 -type f -name 'staging-db-*.sql.gz' -printf '%T@ %p\n' | sort -nr | head -n 1 | cut -d' ' -f2-)
+          test -n "$file" && test -s "$file" || { echo "STAGING_DB_BACKUP_FILE_MISSING"; exit 16; }
+          gzip -t "$file" || { echo "STAGING_DB_BACKUP_CORRUPT"; exit 17; }
+          echo "STAGING_DB_BACKUP_ARCHIVE_VALID=yes"
+          if [ -f "$root/config/.env" ]; then
+            envmode=$(stat -c '%a' "$root/config/.env")
+            if [ "$envmode" = 600 ]; then
+              echo "STAGING_PRIVATE_ENV_PERMISSIONS=600"
+              python3 - "$root/config/.env" <<'PY'
+          import sys, re
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          values = {}
+          duplicates = []
+          for original in path.read_text(encoding='utf8').splitlines():
+              line = re.sub(r'^export\s+', '', original.strip())
+              if not line or line.startswith('#') or '=' not in line:
+                  continue
+              key, value = line.split('=', 1)
+              key = key.strip()
+              if key in values:
+                  duplicates.append(key)
+              values[key] = value.strip().strip('"').strip("'")
+          db = values.get('DB_NAME', '')
+          user = values.get('DB_USER', '')
+          env = values.get('APP_ENV', '')
+          print('STAGING_PRIVATE_DB_NAME_MATCH=' + ('yes' if db=='u293982346_encarmentest' else 'no'))
+          print('STAGING_PRIVATE_DB_NAME_KEY_PRESENT=' + ('yes' if 'DB_NAME' in values else 'no'))
+          print('STAGING_PRIVATE_DB_NAME_FORMAT=' + ('quoted' if any('DB_NAME=' in ln and ('"' in ln or "'" in ln) for ln in path.read_text(encoding='utf8').splitlines()) else 'plain_or_other'))
+          print('STAGING_PRIVATE_APP_ENV_STAGING=' + ('yes' if env=='staging' else 'no'))
+          print('STAGING_PRIVATE_DB_USER_IS_PRODUCTION=' + ('yes' if user=='u293982346_appuser' else 'no'))
+          print('STAGING_PRIVATE_DB_USER_PRESENT=' + ('yes' if bool(user) else 'no'))
+          print('STAGING_PRIVATE_CRITICAL_DUPLICATES=' + ('yes' if any(x in duplicates for x in ('DB_NAME','DB_USER','DB_PASSWORD','APP_ENV')) else 'no'))
+          print('STAGING_PRIVATE_CLASSIFIED_GATE_PRESENT=' + ('yes' if 'STAGING_CLASSIFIED_WRITES_ENABLED' in values else 'no'))
+          PY
+            else
+              echo "STAGING_PRIVATE_ENV_PERMISSIONS=unexpected"
+            fi
+          else
+            echo "STAGING_PRIVATE_ENV_MISSING=yes"
+          fi
+          echo "ENC041_READONLY_PREFLIGHT_COMPLETE=yes"
+          python3 <<'PY'
+          import os, pathlib, re, subprocess, tempfile
+          root=pathlib.Path.home()/'domains/staging.encarmen.org/hbuilds'
+          config=root/'config/.env'
+          backup=pathlib.Path.home()/'encarmen-staging-backups'
+          vals={}
+          for line in config.read_text(encoding='utf8').splitlines():
+              text=line.strip().removeprefix('export ').strip()
+              if not text or text.startswith('#') or '=' not in text:continue
+              k,v=text.split('=',1)
+              vals[k.strip()]=v.strip().strip('"').strip("'")
+          if vals.get('APP_ENV')!='staging' or vals.get('DB_NAME')!='u293982346_encarmentest' or vals.get('DB_USER')=='u293982346_appuser' or not all(vals.get(k) for k in ('DB_USER','DB_HOST','DB_PASSWORD')):
+              raise SystemExit('ENC041_STAGING_SQL_CONFIG_REJECTED')
+          print('ENC041_STAGING_SQL_CONFIG=VALID')
+          for name in ('STAGING_READ_ONLY','STAGING_DB_CONFIRMED'):
+              print('ENC041_'+name+'='+('true' if vals.get(name)=='true' else 'false_or_other'))
+          if backup.is_symlink() or (backup.stat().st_mode & 0o077):
+              raise SystemExit('ENC041_PRIVATE_BACKUP_UNSAFE')
+          cnf=None
+          try:
+              with tempfile.NamedTemporaryFile(mode='w',dir=backup,prefix='.enc041-cnf-',delete=False) as output:
+                  cnf=pathlib.Path(output.name)
+                  os.chmod(cnf,0o600)
+                  output.write('[client]\n')
+                  for k,v in (('host',vals['DB_HOST']),('port',vals.get('DB_PORT','3306')),('user',vals['DB_USER']),('password',vals['DB_PASSWORD'])):
+                      output.write(k+'="'+str(v).replace('\\','\\\\').replace('"','\\"').replace('\n','')+'"\n')
+              def sql(query):
+                  proc=subprocess.run(['mariadb','--defaults-extra-file='+str(cnf),'--batch','--skip-column-names','-D','u293982346_encarmentest','-e',query],capture_output=True,text=True,timeout=20)
+                  if proc.returncode:raise RuntimeError('SQL_READONLY_COMMAND_FAILED')
+                  return [x.split('\t') for x in proc.stdout.strip().splitlines() if x.strip()]
+              identity=sql('SELECT DATABASE(), CURRENT_USER()')
+              if len(identity)!=1 or identity[0][0]!='u293982346_encarmentest' or identity[0][1].split('@')[0]=='u293982346_appuser':
+                  raise RuntimeError('SQL_IDENTITY_INVALID')
+              print('ENC041_SQL_IDENTITY=VERIFIED_STAGING')
+              grants=sql('SHOW GRANTS FOR CURRENT_USER()')
+              if not grants or any('u293982346_encarmenapp' in ' '.join(g) for g in grants):
+                  raise RuntimeError('SQL_GRANTS_PRODUCTION_OR_MISSING')
+              print('ENC041_SQL_NO_EXPLICIT_PRODUCTION_GRANTS=yes')
+              grantText=' '.join(' '.join(g) for g in grants).upper()
+              hasInsert=('INSERT' in grantText or 'ALL PRIVILEGES' in grantText)
+              hasDelete=('DELETE' in grantText or 'ALL PRIVILEGES' in grantText)
+              print('ENC041_SQL_INSERT_PRIVILEGE='+('yes' if hasInsert else 'no'))
+              stageLines=[]
+              for line in grants:
+                  g=' '.join(line).replace('`','').upper()
+                  if ' ON U293982346_ENCARMENTEST.* TO ' in g or ' ON U293982346_ENCARMENTEST.CLASSIFIEDS TO ' in g:
+                      stageLines.append(g.split(' ON ')[0])
+              allowedInsert=any('INSERT' in x or 'ALL PRIVILEGES' in x for x in stageLines)
+              allowedDelete=any('DELETE' in x or 'ALL PRIVILEGES' in x for x in stageLines)
+              allowedSelect=any('SELECT' in x or 'ALL PRIVILEGES' in x for x in stageLines)
+              print('ENC041_CLASSIFIEDS_GRANT_SELECT='+('yes' if allowedSelect else 'no'))
+              print('ENC041_CLASSIFIEDS_GRANT_INSERT='+('yes' if allowedInsert else 'no'))
+              print('ENC041_CLASSIFIEDS_GRANT_DELETE='+('yes' if allowedDelete else 'no'))
+
+              print('ENC041_SQL_DELETE_PRIVILEGE='+('yes' if hasDelete else 'no'))
+              print('ENC041_SQL_GLOBAL_PRIVILEGE='+('yes' if any('ON *.*' in ' '.join(g).upper() and 'USAGE' not in ' '.join(g).upper() for g in grants) else 'no'))
+              schemas=sql('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA')
+              visible={row[0].lower() for row in schemas if row}
+              allowed={'u293982346_encarmentest','information_schema','performance_schema'}
+              print('ENC041_SQL_SCHEMA_ISOLATED='+('yes' if 'u293982346_encarmentest' in visible and visible.issubset(allowed) else 'no'))
+              marker=sql('SELECT env_name, db_name FROM encarmen_environment_marker')
+              print('ENC041_SQL_MARKER_STAGING='+('yes' if marker==[['staging','u293982346_encarmentest']] else 'no'))
+              engine=sql("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='classifieds'")
+              print('ENC041_CLASSIFIEDS_INNODB='+('yes' if engine==[['InnoDB']] else 'no'))
+              pk=sql("SELECT COLUMN_NAME, NON_UNIQUE, SEQ_IN_INDEX FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='classifieds' AND INDEX_NAME='PRIMARY'")
+              print('ENC041_CLASSIFIEDS_PRIMARY_ID='+('yes' if pk==[['id','0','1']] else 'no'))
+              cols={row[0] for row in sql('SHOW COLUMNS FROM classifieds') if row}
+              expected={'id','title','category','subcategory','price','price_type','phone','whatsapp','colonia','status','user_token','raw_data'}
+              missing=sorted(expected-cols)
+              print('ENC041_CLASSIFIEDS_SCHEMA_MISSING_COUNT='+str(len(missing)))
+              print('ENC041_CLASSIFIEDS_SCHEMA_MISSING='+(','.join(missing) if missing else 'none'))
+              expr=sql('SELECT CONVERT(0x616263 USING utf8mb4)')
+              print('ENC041_SQL_HEX_CONVERT_SUPPORTED='+('yes' if expr==[['abc']] else 'no'))
+              import base64
+              def hx(text):
+                  return "CONVERT(FROM_BASE64('"+base64.b64encode(str(text).encode('utf8')).decode('ascii')+"') USING utf8mb4)"
+              raw='{"id":"ad-enc041-test-123","title":"ENC041 prueba oculta, no publicar","category":"__enc041_internal_test","status":"trash"}'
+              stmt=('INSERT INTO classifieds (id,title,category,subcategory,price,price_type,phone,whatsapp,colonia,status,user_token,raw_data) VALUES ('+
+                  ','.join([hx('ad-enc041-test-123'),hx('ENC041 prueba oculta, no publicar'),hx('__enc041_internal_test'),hx(''),'NULL',hx('consult'),hx(''),hx(''),hx(''),hx('trash'),hx(''),hx(raw)])+')')
+              import re as _re
+              def prepare():
+                  result=subprocess.run(['mariadb','--defaults-extra-file='+str(cnf),'--batch','--skip-column-names','-D','u293982346_encarmentest','-e',
+                    'PREPARE enc041_stmt FROM '+chr(39)+stmt.replace(chr(39),chr(39)*2)+chr(39)+'; DEALLOCATE PREPARE enc041_stmt'],
+                    stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=20)
+                  if result.returncode:
+                      m=_re.search(rb'ERROR\s+(\d{3,5})',result.stderr)
+                      code=m.group(1).decode('ascii') if m else 'UNKNOWN'
+                      match=_re.search(rb"Unknown column '([^']+)'",result.stderr)
+                      name=match.group(1).decode('ascii','ignore') if match else ''
+                      shape='hex' if name.startswith('0x') else 'long' if len(name)>40 else 'identifier' if name else 'none'
+                      print('ENC041_SQL_PREPARE=REJECTED_'+code)
+                      print('ENC041_SQL_UNKNOWN_COLUMN_SHAPE='+shape)
+                  else:
+                      print('ENC041_SQL_PREPARE=PASS_NO_WRITE')
+              prepare()
+
+              triggers=sql("SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND EVENT_OBJECT_TABLE='classifieds'")
+              print('ENC041_CLASSIFIEDS_TRIGGER_COUNT='+str(int(triggers[0][0]) if triggers and triggers[0] else -1))
+
+
+              count=sql('SELECT COUNT(*) FROM classifieds')
+              print('ENC041_SQL_CLASSIFIEDS_READABLE='+('yes' if len(count)==1 and count[0][0].isdigit() else 'no'))
+          except Exception as err:
+              print('ENC041_SQL_PREFLIGHT=FAIL_CLOSED')
+              raise SystemExit(31)
+          finally:
+              if cnf is not None:cnf.unlink(missing_ok=True)
+          PY
+          REMOTE
