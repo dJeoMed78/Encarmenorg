@@ -208,3 +208,18 @@ jobs:
               if cnf is not None:cnf.unlink(missing_ok=True)
           PY
           REMOTE
+
+      - name: Inspect staging storage and failed candidate without changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          root="$HOME/domains/staging.encarmen.org/hbuilds"
+          echo "STAGING_ACTIVE_RELEASE=$(readlink "$root/current")"
+          df -h "$root" | tail -1 | awk '{print "STAGING_DISK_USED="$5" AVAILABLE="$4}'
+          df -i "$root" | tail -1 | awk '{print "STAGING_INODES_USED="$5" AVAILABLE="$4}'
+          test -d "$root/versions/enc-coord-c28c08e834b9" && echo "FAILED_CANDIDATE_DIR=exists" || echo "FAILED_CANDIDATE_DIR=missing"
+          test -d "$root/versions/enc-coord-c28c08e834b9/nodejs" && echo "FAILED_CANDIDATE_NODEJS=exists" || echo "FAILED_CANDIDATE_NODEJS=missing"
+          du -sh "$root/current/nodejs/node_modules" "$HOME/encarmen-staging-backups/files/2026-11-06" 2>/dev/null | awk '{print "STAGING_SIZE="$1" PATH="$2}'
+          REMOTE
