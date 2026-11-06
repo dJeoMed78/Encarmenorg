@@ -1,4 +1,5 @@
 name: ENC radars 041+043 authorized reversible staging deployment
+# Authorized ENC-062 deployment: source metadata and approval security validated by CI; Staging only.
 on:
   push:
     branches: [ia-desarrollo]
