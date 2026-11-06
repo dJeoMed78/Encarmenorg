@@ -95,9 +95,8 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
   const handleOpenRadar = () => {
     setIsRadarOpen(true);
     setModalError(null);
-    if (radarCandidates.length === 0) {
-      handleSearchRadar(true);
-    }
+    // Opening a panel does not imply consent to an external AI search.
+    // Leave the search explicitly initiated by the administrator.
   };
 
   const handleSearchRadar = async (useAiMode: boolean) => {
@@ -106,15 +105,19 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
     setModalError(null);
     try {
       const res = await searchClassifiedRadarCandidates(radarQuery, radarCat, useAiMode);
-      if (res.success && Array.isArray(res.candidates) && res.candidates.length > 0) {
+      if (res.success && Array.isArray(res.candidates)) {
         setRadarCandidates(res.candidates);
-        const unpub = res.candidates.filter(c => !c.alreadyPublished).map(c => c.id);
-        setSelectedCandidateIds(new Set(unpub));
-        if (res.aiInfo) {
-          setRadarAiInfo(res.aiInfo);
-        }
+        setSelectedCandidateIds(new Set(res.candidates.filter(c => !c.alreadyPublished).map(c => c.id)));
+        setRadarAiInfo(res.aiInfo || {
+          usedAi: false,
+          message: res.candidates.length === 0
+            ? 'La búsqueda terminó correctamente, pero las fuentes consultadas no devolvieron anuncios verificables.'
+            : undefined
+        });
       } else {
-        setModalError(res.message || 'No se encontraron candidatos para los criterios ingresados.');
+        setRadarCandidates([]);
+        setSelectedCandidateIds(new Set());
+        setModalError(res.message || 'La búsqueda falló; verifica la conexión y vuelve a intentar.');
       }
     } catch (err: any) {
       setModalError(err.message || 'Error de conexión con el radar.');
