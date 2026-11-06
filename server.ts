@@ -3875,7 +3875,7 @@ function extractClassifiedOriginFields(html: string): NonNullable<ClassifiedEvid
   const plain = decodeHtmlEntities(html.replace(/<(?:script|style)\b[^>]*>[\s\S]*?<\/(?:script|style)>/gi, ' '));
   const meta = (key: string) => {
     const tags = html.match(/<meta\b[^>]*>/gi) || [];
-    const tag = tags.find(t => new RegExp('(?:name|property)=["\\'](?:' + key + ')["\\']', 'i').test(t));
+    const tag = tags.find(t => /(?:name|property)=["'](?:description|og:description)["']/i.test(t) && new RegExp(key, 'i').test(t));
     return tag ? decodeHtmlEntities(tag.match(/content=["']([^"']+)["']/i)?.[1] || '') : '';
   };
   const desc = meta('description|og:description');
