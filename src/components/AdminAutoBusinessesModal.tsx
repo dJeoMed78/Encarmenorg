@@ -1042,9 +1042,9 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                           <div className="flex items-center gap-1.5 text-[11px] text-stone-400 pt-1 flex-wrap">
                             <span className="font-semibold text-stone-500">Procedencia:</span>
                             <span className="text-sky-300 font-medium">{candidate.source}</span>
-                            {(candidate as any).provenance === 'ai_unverified' || (candidate as any).requiresAdminVerification ? (
+                            {(candidate as any).provenance === 'ai_unverified' || (candidate as any).provenance === 'ai_suggestion_with_url' || (candidate as any).requiresAdminVerification ? (
                               <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-950/80 text-amber-300 border border-amber-700/50 font-medium">
-                                IA sin verificar (Requiere revisión manual)
+                                Sugerencia IA — No verificada (Requiere revisión manual)
                               </span>
                             ) : (candidate as any).isLiveWebDiscovery === true ? (
                               <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-700/50 font-medium">
@@ -1062,7 +1062,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                                 rel="noopener noreferrer"
                                 className="px-1.5 py-0.5 rounded text-[10px] bg-sky-950/80 text-sky-300 border border-sky-700/50 hover:underline"
                               >
-                                Ver fuente ↗
+                                URL de referencia ↗
                               </a>
                             )}
                           </div>
