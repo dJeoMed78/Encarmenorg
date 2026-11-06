@@ -1,0 +1,44 @@
+name: ENCARMEN radar clasificados 041 CI
+on:
+  push:
+    branches: [work/enc-radar-clasificados-041-nia]
+  pull_request:
+    branches: [ia-desarrollo]
+    paths:
+      - 'server.ts'
+      - 'src/services/api.ts'
+      - 'src/components/AdminClassifiedsTab.tsx'
+      - 'tests/enc-radar-classifieds-041.test.mjs'
+      - 'tests/enc-staging-classified-lane-041.test.mjs'
+      - 'src/db/stagingClassifiedStore.ts'
+      - 'src/db/mariadb.ts'
+      - 'src/server/stagingBusinessSecurity.ts'
+      - '.github/workflows/enc-radar-classifieds-041-ci.yml'
+permissions:
+  contents: read
+jobs:
+  radar-classifieds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: node --import tsx --test tests/enc-radar-classifieds-041.test.mjs tests/enc-staging-classified-lane-041.test.mjs
+      - name: Business approval real handlers and MariaDB lock regressions (mocked dependencies)
+        run: timeout 150s env NODE_ENV=test node --import tsx --test tests/radar-business-approval.test.mjs tests/enc-radars-041-043-integration.test.mjs
+      - name: Existing Staging write and isolation regressions
+        run: node --import tsx --test tests/enc-staging-write-gate-005-unit.test.mjs tests/enc-staging-write-gate-005-http.test.mjs tests/staging-isolation-proof.test.mjs tests/security-containment-003.test.mjs
+      - name: Live probe must fail closed without private Staging authorization
+        run: |
+          if node --import tsx scripts/enc-staging-classified-persistence-041.mjs > probe-check.log 2>&1; then
+            echo "ERROR: live probe executed without explicit authorization"
+            exit 1
+          fi
+          grep -q '"state": "BLOCKED_OR_FAILED"' probe-check.log
+          grep -q 'EXPLICIT_PROBE_CONFIRMATION_MISSING' probe-check.log
+      - run: npm run build

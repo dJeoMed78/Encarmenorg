@@ -590,7 +590,7 @@ export async function deleteClassified(id: string): Promise<{
 export async function searchClassifiedRadarCandidates(
   query: string = '',
   category: string = 'all',
-  useAi: boolean = true
+  useAi: boolean = false
 ): Promise<{
   success: boolean;
   candidates: import('../types').ClassifiedAd[];
@@ -605,16 +605,18 @@ export async function searchClassifiedRadarCandidates(
     const res = await adminFetch(API_BASE + '/classifieds/radar-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, category, useAi: true, timestamp: Date.now() })
+      body: JSON.stringify({ query, category, useAi: useAi === true, timestamp: Date.now() })
     });
-    if (res.ok) {
-      return await res.json();
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || data.success !== true || !Array.isArray(data.candidates)) {
+      return {
+        success: false,
+        candidates: [],
+        aiInfo: data?.aiInfo,
+        message: typeof data?.message === 'string' ? data.message : `El radar respondió HTTP ${res.status}.`
+      };
     }
-    return {
-      success: false,
-      candidates: [],
-      message: 'Error al consultar el radar en vivo.'
-    };
+    return data;
   } catch (err: any) {
     return {
       success: false,
@@ -635,9 +637,17 @@ export async function approveClassifiedCandidate(candidate: Partial<import('../t
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ candidate })
     });
-    return await parseJsonResponse(res, 'Error al aprobar anuncio');
+    const data = await parseJsonResponse<{
+      success?: boolean;
+      message?: string;
+      classified?: import('../types').ClassifiedAd;
+    }>(res, 'Error al aprobar anuncio');
+    if (!res.ok || data?.success !== true || !data.classified?.id) {
+      return { success: false, message: data?.message || `No se confirmó el guardado (HTTP ${res.status}).` };
+    }
+    return { success: true, message: data.message || 'Anuncio aprobado.', classified: data.classified };
   } catch (err: any) {
-    return { success: false, message: err.message || 'Error al aprobar anuncio' };
+    return { success: false, message: err?.message || 'Error al aprobar anuncio' };
   }
 }
 
@@ -652,9 +662,18 @@ export async function batchApproveClassifiedCandidates(candidates: Partial<impor
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ candidates })
     });
-    return await parseJsonResponse(res, 'Error al aprobar anuncios por lote');
+    const data = await parseJsonResponse<{ success?: boolean; message?: string; count?: number }>(res, 'Error al aprobar anuncios por lote');
+    // Legacy response has only a count. Never call a partial batch a full success.
+    if (!res.ok || data?.success !== true || !Number.isInteger(data.count) || data.count !== candidates.length) {
+      return {
+        success: false,
+        count: Number.isInteger(data?.count) ? data.count : 0,
+        message: data?.message || `No se confirmó la aprobación completa (HTTP ${res.status}).`
+      };
+    }
+    return { success: true, message: data.message || 'Anuncios aprobados.', count: data.count };
   } catch (err: any) {
-    return { success: false, message: err.message || 'Error al aprobar anuncios por lote' };
+    return { success: false, message: err?.message || 'Error al aprobar anuncios por lote' };
   }
 }
 
@@ -1081,9 +1100,30 @@ export async function parseWhatsAppGroupBusinesses(
   }
 }
 
+export interface ApproveCandidateResult {
+  success: boolean;
+  message: string;
+  business?: Business;
+  duplicate?: boolean;
+  publishedToWordPress?: boolean;
+  code?: string;
+}
+
+export interface ApproveMultipleCandidatesResult {
+  success: boolean;
+  message: string;
+  count?: number;
+  totalRequested?: number;
+  confirmed?: Business[];
+  published?: Business[];
+  rejected?: { candidate: AutoBusinessCandidate; reason: string; code?: string }[];
+  failed?: { candidate: AutoBusinessCandidate; reason: string; code?: string }[];
+  publishedToWordPress?: boolean;
+}
+
 export async function approveAutoBusinessCandidate(
   candidate: AutoBusinessCandidate
-): Promise<{ success: boolean; message: string; business?: Business; wpSynced?: boolean; wpPermalink?: string }> {
+): Promise<ApproveCandidateResult> {
   try {
     const res = await adminFetch(`${API_BASE}/businesses/approve-candidate`, {
       method: 'POST',
@@ -1092,20 +1132,30 @@ export async function approveAutoBusinessCandidate(
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
-      throw new Error(data.message || 'Error al aprobar negocio');
+      return {
+        success: false,
+        duplicate: Boolean(data.duplicate),
+        code: data.code,
+        message: data.message || 'Error al aprobar negocio en MariaDB'
+      };
     }
-    return data;
+    return {
+      success: true,
+      business: data.business,
+      publishedToWordPress: false,
+      message: data.message || 'Negocio aprobado y guardado en MariaDB'
+    };
   } catch (err: any) {
     return {
       success: false,
-      message: err.message || 'Error al aprobar la empresa'
+      message: err.message || 'Error de conexión al aprobar la empresa'
     };
   }
 }
 
 export async function approveMultipleAutoBusinessCandidates(
   candidates: AutoBusinessCandidate[]
-): Promise<{ success: boolean; message: string; count?: number; published?: Business[] }> {
+): Promise<ApproveMultipleCandidatesResult> {
   try {
     const res = await adminFetch(`${API_BASE}/businesses/approve-multiple-candidates`, {
       method: 'POST',
@@ -1113,14 +1163,37 @@ export async function approveMultipleAutoBusinessCandidates(
       body: JSON.stringify({ candidates })
     });
     const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.message || 'Error al aprobar los negocios');
+    if (!res.ok && !data.confirmed) {
+      return {
+        success: false,
+        count: 0,
+        confirmed: [],
+        published: [],
+        rejected: data.rejected || [],
+        failed: data.failed || [],
+        message: data.message || 'Error al procesar candidatos en MariaDB'
+      };
     }
-    return data;
+    return {
+      success: Boolean(data.success),
+      count: data.count || (data.confirmed ? data.confirmed.length : 0),
+      totalRequested: data.totalRequested || candidates.length,
+      confirmed: data.confirmed || data.published || [],
+      published: data.confirmed || data.published || [],
+      rejected: data.rejected || [],
+      failed: data.failed || [],
+      publishedToWordPress: false,
+      message: data.message || 'Procesamiento completado'
+    };
   } catch (err: any) {
     return {
       success: false,
-      message: err.message || 'Error en publicación por lotes'
+      count: 0,
+      confirmed: [],
+      published: [],
+      rejected: [],
+      failed: [],
+      message: err.message || 'Error de conexión en aprobación por lotes'
     };
   }
 }

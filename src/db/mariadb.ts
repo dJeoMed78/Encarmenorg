@@ -1,6 +1,7 @@
 import {STAGING_BUSINESS_DATABASE,stagingBusinessConfiguration,privateStagingBusinessWindowOpen,getPrivateStagingSnapshot} from '../server/stagingBusinessSecurity';
 import {verifyStagingIsolation, evaluateGrants} from '../server/stagingIsolationProof';
 import {createStagingBusinessStore} from './stagingBusinessStore';
+import {createStagingClassifiedStore} from './stagingClassifiedStore';
 import mysql from 'mysql2/promise';
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -1025,6 +1026,41 @@ export async function dbSaveClassified(ad: any): Promise<boolean> {
   }
 }
 
+// INSERT-only for radar approvals. Unlike dbSaveClassified, never overwrite an
+// existing classified on duplicate id; SQL PRIMARY KEY enforces idempotency.
+// The existing Staging guard remains in force and denies this operation there.
+export async function dbCreateRadarClassifiedOnce(ad: any): Promise<'created' | 'duplicate' | 'blocked' | 'error'> {
+  if (!guardWrite('dbCreateRadarClassifiedOnce')) return 'blocked';
+  if (!pool) return 'error';
+  try {
+    const rawData = JSON.stringify(ad);
+    const [result]: any = await pool.query(`
+      INSERT INTO classifieds (
+        id, title, category, subcategory, price, price_type, phone, whatsapp,
+        colonia, status, user_token, raw_data
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      String(ad.id),
+      ad.title || '',
+      ad.category || '',
+      ad.subcategory || '',
+      ad.price !== undefined && ad.price !== null ? Number(ad.price) : null,
+      ad.priceType || 'fixed',
+      ad.phone || '',
+      ad.whatsapp || '',
+      ad.colonia || '',
+      ad.status || 'active',
+      ad.userToken || '',
+      rawData
+    ]);
+    return result?.affectedRows === 1 ? 'created' : 'error';
+  } catch (err: any) {
+    if (err?.code === 'ER_DUP_ENTRY') return 'duplicate';
+    console.warn('[MariaDB] Error de alta exclusiva de clasificado:', err?.code || 'SQL_ERROR');
+    return 'error';
+  }
+}
+
 export async function dbDeleteClassified(id: string): Promise<boolean> {
   if (!guardWrite('dbDeleteClassified')) return false;
   if (!pool) return false;
@@ -1353,6 +1389,21 @@ export function isBusinessWritePermitted(): boolean {
   return stagingBusinessConfiguration(process.env, PRODUCTION_DB_USER) &&
     privateStagingBusinessWindowOpen(process.env, { connectionUser: effectiveUser });
 }
+// Dedicated Staging classifieds capability. Never relax isWritePermitted() or
+// the general guardWrite(). This gate requires a real private config snapshot.
+export const stagingClassifiedStore = createStagingClassifiedStore({
+  getConnection: async () => {
+    if (!pool || !isConnected || connectedDatabase !== STAGING_BUSINESS_DATABASE) throw new Error('STAGING_DATABASE_UNAVAILABLE');
+    return pool.getConnection();
+  },
+  getUser: () => connectedUser,
+  getSnapshot: () => getPrivateStagingSnapshot({ connectionUser: connectedUser || undefined })
+});
+export function isStagingClassifiedWritePermitted(): boolean {
+  return isStagingEnvironment() && isConnected && pool !== null &&
+    connectedDatabase === STAGING_BUSINESS_DATABASE && stagingClassifiedStore.canWrite();
+}
+
 export const stagingBusinessStore = createStagingBusinessStore({
   canWrite: isBusinessWritePermitted,
   getConnection: async () => { if (!pool) throw new Error('STAGING_DATABASE_UNAVAILABLE'); return pool.getConnection(); },

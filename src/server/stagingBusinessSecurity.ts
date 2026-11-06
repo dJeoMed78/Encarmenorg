@@ -62,7 +62,11 @@ export function getPrivateStagingSnapshot(options?: PrivateSnapshotOptions): Rec
       'ENC_ADMIN_MUTATIONS_ENABLED',
       'PUBLIC_REGISTRATION_ENABLED',
       'ENC_ADMIN_PUBLIC_ORIGIN',
-      'ENC_ADMIN_CREDENTIALS_JSON'
+      'ENC_ADMIN_CREDENTIALS_JSON',
+      'STAGING_CLASSIFIED_WRITES_ENABLED',
+      'STAGING_CLASSIFIED_BACKUP_ID',
+      'STAGING_CLASSIFIED_BACKUP_CHECKED_AT',
+      'STAGING_CLASSIFIED_WRITE_EXPIRES_AT'
     ];
     if (criticalKeys.some(k => duplicates.has(k))) return null;
 

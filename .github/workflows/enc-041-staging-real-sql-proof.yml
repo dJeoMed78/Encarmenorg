@@ -1,0 +1,41 @@
+name: ENC-041 Staging real SQL persistence proof authorized
+on:
+  push:
+    branches: [work/enc-radar-clasificados-041-nia]
+    paths: [.github/workflows/enc-041-staging-real-sql-proof.yml]
+permissions:
+  contents: read
+concurrency:
+  group: enc-041-staging-real-sql-one-shot
+  cancel-in-progress: false
+jobs:
+  prove-staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify preflighted base64 SQL probe and backup reuse syntax
+        run: python3 -m py_compile scripts/enc-041-staging-real-sql-proof.py
+      - name: Verify SSH credential and pinned host identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS" || { echo "ENC041_SSH_SECRET_NOT_AVAILABLE"; exit 2; }
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test -s "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' || { echo "ENC041_SSH_HOST_IDENTITY_CHANGED"; exit 3; }
+          echo "ENC041_SSH_IDENTITY=VERIFIED"
+      - name: Full backup and synthetic insert commit readback cleanup in isolated Staging only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'work/enc-radar-clasificados-041-nia' || { echo "ENC041_SOURCE_BRANCH_MISMATCH"; exit 4; }
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o BatchMode=no -o ConnectTimeout=12 u293982346@45.137.159.114 'ENC041_REAL_SQL_PROOF=AUTHORIZED_STAGING_ONLY python3 -' < scripts/enc-041-staging-real-sql-proof.py

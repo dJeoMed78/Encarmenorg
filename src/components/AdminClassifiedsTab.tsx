@@ -85,6 +85,7 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
   const [radarQuery, setRadarQuery] = useState('');
   const [radarCat, setRadarCat] = useState('all');
   const [radarLoading, setRadarLoading] = useState(false);
+  const [radarHasSearched, setRadarHasSearched] = useState(false);
   const [radarCandidates, setRadarCandidates] = useState<ClassifiedAd[]>([]);
   const [radarAiInfo, setRadarAiInfo] = useState<{ usedAi: boolean; quotaExhausted?: boolean; message?: string } | null>(null);
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set());
@@ -95,26 +96,30 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
   const handleOpenRadar = () => {
     setIsRadarOpen(true);
     setModalError(null);
-    if (radarCandidates.length === 0) {
-      handleSearchRadar(true);
-    }
+    // Opening a panel does not imply consent to an external AI search.
+    // Leave the search explicitly initiated by the administrator.
   };
 
   const handleSearchRadar = async (useAiMode: boolean) => {
+    setRadarHasSearched(true);
     setRadarLoading(true);
     setRadarAiInfo(null);
     setModalError(null);
     try {
       const res = await searchClassifiedRadarCandidates(radarQuery, radarCat, useAiMode);
-      if (res.success && Array.isArray(res.candidates) && res.candidates.length > 0) {
+      if (res.success && Array.isArray(res.candidates)) {
         setRadarCandidates(res.candidates);
-        const unpub = res.candidates.filter(c => !c.alreadyPublished).map(c => c.id);
-        setSelectedCandidateIds(new Set(unpub));
-        if (res.aiInfo) {
-          setRadarAiInfo(res.aiInfo);
-        }
+        setSelectedCandidateIds(new Set(res.candidates.filter(c => !c.alreadyPublished).map(c => c.id)));
+        setRadarAiInfo(res.aiInfo || {
+          usedAi: false,
+          message: res.candidates.length === 0
+            ? 'La búsqueda terminó correctamente, pero las fuentes consultadas no devolvieron anuncios verificables.'
+            : undefined
+        });
       } else {
-        setModalError(res.message || 'No se encontraron candidatos para los criterios ingresados.');
+        setRadarCandidates([]);
+        setSelectedCandidateIds(new Set());
+        setModalError(res.message || 'La búsqueda falló; verifica la conexión y vuelve a intentar.');
       }
     } catch (err: any) {
       setModalError(err.message || 'Error de conexión con el radar.');
@@ -125,29 +130,24 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
 
   const handleApprove = async (cand: ClassifiedAd) => {
     setApprovingId(cand.id);
-    // Optimistic removal: remove immediately from radar candidates list so user sees instant reaction!
-    setRadarCandidates(prev => prev.filter(c => c.id !== cand.id));
-    setSelectedCandidateIds(prev => {
-      const next = new Set(prev);
-      next.delete(cand.id);
-      return next;
-    });
-
-    setNotification({
-      type: 'success',
-      text: `¡Anuncio "${cand.title}" verificado y publicado con éxito!`
-    });
-
+    setModalError(null);
     try {
       const res = await approveClassifiedCandidate(cand);
-      if (res.success) {
-        if (onRefresh) onRefresh();
-      } else {
-        // Keep it published locally in view
-        if (onRefresh) onRefresh();
+      if (!res.success || !res.classified?.id) {
+        setModalError(res.message || 'No fue posible confirmar la publicación.');
+        setNotification({ type: 'error', text: res.message || 'No se publicó el anuncio.' });
+        return;
       }
-    } catch (_err: any) {
+      setRadarCandidates(prev => prev.filter(c => c.id !== cand.id));
+      setSelectedCandidateIds(prev => {
+        const next = new Set(prev);
+        next.delete(cand.id);
+        return next;
+      });
+      setNotification({ type: 'success', text: `Anuncio "${cand.title}" publicado y confirmado.` });
       if (onRefresh) onRefresh();
+    } catch (err: any) {
+      setModalError(err?.message || 'Error al publicar anuncio.');
     } finally {
       setApprovingId(null);
       setTimeout(() => setNotification(null), 4000);
@@ -159,21 +159,22 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
     if (toApprove.length === 0) return;
 
     setIsBatchApproving(true);
-    const approvedIds = new Set(toApprove.map(c => c.id));
-    // Optimistic removal from radar
-    setRadarCandidates(prev => prev.filter(c => !approvedIds.has(c.id)));
-    setSelectedCandidateIds(new Set());
-
-    setNotification({
-      type: 'success',
-      text: `¡${toApprove.length} anuncios verificados y publicados en Clasificados!`
-    });
-
+    setModalError(null);
     try {
-      await batchApproveClassifiedCandidates(toApprove);
+      const res = await batchApproveClassifiedCandidates(toApprove);
+      if (!res.success || res.count !== toApprove.length) {
+        setModalError(res.message || 'No se confirmó la publicación del lote. Recarga para comprobar los anuncios guardados.');
+        setNotification({ type: 'error', text: 'No se confirmó la publicación completa.' });
+        if (onRefresh) onRefresh();
+        return;
+      }
+      const approvedIds = new Set(toApprove.map(c => c.id));
+      setRadarCandidates(prev => prev.filter(c => !approvedIds.has(c.id)));
+      setSelectedCandidateIds(new Set());
+      setNotification({ type: 'success', text: `${res.count} anuncios publicados y confirmados.` });
       if (onRefresh) onRefresh();
-    } catch (_err: any) {
-      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      setModalError(err?.message || 'Error al publicar anuncios.');
     } finally {
       setIsBatchApproving(false);
       setTimeout(() => setNotification(null), 4000);
@@ -706,17 +707,17 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                 <div className="py-16 text-center space-y-3">
                   <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto" />
                   <p className="text-xs font-bold text-stone-600">
-                    Rastreando publicaciones verificables en el grupo de Facebook de Empresas en Carmen...
+                    Consultando fuentes públicas de anuncios y validando enlaces individuales...
                   </p>
                 </div>
               ) : radarCandidates.length === 0 ? (
                 <div className="py-16 text-center space-y-2 bg-white rounded-2xl border border-stone-200">
                   <Tag className="w-8 h-8 text-stone-300 mx-auto" />
                   <p className="text-xs font-bold text-stone-700">
-                    No se encontraron candidatos para los criterios ingresados.
+                    {radarHasSearched ? 'No se encontraron anuncios verificables para esta búsqueda.' : 'Escribe un término y elige Buscar (Sin IA) o Radar IA.'}
                   </p>
                   <p className="text-[11px] text-stone-400">
-                    Intenta buscar con palabras clave como "empleo", "renta", "terreno", "versa" o pulsa "Buscar (Sin IA)".
+                    {radarHasSearched ? 'Prueba otros términos o categorías. Cero resultados no significa que se haya publicado algo.' : 'Las búsquedas externas se ejecutan únicamente cuando pulses uno de los botones.'}
                   </p>
                 </div>
               ) : (
