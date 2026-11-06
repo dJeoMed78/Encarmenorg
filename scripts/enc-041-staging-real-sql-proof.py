@@ -71,9 +71,12 @@ def clientconfig(v):
 
 def command(cnf, program, args, timeout=60):
     result = subprocess.run([program, "--defaults-extra-file=" + str(cnf), *args],
-                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=timeout)
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
     if result.returncode != 0:
-        abort(program.upper().replace("-", "_") + "_FAILED")
+        # Error number only: do not print SQL, credentials, server messages or rows.
+        match = re.search(rb'ERROR\\s+(\\d{3,5})', result.stderr)
+        safe_code = match.group(1).decode('ascii') if match else 'UNKNOWN'
+        abort(program.upper().replace("-", "_") + "_FAILED_CODE_" + safe_code)
     return result.stdout
 
 def sql(cnf, query):
