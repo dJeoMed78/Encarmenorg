@@ -1,0 +1,23 @@
+name: ENC-063 footer build verification
+on:
+  pull_request:
+    branches: [ia-desarrollo]
+    paths:
+      - src/components/Footer.tsx
+      - .github/workflows/enc-footer-063-ci.yml
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: ENCARMEN_EXPECTED_SHA="$GITHUB_SHA" node scripts/verify_footer_release.cjs

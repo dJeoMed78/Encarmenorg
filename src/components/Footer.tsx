@@ -1,6 +1,6 @@
 import React from 'react';
 import { getSavedPortalLinks, getSavedFooterAd } from './AdminLinksAndAdsManager';
-import { APP_VERSION, APP_COMMIT_SHA } from '../constants/version';
+import { APP_COMMIT_SHA, APP_BUILD_TIMESTAMP } from '../constants/version';
 
 interface FooterProps {
   onAdminClick: () => void;
@@ -12,9 +12,15 @@ interface FooterProps {
 export function Footer({ onAdminClick }: FooterProps) {
   // Display the exact build's Git revision only when it was verified at build time.
   // Timestamp alone is not proof that a particular commit was deployed.
-  const footerVersion = APP_VERSION;
   const footerCommit = typeof APP_COMMIT_SHA === 'string' && /^[a-f0-9]{40}$/.test(APP_COMMIT_SHA)
     ? APP_COMMIT_SHA.slice(0, 12)
+    : null;
+  const buildDate = APP_BUILD_TIMESTAMP ? new Date(APP_BUILD_TIMESTAMP) : null;
+  const footerUpdatedAt = buildDate && !Number.isNaN(buildDate.getTime())
+    ? new Intl.DateTimeFormat('es-MX', {
+        timeZone: 'America/Merida', day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: false
+      }).format(buildDate)
     : null;
 
   const footerLinks = getSavedPortalLinks().filter((l) => l.group === 'footer');
@@ -92,7 +98,7 @@ export function Footer({ onAdminClick }: FooterProps) {
             >
               ©
             </button>
-            <span>2026 encarmen.org · Ciudad del Carmen, Campeche · Compilación: {footerVersion} · Commit: {footerCommit || 'no verificado'}</span>
+            <span>2026 encarmen.org · Ciudad del Carmen, Campeche · Commit: {footerCommit || 'no verificado'} · Actualización: {footerUpdatedAt || 'no verificada'}</span>
           </div>
         </div>
       </div>

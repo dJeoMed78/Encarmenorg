@@ -31,7 +31,9 @@ if (!files.length) {
   process.exit(1);
 }
 const bundles = files.map(f => fs.readFileSync(path.join(assets, f), 'utf8'));
-if (!bundles.some(x => x.includes(sha) && x.includes(version[1]))) {
+// The footer intentionally renders SHA and timestamp, not the legacy version string.
+// Minifiers may tree-shake APP_VERSION when it is not referenced by the UI.
+if (!bundles.some(x => x.includes(sha) && x.includes(commit[1]))) {
   console.error('FOOTER_DIST_IDENTITY_MISSING');
   process.exit(1);
 }
