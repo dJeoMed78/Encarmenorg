@@ -138,6 +138,18 @@ jobs:
               hasInsert=('INSERT' in grantText or 'ALL PRIVILEGES' in grantText)
               hasDelete=('DELETE' in grantText or 'ALL PRIVILEGES' in grantText)
               print('ENC041_SQL_INSERT_PRIVILEGE='+('yes' if hasInsert else 'no'))
+              stageLines=[]
+              for line in grants:
+                  g=' '.join(line).replace('`','').upper()
+                  if ' ON U293982346_ENCARMENTEST.* TO ' in g or ' ON U293982346_ENCARMENTEST.CLASSIFIEDS TO ' in g:
+                      stageLines.append(g.split(' ON ')[0])
+              allowedInsert=any('INSERT' in x or 'ALL PRIVILEGES' in x for x in stageLines)
+              allowedDelete=any('DELETE' in x or 'ALL PRIVILEGES' in x for x in stageLines)
+              allowedSelect=any('SELECT' in x or 'ALL PRIVILEGES' in x for x in stageLines)
+              print('ENC041_CLASSIFIEDS_GRANT_SELECT='+('yes' if allowedSelect else 'no'))
+              print('ENC041_CLASSIFIEDS_GRANT_INSERT='+('yes' if allowedInsert else 'no'))
+              print('ENC041_CLASSIFIEDS_GRANT_DELETE='+('yes' if allowedDelete else 'no'))
+
               print('ENC041_SQL_DELETE_PRIVILEGE='+('yes' if hasDelete else 'no'))
               print('ENC041_SQL_GLOBAL_PRIVILEGE='+('yes' if any('ON *.*' in ' '.join(g).upper() and 'USAGE' not in ' '.join(g).upper() for g in grants) else 'no'))
               schemas=sql('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA')
