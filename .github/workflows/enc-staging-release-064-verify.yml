@@ -1,0 +1,30 @@
+name: ENC-064 verify deployed Staging release
+on:
+  pull_request:
+    branches: [ia-desarrollo]
+    paths: [.github/workflows/enc-staging-release-064-verify.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_SHA: db34778138b7f028761cbff057c010bc35d33204
+    steps:
+      - name: Observe scoped deployment workflow runs (read only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${{ github.repository }}/actions/workflows/enc-radars-041-043-staging-deploy.yml/runs?per_page=5" --jq '.workflow_runs[] | [.id,.event,.status,.conclusion,.head_sha] | @tsv' || true
+      - name: Verify Staging release identity and HTTP
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl -sSLo /dev/null -w '%{http_code}' --max-time 20 https://staging.encarmen.org/)
+          echo "STAGING_HTTP_STATUS=$code"
+          test "$code" = 200
+          curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' https://staging.encarmen.org/encarmen-release.json > /tmp/encarmen-release-064.json
+          node -e 'const fs=require("fs");const d=JSON.parse(fs.readFileSync("/tmp/encarmen-release-064.json","utf8"));if(!/^[a-f0-9]{40}$/.test(d.sha)||!Number.isFinite(Date.parse(d.updatedAt))||d.sha!==process.env.EXPECTED_SHA){console.log("STAGING_RELEASE_SHA_MISMATCH");process.exit(1)}console.log("STAGING_RELEASE_SHA="+d.sha);console.log("STAGING_UPDATED_AT="+d.updatedAt);console.log("STAGING_FOOTER_IDENTITY=VERIFIED")'
