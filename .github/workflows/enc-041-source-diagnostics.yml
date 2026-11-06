@@ -57,14 +57,10 @@ jobs:
                   raw=resp.read(1048576)
               items=ET.fromstring(raw).findall('.//item')
               pattern=[
-                (r'(^|\.)computrabajo\.com
-,r'^/ofertas-de-trabajo/'),
-                (r'(^|\.)occ\.com\.mx
-,r'^/empleo/oferta/'),
-                (r'(^|\.)inmuebles24\.com
-,r'^/propiedades/'),
-                (r'(^|\.)facebook\.com
-,r'^/(groups/[^/]+/posts/|marketplace/item/)'),
+                ('computrabajo.com','/ofertas-de-trabajo/'),
+                ('occ.com.mx','/empleo/oferta/'),
+                ('inmuebles24.com','/propiedades/'),
+                ('facebook.com','/groups/'),
               ]
               valid=0
               other=0
@@ -74,7 +70,7 @@ jobs:
                   if u.scheme!='https' or not u.hostname:
                       other+=1
                       continue
-                  if any(re.search(domain,u.hostname,re.I) and re.search(route,u.path,re.I) for domain,route in pattern):
+                  if any((u.hostname==domain or u.hostname.endswith('.'+domain)) and u.path.startswith(route) for domain,route in pattern):
                       valid+=1
                   else:other+=1
               print('ENC041_RSS_ITEMS='+str(len(items)))
