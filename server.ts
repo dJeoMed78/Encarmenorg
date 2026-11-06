@@ -4148,8 +4148,9 @@ async function scrapeRealWebClassifieds(searchQuery: string, category: string): 
           scanned++;
           addItem(title, '', candidateUrl);
         }
-      } catch {
-        // Network access can be blocked by the source; never report a false candidate.
+      } catch (error: any) {
+        // Safe operational diagnostics: no API keys, request cookies or raw HTML.
+        console.warn('[Classified Radar] Local source unavailable', portal.host, error?.name || 'FETCH_FAILED');
       }
     })());
   }
