@@ -178,7 +178,7 @@ jobs:
               import re as _re
               def prepare():
                   result=subprocess.run(['mariadb','--defaults-extra-file='+str(cnf),'--batch','--skip-column-names','-D','u293982346_encarmentest','-e',
-                    'PREPARE enc041_stmt FROM '+chr(39)+stmt+chr(39)+'; DEALLOCATE PREPARE enc041_stmt'],
+                    'PREPARE enc041_stmt FROM '+chr(39)+stmt.replace(chr(39),chr(39)*2)+chr(39)+'; DEALLOCATE PREPARE enc041_stmt'],
                     stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=20)
                   if result.returncode:
                       m=_re.search(rb'ERROR\s+(\d{3,5})',result.stderr)
