@@ -3800,6 +3800,8 @@ function resolveSourceSiteName(sourceUrl?: string, sourceField?: string): string
   if (url.includes('facebook.com/groups/')) return 'Grupo de Facebook';
   if (url.includes('facebook.com/marketplace')) return 'FB Marketplace';
   if (url.includes('facebook.com') || url.includes('fb.com')) return 'Facebook';
+  if (url.includes('locanto.com.mx')) return 'Locanto Ciudad del Carmen';
+  if (url.includes('carmen.ciudadanuncios.com.mx')) return 'Ciudad Anuncios Carmen';
   if (url.includes('computrabajo')) return 'Computrabajo';
   if (url.includes('occ.com.mx')) return 'OCC Mundial';
   if (url.includes('indeed.com')) return 'Indeed Empleos';
@@ -3828,6 +3830,8 @@ function canonicalClassifiedListingUrl(rawUrl: string): string | null {
     const path = url.pathname.toLowerCase();
     const subdomain = (domain: string): boolean => host === domain || host.endsWith('.' + domain);
     const supported =
+      (host === 'www.locanto.com.mx' && /^\/ciudaddelcarmen\/id_\d+\/[^/]+\.html$/.test(path)) ||
+      (host === 'carmen.ciudadanuncios.com.mx' && /^\/item\/\d+\/?$/.test(path)) ||
       (subdomain('computrabajo.com') && /^\/ofertas-de-trabajo\/[^/]+/.test(path)) ||
       (subdomain('mercadolibre.com.mx') && /^\/(?:articulo\/)?mlm-\d+/.test(path)) ||
       (subdomain('inmuebles24.com') && /^\/propiedades\/[^/]+/.test(path)) ||
@@ -3891,7 +3895,8 @@ async function verifyClassifiedListingEvidence(item: { sourceUrl?: string; title
     const headlineText = normalize(headingMatches.map(match => match[1]).join(' '));
     const tokens = [...new Set(normalize(title).split(/\s+/).filter(word => word.length >= 4))];
     const matches = tokens.filter(word => headlineText.includes(word));
-    const locationConfirmed = /ciudad del carmen|carmen campeche|carmen camp|cd del carmen/.test(pageText);
+    const locationConfirmed = /ciudad del carmen|carmen campeche|carmen camp|cd del carmen/.test(pageText) ||
+      (new URL(url).hostname === 'carmen.ciudadanuncios.com.mx' && /ciudad carmen|carmen campeche/.test(pageText));
     if (tokens.length < 2 || matches.length < Math.min(2, tokens.length)) {
       return { verified: false, reason: 'El título no coincide con el encabezado del anuncio.' };
     }
@@ -4114,8 +4119,13 @@ async function scrapeRealWebClassifieds(searchQuery: string, category: string): 
     }
   }
 
-  // 3. Canales RSS por Portal (Inmuebles24, Propiedades.com, OCC Mundial, Computrabajo, Lamudi, Facebook)
+  // 3. Canales RSS por Portal (Inmuebles24, Propiedades.com, OCC Mundial, Computrabajo, Lamudi, Facebook, Locanto, Ciudad Anuncios)
   const rssQueries: { q: string; cat: string }[] = [];
+  // Nuevas fuentes locales verificadas. Solo se aceptan URL de anuncios individuales,
+  // nunca portadas ni resultados de búsqueda; cada candidato se valida contra su HTML.
+  const localSuffix = searchQuery ? ` ${searchQuery}` : '';
+  rssQueries.push({ q: `site:locanto.com.mx/ciudaddelcarmen/ID_ "Ciudad del Carmen"${localSuffix}`, cat: category });
+  rssQueries.push({ q: `site:carmen.ciudadanuncios.com.mx/item/ "Carmen" "Campeche"${localSuffix}`, cat: category });
   if (searchQuery) {
     rssQueries.push({ q: `site:facebook.com "Ciudad del Carmen" ${searchQuery}`, cat: category });
     rssQueries.push({ q: `site:inmuebles24.com/propiedades "Ciudad del Carmen" ${searchQuery}`, cat: 'inmuebles' });
