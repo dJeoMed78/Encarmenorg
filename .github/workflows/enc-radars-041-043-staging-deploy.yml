@@ -4,6 +4,7 @@ on:
   push:
     branches: [ia-desarrollo]
     paths: [.github/workflows/enc-radars-041-043-staging-deploy.yml]
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -43,6 +44,10 @@ jobs:
           ENCARMEN_EXPECTED_SHA="$GITHUB_SHA" node scripts/verify_footer_release.cjs
           test -f server.js && test -f api/server.bundle.js && test -f dist/index.html
           printf '%s\n' "$GITHUB_SHA" > dist/encarmen-release.txt
+          # Created only after SHA/build verification; deployed atomically with bundle.
+          node -e 'const fs=require("node:fs");fs.writeFileSync("dist/encarmen-release.json",JSON.stringify({sha:process.env.GITHUB_SHA,updatedAt:new Date().toISOString()}))'
+          node -e 'const d=require("./dist/encarmen-release.json");if(d.sha!==process.env.GITHUB_SHA||!Number.isFinite(Date.parse(d.updatedAt)))process.exit(1)'
+
           tar -czf ../enc041-payload.tar.gz server.js dist api/server.bundle.js
           gzip -t ../enc041-payload.tar.gz
       - name: Verify pinned SSH host identity
@@ -162,8 +167,10 @@ jobs:
           for i in 1 2 3 4 5; do
             code=$(curl -sSL -o /dev/null -w '%{http_code}' --max-time 15 https://staging.encarmen.org/ || true)
             sha=$(curl -fsSL --max-time 15 https://staging.encarmen.org/encarmen-release.txt || true)
-            if [[ "$code" = 200 && "$sha" = "$GITHUB_SHA" ]]; then
-              echo "ENC041_STAGING_HTTP_VERSION=PASS"
+            manifest=$(curl -fsSL --max-time 15 -H 'Cache-Control: no-cache' https://staging.encarmen.org/encarmen-release.json || true)
+            if [[ "$code" = 200 && "$sha" = "$GITHUB_SHA" && -n "$manifest" ]] &&
+                RELEASE_JSON="$manifest" node -e 'const d=JSON.parse(process.env.RELEASE_JSON);if(d.sha!==process.env.GITHUB_SHA||!Number.isFinite(Date.parse(d.updatedAt)))process.exit(1)'; then
+              echo "ENCARMEN_STAGING_FOOTER_RELEASE_IDENTITY=PASS"
               exit 0
             fi
             sleep 7
