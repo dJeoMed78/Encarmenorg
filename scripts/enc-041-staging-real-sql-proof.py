@@ -76,7 +76,11 @@ def command(cnf, program, args, timeout=60):
         # Error number only: do not print SQL, credentials, server messages or rows.
         match = re.search(rb'ERROR\s+(\d{3,5})', result.stderr)
         safe_code = match.group(1).decode('ascii') if match else 'UNKNOWN'
-        abort(program.upper().replace("-", "_") + "_FAILED_CODE_" + safe_code)
+        column = re.search(rb"Unknown column '([^']+)'", result.stderr, re.IGNORECASE)
+        name = column.group(1).decode('ascii', 'ignore') if column else ''
+        safe_name = name if re.fullmatch(r'[a-zA-Z_][a-zA-Z0-9_]{0,40}', name) else 'REDACTED'
+        abort(program.upper().replace("-", "_") + "_FAILED_CODE_" + safe_code +
+              ("_COLUMN_" + safe_name.upper() if safe_code == '1054' else ""))
     return result.stdout
 
 def sql(cnf, query):
