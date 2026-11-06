@@ -117,6 +117,31 @@ def full_backup(cnf):
     folder = PRIV / "database"
     if folder.is_symlink() or not folder.is_dir() or folder.stat().st_mode & 0o077:
         abort("STAGING_BACKUP_DESTINATION_UNSAFE")
+    # Reuse the latest already-verified private full backup within 20 minutes.
+    # This prevents repeated dumps and unnecessary backup accumulation.
+    candidates = sorted(folder.glob("enc041-preproof-*.sql.gz"), key=lambda item: item.stat().st_mtime, reverse=True)
+    for existing in candidates:
+        manifest = existing.with_suffix(".manifest.json")
+        if not existing.is_file() or existing.is_symlink() or not manifest.is_file():
+            continue
+        if existing.stat().st_mode & 0o077 or manifest.stat().st_mode & 0o077:
+            continue
+        age = dt.datetime.now(dt.timezone.utc).timestamp() - existing.stat().st_mtime
+        if age < 0 or age > 20 * 60:
+            continue
+        try:
+            metadata = json.loads(manifest.read_text(encoding="utf8"))
+            data = existing.read_bytes()
+            if metadata.get("db") != STAGING or metadata.get("sha256") != hashlib.sha256(data).hexdigest():
+                continue
+            restored = gzip.decompress(data)
+            if len(restored) < 1024 or b"CREATE TABLE" not in restored:
+                continue
+            print("ENC041_FRESH_SQL_BACKUP=REUSED_VERIFIED_PRIVATE")
+            print("ENC041_BACKUP_REFERENCE=" + existing.name)
+            return existing
+        except (OSError, ValueError, EOFError):
+            continue
     dump = command(cnf, "mariadb-dump",
                    ["--single-transaction", "--quick", "--skip-lock-tables",
                     "--default-character-set=utf8mb4", "--no-tablespaces", STAGING], timeout=240)
@@ -149,7 +174,7 @@ def full_backup(cnf):
     return file
 
 def str_sql(value):
-    # SQL literals represented as hex; no untrusted SQL or password interpolation.
+    # Base64-encoded literals avoid long-hex parsing; no untrusted SQL/password interpolation.
     return "CONVERT(FROM_BASE64(\'" + base64.b64encode(str(value).encode("utf8")).decode("ascii") + "\') USING utf8mb4)"
 
 def read_probe(cnf, test_id):
