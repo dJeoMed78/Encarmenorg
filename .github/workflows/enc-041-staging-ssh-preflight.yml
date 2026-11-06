@@ -167,6 +167,11 @@ jobs:
               missing=sorted(expected-cols)
               print('ENC041_CLASSIFIEDS_SCHEMA_MISSING_COUNT='+str(len(missing)))
               print('ENC041_CLASSIFIEDS_SCHEMA_MISSING='+(','.join(missing) if missing else 'none'))
+              expr=sql('SELECT CONVERT(0x616263 USING utf8mb4)')
+              print('ENC041_SQL_HEX_CONVERT_SUPPORTED='+('yes' if expr==[['abc']] else 'no'))
+              triggers=sql("SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND EVENT_OBJECT_TABLE='classifieds'")
+              print('ENC041_CLASSIFIEDS_TRIGGER_COUNT='+str(int(triggers[0][0]) if triggers and triggers[0] else -1))
+
 
               count=sql('SELECT COUNT(*) FROM classifieds')
               print('ENC041_SQL_CLASSIFIEDS_READABLE='+('yes' if len(count)==1 and count[0][0].isdigit() else 'no'))
