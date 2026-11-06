@@ -3,6 +3,9 @@ on:
   push:
     branches: [ia-desarrollo]
     paths: [.github/workflows/enc-radars-041-043-staging-preflight.yml]
+  pull_request:
+    branches: [ia-desarrollo]
+    paths: [.github/workflows/enc-radars-041-043-staging-preflight.yml]
 permissions:
   contents: read
 jobs:
