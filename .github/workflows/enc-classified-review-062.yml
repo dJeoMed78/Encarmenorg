@@ -1,0 +1,25 @@
+name: ENC-062 classified approval and extraction
+on:
+  pull_request:
+    branches: [ia-desarrollo]
+    paths:
+      - server.ts
+      - src/components/AdminClassifiedsTab.tsx
+      - tests/enc-classified-review-062.test.mjs
+      - .github/workflows/enc-classified-review-062.yml
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: NODE_ENV=test node --import tsx --test tests/enc-classified-review-062.test.mjs tests/enc-local-classified-sources-061.test.mjs tests/enc-radar-classifieds-041.test.mjs tests/enc-staging-classified-lane-041.test.mjs
+      - run: npm run build

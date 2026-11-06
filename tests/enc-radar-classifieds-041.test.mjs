@@ -341,13 +341,13 @@ test('prueba aislada: la URL de un dominio desconocido no se consulta', async ()
 });
 
 
-test('candidatos revisados no heredan precios ni contactos no contrastados', () => {
+test('candidatos revisados obtienen precio y contacto solo desde HTML de origen verificado', () => {
   const code = server.slice(server.indexOf('async function scrapeRealWebClassifieds('),server.indexOf('// ENDPOINT DE CLASIFICADOS CON LAS 2 VERSIONES:'));
-  assert.match(code, /sourceVerification: 'direct-page-title-location'/);
-  assert.match(code, /price: null/);
-  assert.match(code, /phone: ''/);
-  assert.match(code, /whatsapp: ''/);
-  assert.match(code, /Consulta la publicación original para confirmar/);
+  assert.match(code, /sourceVerification: 'direct-page-title-location-fields'/);
+  assert.match(code, /\.\.\.evidence\.fields/);
+  assert.match(code, /priceType: evidence\.fields\?\.price/);
+  assert.doesNotMatch(code, /contactName: item\.source/);
+  assert.doesNotMatch(code, /description: 'Consulta la publicación original/);
 });
 
 test('el radar no llama vigentes a anuncios con fecha original desconocida', () => {

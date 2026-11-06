@@ -225,6 +225,13 @@ const adminSecurity = registerAdminSecurity(app, {
       ? (businessWrites && Boolean(snapshot && snapshot.ENC_ADMIN_MUTATIONS_ENABLED === 'true'))
       : (process.env.ENC_ADMIN_MUTATIONS_ENABLED === 'true');
     if (administrativeWritesReady(req, { mutationsEnabled, isStaging, businessWrites })) return true;
+    // La autorización de clasificados tiene su propio carril privado, no depende
+    // del interruptor de mutaciones empresariales. No ampliar a otras rutas.
+    const classifiedPath = (req.path || '').replace(/\/+$/, '') || '/';
+    if (req.method === 'POST' &&
+        ['/api/classifieds/approve-candidate', '/api/classifieds/batch-approve'].includes(classifiedPath)) {
+      return isStaging ? isStagingClassifiedWritePermitted() : (isMariaDbActive() && isWritePermitted());
+    }
     const cleanPath = (req.path || '').replace(/\/+$/, '') || '/';
     if (req.method === 'POST' && (cleanPath === '/api/businesses/approve-candidate' || cleanPath === '/api/businesses/approve-multiple-candidates')) {
       return isStaging ? (businessWrites && mutationsEnabled) : (isMariaDbActive() && isWritePermitted());
@@ -3860,7 +3867,31 @@ function isDirectListingUrl(rawUrl: string): boolean {
   return canonicalClassifiedListingUrl(rawUrl) !== null;
 }
 
-type ClassifiedEvidence = { verified: boolean; checkedAt?: string; reason?: string };
+type ClassifiedEvidence = { verified: boolean; checkedAt?: string; reason?: string; fields?: { description: string; price: number | null; phone: string; contactName: string; colonia: string; location: string } };
+
+// Extract only fields actually visible in the fetched origin page. Never infer
+// seller identity, phone or price from the search snippet or AI.
+function extractClassifiedOriginFields(html: string): NonNullable<ClassifiedEvidence['fields']> {
+  const plain = decodeHtmlEntities(html.replace(/<(?:script|style)\b[^>]*>[\s\S]*?<\/(?:script|style)>/gi, ' '));
+  const meta = (key: string) => {
+    const tags = html.match(/<meta\b[^>]*>/gi) || [];
+    const tag = tags.find(t => /(?:name|property)=["'](?:description|og:description)["']/i.test(t) && new RegExp(key, 'i').test(t));
+    return tag ? decodeHtmlEntities(tag.match(/content=["']([^"']+)["']/i)?.[1] || '') : '';
+  };
+  const desc = meta('description|og:description');
+  const description = (desc && desc.length >= 20 ? desc : plain.slice(0, 500)).slice(0, 700);
+  const priceMatch = plain.match(/(?:precio|\$|mxn)\s*[:\$]?\s*([0-9]{1,3}(?:[,\s][0-9]{3})+|[0-9]{2,8})(?:\s*(?:mxn|pesos))?/i);
+  const price = priceMatch ? Number(priceMatch[1].replace(/[,\s]/g, '')) : null;
+  const phoneMatch = plain.match(/(?:tel[eé]fono|celular|whatsapp|contacto)\s*:?\s*(?:\+?52[\s-]?)?([0-9][0-9\s-]{8,15}[0-9])/i);
+  const phone = phoneMatch ? phoneMatch[1].replace(/\D/g, '').slice(-10) : '';
+  const nameMatch = plain.match(/(?:anunciante|publicado por|nombre de contacto|vendedor)\s*:\s*([^|\n]{3,65})/i);
+  const contactName = nameMatch ? nameMatch[1].trim().slice(0, 65) : '';
+  const locationMatch = plain.match(/(?:ubicaci[oó]n|ciudad|localidad)\s*:\s*(Ciudad del Carmen|Carmen,? Campeche)/i);
+  const location = locationMatch ? 'Ciudad del Carmen, Campeche' : '';
+  return { description, price: price !== null && Number.isFinite(price) && price > 0 ? price : null,
+    phone: phone.length === 10 ? phone : '', contactName, colonia: '', location };
+}
+
 
 // A familiar URL pattern or an AI citation is not proof of a currently accessible listing.
 // Fail closed if the direct source cannot confirm both the title and Ciudad del Carmen.
@@ -3904,7 +3935,7 @@ async function verifyClassifiedListingEvidence(item: { sourceUrl?: string; title
     if (/anuncio (?:no disponible|eliminado|retirado)|oferta (?:finalizada|cerrada|expirada)|vacante (?:cerrada|cubierta)/.test(pageText)) {
       return { verified: false, reason: 'El origen muestra señales de anuncio retirado o vencido.' };
     }
-    return { verified: true, checkedAt: new Date().toISOString() };
+    return { verified: true, checkedAt: new Date().toISOString(), fields: extractClassifiedOriginFields(html) };
   } catch {
     return { verified: false, reason: 'No fue posible consultar directamente el anuncio.' };
   }
@@ -4008,9 +4039,9 @@ function buildCandidateFromScrapedItem(
     currency: 'MXN',
     phone: phoneVal,
     whatsapp: phoneVal ? `52${phoneVal}` : '',
-    colonia: 'Ciudad del Carmen, Campeche',
-    location: 'Ciudad del Carmen, Campeche',
-    contactName: `Publicado en ${siteName}`,
+    colonia: '',
+    location: '',
+    contactName: '',
     image: defaultImg,
     sourceUrl: urlRaw,
     source: siteName,
@@ -4235,15 +4266,12 @@ async function scrapeRealWebClassifieds(searchQuery: string, category: string): 
   })));
   return checks.filter(({ evidence }) => evidence.verified).map(({ item, evidence }) => ({
     ...item,
-    // Search excerpts and AI output are not authoritative price/contact evidence.
-    description: 'Consulta la publicación original para confirmar descripción, vigencia y condiciones.',
-    price: null,
-    priceType: 'consult',
-    phone: '',
-    whatsapp: '',
-    contactName: item.source || '',
+    ...evidence.fields,
+    priceType: evidence.fields?.price ? 'fixed' : 'consult',
+    colonia: evidence.fields?.colonia || '',
+    location: evidence.fields?.location || '',
     sourceVerifiedAt: evidence.checkedAt,
-    sourceVerification: 'direct-page-title-location'
+    sourceVerification: 'direct-page-title-location-fields'
   }));
 }
 
@@ -4484,12 +4512,9 @@ Devuelve ÚNICAMENTE un array JSON válido:
     const finalCandidates = checkedCandidates.filter(({ evidence }) => evidence.verified)
       .map(({ item, evidence }) => ({
         ...item,
-        description: 'Consulta la publicación original para confirmar descripción, vigencia y condiciones.',
-        price: null,
-        priceType: 'consult',
-        phone: '',
+        ...evidence.fields,
+        priceType: evidence.fields?.price ? 'fixed' : 'consult',
         whatsapp: '',
-        contactName: item.source || '',
         sourceVerifiedAt: evidence.checkedAt,
         sourceVerification: 'direct-page-title-location'
       }));
@@ -8520,7 +8545,7 @@ if (!process.env.VERCEL && process.env.NODE_ENV !== 'test') {
   });
 }
 
-export { canonicalClassifiedListingUrl, resolveSourceSiteName, verifyClassifiedListingEvidence };
+export { canonicalClassifiedListingUrl, resolveSourceSiteName, verifyClassifiedListingEvidence, extractClassifiedOriginFields };
 export default app;
 
 
