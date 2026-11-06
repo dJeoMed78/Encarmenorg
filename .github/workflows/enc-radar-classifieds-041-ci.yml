@@ -29,6 +29,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: node --import tsx --test tests/enc-radar-classifieds-041.test.mjs tests/enc-staging-classified-lane-041.test.mjs
+      - name: Business approval real handlers and MariaDB lock regressions (mocked dependencies)
+        run: node --import tsx --test tests/radar-business-approval.test.mjs tests/enc-radars-041-043-integration.test.mjs
       - name: Existing Staging write and isolation regressions
         run: node --import tsx --test tests/enc-staging-write-gate-005-unit.test.mjs tests/enc-staging-write-gate-005-http.test.mjs tests/staging-isolation-proof.test.mjs tests/security-containment-003.test.mjs
       - name: Live probe must fail closed without private Staging authorization
