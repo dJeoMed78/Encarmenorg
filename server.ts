@@ -8519,6 +8519,7 @@ if (!process.env.VERCEL && process.env.NODE_ENV !== 'test') {
   });
 }
 
+export { canonicalClassifiedListingUrl, resolveSourceSiteName, verifyClassifiedListingEvidence };
 export default app;
 
 
