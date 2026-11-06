@@ -37,5 +37,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse --abbrev-ref HEAD)" = 'work/enc-radar-clasificados-041-nia' || { echo "ENC041_SOURCE_BRANCH_MISMATCH"; exit 4; }
+          test "$GITHUB_REF_NAME" = 'work/enc-radar-clasificados-041-nia' || { echo "ENC041_SOURCE_BRANCH_MISMATCH"; exit 4; }
           sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o BatchMode=no -o ConnectTimeout=12 u293982346@45.137.159.114 'ENC041_REAL_SQL_PROOF=AUTHORIZED_STAGING_ONLY python3 -' < scripts/enc-041-staging-real-sql-proof.py
