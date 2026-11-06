@@ -1,0 +1,18 @@
+name: ENC radars staging deployment status observer
+on:
+  pull_request:
+    branches: [ia-desarrollo]
+    paths: [.github/workflows/enc-radars-staging-observer.yml]
+permissions:
+  actions: read
+  contents: read
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Read GitHub Actions deployment run metadata only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/${{ github.repository }}/actions/workflows/enc-radars-041-043-staging-deploy.yml/runs --jq '.workflow_runs[:5][] | "RUN_ID=\\(.id) STATUS=\\(.status) CONCLUSION=\\(.conclusion) SHA=\\(.head_sha)"'
