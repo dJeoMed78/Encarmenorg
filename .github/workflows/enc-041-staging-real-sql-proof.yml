@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      SSHPASS: \${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
