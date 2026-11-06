@@ -3872,21 +3872,21 @@ type ClassifiedEvidence = { verified: boolean; checkedAt?: string; reason?: stri
 // Extract only fields actually visible in the fetched origin page. Never infer
 // seller identity, phone or price from the search snippet or AI.
 function extractClassifiedOriginFields(html: string): NonNullable<ClassifiedEvidence['fields']> {
-  const plain = decodeHtmlEntities(html.replace(/<(?:script|style)\\b[^>]*>[\\s\\S]*?<\\/(?:script|style)>/gi, ' '));
+  const plain = decodeHtmlEntities(html.replace(/<(?:script|style)\b[^>]*>[\s\S]*?<\/(?:script|style)>/gi, ' '));
   const meta = (key: string) => {
-    const tags = html.match(/<meta\\b[^>]*>/gi) || [];
-    const tag = tags.find(t => new RegExp('(?:name|property)=["\\\'](?:' + key + ')["\\\']', 'i').test(t));
+    const tags = html.match(/<meta\b[^>]*>/gi) || [];
+    const tag = tags.find(t => new RegExp('(?:name|property)=["\\'](?:' + key + ')["\\']', 'i').test(t));
     return tag ? decodeHtmlEntities(tag.match(/content=["']([^"']+)["']/i)?.[1] || '') : '';
   };
   const desc = meta('description|og:description');
   const description = (desc && desc.length >= 20 ? desc : plain.slice(0, 500)).slice(0, 700);
-  const priceMatch = plain.match(/(?:precio|\\$|mxn)\\s*[:\\$]?\\s*([0-9]{1,3}(?:[,\\s][0-9]{3})+|[0-9]{2,8})(?:\\s*(?:mxn|pesos))?/i);
-  const price = priceMatch ? Number(priceMatch[1].replace(/[,\\s]/g, '')) : null;
-  const phoneMatch = plain.match(/(?:tel[eé]fono|celular|whatsapp|contacto)\\s*:?\\s*(?:\\+?52[\\s-]?)?([0-9][0-9\\s-]{8,15}[0-9])/i);
-  const phone = phoneMatch ? phoneMatch[1].replace(/\\D/g, '').slice(-10) : '';
-  const nameMatch = plain.match(/(?:anunciante|publicado por|nombre de contacto|vendedor)\\s*:\\s*([^|\\n]{3,65})/i);
+  const priceMatch = plain.match(/(?:precio|\$|mxn)\s*[:\$]?\s*([0-9]{1,3}(?:[,\s][0-9]{3})+|[0-9]{2,8})(?:\s*(?:mxn|pesos))?/i);
+  const price = priceMatch ? Number(priceMatch[1].replace(/[,\s]/g, '')) : null;
+  const phoneMatch = plain.match(/(?:tel[eé]fono|celular|whatsapp|contacto)\s*:?\s*(?:\+?52[\s-]?)?([0-9][0-9\s-]{8,15}[0-9])/i);
+  const phone = phoneMatch ? phoneMatch[1].replace(/\D/g, '').slice(-10) : '';
+  const nameMatch = plain.match(/(?:anunciante|publicado por|nombre de contacto|vendedor)\s*:\s*([^|\n]{3,65})/i);
   const contactName = nameMatch ? nameMatch[1].trim().slice(0, 65) : '';
-  const locationMatch = plain.match(/(?:ubicaci[oó]n|ciudad|localidad)\\s*:\\s*(Ciudad del Carmen|Carmen,? Campeche)/i);
+  const locationMatch = plain.match(/(?:ubicaci[oó]n|ciudad|localidad)\s*:\s*(Ciudad del Carmen|Carmen,? Campeche)/i);
   const location = locationMatch ? 'Ciudad del Carmen, Campeche' : '';
   return { description, price: Number.isFinite(price) && price > 0 ? price : null,
     phone: phone.length === 10 ? phone : '', contactName, colonia: '', location };
