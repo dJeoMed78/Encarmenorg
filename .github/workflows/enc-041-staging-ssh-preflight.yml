@@ -134,6 +134,18 @@ jobs:
               if not grants or any('u293982346_encarmenapp' in ' '.join(g) for g in grants):
                   raise RuntimeError('SQL_GRANTS_PRODUCTION_OR_MISSING')
               print('ENC041_SQL_NO_EXPLICIT_PRODUCTION_GRANTS=yes')
+              grantText=' '.join(' '.join(g) for g in grants).upper()
+              hasInsert=('INSERT' in grantText or 'ALL PRIVILEGES' in grantText)
+              hasDelete=('DELETE' in grantText or 'ALL PRIVILEGES' in grantText)
+              print('ENC041_SQL_INSERT_PRIVILEGE='+('yes' if hasInsert else 'no'))
+              print('ENC041_SQL_DELETE_PRIVILEGE='+('yes' if hasDelete else 'no'))
+              print('ENC041_SQL_GLOBAL_PRIVILEGE='+('yes' if any('ON *.*' in ' '.join(g).upper() and 'USAGE' not in ' '.join(g).upper() for g in grants) else 'no'))
+              schemas=sql('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA')
+              visible={row[0].lower() for row in schemas if row}
+              allowed={'u293982346_encarmentest','information_schema','performance_schema'}
+              print('ENC041_SQL_SCHEMA_ISOLATED='+('yes' if 'u293982346_encarmentest' in visible and visible.issubset(allowed) else 'no'))
+              marker=sql('SELECT env_name, db_name FROM encarmen_environment_marker')
+              print('ENC041_SQL_MARKER_STAGING='+('yes' if marker==[['staging','u293982346_encarmentest']] else 'no'))
               engine=sql("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='classifieds'")
               print('ENC041_CLASSIFIEDS_INNODB='+('yes' if engine==[['InnoDB']] else 'no'))
               pk=sql("SELECT COLUMN_NAME, NON_UNIQUE, SEQ_IN_INDEX FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='classifieds' AND INDEX_NAME='PRIMARY'")
