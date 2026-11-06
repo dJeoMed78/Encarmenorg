@@ -7837,7 +7837,7 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
         });
       } catch (err: any) {
         console.error('[Error Approve Candidate]:', err);
-        return res.status(err?.code === 'BUSINESS_DB_LOCK_UNAVAILABLE' ? 503 : 500).json({ success: false, message: err.message || 'Error al aprobar candidato.' });
+        return res.status(err?.code === 'BUSINESS_DB_LOCK_UNAVAILABLE' ? 503 : 500).json({ success: false, message: err?.code === 'BUSINESS_DB_LOCK_UNAVAILABLE' ? 'Error de base de datos al adquirir bloqueo MariaDB.' : (err.message || 'Error al aprobar candidato.') });
       }
     });
   };
