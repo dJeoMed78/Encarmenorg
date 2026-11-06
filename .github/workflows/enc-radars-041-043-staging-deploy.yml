@@ -145,7 +145,7 @@ jobs:
           echo "ENC041_PREDEPLOY_BACKUP=PASS"
           REMOTE
           sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no "$host" "umask 077; cat > \"\$HOME/encarmen-staging-backups/payload-enc-coord-$short.tar.gz\"" < enc041-payload.tar.gz
-          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no "$host" 'umask 077; cat > "$HOME/encarmen-staging-backups/enc041-deploy.sh"; chmod 600 "$HOME/encarmen-staging-backups/enc041-deploy.sh"' < coordination/ops/staging-backups/deploy_staging_candidate.sh
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no "$host" 'umask 077; cat > "$HOME/encarmen-staging-backups/enc041-deploy.sh"; chmod 600 "$HOME/encarmen-staging-backups/enc041-deploy.sh"' < candidate/ops/staging-backups/deploy_staging_candidate_041_043.sh
           sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no "$host" "bash -s '$GITHUB_SHA'" <<'REMOTE'
           set -euo pipefail
           sha="$1"
