@@ -7309,7 +7309,8 @@ export async function acquireApprovalMutex<T>(fn: () => Promise<T>): Promise<T> 
 // Thread-safe next business ID generator querying MariaDB with distributed advisory lock (Correcciones A & B)
 export async function getNextBusinessId(
   allocatedIds: Set<number> = new Set(),
-  poolOverride?: any
+  poolOverride?: any,
+  lockAlreadyHeld = false
 ): Promise<number> {
   let maxId = 4000;
   for (const b of businessesCache) {
@@ -7335,14 +7336,12 @@ export async function getNextBusinessId(
     try {
       conn = typeof pool.getConnection === 'function' ? await pool.getConnection() : pool;
 
-      // Bloqueo consultivo distribuido de MariaDB para serializar la asignación entre múltiples procesos (Corrección B)
-      try {
-        if (typeof conn.query === 'function') {
-          const [lockRows] = await conn.query("SELECT GET_LOCK('encarmen:business:id-allocation', 5) AS acquired");
-          lockAcquired = Boolean(lockRows?.[0]?.acquired === 1 || lockRows?.[0]?.acquired === '1');
-        }
-      } catch (lockErr) {
-        // En entornos de prueba o mocks donde GET_LOCK no esté soportado, continuar a la consulta
+      // El controlador mantiene el bloqueo durante lectura, escritura y verificación.
+      // Las llamadas independientes deben adquirirlo y fallar si no se concede.
+      if (!lockAlreadyHeld) {
+        const [lockRows] = await conn.query("SELECT GET_LOCK('encarmen:business:id-allocation', 5) AS acquired");
+        lockAcquired = lockRows?.[0]?.acquired === 1 || lockRows?.[0]?.acquired === '1';
+        if (!lockAcquired) throw new Error('No se adquirió el bloqueo distribuido para asignación de ID');
       }
 
       // Consulta SQL con cierre correcto de comilla (Corrección A)
@@ -7404,6 +7403,34 @@ export interface BusinessApprovalDependencies {
   contactDigits: (phoneOrContact?: string | null) => string;
 }
 
+// Advisory lock must remain held until write and readback complete.
+// Never fall back to in-memory allocation if MariaDB refuses the lock.
+export async function withBusinessAllocationLock<T>(pool: any, operation: () => Promise<T>): Promise<T> {
+  if (!pool || typeof pool.getConnection !== 'function') {
+    throw new Error('No hay conexión dedicada de MariaDB para bloqueo distribuido');
+  }
+  const conn = await pool.getConnection();
+  let acquired = false;
+  try {
+    const [rows] = await conn.query("SELECT GET_LOCK('encarmen:business:id-allocation', 5) AS acquired");
+    acquired = rows?.[0]?.acquired === 1 || rows?.[0]?.acquired === '1';
+    if (!acquired) throw new Error('No se adquirió el bloqueo distribuido de MariaDB');
+    return await operation();
+  } finally {
+    if (acquired) {
+      try {
+        const [rows] = await conn.query("SELECT RELEASE_LOCK('encarmen:business:id-allocation') AS released");
+        if (!(rows?.[0]?.released === 1 || rows?.[0]?.released === '1')) {
+          console.error('[Business Allocation Lock] MariaDB no confirmó liberación del bloqueo');
+        }
+      } catch (err) {
+        console.error('[Business Allocation Lock] Falló liberación del bloqueo:', err);
+      }
+    }
+    if (typeof conn.release === 'function') conn.release();
+  }
+}
+
 export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessApprovalDependencies>) {
   const deps: BusinessApprovalDependencies = {
     isStaging: isStagingEnvironment(),
@@ -7414,7 +7441,7 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
     stagingBusinessStore,
     businessesCache,
     acquireApprovalMutex,
-    getNextBusinessId,
+    getNextBusinessId: (allocatedIds?: Set<number>) => getNextBusinessId(allocatedIds, undefined, true),
     findDuplicateBusiness,
     dismissedCandidates,
     saveDismissedCandidate: async (id: string, name?: string, contact?: string) => {
@@ -7434,6 +7461,10 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
   const handleApproveCandidate = async (req: Request, res: Response) => {
     return deps.acquireApprovalMutex(async () => {
       try {
+        return await (deps.isStaging
+          ? async (operation: () => Promise<any>) => operation()
+          : async (operation: () => Promise<any>) => withBusinessAllocationLock(deps.getPool(), operation)
+        )(async () => {
         const candidate = req.body?.candidate || req.body;
         if (!candidate || !candidate.name || !candidate.name.trim() || candidate.name.trim().length < 2) {
           return res.status(400).json({
@@ -7637,6 +7668,7 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
           publishedToWordPress: false,
           message: `Empresa "${verified.name}" verificada y publicada con éxito en MariaDB (ID: ${verified.id}).`
         });
+        });
       } catch (err: any) {
         console.error('[Error Approve Candidate]:', err);
         return res.status(500).json({ success: false, message: err.message || 'Error al aprobar candidato.' });
@@ -7647,6 +7679,10 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
   const handleApproveMultipleCandidates = async (req: Request, res: Response) => {
     return deps.acquireApprovalMutex(async () => {
       try {
+        return await (deps.isStaging
+          ? async (operation: () => Promise<any>) => operation()
+          : async (operation: () => Promise<any>) => withBusinessAllocationLock(deps.getPool(), operation)
+        )(async () => {
         const { candidates } = req.body;
         if (!Array.isArray(candidates) || candidates.length === 0) {
           return res.status(400).json({ success: false, message: 'La lista de candidatos está vacía o es inválida.' });
@@ -7866,6 +7902,7 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
           message: confirmed.length === candidates.length
             ? `Se aprobaron y confirmaron ${confirmed.length} empresas en MariaDB con éxito.`
             : `Se confirmaron ${confirmed.length} de ${candidates.length} empresas en MariaDB. ${rejected.length} no se pudieron guardar o fueron rechazadas.`
+        });
         });
       } catch (err: any) {
         console.error('[Bulk Approve Error]:', err);
