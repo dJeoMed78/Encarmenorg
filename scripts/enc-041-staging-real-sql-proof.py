@@ -3,6 +3,7 @@
 No production access, no schema changes, no general application write toggle.
 A verified full staging dump is created privately before a hidden single-row probe.
 """
+import base64
 import datetime as dt
 import gzip
 import hashlib
@@ -149,7 +150,7 @@ def full_backup(cnf):
 
 def str_sql(value):
     # SQL literals represented as hex; no untrusted SQL or password interpolation.
-    return "CONVERT(0x" + str(value).encode("utf8").hex() + " USING utf8mb4)"
+    return "CONVERT(FROM_BASE64(\'" + base64.b64encode(str(value).encode("utf8")).decode("ascii") + "\') USING utf8mb4)"
 
 def read_probe(cnf, test_id):
     q = "SELECT id,status,SHA2(raw_data,256) FROM classifieds WHERE id=" + str_sql(test_id)
