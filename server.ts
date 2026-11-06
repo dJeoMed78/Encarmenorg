@@ -596,6 +596,22 @@ try {
   }
 } catch (_) {}
 
+// Active release metadata is served from dist, never from public or a stale source stamp.
+app.get('/encarmen-release.json', (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('CDN-Cache-Control', 'no-store');
+  res.setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
+  try {
+    const raw = fs.readFileSync(path.resolve(__dirname, 'dist/encarmen-release.json'), 'utf8');
+    const data = JSON.parse(raw);
+    if (!/^[a-f0-9]{40}$/.test(String(data.sha || '')) ||
+        !Number.isFinite(Date.parse(String(data.updatedAt || '')))) throw new Error('invalid identity');
+    return res.json({ sha: data.sha, updatedAt: data.updatedAt });
+  } catch {
+    return res.status(503).json({ error: 'RELEASE_IDENTITY_NOT_VERIFIED' });
+  }
+});
+
 app.get('/api/version', (_req: Request, res: Response) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
   res.setHeader('CDN-Cache-Control', 'no-store');
