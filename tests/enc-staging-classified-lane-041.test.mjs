@@ -7,7 +7,7 @@ const config = (changes = {}) => ({
   APP_ENV: 'staging',
   DB_NAME: 'u293982346_encarmentest',
   DB_USER: 'isolated_staging_writer',
-  STAGING_READ_ONLY: 'true',
+  STAGING_READ_ONLY: 'false',
   STAGING_DB_CONFIRMED: 'true',
   STAGING_CLASSIFIED_WRITES_ENABLED: 'true',
   STAGING_CLASSIFIED_BACKUP_ID: 'verified-backup-20261105-001',
@@ -18,7 +18,7 @@ const config = (changes = {}) => ({
 
 test('ventana privada valida Staging y mantiene el bloqueo general', () => {
   assert.equal(stagingClassifiedWindowValid(config(), 'isolated_staging_writer', now), true);
-  assert.equal(stagingClassifiedWindowValid(config({STAGING_READ_ONLY:'false'}), 'isolated_staging_writer', now), false);
+  assert.equal(stagingClassifiedWindowValid(config({STAGING_READ_ONLY:'true'}), 'isolated_staging_writer', now), false);
   assert.equal(stagingClassifiedWindowValid(config({APP_ENV:'production'}), 'isolated_staging_writer', now), false);
   assert.equal(stagingClassifiedWindowValid(config({DB_NAME:'u293982346_encarmenapp'}), 'isolated_staging_writer', now), false);
   assert.equal(stagingClassifiedWindowValid(config(), 'u293982346_appuser', now), false);
