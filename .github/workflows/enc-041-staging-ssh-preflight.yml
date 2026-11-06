@@ -96,50 +96,54 @@ jobs:
             echo "STAGING_PRIVATE_ENV_MISSING=yes"
           fi
           echo "ENC041_READONLY_PREFLIGHT_COMPLETE=yes"
-          cd "$root/current/nodejs"
-          node <<'NODE'
-          const fs = require('fs');
-          const mysql = require('mysql2/promise');
-          const path = require('path');
-          const configFile = path.join(process.env.HOME,'domains','staging.encarmen.org','hbuilds','config','.env');
-          const values = {};
-          for (const line of fs.readFileSync(configFile,'utf8').split(/\r?\n/)) {
-            const item = line.trim().replace(/^export\s+/,'');
-            if (!item || item.startsWith('#')) continue;
-            const idx = item.indexOf('=');
-            if (idx < 1) continue;
-            values[item.slice(0,idx).trim()] = item.slice(idx+1).trim().replace(/^['"]|['"]$/g,'');
-          }
-          async function main() {
-            if (values.APP_ENV !== 'staging' || values.DB_NAME !== 'u293982346_encarmentest' ||
-                !values.DB_USER || values.DB_USER === 'u293982346_appuser' ||
-                !values.DB_HOST || !values.DB_PASSWORD) throw Error('STAGING_DB_PRIVATE_CONFIG_REJECTED');
-            console.log('ENC041_STAGING_DB_CONFIG_VALID=yes');
-            console.log('ENC041_STAGING_READ_ONLY='+(values.STAGING_READ_ONLY === 'true'?'true':values.STAGING_READ_ONLY === 'false'?'false':'other'));
-            console.log('ENC041_STAGING_DB_CONFIRMED='+(values.STAGING_DB_CONFIRMED === 'true'?'true':'not_true'));
-            const db = await mysql.createConnection({
-              host: values.DB_HOST, port: Number(values.DB_PORT || 3306),
-              user: values.DB_USER, password: values.DB_PASSWORD,
-              database: values.DB_NAME, connectTimeout: 12000
-            });
-            try {
-              const [name] = await db.query('SELECT DATABASE() AS db_name, CURRENT_USER() AS current_user');
-              if (name[0]?.db_name !== 'u293982346_encarmentest') throw Error('CONNECTED_TO_WRONG_DATABASE');
-              console.log('ENC041_SQL_DATABASE_IDENTITY=staging_only');
-              const [grants] = await db.query('SHOW GRANTS FOR CURRENT_USER()');
-              const statements = grants.map(r=>String(Object.values(r)[0]||''));
-              if (statements.length === 0 || statements.some(g=>g.includes('u293982346_encarmenapp')))
-                throw Error('SQL_GRANTS_PRODUCTION_OR_UNKNOWN');
-              console.log('ENC041_SQL_GRANTS_NO_EXPLICIT_PRODUCTION=yes');
-              const [tables] = await db.query("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='classifieds'");
-              console.log('ENC041_CLASSIFIEDS_INNODB='+(tables.length===1 && String(tables[0].ENGINE).toLowerCase()==='innodb'?'yes':'no'));
-              const [pks] = await db.query("SELECT COLUMN_NAME,NON_UNIQUE,SEQ_IN_INDEX FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='classifieds' AND INDEX_NAME='PRIMARY'");
-              console.log('ENC041_CLASSIFIEDS_PK_ID='+(pks.length===1 && pks[0].COLUMN_NAME==='id' && Number(pks[0].NON_UNIQUE)===0?'yes':'no'));
-              const [count] = await db.query('SELECT COUNT(*) AS n FROM classifieds');
-              console.log('ENC041_SQL_CLASSIFIEDS_READABLE=yes');
-              console.log('ENC041_SQL_CLASSIFIEDS_COUNT='+Number(count[0]?.n||0));
-            } finally { await db.end(); }
-          }
-          main().catch(e=>{ console.log('ENC041_SQL_PREFLIGHT_ERROR='+String(e.message||'UNKNOWN').replace(/[^A-Z0-9_]/gi,'_').slice(0,65));process.exitCode=1;});
-          NODE
+          python3 <<'PY'
+          import os, pathlib, re, subprocess, tempfile
+          root=pathlib.Path.home()/'domains/staging.encarmen.org/hbuilds'
+          config=root/'config/.env'
+          backup=pathlib.Path.home()/'encarmen-staging-backups'
+          vals={}
+          for line in config.read_text(encoding='utf8').splitlines():
+              text=line.strip().removeprefix('export ').strip()
+              if not text or text.startswith('#') or '=' not in text:continue
+              k,v=text.split('=',1)
+              vals[k.strip()]=v.strip().strip('"').strip("'")
+          if vals.get('APP_ENV')!='staging' or vals.get('DB_NAME')!='u293982346_encarmentest' or vals.get('DB_USER')=='u293982346_appuser' or not all(vals.get(k) for k in ('DB_USER','DB_HOST','DB_PASSWORD')):
+              raise SystemExit('ENC041_STAGING_SQL_CONFIG_REJECTED')
+          print('ENC041_STAGING_SQL_CONFIG=VALID')
+          for name in ('STAGING_READ_ONLY','STAGING_DB_CONFIRMED'):
+              print('ENC041_'+name+'='+('true' if vals.get(name)=='true' else 'false_or_other'))
+          if backup.is_symlink() or (backup.stat().st_mode & 0o077):
+              raise SystemExit('ENC041_PRIVATE_BACKUP_UNSAFE')
+          cnf=None
+          try:
+              with tempfile.NamedTemporaryFile(mode='w',dir=backup,prefix='.enc041-cnf-',delete=False) as output:
+                  cnf=pathlib.Path(output.name)
+                  os.chmod(cnf,0o600)
+                  output.write('[client]\n')
+                  for k,v in (('host',vals['DB_HOST']),('port',vals.get('DB_PORT','3306')),('user',vals['DB_USER']),('password',vals['DB_PASSWORD'])):
+                      output.write(k+'="'+str(v).replace('\\','\\\\').replace('"','\\"').replace('\n','')+'"\n')
+              def sql(query):
+                  proc=subprocess.run(['mariadb','--defaults-extra-file='+str(cnf),'--batch','--skip-column-names','-D','u293982346_encarmentest','-e',query],capture_output=True,text=True,timeout=20)
+                  if proc.returncode:raise RuntimeError('SQL_READONLY_COMMAND_FAILED')
+                  return [x.split('\t') for x in proc.stdout.strip().splitlines() if x.strip()]
+              identity=sql('SELECT DATABASE(), CURRENT_USER()')
+              if len(identity)!=1 or identity[0][0]!='u293982346_encarmentest' or identity[0][1].split('@')[0]=='u293982346_appuser':
+                  raise RuntimeError('SQL_IDENTITY_INVALID')
+              print('ENC041_SQL_IDENTITY=VERIFIED_STAGING')
+              grants=sql('SHOW GRANTS FOR CURRENT_USER()')
+              if not grants or any('u293982346_encarmenapp' in ' '.join(g) for g in grants):
+                  raise RuntimeError('SQL_GRANTS_PRODUCTION_OR_MISSING')
+              print('ENC041_SQL_NO_EXPLICIT_PRODUCTION_GRANTS=yes')
+              engine=sql("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='classifieds'")
+              print('ENC041_CLASSIFIEDS_INNODB='+('yes' if engine==[['InnoDB']] else 'no'))
+              pk=sql("SELECT COLUMN_NAME, NON_UNIQUE, SEQ_IN_INDEX FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='classifieds' AND INDEX_NAME='PRIMARY'")
+              print('ENC041_CLASSIFIEDS_PRIMARY_ID='+('yes' if pk==[['id','0','1']] else 'no'))
+              count=sql('SELECT COUNT(*) FROM classifieds')
+              print('ENC041_SQL_CLASSIFIEDS_READABLE='+('yes' if len(count)==1 and count[0][0].isdigit() else 'no'))
+          except Exception as err:
+              print('ENC041_SQL_PREFLIGHT=FAIL_CLOSED')
+              raise SystemExit(31)
+          finally:
+              if cnf is not None:cnf.unlink(missing_ok=True)
+          PY
           REMOTE
