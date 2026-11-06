@@ -209,6 +209,7 @@ jobs:
           PY
           REMOTE
 
+      # Post-deployment verification of current release and database identity
       - name: Inspect staging storage and failed candidate without changes
         shell: bash
         run: |
