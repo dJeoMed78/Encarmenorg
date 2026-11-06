@@ -169,6 +169,28 @@ jobs:
               print('ENC041_CLASSIFIEDS_SCHEMA_MISSING='+(','.join(missing) if missing else 'none'))
               expr=sql('SELECT CONVERT(0x616263 USING utf8mb4)')
               print('ENC041_SQL_HEX_CONVERT_SUPPORTED='+('yes' if expr==[['abc']] else 'no'))
+              def hx(text):
+                  return 'CONVERT(0x'+str(text).encode('utf8').hex()+' USING utf8mb4)'
+              raw='{"id":"ad-enc041-test-123","title":"ENC041 prueba oculta, no publicar","category":"__enc041_internal_test","status":"trash"}'
+              stmt=('INSERT INTO classifieds (id,title,category,subcategory,price,price_type,phone,whatsapp,colonia,status,user_token,raw_data) VALUES ('+
+                  ','.join([hx('ad-enc041-test-123'),hx('ENC041 prueba oculta, no publicar'),hx('__enc041_internal_test'),hx(''),'NULL',hx('consult'),hx(''),hx(''),hx(''),hx('trash'),hx(''),hx(raw)])+')')
+              import re as _re
+              def prepare():
+                  result=subprocess.run(['mariadb','--defaults-extra-file='+str(cnf),'--batch','--skip-column-names','-D','u293982346_encarmentest','-e',
+                    'PREPARE enc041_stmt FROM '+chr(39)+stmt+chr(39)+'; DEALLOCATE PREPARE enc041_stmt'],
+                    stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=20)
+                  if result.returncode:
+                      m=_re.search(rb'ERROR\\s+(\\d{3,5})',result.stderr)
+                      code=m.group(1).decode('ascii') if m else 'UNKNOWN'
+                      match=_re.search(rb"Unknown column '([^']+)'",result.stderr)
+                      name=match.group(1).decode('ascii','ignore') if match else ''
+                      shape='hex' if name.startswith('0x') else 'long' if len(name)>40 else 'identifier' if name else 'none'
+                      print('ENC041_SQL_PREPARE=REJECTED_'+code)
+                      print('ENC041_SQL_UNKNOWN_COLUMN_SHAPE='+shape)
+                  else:
+                      print('ENC041_SQL_PREPARE=PASS_NO_WRITE')
+              prepare()
+
               triggers=sql("SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND EVENT_OBJECT_TABLE='classifieds'")
               print('ENC041_CLASSIFIEDS_TRIGGER_COUNT='+str(int(triggers[0][0]) if triggers and triggers[0] else -1))
 
