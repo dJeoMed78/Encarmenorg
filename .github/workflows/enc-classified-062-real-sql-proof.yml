@@ -53,7 +53,7 @@ jobs:
           if vals.get('APP_ENV')!='staging' or vals.get('DB_NAME')!='u293982346_encarmentest':
               raise SystemExit('STAGING_ENV_IDENTITY_FAILED')
           # This reports only boolean readiness; never expose private authorization material.
-          required=('ENC_STAGING_CLASSIFIED_WRITES_ENABLED','ENC_STAGING_CLASSIFIED_WRITES_APPROVED')
+          required=('STAGING_CLASSIFIED_WRITES_ENABLED','STAGING_CLASSIFIED_BACKUP_ID','STAGING_CLASSIFIED_BACKUP_CHECKED_AT','STAGING_CLASSIFIED_WRITE_EXPIRES_AT')
           for key in required:
               print(key+'=' + ('PRESENT' if vals.get(key) else 'MISSING'))
           PY
