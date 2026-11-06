@@ -8457,7 +8457,7 @@ if (!isProduction && !process.env.VERCEL) {
   });
 }
 
-if (!process.env.VERCEL) {
+if (!process.env.VERCEL && process.env.NODE_ENV !== 'test') {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Express] Servidor corriendo exitosamente en http://0.0.0.0:${PORT}`);
   });
