@@ -7564,13 +7564,24 @@ export async function withBusinessAllocationLock<T>(pool: any, operation: () => 
   if (!pool || typeof pool.getConnection !== 'function') {
     throw new Error('No hay conexión dedicada de MariaDB para bloqueo distribuido');
   }
-  const conn = await pool.getConnection();
+  let conn: any;
+  try {
+    conn = await pool.getConnection();
+  } catch (err: any) {
+    err.code = 'BUSINESS_DB_LOCK_UNAVAILABLE';
+    throw err;
+  }
   let acquired = false;
+  let operationStarted = false;
   try {
     const [rows] = await conn.query("SELECT GET_LOCK('encarmen:business:id-allocation', 5) AS acquired");
     acquired = rows?.[0]?.acquired === 1 || rows?.[0]?.acquired === '1';
     if (!acquired) throw new Error('No se adquirió el bloqueo distribuido de MariaDB');
+    operationStarted = true;
     return await operation();
+  } catch (err: any) {
+    if (!operationStarted) err.code = 'BUSINESS_DB_LOCK_UNAVAILABLE';
+    throw err;
   } finally {
     if (acquired) {
       try {
@@ -7826,7 +7837,7 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
         });
       } catch (err: any) {
         console.error('[Error Approve Candidate]:', err);
-        return res.status(500).json({ success: false, message: err.message || 'Error al aprobar candidato.' });
+        return res.status(err?.code === 'BUSINESS_DB_LOCK_UNAVAILABLE' ? 503 : 500).json({ success: false, message: err.message || 'Error al aprobar candidato.' });
       }
     });
   };
@@ -8061,7 +8072,7 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
         });
       } catch (err: any) {
         console.error('[Bulk Approve Error]:', err);
-        return res.status(500).json({ success: false, message: err.message || 'Error en publicación múltiple' });
+        return res.status(err?.code === 'BUSINESS_DB_LOCK_UNAVAILABLE' ? 503 : 500).json({ success: false, message: err.message || 'Error en publicación múltiple' });
       }
     });
   };
