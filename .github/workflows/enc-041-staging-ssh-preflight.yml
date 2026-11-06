@@ -169,8 +169,9 @@ jobs:
               print('ENC041_CLASSIFIEDS_SCHEMA_MISSING='+(','.join(missing) if missing else 'none'))
               expr=sql('SELECT CONVERT(0x616263 USING utf8mb4)')
               print('ENC041_SQL_HEX_CONVERT_SUPPORTED='+('yes' if expr==[['abc']] else 'no'))
+              import base64
               def hx(text):
-                  return 'CONVERT(0x'+str(text).encode('utf8').hex()+' USING utf8mb4)'
+                  return "CONVERT(FROM_BASE64('"+base64.b64encode(str(text).encode('utf8')).decode('ascii')+"') USING utf8mb4)"
               raw='{"id":"ad-enc041-test-123","title":"ENC041 prueba oculta, no publicar","category":"__enc041_internal_test","status":"trash"}'
               stmt=('INSERT INTO classifieds (id,title,category,subcategory,price,price_type,phone,whatsapp,colonia,status,user_token,raw_data) VALUES ('+
                   ','.join([hx('ad-enc041-test-123'),hx('ENC041 prueba oculta, no publicar'),hx('__enc041_internal_test'),hx(''),'NULL',hx('consult'),hx(''),hx(''),hx(''),hx('trash'),hx(''),hx(raw)])+')')
