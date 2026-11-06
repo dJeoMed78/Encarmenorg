@@ -1,0 +1,50 @@
+name: ENC041 source diagnostics read-only
+on:
+  push:
+    branches: [work/enc-radar-clasificados-041-nia]
+    paths: [.github/workflows/enc-041-source-diagnostics.yml]
+permissions:
+  contents: read
+jobs:
+  check-sources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: SSH preflight and source checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 -' <<'PY'
+          import urllib.request, urllib.error, re, html, datetime, ssl
+          from urllib.parse import quote
+          urls={
+              "computrabajo":"https://mx.computrabajo.com/trabajo-de-empleo-en-campeche-en-carmen",
+              "bing_rss":"https://www.bing.com/search?format=rss&setlang=es-MX&count=12&q="+quote('site:mx.computrabajo.com/ofertas-de-trabajo "Ciudad del Carmen" empleo'),
+              "mercadolibre":"https://listado.mercadolibre.com.mx/ciudad-del-carmen-empleo"
+          }
+          for name,url in urls.items():
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'ENCARMEN-Radar/1.0 (+https://encarmen.org)','Accept':'text/html,application/xml'})
+                  with urllib.request.urlopen(req,timeout=12) as response:
+                      body=response.read(1048576).decode('utf-8','replace')
+                      status=response.status
+                      contenttype=response.headers.get('Content-Type','').split(';')[0]
+                      direct=len(re.findall(r'/ofertas-de-trabajo/[^"\s<]+',body,re.I)) if name=='computrabajo' else 0
+                      rss=len(re.findall(r'<item>',body,re.I)) if name=='bing_rss' else 0
+                      item=len(re.findall(r'/MLM-\d+',body,re.I)) if name=='mercadolibre' else 0
+                      print('ENC041_SOURCE_'+name.upper()+'_HTTP='+str(status))
+                      print('ENC041_SOURCE_'+name.upper()+'_TYPE='+re.sub(r'[^a-zA-Z0-9/+.-]','',contenttype)[:35])
+                      print('ENC041_SOURCE_'+name.upper()+'_DIRECT_LINK_MARKERS='+str(direct or rss or item))
+              except urllib.error.HTTPError as error:
+                  print('ENC041_SOURCE_'+name.upper()+'_HTTP='+str(error.code))
+              except Exception as error:
+                  print('ENC041_SOURCE_'+name.upper()+'_ERROR='+type(error).__name__)
+          PY
