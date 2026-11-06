@@ -8320,7 +8320,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-const isProduction = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+const isProduction = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test' || !!process.env.VERCEL;
 
 if (!isProduction && !process.env.VERCEL) {
   // Vite Dev Server middleware for dynamic TypeScript compilation, HMR, and React SPA preview
