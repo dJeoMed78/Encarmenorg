@@ -242,7 +242,7 @@ async function createTestServer(opts = {}) {
     businessesCache,
     acquireApprovalMutex,
     getNextBusinessId: async (allocatedIds) => {
-      return getNextBusinessId(allocatedIds, mockPool);
+      return getNextBusinessId(allocatedIds, mockPool, true);
     },
     findDuplicateBusiness,
     dismissedCandidates,
