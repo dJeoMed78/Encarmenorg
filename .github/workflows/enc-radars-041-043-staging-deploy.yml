@@ -1,0 +1,140 @@
+name: ENC radars 041+043 authorized reversible staging deployment
+on:
+  push:
+    branches: [ia-desarrollo]
+    paths: [.github/workflows/enc-radars-041-043-staging-deploy.yml]
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-authorized-staging-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          path: coordination
+          ref: coord/encarmen-work-control-001
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+      - name: Test build exact candidate
+        working-directory: candidate
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'ia-desarrollo'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          npm ci
+          npm run lint
+          node --import tsx --test tests/enc-radar-classifieds-041.test.mjs tests/enc-staging-classified-lane-041.test.mjs
+          npm run build
+          test -f server.js && test -f api/server.bundle.js && test -f dist/index.html
+          printf '%s\n' "$GITHUB_SHA" > dist/encarmen-release.txt
+          tar -czf ../enc041-payload.tar.gz server.js dist api/server.bundle.js
+          gzip -t ../enc041-payload.tar.gz
+      - name: Verify pinned SSH host identity
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+      - name: Verify backup baseline and deploy only staging
+        run: |
+          set -euo pipefail
+          host=u293982346@45.137.159.114
+          short=$(printf '%s' "$GITHUB_SHA" | cut -c1-12)
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no "$host" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          root="$HOME/domains/staging.encarmen.org/hbuilds"
+          test -L "$root/current"
+          test -d "$root/current/nodejs/node_modules"
+          test -f "$root/current/nodejs/server.js"
+          test -f "$root/current/nodejs/api/server.bundle.js"
+          test -f "$root/current/nodejs/dist/index.html"
+          case "$(readlink "$root/current")" in versions/*) ;; *) echo 'STAGING_RELEASE_PATH_INVALID'; exit 5;; esac
+          test "$(stat -c %a "$HOME/encarmen-staging-backups/database")" = 700
+          f=$(find "$HOME/encarmen-staging-backups/database" -maxdepth 1 -type f -name 'staging-db-*.sql.gz' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
+          test -n "$f"
+          gzip -t "$f"
+          # Require recent staging DB backup and verified isolated private configuration.
+          now=$(date +%s); modified=$(stat -c %Y "$f")
+          test $((now - modified)) -le 86400 || { echo "STAGING_DB_BACKUP_TOO_OLD"; exit 6; }
+          python3 - "$root/config/.env" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1])
+          if not p.is_file() or p.is_symlink() or p.stat().st_mode & 0o077: raise SystemExit('STAGING_PRIVATE_CONFIG_UNSAFE')
+          vals={}
+          for line in p.read_text().splitlines():
+              if not line or line.lstrip().startswith('#') or '=' not in line: continue
+              k,v=line.split('=',1); vals[k.strip()]=v.strip().strip('"').strip("'")
+          if vals.get('APP_ENV')!='staging' or vals.get('DB_NAME')!='u293982346_encarmentest' or vals.get('DB_USER')=='u293982346_appuser' or not vals.get('DB_PASSWORD'):
+              raise SystemExit('STAGING_DB_ISOLATION_UNVERIFIED')
+          print('STAGING_PRIVATE_DB_IDENTITY=VERIFIED')
+          PY
+          test -d "$HOME/encarmen-staging-backups/files"
+          echo "ENC041_PREDEPLOY_BACKUP=PASS"
+          REMOTE
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no "$host" "umask 077; cat > \"\$HOME/encarmen-staging-backups/payload-enc-coord-$short.tar.gz\"" < enc041-payload.tar.gz
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no "$host" 'umask 077; cat > "$HOME/encarmen-staging-backups/enc041-deploy.sh"; chmod 600 "$HOME/encarmen-staging-backups/enc041-deploy.sh"' < coordination/ops/staging-backups/deploy_staging_candidate.sh
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no "$host" "bash -s '$GITHUB_SHA'" <<'REMOTE'
+          set -euo pipefail
+          sha="$1"
+          root="$HOME/domains/staging.encarmen.org/hbuilds"
+          old=$(readlink "$root/current")
+          bash "$HOME/encarmen-staging-backups/enc041-deploy.sh" "$sha" "$old"
+          echo "ENC041_STAGING_SWITCH=PASS"
+          REMOTE
+      - name: Check exact SHA over staging HTTP
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5; do
+            code=$(curl -sSL -o /dev/null -w '%{http_code}' --max-time 15 https://staging.encarmen.org/ || true)
+            sha=$(curl -fsSL --max-time 15 https://staging.encarmen.org/encarmen-release.txt || true)
+            if [[ "$code" = 200 && "$sha" = "$GITHUB_SHA" ]]; then
+              echo "ENC041_STAGING_HTTP_VERSION=PASS"
+              exit 0
+            fi
+            sleep 7
+          done
+          exit 1
+      - name: Restore prior staging release if required
+        if: failure()
+        run: |
+          set -u
+          test -n "$SSHPASS" && test -f "$HOME/.ssh/known_hosts" || exit 0
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 "bash -s '$GITHUB_SHA'" <<'REMOTE'
+          set -euo pipefail
+          sha="$1"
+          short=$(printf '%s' "$sha" | cut -c1-12)
+          root="$HOME/domains/staging.encarmen.org/hbuilds"
+          if [ "$(readlink "$root/current")" != "versions/enc-coord-$short" ]; then
+            echo "ENC041_ROLLBACK_NOT_REQUIRED"
+            exit 0
+          fi
+          manifest=$(find "$HOME/encarmen-staging-backups/files" -type f -name "enc-coord-$short.manifest" | head -1)
+          test -n "$manifest"
+          old=$(sed -n 's/^OLD_LINK=//p' "$manifest")
+          case "$old" in versions/*) ;; *) exit 2;; esac
+          test -f "$root/$old/nodejs/server.js"
+          newlink="$root/.enc041-rollback-$$"
+          test ! -e "$newlink" && test ! -L "$newlink"
+          ln -s "$old" "$newlink"
+          mv -Tf "$newlink" "$root/current"
+          mkdir -p "$root/current/nodejs/tmp"
+          touch "$root/current/nodejs/tmp/restart.txt"
+          echo "ENC041_ROLLBACK=RESTORED"
+          REMOTE
