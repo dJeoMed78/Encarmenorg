@@ -802,20 +802,20 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                               <span className="text-xs font-black text-emerald-600">
                                 {cand.price !== undefined && cand.price !== null && cand.price > 0
                                   ? `$${Number(cand.price).toLocaleString('es-MX')} ${cand.currency || 'MXN'}`
-                                  : 'Consultar precio'}
+                                  : 'Precio no recuperado'}
                               </span>
                             </div>
 
                             {/* Description */}
                             <p className="text-xs text-stone-600 leading-relaxed whitespace-pre-line">
-                              {cand.description}
+                              {cand.description || 'Descripción no recuperada. Consulta la publicación original antes de aprobar.'}
                             </p>
 
                             {/* Metadata & Contact */}
                             <div className="pt-2 flex items-center gap-4 text-xs text-stone-500 flex-wrap">
                               <div className="flex items-center gap-1 font-medium">
                                 <MapPin className="w-3.5 h-3.5 text-stone-400" />
-                                <span>{cand.colonia || 'Ciudad del Carmen, Campeche'}</span>
+                                <span>{cand.colonia || 'Ubicación pendiente de verificar'}</span>
                               </div>
 
                               {(cand.phone || cand.whatsapp) && (
