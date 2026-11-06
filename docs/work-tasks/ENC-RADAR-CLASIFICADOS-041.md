@@ -66,3 +66,25 @@ La prueba presencial exige `ENC_CLASSIFIED_PROBE_EXECUTE=CONFIRM_STAGING_041` y 
 
 ### Siguiente paso seguro
 Ejecutar preflight de aislamiento y respaldo en infraestructura Staging autorizada; activar temporalmente solo el carril de clasificados en configuración privada; publicar candidato Staging únicamente tras autorizar su SHA; ejecutar el probe real y E2E HTTP con sesión administrativa; verificar persistencia/reinicio/duplicados/cierre de ventana; presentar evidencias a Jeo para aceptación. No ejecutar SQL si cualquiera de los controles falla.
+
+
+## Comprobación de persistencia SQL real en Hostinger — 2026-11-06 UTC
+
+**Completado:** procedimiento de prueba presencial ejecutado en Hostinger con GitHub Actions por SSH desde rama de Nia, sin desplegar la PR. Run: https://github.com/dJeoMed78/Encarmenorg/actions/runs/42148261108; commit `17f7de4bf75d23eaf520f556e73ac4a4c3ace0dc`.
+
+Comprobaciones reales confirmadas en logs (sin revelar credenciales ni datos):
+- `ENC041_ISOLATION=STAGING_SQL_MARKER_GRANTS_SCHEMA_VERIFIED`
+- `ENC041_FRESH_SQL_BACKUP=REUSED_VERIFIED_PRIVATE`; respaldo previamente creado, comprobado y guardado exclusivamente en Hostinger.
+- `ENC041_BEFORE_INSERT=NO_SYNTHETIC_ROW`
+- `ENC041_SQL_INSERT_COMMIT=SUCCESS`
+- `ENC041_NEW_CONNECTION_READBACK=EXACT_MATCH`
+- `ENC041_SYNTHETIC_ROW_CLEANUP=CONFIRMED`
+- `ENC041_REAL_SQL_PERSISTENCE=PASS`.
+
+Se confirmó que no quedaron registros sintéticos del procedimiento. Las tentativas anteriores fallidas abortaron y registraron limpieza; se corrigió la compatibilidad de valores SQL usando FROM_BASE64 y se validó mediante PREPARE de solo lectura.
+
+**Alcance demostrado:** aislamiento, privilegios, backup y persistencia SQL real de inserción de un clasificado oculto en la tabla existente de Staging.
+
+**AÚN NO demostrado:** despliegue del nuevo backend, funcionamiento del endpoint administrativo con sesión, paso por guardia temporal y aceptación de UI del propietario. Tampoco se ha activado `STAGING_CLASSIFIED_WRITES_ENABLED` en Staging. El marcador `STAGING_READ_ONLY` observado actualmente no coincide con el valor requerido por el carril, por lo cual su compuerta continúa cerrada.
+
+**Decisión:** no afirmar que el Issue #41 se cerró. Mantener PR en borrador hasta completar validación de release Staging y HTTP real; no tocar producción.
