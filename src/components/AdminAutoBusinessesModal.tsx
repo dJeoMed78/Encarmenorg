@@ -209,20 +209,20 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
     }
   };
 
-  // 1. ACEPTAR (Aprobar y publicar en encarmen.org y empresasencarmen.com)
+  // 1. ACEPTAR (Aprobar y guardar con persistencia confirmada en MariaDB)
   const handleAccept = async (candidate: AutoBusinessCandidate) => {
     setApprovingId(candidate.id);
     setNotice(null);
     try {
       const res = await approveAutoBusinessCandidate(candidate);
       if (res.success && res.business) {
-        // Mark candidate as accepted
+        // Mark candidate as accepted only after verified backend persistence
         setCandidates(prev =>
           prev.map(c => (c.id === candidate.id ? { ...c, status: 'accepted' } : c))
         );
 
         setNotice({
-          text: `¡Éxito! "${candidate.name}" ha sido autorizada y publicada en el directorio oficial.`,
+          text: `¡Éxito! "${candidate.name}" ha sido guardada y confirmada en MariaDB.`,
           type: 'success'
         });
 
@@ -231,13 +231,13 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
         }
       } else {
         setNotice({
-          text: res.message || 'Error al autorizar la empresa.',
+          text: res.message || 'No se pudo confirmar la persistencia en MariaDB.',
           type: 'error'
         });
       }
     } catch (err: any) {
       setNotice({
-        text: err.message || 'Error durante la publicación de la empresa.',
+        text: err.message || 'Error durante la persistencia de la empresa.',
         type: 'error'
       });
     } finally {
@@ -278,7 +278,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
       instagram: c.instagram || '',
       website: c.website || '',
       image: c.image || '',
-      cover_url: c.cover_url || '',
+      ...((c as any).cover_url ? { cover_url: (c as any).cover_url } : {}),
       gallery: (c as any).gallery || [],
       slug: c.slug || '',
       isRecommended: false,
@@ -317,7 +317,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
       instagram: updatedData.instagram || editingCandidate.instagram,
       website: updatedData.website || editingCandidate.website,
       image: updatedData.image || editingCandidate.image,
-      cover_url: updatedData.cover_url ?? editingCandidate.cover_url,
+      ...((updatedData as any).cover_url ?? (editingCandidate as any).cover_url ? { cover_url: (updatedData as any).cover_url ?? (editingCandidate as any).cover_url } : {}),
       gallery: updatedData.gallery || (editingCandidate as any).gallery,
       slug: updatedData.slug || editingCandidate.slug,
       status: 'modified'
@@ -378,7 +378,7 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
 
     if (
       !window.confirm(
-        `¿Deseas autorizar y publicar ${pending.length} negocios en el catálogo oficial de Ciudad del Carmen?`
+        `¿Deseas autorizar y guardar ${pending.length} negocios en MariaDB?`
       )
     ) {
       return;
@@ -388,24 +388,53 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
     setNotice(null);
     try {
       const res = await approveMultipleAutoBusinessCandidates(pending);
-      if (res.success) {
-        setCandidates(prev => prev.map(c => ({ ...c, status: 'accepted' })));
-        setNotice({
-          text: `¡Éxito total! Se publicaron ${res.count || pending.length} empresas en el catálogo oficial de Carmen.`,
-          type: 'success'
-        });
-        if (res.published && Array.isArray(res.published) && onBusinessApproved) {
-          res.published.forEach(b => onBusinessApproved(b));
+      const confirmedList = res.confirmed || res.published || [];
+      const confirmedNames = new Set(confirmedList.map(b => b.name?.toLowerCase().trim()));
+      const confirmedPhones = new Set(
+        confirmedList.flatMap(b => [(b.phone || '').replace(/\D/g, '').slice(-10), (b.whatsapp || '').replace(/\D/g, '').slice(-10)]).filter(Boolean)
+      );
+
+      // Actualizar estado ÚNICAMENTE para las empresas cuya persistencia fue confirmada
+      setCandidates(prev =>
+        prev.map(c => {
+          const cPhone = (c.phone || '').replace(/\D/g, '').slice(-10);
+          const cWa = (c.whatsapp || '').replace(/\D/g, '').slice(-10);
+          const isConfirmed = confirmedNames.has(c.name?.toLowerCase().trim()) ||
+            (cPhone && confirmedPhones.has(cPhone)) ||
+            (cWa && confirmedPhones.has(cWa));
+
+          if (isConfirmed) {
+            return { ...c, status: 'accepted' };
+          }
+          return c;
+        })
+      );
+
+      if (confirmedList.length > 0) {
+        if (confirmedList.length === pending.length) {
+          setNotice({
+            text: `¡Éxito total! Se guardaron y confirmaron ${confirmedList.length} empresas en MariaDB.`,
+            type: 'success'
+          });
+        } else {
+          setNotice({
+            text: `Operación parcial: Se confirmaron ${confirmedList.length} de ${pending.length} empresas en MariaDB. ${pending.length - confirmedList.length} no se guardaron (duplicados o errores).`,
+            type: 'info'
+          });
+        }
+
+        if (onBusinessApproved) {
+          confirmedList.forEach(b => onBusinessApproved(b));
         }
       } else {
         setNotice({
-          text: res.message || 'Error en publicación por lote.',
+          text: res.message || 'No se pudo confirmar el guardado de ninguna empresa en MariaDB.',
           type: 'error'
         });
       }
     } catch (err: any) {
       setNotice({
-        text: err.message || 'Error de conexión durante la aprobación.',
+        text: err.message || 'Error de conexión durante la aprobación en lote.',
         type: 'error'
       });
     } finally {
@@ -1010,9 +1039,19 @@ export const AdminAutoBusinessesModal: React.FC<AdminAutoBusinessesModalProps> =
                           </div>
 
                           {/* Source badge */}
-                          <div className="flex items-center gap-1.5 text-[11px] text-stone-400 pt-1">
-                            <span className="font-semibold text-stone-500">Fuente detectada:</span>
+                          <div className="flex items-center gap-1.5 text-[11px] text-stone-400 pt-1 flex-wrap">
+                            <span className="font-semibold text-stone-500">Procedencia:</span>
                             <span className="text-sky-300 font-medium">{candidate.source}</span>
+                            {(candidate as any).isLiveWebDiscovery === false && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-stone-800 text-stone-300 border border-stone-700">
+                                Catálogo local
+                              </span>
+                            )}
+                            {(candidate as any).isLiveWebDiscovery === true && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-700/50">
+                                Detección web activa
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
