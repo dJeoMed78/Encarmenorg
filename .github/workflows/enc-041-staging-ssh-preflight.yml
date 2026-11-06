@@ -1,0 +1,77 @@
+name: ENC-041 Staging SSH preflight read only
+on:
+  push:
+    branches: [work/enc-radar-clasificados-041-nia]
+    paths: [.github/workflows/enc-041-staging-ssh-preflight.yml]
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Verify credential availability without disclosure
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS" || { echo "STAGING_SSH_SECRET_UNAVAILABLE"; exit 2; }
+          echo "STAGING_SSH_SECRET_PRESENT=yes"
+      - name: Check pinned Hostinger SSH identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test -s "$HOME/.ssh/known_hosts"
+          fp=$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')
+          test "$fp" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4' || { echo "STAGING_SSH_FINGERPRINT_MISMATCH"; exit 3; }
+          echo "STAGING_SSH_FINGERPRINT_VERIFIED=yes"
+      - name: Inspect current staging and backup without changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no -o BatchMode=no -o ConnectTimeout=12 u293982346@45.137.159.114 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          root="$HOME/domains/staging.encarmen.org/hbuilds"
+          test -d "$root" || { echo "STAGING_ROOT_MISSING"; exit 10; }
+          test -L "$root/current" || { echo "STAGING_RELEASE_SYMLINK_MISSING"; exit 11; }
+          release=$(readlink "$root/current")
+          case "$release" in versions/*) ;; *) echo "STAGING_RELEASE_UNEXPECTED"; exit 12;; esac
+          test -f "$root/current/nodejs/server.js" || { echo "STAGING_SERVER_BUNDLE_MISSING"; exit 13; }
+          echo "STAGING_RELEASE_PATH_VALID=yes"
+          if [ -f "$root/current/nodejs/dist/encarmen-release.txt" ]; then
+            rev=$(head -c 80 "$root/current/nodejs/dist/encarmen-release.txt" | tr -cd 'a-fA-F0-9')
+            echo "STAGING_BUNDLE_SHA=${rev:-unknown}"
+          else
+            echo "STAGING_BUNDLE_SHA=not_available"
+          fi
+          dir="$HOME/encarmen-staging-backups/database"
+          test -d "$dir" && test ! -L "$dir" || { echo "STAGING_DB_BACKUP_DIR_MISSING"; exit 14; }
+          mode=$(stat -c '%a' "$dir")
+          test "$mode" = 700 || { echo "STAGING_DB_BACKUP_DIR_PERMISSION_INVALID"; exit 15; }
+          file=$(find "$dir" -maxdepth 1 -type f -name 'staging-db-*.sql.gz' -printf '%T@ %p\n' | sort -nr | head -n 1 | cut -d' ' -f2-)
+          test -n "$file" && test -s "$file" || { echo "STAGING_DB_BACKUP_FILE_MISSING"; exit 16; }
+          gzip -t "$file" || { echo "STAGING_DB_BACKUP_CORRUPT"; exit 17; }
+          echo "STAGING_DB_BACKUP_ARCHIVE_VALID=yes"
+          if [ -f "$root/config/.env" ]; then
+            envmode=$(stat -c '%a' "$root/config/.env")
+            if [ "$envmode" = 600 ]; then
+              echo "STAGING_PRIVATE_ENV_PERMISSIONS=600"
+              if grep -Eq '^DB_NAME=u293982346_encarmentest$' "$root/config/.env"; then
+                echo "STAGING_PRIVATE_DB_NAME_MATCH=yes"
+              else
+                echo "STAGING_PRIVATE_DB_NAME_MATCH=no"
+              fi
+            else
+              echo "STAGING_PRIVATE_ENV_PERMISSIONS=unexpected"
+            fi
+          else
+            echo "STAGING_PRIVATE_ENV_MISSING=yes"
+          fi
+          echo "ENC041_READONLY_PREFLIGHT_COMPLETE=yes"
+          REMOTE
