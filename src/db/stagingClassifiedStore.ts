@@ -13,7 +13,7 @@ export function stagingClassifiedWindowValid(
       snapshot.DB_NAME !== STAGING_BUSINESS_DATABASE ||
       snapshot.DB_USER !== connectedUser ||
       snapshot.DB_USER === 'u293982346_appuser' ||
-      snapshot.STAGING_READ_ONLY !== 'true' ||
+      snapshot.STAGING_READ_ONLY !== 'false' ||
       snapshot.STAGING_DB_CONFIRMED !== 'true' ||
       snapshot.STAGING_CLASSIFIED_WRITES_ENABLED !== 'true') return false;
 
