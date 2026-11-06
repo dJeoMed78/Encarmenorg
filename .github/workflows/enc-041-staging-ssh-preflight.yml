@@ -181,7 +181,7 @@ jobs:
                     'PREPARE enc041_stmt FROM '+chr(39)+stmt+chr(39)+'; DEALLOCATE PREPARE enc041_stmt'],
                     stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=20)
                   if result.returncode:
-                      m=_re.search(rb'ERROR\\s+(\\d{3,5})',result.stderr)
+                      m=_re.search(rb'ERROR\s+(\d{3,5})',result.stderr)
                       code=m.group(1).decode('ascii') if m else 'UNKNOWN'
                       match=_re.search(rb"Unknown column '([^']+)'",result.stderr)
                       name=match.group(1).decode('ascii','ignore') if match else ''
