@@ -85,6 +85,7 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
   const [radarQuery, setRadarQuery] = useState('');
   const [radarCat, setRadarCat] = useState('all');
   const [radarLoading, setRadarLoading] = useState(false);
+  const [radarHasSearched, setRadarHasSearched] = useState(false);
   const [radarCandidates, setRadarCandidates] = useState<ClassifiedAd[]>([]);
   const [radarAiInfo, setRadarAiInfo] = useState<{ usedAi: boolean; quotaExhausted?: boolean; message?: string } | null>(null);
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set());
@@ -100,6 +101,7 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
   };
 
   const handleSearchRadar = async (useAiMode: boolean) => {
+    setRadarHasSearched(true);
     setRadarLoading(true);
     setRadarAiInfo(null);
     setModalError(null);
@@ -705,17 +707,17 @@ export const AdminClassifiedsTab: React.FC<AdminClassifiedsTabProps> = ({
                 <div className="py-16 text-center space-y-3">
                   <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto" />
                   <p className="text-xs font-bold text-stone-600">
-                    Rastreando publicaciones verificables en el grupo de Facebook de Empresas en Carmen...
+                    Consultando fuentes públicas de anuncios y validando enlaces individuales...
                   </p>
                 </div>
               ) : radarCandidates.length === 0 ? (
                 <div className="py-16 text-center space-y-2 bg-white rounded-2xl border border-stone-200">
                   <Tag className="w-8 h-8 text-stone-300 mx-auto" />
                   <p className="text-xs font-bold text-stone-700">
-                    No se encontraron candidatos para los criterios ingresados.
+                    {radarHasSearched ? 'No se encontraron anuncios verificables para esta búsqueda.' : 'Escribe un término y elige Buscar (Sin IA) o Radar IA.'}
                   </p>
                   <p className="text-[11px] text-stone-400">
-                    Intenta buscar con palabras clave como "empleo", "renta", "terreno", "versa" o pulsa "Buscar (Sin IA)".
+                    {radarHasSearched ? 'Prueba otros términos o categorías. Cero resultados no significa que se haya publicado algo.' : 'Las búsquedas externas se ejecutan únicamente cuando pulses uno de los botones.'}
                   </p>
                 </div>
               ) : (
