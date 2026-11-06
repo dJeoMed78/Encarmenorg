@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      # Refresh deployment status after backup preflight update
+      # Refresh deployment status after isolated release assembly fix
       - name: Read GitHub Actions deployment run metadata only
         env:
           GH_TOKEN: ${{ github.token }}
