@@ -355,3 +355,22 @@ test('el radar no llama vigentes a anuncios con fecha original desconocida', () 
   assert.match(builder, /sourcePublishedAt: null/);
   assert.match(builder, /discoveredAt: new Date\(\).toISOString\(\)/);
 });
+
+test('abrir radar no ejecuta búsqueda AI automática', () => {
+  const block = ui.slice(ui.indexOf('const handleOpenRadar = () => {'), ui.indexOf('const handleSearchRadar = async'));
+  assert.doesNotMatch(block, /handleSearchRadar\s*\(/);
+});
+
+test('resultado de búsqueda exitoso vacío no se convierte en un error rojo', () => {
+  const code = ui.slice(ui.indexOf('const handleSearchRadar = async'),ui.indexOf('const handleApprove = async'));
+  assert.match(code, /if \(res\.success && Array\.isArray\(res\.candidates\)\)/);
+  assert.match(code, /setRadarCandidates\(res\.candidates\)/);
+  assert.match(code, /setRadarAiInfo\(res\.aiInfo/);
+  assert.match(code, /La búsqueda terminó correctamente/);
+});
+
+test('el radar inicia vacío y muestra procedencia neutral, sin afirmar Facebook rastreado', () => {
+  assert.match(ui, /radarHasSearched/);
+  assert.match(ui, /Consultando fuentes públicas de anuncios/);
+  assert.doesNotMatch(ui, /Rastreando publicaciones verificables en el grupo de Facebook/);
+});
