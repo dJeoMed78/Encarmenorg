@@ -1,5 +1,5 @@
 name: ENC radars 041+043 authorized reversible staging deployment
-# Authorized ENC-034 Glass two-column UI: CI Chrome 320/390/834/1440 and media PASS.
+# ENC-034 controlled diagnostic: stage-only boolean gate status. No mutation of permissions.
 # Release only Staging; no private write flags, no production modification.
 # Staging ONLY. main/production excluded; deployment keeps automatic rollback on failed HTTP.
 on:
