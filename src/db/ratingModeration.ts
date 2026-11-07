@@ -25,13 +25,16 @@ export function createRatingModerationRepository(db: { getConnection(): Promise<
     async approved(businessId: string, limit: number, offset: number): Promise<ModeratedComment[]> {
       return withConnection(async c => {
         const [rows]: any = await c.query(
-          `SELECT r.id, r.business_id AS businessId, r.comment, r.created_at AS createdAt
+          `SELECT r.id, r.business_id AS businessId, r.rating, r.comment, r.created_at AS createdAt
            FROM business_ratings r INNER JOIN business_rating_moderation m ON m.rating_id = r.id
            WHERE r.business_id = ? AND m.status = 'approved'
              AND r.comment IS NOT NULL AND TRIM(r.comment) <> ''
            ORDER BY r.created_at DESC, r.id DESC LIMIT ? OFFSET ?`,
           [businessId, limit, offset]);
-        return rows.map((r: any) => ({ id: String(r.id), businessId: String(r.businessId), comment: String(r.comment), createdAt: String(r.createdAt) }));
+        return rows.map((r: any) => ({
+          id: String(r.id), businessId: String(r.businessId), rating: Number(r.rating),
+          comment: String(r.comment), createdAt: String(r.createdAt)
+        }));
       });
     },
     async pending(limit: number, offset: number): Promise<ModeratedComment[]> {
