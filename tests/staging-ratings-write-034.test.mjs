@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {stagingRatingsWindowValid, stagingRatingsPublicWriteValid} from '../src/db/stagingRatingWrite.ts';
+import {stagingRatingsWindowValid, stagingRatingsPublicWriteValid, stagingRatingsModerationWriteValid} from '../src/db/stagingRatingWrite.ts';
 const NOW=Date.parse('2026-11-07T15:00:00Z');
 const base={
  APP_ENV:'staging',DB_NAME:'u293982346_encarmentest',DB_USER:'staging_user',
@@ -33,7 +33,7 @@ test('schema and HTTP mutators never widen the general staging write gate',async
  assert.match(server,/isStagingRatingsWritePermitted\(\)/);
  assert.match(server,/adminSecurity\.isAuthorized\(req, 'admin:manage'\)/);
  assert.match(db,/isWritePermitted\(\) \|\| isStagingRatingsWritePermitted\(\) \|\| isStagingRatingsPublicWritePermitted\(\)/);
- assert.match(db,/if \(!isStagingRatingsWritePermitted\(\)\) throw ratingsError\('RATINGS_DATABASE_READ_ONLY'\)/);
+ assert.match(db,/if \(!isStagingRatingsModerationWritePermitted\(\)\) throw ratingsError\('RATINGS_DATABASE_READ_ONLY'\)/);
 });
 
 test('durable public rating writes need exact private Staging flag and schema attestation',()=>{
@@ -46,4 +46,12 @@ test('durable public rating writes need exact private Staging flag and schema at
  ['RATINGS_MODERATION_APPROVED','false'],['RATINGS_SCHEMA_APPROVED','false'],
  ['STAGING_RATINGS_BACKUP_ID','bad'],['STAGING_RATINGS_BACKUP_CHECKED_AT','invalid']
  ]) assert.equal(stagingRatingsPublicWriteValid({...snapshot,[key]:value},'staging_user'),false,key);
+});
+
+test('moderation requires separate private administrator write switch',()=>{
+ const full={...base,STAGING_RATINGS_MODERATION_WRITES_ENABLED:'true'};
+ assert.equal(stagingRatingsModerationWriteValid(full,'staging_user'),true);
+ assert.equal(stagingRatingsModerationWriteValid({...full,STAGING_RATINGS_MODERATION_WRITES_ENABLED:'false'},'staging_user'),false);
+ assert.equal(stagingRatingsModerationWriteValid({...full,APP_ENV:'production'},'staging_user'),false);
+ assert.equal(stagingRatingsModerationWriteValid({...full,DB_NAME:'u293982346_encarmenapp'},'staging_user'),false);
 });
