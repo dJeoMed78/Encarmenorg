@@ -29,21 +29,21 @@ export function BusinessComments({ businessId }: { businessId: string | number }
       .catch(() => { if (!controller.signal.aborted) setStatus('unavailable'); });
     return () => controller.abort();
   }, [id, page]);
-  return <section className="bpd-comments" aria-label="Comentarios aprobados">
-    <strong>Comentarios de la comunidad</strong>
+  return <section className="bpd-comments mt-4 rounded-[24px] border border-white/80 bg-white/55 p-4 shadow-[0_10px_30px_rgba(30,41,59,0.07)] backdrop-blur-xl sm:p-5" aria-label="Comentarios aprobados">
+    <h3 className="text-sm font-bold text-slate-900">Comentarios de la comunidad</h3>
     {status === 'loading' && <p>Consultando comentarios…</p>}
     {status === 'unavailable' && <p>Comentarios no disponibles por el momento. No se muestran comentarios sin aprobación.</p>}
     {status === 'ready' && <>
       {comments.length === 0 && <p>Aún no hay comentarios aprobados para mostrar.</p>}
-      <ul className="space-y-3">
-        {comments.map(item => <li key={item.id} className="rounded-xl border border-stone-200 p-3">
-          <p className="whitespace-pre-wrap break-words text-sm">{item.comment}</p>
+      <ul className="mt-3 grid gap-3 sm:grid-cols-2">
+        {comments.map(item => <li key={item.id} className="min-w-0 rounded-2xl border border-white/80 bg-white/65 p-3 shadow-sm">
+          <p className="whitespace-pre-wrap break-words text-sm text-slate-700">{item.comment}</p>
           {Number.isFinite(Date.parse(item.createdAt)) && <time className="text-xs text-stone-500" dateTime={item.createdAt}>
             {new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Merida', day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(item.createdAt))}
           </time>}
         </li>)}
       </ul>
-      <div className="flex gap-2">
+      <div className="mt-3 flex gap-3 text-xs">
         {page > 1 && <button type="button" onClick={() => setPage(n => n - 1)}>Anteriores</button>}
         {comments.length === 20 && <button type="button" onClick={() => setPage(n => n + 1)}>Siguientes</button>}
       </div>
