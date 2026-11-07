@@ -4,6 +4,9 @@ on:
     branches: [ia-desarrollo, work/enc-ratings-comments-034-w1]
     paths:
       - src/db/ratingModeration.ts
+      - src/db/stagingRatingWrite.ts
+      - src/server/stagingBusinessSecurity.ts
+      - tests/staging-ratings-write-034.test.mjs
       - src/db/mariadb.ts
       - src/components/BusinessComments.tsx
       - src/components/BusinessPublicDetail.tsx
@@ -32,7 +35,7 @@ jobs:
       - name: TypeScript
         run: npm run lint
       - name: Moderation and ratings suites
-        run: NODE_ENV=test node --import tsx --test tests/ratings-moderation-034.test.mjs tests/ratings-034.test.mjs tests/ratings-hook-034.test.mjs tests/ratings-repository-034.test.mjs tests/ratings-routes-034.test.mjs
+        run: NODE_ENV=test node --import tsx --test tests/ratings-moderation-034.test.mjs tests/staging-ratings-write-034.test.mjs tests/ratings-034.test.mjs tests/ratings-hook-034.test.mjs tests/ratings-repository-034.test.mjs tests/ratings-routes-034.test.mjs
       - name: Install Chromium for responsive test
         run: npx playwright install chromium --with-deps
       - name: Prepare isolated Vite assets for Chromium
