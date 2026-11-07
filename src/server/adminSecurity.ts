@@ -47,6 +47,7 @@ export function adminPermission(requestPath:string,method:string):string|null {
  if(path==='/api/upload-logo'&&mutable)return 'business:manage';
  if(/^\/(?:api\/)?admin(?:\/|$)/.test(path))return 'admin:manage';
  if(/^\/api\/(?:mariadb|database-status)(?:\/|$)/.test(path) || /^\/api\/(?:sync|webhook)(?:[-/]|$)/.test(path))return 'admin:manage';
+ if(/^\/api\/reviews\/moderation(?:\/|$)/.test(path))return 'admin:manage';
  if(/^\/api\/businesses\/approve-(?:candidate|multiple-candidates)$/.test(path))return 'business:publish';
  if(method.toUpperCase()==='POST'&&/^\/api\/businesses\/(?:auto-search|auto-search-ai|parse-whatsapp-group)$/.test(path))return null;
  if(/^\/(?:api\/)?businesses\/[^/]+(?:\/(?:sync-wp|verify-edit-pin))?$/.test(path)&&mutable)return method.toUpperCase()==='DELETE'?'business:delete':'business:manage';
