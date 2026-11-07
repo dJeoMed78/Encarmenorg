@@ -27,9 +27,15 @@ jobs:
           cache: npm
       - name: Install reproducibly
         run: npm ci
+      - name: Install pinned test-only browser dependencies
+        run: npm install --no-save --no-package-lock --ignore-scripts jsdom@26.1.0 playwright@1.56.1
       - name: TypeScript
         run: npm run lint
       - name: Moderation and ratings suites
         run: NODE_ENV=test node --import tsx --test tests/ratings-moderation-034.test.mjs tests/ratings-034.test.mjs tests/ratings-hook-034.test.mjs tests/ratings-repository-034.test.mjs tests/ratings-routes-034.test.mjs
+      - name: Install Chromium for responsive test
+        run: npx playwright install chromium --with-deps
+      - name: Responsive Chromium verification
+        run: NODE_ENV=test node --test tests/ratings-browser-034.test.mjs
       - name: Compile
         run: npm run build
