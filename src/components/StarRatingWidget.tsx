@@ -183,7 +183,6 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
                   </div>
                   <p className="mt-2 text-[11px] text-slate-500">Selecciona tus estrellas y pulsa «Publicar mi opinión» para enviar todo junto.</p>
                 </div>
-                </div>
                 <button type="submit" disabled={selectedRating === 0 || isSubmitting || loading || !available || Boolean(errorMessage)}
                   className="w-full rounded-2xl border border-amber-300/80 bg-amber-400 px-4 py-3 text-sm font-bold text-slate-900 shadow-sm transition hover:bg-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 disabled:cursor-not-allowed disabled:opacity-50">
                   {isSubmitting ? 'Publicando…' : 'Publicar mi opinión'}
