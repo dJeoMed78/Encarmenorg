@@ -76,7 +76,7 @@ jobs:
               grants=sql('SHOW GRANTS FOR CURRENT_USER()')
               if 'u293982346_encarmenapp' in grants:raise SystemExit('ENC034_PRODUCTION_GRANT_PRESENT')
               tables=sql("SELECT TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('business_ratings','business_rating_moderation') ORDER BY TABLE_NAME")
-              if tables.splitlines()!=['business_rating_moderation\tInnoDB','business_ratings\tInnoDB']:raise SystemExit('ENC034_TABLES_UNVERIFIED')
+              if set(tables.splitlines())!={'business_rating_moderation\tInnoDB','business_ratings\tInnoDB'}:raise SystemExit('ENC034_TABLES_UNVERIFIED')
               fields=sql("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='business_rating_moderation' ORDER BY ORDINAL_POSITION").splitlines()
               if fields!=['rating_id','status','moderated_at','moderated_by']:raise SystemExit('ENC034_SCHEMA_MISMATCH')
               if sql("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='business_rating_moderation' AND INDEX_NAME='PRIMARY' AND COLUMN_NAME='rating_id' AND NON_UNIQUE=0")!='1':raise SystemExit('ENC034_MODERATION_KEY_MISSING')
