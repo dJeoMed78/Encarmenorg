@@ -1,6 +1,6 @@
 // ENC-034: moderation store. Does not create or modify database schema.
 // Approval is explicitly fail-closed until schema and controls are audited.
-export type ModeratedComment = { id: string; businessId: string; comment: string; createdAt: string };
+export type ModeratedComment = { id: string; businessId: string; comment: string; createdAt: string; rating?: number; businessName?: string; category?: string; address?: string; colonia?: string };
 const fail = (code: string): never => { throw Object.assign(new Error(code), { code }); };
 export function createRatingModerationRepository(db: { getConnection(): Promise<any> }) {
   async function withConnection<T>(work: (c: any) => Promise<T>): Promise<T> {
@@ -39,12 +39,20 @@ export function createRatingModerationRepository(db: { getConnection(): Promise<
         // Existing comments without moderation rows are private by default,
         // including historical comments. Admin may review, never auto-approve.
         const [rows]: any = await c.query(
-          `SELECT r.id, r.business_id AS businessId, r.comment, r.created_at AS createdAt
-           FROM business_ratings r LEFT JOIN business_rating_moderation m ON m.rating_id = r.id
+          `SELECT r.id, r.business_id AS businessId, r.rating, r.comment, r.created_at AS createdAt,
+                  b.name AS businessName, b.category AS category, b.address AS address, b.colonia AS colonia
+           FROM business_ratings r
+           LEFT JOIN business_rating_moderation m ON m.rating_id = r.id
+           LEFT JOIN businesses b ON b.id = r.business_id
            WHERE r.comment IS NOT NULL AND TRIM(r.comment) <> ''
              AND (m.rating_id IS NULL OR m.status = 'pending')
            ORDER BY r.created_at DESC, r.id DESC LIMIT ? OFFSET ?`, [limit, offset]);
-        return rows.map((r: any) => ({ id: String(r.id), businessId: String(r.businessId), comment: String(r.comment), createdAt: String(r.createdAt) }));
+        return rows.map((r: any) => ({
+          id: String(r.id), businessId: String(r.businessId), rating: Number(r.rating),
+          comment: String(r.comment), createdAt: String(r.createdAt),
+          businessName: String(r.businessName || ''), category: String(r.category || ''),
+          address: String(r.address || ''), colonia: String(r.colonia || '')
+        }));
       });
     },
     async decide(ratingId: string, status: 'approved' | 'rejected', adminId: string): Promise<boolean> {
