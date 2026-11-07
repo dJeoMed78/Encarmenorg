@@ -2,6 +2,7 @@ import {STAGING_BUSINESS_DATABASE,stagingBusinessConfiguration,privateStagingBus
 import {verifyStagingIsolation, evaluateGrants} from '../server/stagingIsolationProof';
 import {createStagingBusinessStore} from './stagingBusinessStore';
 import {createStagingClassifiedStore} from './stagingClassifiedStore';
+import {createRatingModerationRepository} from './ratingModeration';
 import mysql from 'mysql2/promise';
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -1357,6 +1358,24 @@ export function createRatingsRepository(db: Pick<mysql.Pool, 'getConnection'>) {
       }
     }
   };
+}
+function ratingModerationRepository() {
+  if (!pool) throw ratingsError('RATINGS_DATABASE_UNAVAILABLE');
+  if (process.env.RATINGS_SCHEMA_APPROVED !== 'true' ||
+      process.env.RATINGS_MODERATION_APPROVED !== 'true') {
+    throw ratingsError('COMMENTS_SCHEMA_APPROVAL_REQUIRED');
+  }
+  return createRatingModerationRepository(pool);
+}
+export async function dbGetApprovedRatingComments(id: string, limit: number, offset: number) {
+  return ratingModerationRepository().approved(id, limit, offset);
+}
+export async function dbGetPendingRatingComments(limit: number, offset: number) {
+  return ratingModerationRepository().pending(limit, offset);
+}
+export async function dbModerateRatingComment(id: string, status: 'approved'|'rejected', adminId: string) {
+  if (!isWritePermitted()) throw ratingsError('RATINGS_DATABASE_READ_ONLY');
+  return ratingModerationRepository().decide(id, status, adminId);
 }
 function ratingsRepository() {
   if (!pool) throw ratingsError('RATINGS_DATABASE_UNAVAILABLE');
