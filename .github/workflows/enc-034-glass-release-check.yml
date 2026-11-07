@@ -1,0 +1,39 @@
+name: ENC-034 Glass release read-only verification
+on:
+  pull_request:
+    branches: [ia-desarrollo]
+    paths: [.github/workflows/enc-034-glass-release-check.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_SHA: 9eef757ca928dd27ac964a6490b52d474d8fa2da
+    steps:
+      - name: Check staging deploy status read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${{ github.repository }}/actions/workflows/enc-radars-041-043-staging-deploy.yml/runs?per_page=3" --jq '.workflow_runs[] | [.id,.event,.status,.conclusion,.head_sha] | @tsv'
+      - name: Verify expected staging release and rating API without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 20); do
+            code=$(curl -sSL --max-time 18 -o /dev/null -w '%{http_code}' https://staging.encarmen.org/ || true)
+            sha=$(curl -fsSL --max-time 18 -H 'Cache-Control: no-cache' https://staging.encarmen.org/encarmen-release.txt || true)
+            if [ "$code" = 200 ] && [ "$sha" = "$EXPECTED_SHA" ]; then break; fi
+            sleep 10
+          done
+          test "$code" = 200
+          test "$sha" = "$EXPECTED_SHA"
+          echo "ENC034_GLASS_STAGING_SHA=VERIFIED"
+          manifest=$(curl -fsSL --max-time 18 -H 'Cache-Control: no-cache' https://staging.encarmen.org/encarmen-release.json)
+          RELEASE_JSON="$manifest" node -e 'const d=JSON.parse(process.env.RELEASE_JSON);if(d.sha!==process.env.EXPECTED_SHA||!Number.isFinite(Date.parse(d.updatedAt)))process.exit(1);console.log("ENC034_GLASS_STAGING_TIMESTAMP="+d.updatedAt)'
+          ratings=$(curl -sSL --max-time 18 -o /dev/null -w '%{http_code}' https://staging.encarmen.org/api/ratings)
+          test "$ratings" = 200
+          echo "ENC034_GLASS_RATINGS_READ_HTTP=200"
