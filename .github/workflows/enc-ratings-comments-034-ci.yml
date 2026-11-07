@@ -35,6 +35,8 @@ jobs:
         run: NODE_ENV=test node --import tsx --test tests/ratings-moderation-034.test.mjs tests/ratings-034.test.mjs tests/ratings-hook-034.test.mjs tests/ratings-repository-034.test.mjs tests/ratings-routes-034.test.mjs
       - name: Install Chromium for responsive test
         run: npx playwright install chromium --with-deps
+      - name: Prepare isolated Vite assets for Chromium
+        run: npx vite build --outDir /tmp/034-dist
       - name: Responsive Chromium verification
         run: NODE_ENV=test node --test tests/ratings-browser-034.test.mjs
       - name: Compile
