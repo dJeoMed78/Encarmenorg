@@ -32,7 +32,7 @@ test('schema and HTTP mutators never widen the general staging write gate',async
  const db=fs.readFileSync('src/db/mariadb.ts','utf8');
  assert.match(server,/isStagingRatingsWritePermitted\(\)/);
  assert.match(server,/adminSecurity\.isAuthorized\(req, 'admin:manage'\)/);
- assert.match(db,/isWritePermitted\(\) \|\| isStagingRatingsWritePermitted\(\)/);
+ assert.match(db,/isWritePermitted\(\) \|\| isStagingRatingsWritePermitted\(\) \|\| isStagingRatingsPublicWritePermitted\(\)/);
  assert.match(db,/if \(!isStagingRatingsWritePermitted\(\)\) throw ratingsError\('RATINGS_DATABASE_READ_ONLY'\)/);
 });
 
