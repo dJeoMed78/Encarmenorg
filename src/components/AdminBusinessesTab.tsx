@@ -32,6 +32,7 @@ import {
 } from '../services/api';
 import { formatPhoneNumber } from '../utils/phone';
 import { AdminAutoBusinessesModal } from './AdminAutoBusinessesModal';
+import { AdminRatingsModeration } from './AdminRatingsModeration';
 
 interface AdminBusinessesTabProps {
   businesses: Business[];
@@ -82,6 +83,7 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
     {(['phone', 'whatsapp'] as const).filter(field => contactDigits(business[field])).map(field => <button key={field} type="button" disabled={clearingContact} onClick={() => void clearContact(business, field)} className="text-[10px] text-rose-700 underline disabled:opacity-40">Retirar {field === 'phone' ? 'teléfono' : 'WhatsApp'}</button>)}
   </div>;
   const [isAutoSearchModalOpen, setIsAutoSearchModalOpen] = useState(false);
+  const [showRatingsModeration, setShowRatingsModeration] = useState(false);
   const [autoModalSource, setAutoModalSource] = useState<'all' | 'official_group' | 'official_page' | 'whatsapp' | 'community' | 'ai'>('all');
   const [autoModalTriggerAi, setAutoModalTriggerAi] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -272,6 +274,14 @@ export const AdminBusinessesTab: React.FC<AdminBusinessesTabProps> = ({
 
   return (
     <div className="space-y-5">
+      <div className="flex flex-col gap-3">
+        <button type="button" onClick={() => setShowRatingsModeration(v => !v)}
+          aria-expanded={showRatingsModeration}
+          className="self-start rounded-xl bg-stone-800 text-white px-4 py-2 text-xs font-semibold">
+          {showRatingsModeration ? 'Cerrar moderación de comentarios' : 'Moderar comentarios'}
+        </button>
+        {showRatingsModeration && <AdminRatingsModeration />}
+      </div>
       {/* Top Filter and Controls */}
       <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
