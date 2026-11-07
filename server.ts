@@ -2106,6 +2106,7 @@ export function registerRatingsRoutes(app: Pick<express.Express, 'get' | 'post'>
     } catch (error) { return ratingError(res, error); }
   });
 }
+// ENC-REVIEWS-006 RATINGS ROUTES END
 // ENC-034. Comments stay private unless a separate verified moderation record
 // marks them approved. Historical reviews have no moderation records.
 const validCommentId = (value: unknown): value is string =>
@@ -2154,7 +2155,7 @@ app.post('/api/reviews/moderation/:id', async (req: Request, res: Response) => {
     return found ? res.json({success:true}) : res.status(404).json({success:false,error:'COMMENT_NOT_FOUND'});
   } catch(error) { return commentsFailure(res,error); }
 });
-// ENC-REVIEWS-006 RATINGS ROUTES END
+
 registerRatingsRoutes(app);
 
 // Businesses List with search & filters
