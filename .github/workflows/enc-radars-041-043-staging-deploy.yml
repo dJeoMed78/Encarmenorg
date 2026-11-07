@@ -9,7 +9,13 @@ name: ENC radars 041+043 authorized reversible staging deployment
 on:
   push:
     branches: [ia-desarrollo]
-    paths: [.github/workflows/enc-radars-041-043-staging-deploy.yml]
+    paths:
+      - .github/workflows/enc-radars-041-043-staging-deploy.yml
+      - src/components/BusinessPublicDetail.tsx
+      - src/utils/businessMediaPresentation.ts
+      - tests/business-cover-brand-fallback.test.mjs
+      - tests/business-detail-logo-hero.test.mjs
+      - tests/business-media-presentation.test.mjs
   workflow_dispatch:
 permissions:
   contents: read
@@ -46,6 +52,7 @@ jobs:
           npm ci
           npm run lint
           node --import tsx --test tests/enc-radar-classifieds-041.test.mjs tests/enc-staging-classified-lane-041.test.mjs
+          node --import tsx --test tests/business-media-presentation.test.mjs tests/business-cover-brand-fallback.test.mjs tests/business-detail-logo-hero.test.mjs tests/enc-staging-public-media-001.test.mjs tests/enc-media-regression-guard.test.mjs
           npm run build
           ENCARMEN_EXPECTED_SHA="$GITHUB_SHA" node scripts/verify_footer_release.cjs
           test -f server.js && test -f api/server.bundle.js && test -f dist/index.html

@@ -5,20 +5,27 @@ import { readFileSync } from 'node:fs';
 const detail = readFileSync(new URL('../src/components/BusinessPublicDetail.tsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../src/components/BusinessPublicDetail.css', import.meta.url), 'utf8');
 
-test('el logotipo registrado se muestra en ambas columnas y el hero inicial', () => {
-  assert.match(detail, /displayBrandImage && \(heroLogoMode \|\| !photos\.length\)/);
-  assert.match(detail, /className="bpd-hero-logo"[\s\S]*?src=\{displayBrandImage\}/);
-  assert.match(detail, /className="bpd-card bpd-identity"[\s\S]*?src=\{displayBrandImage\}/);
+test('the initial hero uses the cover, or the logo only when the cover is absent', () => {
+  assert.match(detail, /heroBrandImage = \(coverPhoto && !coverFailed \? coverPhoto : undefined\) \|\| displayBrandImage/);
+  assert.match(detail, /heroBrandMode \?/);
+  assert.match(detail, /className=\{heroBrandImage === coverPhoto \? "bpd-hero-cover" : "bpd-hero-logo"\}/);
   assert.match(css, /\.bpd-hero > img\.bpd-hero-logo\s*\{[^}]*object-fit:\s*contain/);
 });
 
-test('seleccionar fotos cambia el hero y conserva el logo lateral', () => {
-  assert.match(detail, /setHeroLogoMode\(false\);\s*setIndex\(i\)/);
-  assert.match(detail, /const turn = \(n: number\) => \{[\s\S]*?setHeroLogoMode\(false\)/);
-  assert.match(detail, /useEffect\(\(\) => \{\s*setLogoFailed\(false\);\s*setCoverFailed\(false\);\s*setHeroLogoMode\(true\);\s*setIndex\(0\);/);
+test('only product/service gallery entries appear as thumbnails and selecting one changes the hero', () => {
+  assert.match(detail, /const photos = media\.gallery/);
+  assert.match(detail, /photos\.length > 0 && \(\s*<div className="bpd-thumbnails">/);
+  assert.match(detail, /setHeroBrandMode\(false\);\s*setIndex\(i\)/);
+  assert.match(detail, /const turn = \(n: number\) => \{[\s\S]*?setHeroBrandMode\(false\)/);
+  assert.match(detail, /Ver todas las fotos \(\{photos\.length\}\)/);
 });
 
-test('sin logo se mantiene la foto disponible o el estado vacío', () => {
-  assert.match(detail, /\) : \(\s*<Photo src=\{photos\[index\]\}/);
-  assert.match(detail, /photos\.length > 1 &&/);
+test('no cover and no logo leaves a placeholder until a service thumbnail is selected', () => {
+  assert.match(detail, /heroBrandMode \?/);
+  assert.ok(detail.includes('Imagen principal de '));
+  assert.match(detail, /<Photo src=\{photos\[index\]\}/);
+});
+
+test('changing business media resets the hero to its cover/logo initial state', () => {
+  assert.match(detail, /setHeroBrandMode\(true\);\s*setIndex\(0\);[\s\S]*?\[b\.id, registeredLogo, coverPhoto, galleryKey\]/);
 });

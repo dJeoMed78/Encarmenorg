@@ -3,22 +3,23 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const src = readFileSync(new URL('../src/components/BusinessPublicDetail.tsx', import.meta.url), 'utf8');
+const helper = readFileSync(new URL('../src/utils/businessMediaPresentation.ts', import.meta.url), 'utf8');
 
-test('a registered logo wins over cover; missing/failed logo uses cover', () => {
-  assert.match(src, /registeredLogo = companyLogo\(b\.logo_url\)/);
-  assert.match(src, /coverPhoto = companyLogo\(extra\.cover_url\) \|\| companyLogo\(b\.image\) \|\| companyLogo\(b\.imageUrl\)/);
-  assert.match(src, /registeredLogo && !logoFailed \? registeredLogo : undefined/);
-  assert.match(src, /coverPhoto && !coverFailed \? coverPhoto : undefined/);
-  assert.match(src, /setCoverFailed\(false\)/);
-  assert.match(src, /displayBrandImage === registeredLogo \? setLogoFailed\(true\) : setCoverFailed\(true\)/);
+test('cover has priority in the hero and logo is used only as fallback', () => {
+  assert.match(src, /const media = resolveBusinessMedia\(b, window\.location\.origin\)/);
+  assert.match(src, /heroBrandImage = \(coverPhoto && !coverFailed \? coverPhoto : undefined\) \|\| displayBrandImage/);
+  assert.match(src, /registeredLogo = media\.logo/);
+  assert.match(src, /coverPhoto = media\.cover/);
+  assert.match(helper, /hero: cover \|\| logo/);
 });
 
-test('hero and identity use same resolved brand image but gallery remains separate', () => {
-  assert.match(src, /heroLogoMode && displayBrandImage/);
-  assert.match(src, /displayBrandImage && \(heroLogoMode \|\| !photos\.length\)/);
-  assert.match(src, /className="bpd-hero-logo"/);
-  assert.match(src, /className="bpd-card bpd-identity"/);
-  assert.match(src, /src=\{displayBrandImage\}/);
-  assert.match(src, /Array\.isArray\(b\.gallery\) \? b\.gallery : \[\]/);
-  assert.doesNotMatch(src, /gallery\.filter|delete b\.image|b\.logo_url\s*=/);
+test('identity logo and public gallery remain independent from the cover', () => {
+  assert.match(src, /const photos = media\.gallery/);
+  assert.match(src, /displayBrandImage = registeredLogo && !logoFailed \? registeredLogo : undefined/);
+  const identity = src.slice(src.indexOf('<div className="bpd-card bpd-identity">'), src.indexOf('<aside className="bpd-facts">'));
+  assert.match(identity, /src=\{displayBrandImage\}/);
+  assert.match(identity, /alt=/);
+  assert.match(identity, /onError=\{\(\) => setLogoFailed\(true\)\}/);
+  assert.doesNotMatch(identity, /coverPhoto|heroBrandImage/);
+  assert.doesNotMatch(src, /delete b\.image|b\.logo_url\s*=/);
 });
