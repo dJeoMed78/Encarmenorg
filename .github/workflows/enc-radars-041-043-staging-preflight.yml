@@ -1,4 +1,5 @@
 name: ENC radars 041+043 staging read-only preflight
+# ENC-034 PR82 post-abort read-only preflight: inspect active release, backup and DB isolation; no mutation; 2026-11-07.
 on:
   push:
     branches: [ia-desarrollo]
