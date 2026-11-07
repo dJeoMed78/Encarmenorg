@@ -5,6 +5,7 @@ on:
     paths:
       - src/db/ratingModeration.ts
       - src/db/stagingRatingWrite.ts
+      - tests/ratings-mariadb-034.integration.test.mjs
       - src/server/stagingBusinessSecurity.ts
       - tests/staging-ratings-write-034.test.mjs
       - src/db/mariadb.ts
@@ -21,7 +22,20 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: enc034_ephemeral
+          MARIADB_USER: enc034_test
+          MARIADB_PASSWORD: local-ci-test-only
+          MARIADB_ROOT_PASSWORD: local-ci-root-only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 10s --health-timeout 5s --health-retries 8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,6 +50,12 @@ jobs:
         run: npm run lint
       - name: Moderation and ratings suites
         run: NODE_ENV=test node --import tsx --test tests/ratings-moderation-034.test.mjs tests/staging-ratings-write-034.test.mjs tests/ratings-034.test.mjs tests/ratings-hook-034.test.mjs tests/ratings-repository-034.test.mjs tests/ratings-routes-034.test.mjs
+      - name: Real MariaDB (ephemeral GitHub runner; no Hostinger)
+        env:
+          ENC034_EPHEMERAL_DB_TEST: 'true'
+          ENC034_TEST_DB_HOST: 127.0.0.1
+          ENC034_TEST_DB_NAME: enc034_ephemeral
+        run: NODE_ENV=test node --import tsx --test tests/ratings-mariadb-034.integration.test.mjs
       - name: Install Chromium for responsive test
         run: npx playwright install chromium --with-deps
       - name: Prepare isolated Vite assets for Chromium
