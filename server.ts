@@ -111,6 +111,7 @@ import {
   dbGetRatingStats, dbGetBusinessRating, dbInsertRating,
   dbGetApprovedRatingComments, dbGetPendingRatingComments, dbModerateRatingComment,
   isStagingRatingsWritePermitted,
+  isStagingRatingsPublicWritePermitted,
   isStagingEnvironment,
   isWritePermitted,
   isBusinessWritePermitted,
@@ -276,7 +277,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.method === 'POST' && ['/api/businesses/approve-candidate','/api/businesses/approve-multiple-candidates'].includes(req.path) &&
         adminSecurity.isAuthorized(req, 'business:publish') && isBusinessWritePermitted() &&
         getPrivateStagingSnapshot()?.ENC_ADMIN_MUTATIONS_ENABLED === 'true') return next();
-    if (req.method === 'POST' && req.path === '/api/ratings' && isStagingRatingsWritePermitted()) return next();
+    if (req.method === 'POST' && req.path === '/api/ratings' && (isStagingRatingsWritePermitted() || isStagingRatingsPublicWritePermitted())) return next();
     if (req.method === 'POST' && /^\/api\/reviews\/moderation\/[A-Za-z0-9_-]+$/.test(req.path) &&
         adminSecurity.isAuthorized(req, 'admin:manage') && isStagingRatingsWritePermitted()) return next();
     if (req.method.toUpperCase() === 'POST' && (req.path === '/api/ratings/get' || req.path === '/api/events/radar-search')) return next();
@@ -2066,6 +2067,21 @@ export function registerRatingsRoutes(app: Pick<express.Express, 'get' | 'post'>
   const validRatingVisitor = (value: unknown): value is string =>
     typeof value === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value);
   const ratingVisitorKey = (visitor: string) => crypto.createHash('sha256').update(visitor).digest('hex');
+  // Basic, bounded abuse control; no raw visitor IP stored, no external API.
+  const ratingIpSalt = crypto.randomBytes(32);
+  const ratingAttempts = new Map<string, { count: number; until: number }>();
+  const ratingRateLimited = (req: Request): boolean => {
+    if (!isStagingEnvironment()) return false;
+    const now = Date.now();
+    for (const [key, value] of ratingAttempts) if (value.until <= now) ratingAttempts.delete(key);
+    const identity = crypto.createHmac('sha256', ratingIpSalt)
+      .update(String(req.ip || req.socket.remoteAddress || 'unknown')).digest('hex');
+    if (!ratingAttempts.has(identity) && ratingAttempts.size >= 2000) return true;
+    const current = ratingAttempts.get(identity) || { count: 0, until: now + 60*60_000 };
+    current.count++;
+    ratingAttempts.set(identity, current);
+    return current.count > 20;
+  };
   const ratingError = (res: Response, error: any) => {
     const status = error?.code === 'ER_DUP_ENTRY' ? 409 : error?.code === 'RATING_BUSINESS_NOT_FOUND' ? 404 : 503;
     const knownCodes = new Set(['RATINGS_SCHEMA_APPROVAL_REQUIRED', 'RATINGS_SCHEMA_REQUIRED',
@@ -2097,6 +2113,7 @@ export function registerRatingsRoutes(app: Pick<express.Express, 'get' | 'post'>
 
   app.post('/api/ratings', async (req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'no-store');
+    if (ratingRateLimited(req)) return res.status(429).json({success:false,error:'RATINGS_RATE_LIMITED'});
     const { businessId, rating, visitorId, comment } = req.body || {};
     if (!validRatingBusinessId(businessId) || typeof rating !== 'number' || !Number.isInteger(rating) || rating < 1 || rating > 5 ||
         !validRatingVisitor(visitorId) || (comment !== undefined && (typeof comment !== 'string' || comment.length > 200))) {
