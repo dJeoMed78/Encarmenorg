@@ -60,6 +60,27 @@ jobs:
                   print('ENC034_PROC_'+str(idx)+'_RELEASE_HASH='+digest+'-'+str(mtime))
               except OSError:
                   print('ENC034_PROC_'+str(idx)+'_RELEASE_HASH=UNAVAILABLE')
+          for idx,(pid,known,active) in enumerate(candidates[:12]):
+              try:
+                  envbytes=(pathlib.Path('/proc')/pid/'environ').read_bytes()
+                  env={}
+                  for part in envbytes.split(b'\\0'):
+                      if b'=' in part:
+                          k,v=part.split(b'=',1)
+                          env[k.decode(errors='replace')]=v.decode(errors='replace')
+                  expected_cfg=(root/'config/.env').resolve()
+                  actual_cfg=pathlib.Path(env['ENC_STAGING_CONFIG_FILE']).resolve() if env.get('ENC_STAGING_CONFIG_FILE') else None
+                  checks={
+                      'CONFIG_OVERRIDE_MATCH':actual_cfg is None or actual_cfg==expected_cfg,
+                      'APP_ENV_STAGING':env.get('APP_ENV')=='staging',
+                      'DB_NAME_STAGING':env.get('DB_NAME')=='u293982346_encarmentest',
+                      'RATINGS_PUBLIC_FLAG_IN_PROCESS':env.get('STAGING_RATINGS_PUBLIC_WRITES_ENABLED')=='true',
+                      'RATINGS_SCHEMA_IN_PROCESS':env.get('RATINGS_SCHEMA_APPROVED')=='true',
+                      'IS_ACTIVE':active,
+                  }
+                  for key,val in checks.items():print('ENC034_PROC_'+str(idx)+'_'+key+'='+('PASS' if val else 'FAIL'))
+              except (OSError,PermissionError):
+                  print('ENC034_PROC_'+str(idx)+'_ENV=UNAVAILABLE')
           print('ENC034_NODE_PROCESS_CANDIDATES='+str(len(candidates)))
           for idx,(pid,known,active) in enumerate(candidates[:12]):
               print('ENC034_PROC_'+str(idx)+'_PATH_MATCH='+str(known))
