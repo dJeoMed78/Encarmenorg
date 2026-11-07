@@ -32,16 +32,27 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
   const [hoverRating, setHoverRating] = useState(0);
   const [selectedRating, setSelectedRating] = useState(0);
   const [comment, setComment] = useState('');
-  useEffect(() => { setHoverRating(0); setSelectedRating(0); setComment(''); }, [businessId]);
-  const successMessage = saved ? 'Gracias. El servidor confirmó tu calificación.' : null;
+  const [toast, setToast] = useState<{ title: string; message: string } | null>(null);
+  const [savedWithComment, setSavedWithComment] = useState(false);
+  useEffect(() => { setHoverRating(0); setSelectedRating(0); setComment(''); setToast(null); setSavedWithComment(false); }, [businessId]);
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 4200);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
   const summaryLabel = loading ? 'Consultando calificaciones…' : !available ? 'Calificaciones no disponibles' :
     stats.count === 0 ? 'Sin calificaciones' : stats.average.toFixed(1);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (selectedRating < 1 || selectedRating > 5 || hasRated || isSubmitting) return;
-    const result = await rate(selectedRating, comment.trim());
+    const submittedComment = comment.trim();
+    const result = await rate(selectedRating, submittedComment);
     if (result) {
+      setSavedWithComment(Boolean(submittedComment));
+      setToast(submittedComment
+        ? { title: 'Reseña enviada', message: 'Quedó pendiente de revisión. Se mostrará públicamente cuando sea aprobada.' }
+        : { title: 'Calificación registrada', message: 'Tu voto se guardó correctamente.' });
       setComment('');
       setSelectedRating(0);
       onRatingUpdated?.(result.average, result.count);
@@ -191,7 +202,7 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
             )}
             {saved && (
               <div role="status" className="flex items-center gap-2 rounded-xl bg-emerald-50/85 p-3 text-xs font-semibold text-emerald-800">
-                <Sparkles className="h-4 w-4" aria-hidden="true" /> El servidor confirmó tu calificación.
+                <Sparkles className="h-4 w-4" aria-hidden="true" /> {savedWithComment ? 'Tu calificación se registró. Tu reseña está pendiente de moderación.' : 'El servidor confirmó tu calificación.'}
               </div>
             )}
             {errorMessage && (
@@ -207,6 +218,17 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
           </p>
         </div>
       </div>
+      {toast && (
+        <div role="status" aria-live="polite" aria-atomic="true"
+          className="pointer-events-none fixed inset-x-4 bottom-5 z-[250] mx-auto flex w-fit max-w-[min(92vw,480px)] items-start gap-3 rounded-2xl border border-white/35 bg-slate-900/90 px-4 py-3 text-white shadow-2xl backdrop-blur-2xl"
+          style={{ WebkitBackdropFilter: 'blur(24px) saturate(160%)', backdropFilter: 'blur(24px) saturate(160%)' }}>
+          <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" aria-hidden="true" />
+          <span className="min-w-0">
+            <strong className="block text-sm font-semibold">{toast.title}</strong>
+            <span className="mt-0.5 block text-xs leading-relaxed text-white/80">{toast.message}</span>
+          </span>
+        </div>
+      )}
     </section>
   );
 };
