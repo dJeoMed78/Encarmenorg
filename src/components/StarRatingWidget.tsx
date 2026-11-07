@@ -30,13 +30,15 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
   const hasRated = stats.hasRated === true;
   const userRating = stats.userRating;
   const [hoverRating, setHoverRating] = useState(0);
-  useEffect(() => { setHoverRating(0); }, [businessId]);
+  const [comment, setComment] = useState('');
+  useEffect(() => { setHoverRating(0); setComment(''); }, [businessId]);
   const successMessage = saved ? 'Gracias. El servidor confirmó tu calificación.' : null;
   const summaryLabel = loading ? 'Consultando calificaciones…' : !available ? 'Calificaciones no disponibles' :
     stats.count === 0 ? 'Sin calificaciones' : stats.average.toFixed(1);
 
   const handleRate = async (star: number) => {
-    const result = await rate(star);
+    const result = await rate(star, comment.trim());
+    if (result) setComment('');
     if (result) onRatingUpdated?.(result.average, result.count);
   };
 
@@ -145,6 +147,13 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
               )}
             </div>
 
+            <label className="block text-xs text-stone-700" htmlFor="rating-review-comment">
+              Comentario opcional (máximo 200 caracteres). Se someterá a moderación.
+            </label>
+            <textarea id="rating-review-comment" value={comment} maxLength={200}
+              onChange={e => setComment(e.target.value)} disabled={isSubmitting || loading || !available}
+              rows={3} className="w-full rounded-xl border border-stone-300 p-2 text-sm"
+              placeholder="Describe tu experiencia con este negocio" />
             <div className="flex items-center gap-1.5">
               {[1, 2, 3, 4, 5].map(star => {
                 const isLit = hoverRating ? star <= hoverRating : false;
