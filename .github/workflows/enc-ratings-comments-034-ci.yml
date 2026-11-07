@@ -1,0 +1,35 @@
+name: ENC-034 moderated comments independent gate
+on:
+  pull_request:
+    branches: [ia-desarrollo, work/enc-ratings-comments-034-w1]
+    paths:
+      - src/db/ratingModeration.ts
+      - src/db/mariadb.ts
+      - src/components/BusinessComments.tsx
+      - src/components/BusinessPublicDetail.tsx
+      - src/components/StarRatingWidget.tsx
+      - src/utils/realRatings.ts
+      - src/server/adminSecurity.ts
+      - server.ts
+      - tests/ratings-moderation-034.test.mjs
+      - .github/workflows/enc-ratings-comments-034-ci.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install reproducibly
+        run: npm ci
+      - name: TypeScript
+        run: npm run lint
+      - name: Moderation and ratings suites
+        run: NODE_ENV=test node --import tsx --test tests/ratings-moderation-034.test.mjs tests/ratings-034.test.mjs tests/ratings-hook-034.test.mjs tests/ratings-repository-034.test.mjs tests/ratings-routes-034.test.mjs
+      - name: Compile
+        run: npm run build
