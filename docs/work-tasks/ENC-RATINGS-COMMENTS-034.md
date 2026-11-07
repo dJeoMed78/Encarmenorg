@@ -75,3 +75,28 @@ Implementado en código:
 **Riesgos abiertos:** no existen todavía permisos de escritura de ratings en Staging; no se probó SQL real ni compatibilidad DDL con tablas activas. La moderación guarda última decisión, usuario y hora pero no historial inmutable de cambios. Identificadores de visitantes no prueban identidad humana; exigir política antiabuso antes de habilitar votos públicos.
 
 **Estado:** IMPLEMENTACIÓN AISLADA; integración, migración, E2E real y despliegue BLOQUEADOS hasta verificaciones y autorizaciones correspondientes.
+
+
+## Verificación SQL real de solo lectura, Staging — 2026-11-07
+
+**Ejecución verificable:** https://github.com/dJeoMed78/Encarmenorg/actions/runs/42386024507 — SUCCESS. Acceso SSH anclado por huella y consultas exclusivamente SELECT a Hostinger, sin DDL/DML. Identidad SQL de base **`u293982346_encarmentest`** comprobada, sin grants explícitos de producción.
+
+**Esquema obtenido de `information_schema` (no supuesto):**
+- `business_ratings`: **EXISTS / InnoDB**, **1 registro** al momento de auditar.
+- Columnas: `id varchar(64) NOT NULL`, `business_id varchar(64) NOT NULL`, `rating tinyint(4) NOT NULL`, `visitor_id varchar(100) NOT NULL`, `ip varchar(50) NULL`, `comment text NULL`, `created_at datetime NULL`.
+- Índices: `PRIMARY(id)`, `idx_biz_visitor(business_id, visitor_id)` no único, `uq_business_ratings_biz_visitor(business_id,visitor_id)` único.
+- `business_rating_moderation`: **MISSING**. El despliegue no puede ofrecer moderación real antes de crearla con autorización y respaldo.
+
+**Corrección posterior a la auditoría:** Se añadió un carril aislado `src/db/stagingRatingWrite.ts`, con verificación estricta de identidad, banderas de autorización y ventana ≤30 minutos ligada a respaldo fresco. La aplicación sólo permite POST de votos/moderación durante la ventana. La compuerta `isWritePermitted()` general permanece sin cambios y la moderación está desactivada en producción. `src/server/stagingBusinessSecurity.ts` rechaza parámetros privados duplicados.
+
+**Para ejecutar la activación real — REQUIERE autorización expresa para DDL Staging:**
+1. Verificar de nuevo `DATABASE()`, `CURRENT_USER()`, grants, versión y esquema; medir la existencia y hashes de respaldos recientes de `u293982346_encarmentest`.
+2. Verificar que `business_rating_moderation` aún no exista; revisar índice, charset/collation y compatibilidad del SQL propuesto en `docs/sql/enc_reviews_034_moderation_PROPOSAL.sql` contra el esquema real.
+3. Crear respaldo lógico consistente y comprobable de Staging con manifiesto y vía de reversión; probar DDL primero en instancia de prueba aislada.
+4. Con permiso específico, crear **únicamente** la nueva tabla vacía de moderación dentro de la base Staging, sin alterar ninguna fila de `business_ratings`. DDL produce commit implícito; si falla, no asumir que rollback SQL elimina la tabla.
+5. Registrar en configuración privada y sólo durante la ventana: `RATINGS_SCHEMA_APPROVED=true`, `RATINGS_MODERATION_APPROVED=true`, `STAGING_RATINGS_WRITES_ENABLED=true`, `STAGING_RATINGS_BACKUP_ID`, `STAGING_RATINGS_BACKUP_CHECKED_AT` y `STAGING_RATINGS_WRITE_EXPIRES_AT` con ≤30 minutos. Exigir `STAGING_DB_CONFIRMED=true`, `STAGING_READ_ONLY=false`. Nunca introducir secrets en GitHub o logs.
+6. Desplegar sólo Staging tras auditar/mergear la PR, verificando SHA y HTTP. Ejecutar POST de voto y comentario **sintéticos autorizados**, SQL readback independiente, rechazo de duplicados, acceso admin, moderación approved/rejected y GET público filtrado. Probar estados de error y concurrencia.
+7. Expirar o revocar ventana, confirmar denegación inmediata; limpiar exclusivamente registros sintéticos tras autorización y comprobar que el registro histórico y agregados legítimos siguen intactos.
+8. Documentar pruebas, respaldo, versiones y rollback, entonces cerrar Issue #34 únicamente con aceptación del propietario.
+
+**No se ejecutaron cambios de estructura ni escritos en SQL durante esta auditoría**; la propuesta DDL permanece comentada para evitar aplicación accidental.
