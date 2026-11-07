@@ -623,34 +623,6 @@ app.get('/encarmen-release.json', (_req: Request, res: Response) => {
   }
 });
 
-// ENC-034 diagnostic: boolean-only status restricted to Staging; remove after verification.
-app.get('/api/_enc034_staging_gate_check', (_req: Request, res: Response) => {
-  res.setHeader('Cache-Control', 'no-store');
-  if (!isStagingEnvironment()) return res.status(404).json({error:'NOT_FOUND'});
-  const cfg=getMariaDbConfig();
-  const snap=getPrivateStagingSnapshot({connectionUser:cfg?.user});
-  const unbound=getPrivateStagingSnapshot();
-  const privateState=unbound || snap;
-  return res.json({
-    connected: isMariaDbActive(),
-    staging: isStagingEnvironment(),
-    configuredDb:cfg?.database===STAGING_PRIVATE_DB_NAME,
-    privateSnapshotPresent:Boolean(privateState),
-    boundSnapshotPresent:Boolean(snap),
-    schemaApproved:privateState?.RATINGS_SCHEMA_APPROVED==='true',
-    moderationApproved:privateState?.RATINGS_MODERATION_APPROVED==='true',
-    publicEnabled:privateState?.STAGING_RATINGS_PUBLIC_WRITES_ENABLED==='true',
-    moderatorEnabled:privateState?.STAGING_RATINGS_MODERATION_WRITES_ENABLED==='true',
-    dbConfirmed:privateState?.STAGING_DB_CONFIRMED==='true',
-    userMatch:!!cfg?.user && cfg.user===privateState?.DB_USER,
-    dbMatches:privateState?.DB_NAME===STAGING_PRIVATE_DB_NAME,
-    backupIdValid:/^[a-zA-Z0-9._-]{12,128}$/.test(privateState?.STAGING_RATINGS_BACKUP_ID||''),
-    backupDateValid:Number.isFinite(Date.parse(privateState?.STAGING_RATINGS_BACKUP_CHECKED_AT||'')),
-    ratingsWritePermitted:isStagingRatingsPublicWritePermitted(),
-    moderationWritePermitted:isStagingRatingsModerationWritePermitted()
-  });
-});
-
 app.get('/api/version', (_req: Request, res: Response) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
   res.setHeader('CDN-Cache-Control', 'no-store');
