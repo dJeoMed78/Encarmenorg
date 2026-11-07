@@ -1,0 +1,54 @@
+name: ENC-034 Staging process identity readonly diagnostic
+on:
+  pull_request:
+    branches: [ia-desarrollo]
+    paths: [.github/workflows/enc-034-staging-runtime-diagnostic.yml]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Read identity only, no secrets or writes
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077;mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 -' <<'PY'
+          import pathlib,os,re,subprocess
+          home=pathlib.Path.home()
+          root=home/'domains/staging.encarmen.org/hbuilds'
+          p=root/'config/.env'
+          vals={}
+          for line in p.read_text().splitlines():
+              if not line.strip() or line.lstrip().startswith('#') or '=' not in line:continue
+              k,v=line.split('=',1);vals[k.strip()]=v.strip().strip('"').strip("'")
+          for key in ['APP_ENV','DB_NAME','STAGING_DB_CONFIRMED','RATINGS_SCHEMA_APPROVED','RATINGS_MODERATION_APPROVED','STAGING_RATINGS_PUBLIC_WRITES_ENABLED','STAGING_RATINGS_MODERATION_WRITES_ENABLED']:
+              expected={'APP_ENV':'staging','DB_NAME':'u293982346_encarmentest'}.get(key,'true')
+              print('ENC034_CONFIG_'+key+'='+('PASS' if vals.get(key)==expected else 'FAIL'))
+          print('ENC034_ROOT_REALPATH='+str(root.resolve()))
+          print('ENC034_CURRENT_REALPATH='+str((root/'current/nodejs').resolve()))
+          print('ENC034_CURRENT_SYMLINK='+str((root/'current').readlink()))
+          needle='/domains/staging.encarmen.org/hbuilds/versions/'
+          candidates=[]
+          for item in pathlib.Path('/proc').iterdir():
+              if not item.name.isdecimal():continue
+              try:
+                  cmd=(item/'cmdline').read_bytes().replace(b'\0',b' ').decode(errors='replace')
+                  cwd=(item/'cwd').resolve()
+                  if 'node' in cmd and ('server.js' in cmd or 'server.bundle' in cmd or str(root) in str(cwd)):
+                      match=needle in str(cwd) and cwd.name=='nodejs'
+                      candidates.append((item.name,match,cwd==((root/'current/nodejs').resolve())))
+              except (OSError,PermissionError):pass
+          print('ENC034_NODE_PROCESS_CANDIDATES='+str(len(candidates)))
+          for idx,(pid,known,active) in enumerate(candidates[:12]):
+              print('ENC034_PROC_'+str(idx)+'_PATH_MATCH='+str(known))
+              print('ENC034_PROC_'+str(idx)+'_ACTIVE='+str(active))
+          PY
