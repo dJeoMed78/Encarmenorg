@@ -14,7 +14,7 @@ permissions:
   contents: read
 concurrency:
   group: encarmen-authorized-staging-deploy
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -56,6 +56,7 @@ jobs:
           tar -czf ../enc041-payload.tar.gz server.js dist api/server.bundle.js
           gzip -t ../enc041-payload.tar.gz
       - name: Verify pinned SSH host identity
+        id: pinned_host
         run: |
           set -euo pipefail
           test -n "$SSHPASS"
@@ -195,7 +196,7 @@ jobs:
           done
           exit 1
       - name: Restore prior staging release if required
-        if: failure()
+        if: failure() && steps.pinned_host.conclusion == 'success'
         run: |
           set -u
           test -n "$SSHPASS" && test -f "$HOME/.ssh/known_hosts" || exit 0
