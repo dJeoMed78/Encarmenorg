@@ -46,7 +46,7 @@ test('MariaDB real: insert, readback, duplicate reject, moderation, approval/rej
     assert.equal((await reviews.approved('enc034-test-biz',20,0)).length,1);
     assert.equal(await reviews.decide(id,'rejected','enc034-admin'),true);
     assert.equal((await reviews.approved('enc034-test-biz',20,0)).length,0);
-    const [db]:any=await pool.query('SELECT DATABASE() AS db');
+    const [db]=await pool.query('SELECT DATABASE() AS db');
     assert.equal(db[0].db,'enc034_ephemeral');
   } finally { await pool.end(); }
 });
