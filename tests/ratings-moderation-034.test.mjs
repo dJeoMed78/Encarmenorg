@@ -41,9 +41,17 @@ test('public comments require approved moderation INNER JOIN and never expose vi
   assert.equal(m.state().released,1);
 });
 test('historical comments without moderation rows remain pending, never public',async()=>{
-  const m=fakePool({pending:[{id:'r1',businessId:'966',comment:'Viejo',createdAt:'2026-01-01'}]});
-  assert.equal((await createRatingModerationRepository(m.pool).pending(20,0)).length,1);
-  assert.match(m.log.find(x=>x.sql.includes('LEFT JOIN')).sql,/m.rating_id IS NULL/);
+  const m=fakePool({pending:[{id:'r1',businessId:'966',rating:4,comment:'Viejo',createdAt:'2026-01-01',businessName:'Taller Ejemplo',category:'Automotriz',address:'Calle 5',colonia:'Centro'}]});
+  const result=await createRatingModerationRepository(m.pool).pending(20,0);
+  assert.deepEqual(result,[{id:'r1',businessId:'966',rating:4,comment:'Viejo',createdAt:'2026-01-01',businessName:'Taller Ejemplo',category:'Automotriz',address:'Calle 5',colonia:'Centro'}]);
+  const sql=m.log.find(x=>x.sql.includes('LEFT JOIN'));
+  assert.match(sql.sql,/m.rating_id IS NULL/);
+  assert.match(sql.sql,/LEFT JOIN businesses b ON b.id = r.business_id/);
+  assert.match(sql.sql,/b.name AS businessName/);
+  assert.match(sql.sql,/b.category AS category/);
+  assert.match(sql.sql,/b.address AS address/);
+  assert.match(sql.sql,/b.colonia AS colonia/);
+  assert.match(sql.sql,/r.rating/);
 });
 test('missing schema fails closed and releases connection',async()=>{
   const m=fakePool({hasSchema:false});
