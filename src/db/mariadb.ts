@@ -3,7 +3,7 @@ import {verifyStagingIsolation, evaluateGrants} from '../server/stagingIsolation
 import {createStagingBusinessStore} from './stagingBusinessStore';
 import {createStagingClassifiedStore} from './stagingClassifiedStore';
 import {createRatingModerationRepository} from './ratingModeration';
-import {stagingRatingsWindowValid} from './stagingRatingWrite';
+import {stagingRatingsWindowValid, stagingRatingsPublicWriteValid, stagingRatingsModerationWriteValid} from './stagingRatingWrite';
 import mysql from 'mysql2/promise';
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -1368,6 +1368,21 @@ export function isStagingRatingsWritePermitted(): boolean {
   const snapshot = getPrivateStagingSnapshot({ connectionUser: effectiveUser || undefined });
   return stagingRatingsWindowValid(snapshot, effectiveUser);
 }
+export function isStagingRatingsPublicWritePermitted(): boolean {
+  if (!isStagingEnvironment() || !isConnected || !pool ||
+      connectedDatabase !== STAGING_BUSINESS_DATABASE) return false;
+  const effectiveUser = connectedUser || getMariaDbConfig()?.user || null;
+  const snapshot = getPrivateStagingSnapshot({ connectionUser: effectiveUser || undefined });
+  return stagingRatingsPublicWriteValid(snapshot, effectiveUser);
+}
+export function isStagingRatingsModerationWritePermitted(): boolean {
+  if (!isStagingEnvironment() || !isConnected || !pool ||
+      connectedDatabase !== STAGING_BUSINESS_DATABASE) return false;
+  const effectiveUser = connectedUser || getMariaDbConfig()?.user || null;
+  const snapshot = getPrivateStagingSnapshot({ connectionUser: effectiveUser || undefined });
+  return stagingRatingsModerationWriteValid(snapshot, effectiveUser) ||
+    stagingRatingsWindowValid(snapshot, effectiveUser);
+}
 function ratingSchemaApproved(): boolean {
   if (isStagingEnvironment()) {
     const effectiveUser = connectedUser || getMariaDbConfig()?.user || null;
@@ -1396,7 +1411,7 @@ export async function dbGetPendingRatingComments(limit: number, offset: number) 
   return ratingModerationRepository().pending(limit, offset);
 }
 export async function dbModerateRatingComment(id: string, status: 'approved'|'rejected', adminId: string) {
-  if (!isStagingRatingsWritePermitted()) throw ratingsError('RATINGS_DATABASE_READ_ONLY');
+  if (!isStagingRatingsModerationWritePermitted()) throw ratingsError('RATINGS_DATABASE_READ_ONLY');
   return ratingModerationRepository().decide(id, status, adminId);
 }
 function ratingsRepository() {
@@ -1408,7 +1423,7 @@ function ratingsRepository() {
 export async function dbGetRatingStats() { return ratingsRepository().getAll(); }
 export async function dbGetBusinessRating(id: string, visitorKey: string | null) { return ratingsRepository().getBusiness(id, visitorKey); }
 export async function dbInsertRating(id: string, visitorKey: string, rating: number, comment: string) {
-  if (!(isWritePermitted() || isStagingRatingsWritePermitted())) throw ratingsError('RATINGS_DATABASE_READ_ONLY');
+  if (!(isWritePermitted() || isStagingRatingsWritePermitted() || isStagingRatingsPublicWritePermitted())) throw ratingsError('RATINGS_DATABASE_READ_ONLY');
   return ratingsRepository().insert(id, visitorKey, rating, comment);
 }
 // ENC-REVIEWS-006 RATINGS REPOSITORY END
