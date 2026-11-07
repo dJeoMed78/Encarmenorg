@@ -23,3 +23,19 @@ export function stagingRatingsWindowValid(snapshot: Record<string,string> | null
   if (expires <= now || expires > now + 30 * 60_000) return false;
   return true;
 }
+
+// Public votes in Staging need a durable, independently revocable capability.
+// This does not grant any other write route (especially business/classified writes).
+// Moderator decisions continue to require the separate short-lived window above.
+export function stagingRatingsPublicWriteValid(snapshot: Record<string,string> | null, user: string | null): boolean {
+  if (!snapshot || !user) return false;
+  return snapshot.APP_ENV === 'staging' &&
+    snapshot.DB_NAME === STAGING_BUSINESS_DATABASE &&
+    snapshot.DB_USER === user && user !== 'u293982346_appuser' &&
+    snapshot.STAGING_DB_CONFIRMED === 'true' &&
+    snapshot.STAGING_RATINGS_PUBLIC_WRITES_ENABLED === 'true' &&
+    snapshot.RATINGS_SCHEMA_APPROVED === 'true' &&
+    snapshot.RATINGS_MODERATION_APPROVED === 'true' &&
+    /^[a-zA-Z0-9._-]{12,128}$/.test(String(snapshot.STAGING_RATINGS_BACKUP_ID || '')) &&
+    Number.isFinite(Date.parse(String(snapshot.STAGING_RATINGS_BACKUP_CHECKED_AT || '')));
+}
