@@ -2072,7 +2072,7 @@ export function registerRatingsRoutes(app: Pick<express.Express, 'get' | 'post'>
   const ratingIpSalt = crypto.randomBytes(32);
   const ratingAttempts = new Map<string, { count: number; until: number }>();
   const ratingRateLimited = (req: Request): boolean => {
-    if (!isStagingEnvironment()) return false;
+    if (typeof isStagingEnvironment !== 'function' || !isStagingEnvironment()) return false;
     const now = Date.now();
     for (const [key, value] of ratingAttempts) if (value.until <= now) ratingAttempts.delete(key);
     const identity = crypto.createHmac('sha256', ratingIpSalt)
