@@ -30,16 +30,22 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
   const hasRated = stats.hasRated === true;
   const userRating = stats.userRating;
   const [hoverRating, setHoverRating] = useState(0);
+  const [selectedRating, setSelectedRating] = useState(0);
   const [comment, setComment] = useState('');
-  useEffect(() => { setHoverRating(0); setComment(''); }, [businessId]);
+  useEffect(() => { setHoverRating(0); setSelectedRating(0); setComment(''); }, [businessId]);
   const successMessage = saved ? 'Gracias. El servidor confirmó tu calificación.' : null;
   const summaryLabel = loading ? 'Consultando calificaciones…' : !available ? 'Calificaciones no disponibles' :
     stats.count === 0 ? 'Sin calificaciones' : stats.average.toFixed(1);
 
-  const handleRate = async (star: number) => {
-    const result = await rate(star, comment.trim());
-    if (result) setComment('');
-    if (result) onRatingUpdated?.(result.average, result.count);
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (selectedRating < 1 || selectedRating > 5 || hasRated || isSubmitting) return;
+    const result = await rate(selectedRating, comment.trim());
+    if (result) {
+      setComment('');
+      setSelectedRating(0);
+      onRatingUpdated?.(result.average, result.count);
+    }
   };
 
   // Compact variant (e.g. for small headers or cards)
@@ -136,31 +142,7 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
                 </span>
               </div>
             ) : (
-              <>
-                <div className="rounded-2xl border border-white/90 bg-white/65 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-slate-700">Tu calificación</span>
-                    <span aria-live="polite" className="text-xs font-semibold text-amber-700">
-                      {isSubmitting ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Guardando…</span>
-                        : hoverRating > 0 ? RATING_LABELS[hoverRating] : 'Selecciona de 1 a 5 estrellas'}
-                    </span>
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-1" role="group" aria-label="Calificar negocio de una a cinco estrellas">
-                    {[1, 2, 3, 4, 5].map(star => (
-                      <button key={star} type="button"
-                        aria-label={`Calificar con ${star} ${star === 1 ? 'estrella' : 'estrellas'}`}
-                        disabled={isSubmitting || loading || !available || Boolean(errorMessage)}
-                        onMouseEnter={() => setHoverRating(star)} onMouseLeave={() => setHoverRating(0)}
-                        onFocus={() => setHoverRating(star)} onBlur={() => setHoverRating(0)}
-                        onClick={() => { void handleRate(star); }}
-                        className="rounded-xl p-1.5 transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
-                        title={`${star} ${star === 1 ? 'estrella' : 'estrellas'} · ${RATING_LABELS[star]}`}>
-                        <Star className={`h-7 w-7 sm:h-8 sm:w-8 transition-colors ${star <= hoverRating ? 'fill-amber-400 text-amber-500' : 'fill-white/50 text-slate-300 hover:text-amber-400'}`} />
-                      </button>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-[11px] text-slate-500">Al seleccionar una estrella se envía tu calificación y el comentario escrito.</p>
-                </div>
+              <form onSubmit={event => { void handleSubmit(event); }} className="space-y-4">
                 <div className="space-y-2">
                   <label className="block text-xs font-semibold text-slate-700" htmlFor="rating-review-comment">
                     Comentario <span className="font-normal text-slate-500">(opcional, máximo 200 caracteres)</span>
@@ -176,7 +158,37 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
                     <span className="tabular-nums">{comment.length}/200</span>
                   </div>
                 </div>
-              </>
+                <div className="rounded-2xl border border-white/90 bg-white/65 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-700">Tu calificación</span>
+                    <span aria-live="polite" className="text-xs font-semibold text-amber-700">
+                      {isSubmitting ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Guardando…</span>
+                        : (hoverRating || selectedRating) > 0 ? RATING_LABELS[hoverRating || selectedRating] : 'Selecciona de 1 a 5 estrellas'}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1" role="group" aria-label="Calificar negocio de una a cinco estrellas">
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <button key={star} type="button"
+                        aria-label={`Calificar con ${star} ${star === 1 ? 'estrella' : 'estrellas'}`}
+                        disabled={isSubmitting || loading || !available || Boolean(errorMessage)}
+                        onMouseEnter={() => setHoverRating(star)} onMouseLeave={() => setHoverRating(0)}
+                        onFocus={() => setHoverRating(star)} onBlur={() => setHoverRating(0)}
+                        aria-pressed={selectedRating === star}
+                        onClick={() => setSelectedRating(star)}
+                        className="rounded-xl p-1.5 transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        title={`${star} ${star === 1 ? 'estrella' : 'estrellas'} · ${RATING_LABELS[star]}`}>
+                        <Star className={`h-7 w-7 sm:h-8 sm:w-8 transition-colors ${star <= (hoverRating || selectedRating) ? 'fill-amber-400 text-amber-500' : 'fill-white/50 text-slate-300 hover:text-amber-400'}`} />
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-500">Selecciona tus estrellas y pulsa «Publicar mi opinión» para enviar todo junto.</p>
+                </div>
+                </div>
+                <button type="submit" disabled={selectedRating === 0 || isSubmitting || loading || !available || Boolean(errorMessage)}
+                  className="w-full rounded-2xl border border-amber-300/80 bg-amber-400 px-4 py-3 text-sm font-bold text-slate-900 shadow-sm transition hover:bg-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 disabled:cursor-not-allowed disabled:opacity-50">
+                  {isSubmitting ? 'Publicando…' : 'Publicar mi opinión'}
+                </button>
+              </form>
             )}
             {saved && (
               <div role="status" className="flex items-center gap-2 rounded-xl bg-emerald-50/85 p-3 text-xs font-semibold text-emerald-800">
