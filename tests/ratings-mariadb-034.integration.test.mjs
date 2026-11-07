@@ -52,7 +52,10 @@ test('MariaDB real: insert, readback, duplicate reject, moderation, approval/rej
     assert.equal(pending[0].colonia,'Centro');
     const id=pending[0].id;
     assert.equal(await reviews.decide(id,'approved','enc034-admin'),true);
-    assert.equal((await reviews.approved('enc034-test-biz',20,0)).length,1);
+    const approved=await reviews.approved('enc034-test-biz',20,0);
+    assert.equal(approved.length,1);
+    assert.equal(approved[0].rating,4);
+    assert.equal(approved[0].comment,'Comentario de integración aislada');
     assert.equal(await reviews.decide(id,'rejected','enc034-admin'),true);
     assert.equal((await reviews.approved('enc034-test-biz',20,0)).length,0);
     const [db]=await pool.query('SELECT DATABASE() AS db');
