@@ -110,6 +110,7 @@ import {
   dbLoadDismissedCandidates,
   dbGetRatingStats, dbGetBusinessRating, dbInsertRating,
   dbGetApprovedRatingComments, dbGetPendingRatingComments, dbModerateRatingComment,
+  isStagingRatingsWritePermitted,
   isStagingEnvironment,
   isWritePermitted,
   isBusinessWritePermitted,
@@ -234,6 +235,10 @@ const adminSecurity = registerAdminSecurity(app, {
       return isStaging ? isStagingClassifiedWritePermitted() : (isMariaDbActive() && isWritePermitted());
     }
     const cleanPath = (req.path || '').replace(/\/+$/, '') || '/';
+    // Review moderation is authorized only by the time-limited private Staging ratings lane.
+    if (req.method === 'POST' && /^\/api\/reviews\/moderation\/[A-Za-z0-9_-]+$/.test(cleanPath)) {
+      return isStaging && isStagingRatingsWritePermitted();
+    }
     if (req.method === 'POST' && (cleanPath === '/api/businesses/approve-candidate' || cleanPath === '/api/businesses/approve-multiple-candidates')) {
       return isStaging ? (businessWrites && mutationsEnabled) : (isMariaDbActive() && isWritePermitted());
     }
@@ -271,6 +276,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.method === 'POST' && ['/api/businesses/approve-candidate','/api/businesses/approve-multiple-candidates'].includes(req.path) &&
         adminSecurity.isAuthorized(req, 'business:publish') && isBusinessWritePermitted() &&
         getPrivateStagingSnapshot()?.ENC_ADMIN_MUTATIONS_ENABLED === 'true') return next();
+    if (req.method === 'POST' && req.path === '/api/ratings' && isStagingRatingsWritePermitted()) return next();
+    if (req.method === 'POST' && /^\/api\/reviews\/moderation\/[A-Za-z0-9_-]+$/.test(req.path) &&
+        adminSecurity.isAuthorized(req, 'admin:manage') && isStagingRatingsWritePermitted()) return next();
     if (req.method.toUpperCase() === 'POST' && (req.path === '/api/ratings/get' || req.path === '/api/events/radar-search')) return next();
     // Authenticated POST search is read-only; classified approvals remain blocked.
     if (req.method === 'POST' && req.path === '/api/classifieds/radar-search' && adminSecurity.isAuthorized(req, 'admin:manage')) return next();
@@ -2146,7 +2154,7 @@ app.post('/api/reviews/moderation/:id', async (req: Request, res: Response) => {
   const principal = adminSecurity.getPrincipal(req);
   if (!principal || !adminSecurity.isAuthorized(req,'admin:manage')) return res.status(401).json({success:false,error:'ADMIN_REQUIRED'});
   // Defense in depth; Staging global write guard additionally blocks this route.
-  if (!isWritePermitted()) return res.status(503).json({success:false,error:'RATINGS_DATABASE_READ_ONLY'});
+  if (!isStagingRatingsWritePermitted()) return res.status(503).json({success:false,error:'RATINGS_DATABASE_READ_ONLY'});
   if (!validCommentId(req.params.id) || !['approved','rejected'].includes(req.body?.status)) {
     return res.status(400).json({success:false,error:'INVALID_MODERATION_DECISION'});
   }
