@@ -7574,9 +7574,15 @@ export async function getNextBusinessId(
     }
 
     let conn: any = null;
+    let connAcquiredLocally = false;
     let lockAcquired = false;
     try {
-      conn = typeof pool.getConnection === 'function' ? await pool.getConnection() : pool;
+      if (typeof pool.getConnection === 'function') {
+        conn = await pool.getConnection();
+        connAcquiredLocally = true;
+      } else {
+        conn = pool;
+      }
 
       // El controlador mantiene el bloqueo durante lectura, escritura y verificación.
       // Las llamadas independientes deben adquirirlo y fallar si no se concede.
@@ -7603,7 +7609,7 @@ export async function getNextBusinessId(
           await conn.query("SELECT RELEASE_LOCK('encarmen:business:id-allocation')");
         } catch (_) {}
       }
-      if (conn && typeof conn.release === 'function') {
+      if (connAcquiredLocally && conn && typeof conn.release === 'function') {
         try {
           conn.release();
         } catch (_) {}
@@ -7647,9 +7653,11 @@ export interface BusinessApprovalDependencies {
 
 // Advisory lock must remain held until write and readback complete.
 // Never fall back to in-memory allocation if MariaDB refuses the lock.
-export async function withBusinessAllocationLock<T>(pool: any, operation: () => Promise<T>): Promise<T> {
+export async function withBusinessAllocationLock<T>(pool: any, operation: (conn?: any) => Promise<T>): Promise<T> {
   if (!pool || typeof pool.getConnection !== 'function') {
-    throw new Error('No hay conexión dedicada de MariaDB para bloqueo distribuido');
+    const err: any = new Error('No hay conexión dedicada de MariaDB para bloqueo distribuido');
+    err.code = 'BUSINESS_DB_LOCK_UNAVAILABLE';
+    throw err;
   }
   let conn: any;
   try {
@@ -7665,7 +7673,7 @@ export async function withBusinessAllocationLock<T>(pool: any, operation: () => 
     acquired = rows?.[0]?.acquired === 1 || rows?.[0]?.acquired === '1';
     if (!acquired) throw new Error('No se adquirió el bloqueo distribuido de MariaDB');
     operationStarted = true;
-    return await operation();
+    return await operation(conn);
   } catch (err: any) {
     if (!operationStarted) err.code = 'BUSINESS_DB_LOCK_UNAVAILABLE';
     throw err;
@@ -7694,7 +7702,7 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
     stagingBusinessStore,
     businessesCache,
     acquireApprovalMutex,
-    getNextBusinessId: (allocatedIds?: Set<number>) => getNextBusinessId(allocatedIds, undefined, true),
+    getNextBusinessId: (allocatedIds?: Set<number>, poolOverride?: any) => getNextBusinessId(allocatedIds, poolOverride, true),
     findDuplicateBusiness,
     dismissedCandidates,
     saveDismissedCandidate: async (id: string, name?: string, contact?: string) => {
@@ -7715,9 +7723,9 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
     return deps.acquireApprovalMutex(async () => {
       try {
         return await (deps.isStaging
-          ? async (operation: () => Promise<any>) => operation()
-          : async (operation: () => Promise<any>) => withBusinessAllocationLock(deps.getPool(), operation)
-        )(async () => {
+          ? async (operation: (conn?: any) => Promise<any>) => operation()
+          : async (operation: (conn?: any) => Promise<any>) => withBusinessAllocationLock(deps.getPool(), operation)
+        )(async (lockConn?: any) => {
         const candidate = req.body?.candidate || req.body;
         if (!candidate || !candidate.name || !candidate.name.trim() || candidate.name.trim().length < 2) {
           return res.status(400).json({
@@ -7808,7 +7816,7 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
         // Non-Staging (MariaDB)
         let newId: number;
         try {
-          newId = await deps.getNextBusinessId();
+          newId = await deps.getNextBusinessId(undefined, lockConn);
         } catch (idErr: any) {
           return res.status(503).json({
             success: false,
@@ -7903,15 +7911,17 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
         );
         if (poolIdx !== -1) CARMEN_AUTO_BUSINESSES_POOL.splice(poolIdx, 1);
 
-        try {
-          const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
-          fs.writeFileSync(bizPath, JSON.stringify(deps.businessesCache, null, 2), 'utf8');
-        } catch (_) {}
+        if (process.env.NODE_ENV !== 'test') {
+            try {
+              const bizPath = path.resolve(__dirname, 'src/data/businesses_seed.json');
+              fs.writeFileSync(bizPath, JSON.stringify(deps.businessesCache, null, 2), 'utf8');
+            } catch (_) {}
 
-        try {
-          const arr = Array.from(deps.dismissedCandidates).map(key => ({ id: key }));
-          fs.writeFileSync(dismissedCandidatesPath, JSON.stringify(arr, null, 2), 'utf8');
-        } catch (_) {}
+            try {
+              const arr = Array.from(deps.dismissedCandidates).map(key => ({ id: key }));
+              fs.writeFileSync(dismissedCandidatesPath, JSON.stringify(arr, null, 2), 'utf8');
+            } catch (_) {}
+        }
 
         await deps.saveDismissedCandidate(verified.id || verified.name, verified.name, phoneDigits || waDigits || '');
 
@@ -7933,9 +7943,9 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
     return deps.acquireApprovalMutex(async () => {
       try {
         return await (deps.isStaging
-          ? async (operation: () => Promise<any>) => operation()
-          : async (operation: () => Promise<any>) => withBusinessAllocationLock(deps.getPool(), operation)
-        )(async () => {
+          ? async (operation: (conn?: any) => Promise<any>) => operation()
+          : async (operation: (conn?: any) => Promise<any>) => withBusinessAllocationLock(deps.getPool(), operation)
+        )(async (lockConn?: any) => {
         const { candidates } = req.body;
         if (!Array.isArray(candidates) || candidates.length === 0) {
           return res.status(400).json({ success: false, message: 'La lista de candidatos está vacía o es inválida.' });
@@ -8026,7 +8036,7 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
             try {
               let newId: number;
               try {
-                newId = await deps.getNextBusinessId(allocatedIds);
+                newId = await deps.getNextBusinessId(allocatedIds, lockConn);
               } catch (idErr: any) {
                 rejected.push({ candidate: cand, reason: 'Error en MariaDB al generar identificador: ' + (idErr.message || idErr) });
                 continue;
