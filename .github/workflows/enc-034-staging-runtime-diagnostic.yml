@@ -52,3 +52,10 @@ jobs:
               print('ENC034_PROC_'+str(idx)+'_PATH_MATCH='+str(known))
               print('ENC034_PROC_'+str(idx)+'_ACTIVE='+str(active))
           PY
+      - name: Read public backend version metadata, never writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --max-time 20 https://staging.encarmen.org/api/version | head -c 1000
+          printf '\n'
+          echo "ENC034_HTTP_RELEASE_SHA=$(curl -fsSL --max-time 20 https://staging.encarmen.org/encarmen-release.txt)"
