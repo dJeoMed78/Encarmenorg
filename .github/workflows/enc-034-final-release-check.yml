@@ -1,0 +1,40 @@
+name: ENC-034 final clean release verification
+on:
+  pull_request:
+    branches: [ia-desarrollo]
+    paths: [.github/workflows/enc-034-final-release-check.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_SHA: 265afdafafe96c178a4117e3a67bea47618729e1
+    steps:
+      - name: Check completed Staging deploy run
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${{ github.repository }}/actions/workflows/enc-radars-041-043-staging-deploy.yml/runs?per_page=3" --jq '.workflow_runs[] | [.id,.event,.status,.conclusion,.head_sha] | @tsv'
+      - name: Verify live SHA and rating GET, ensure debug no longer exposes JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 18); do
+            sha=$(curl -fsSL --max-time 15 -H 'Cache-Control: no-cache' https://staging.encarmen.org/encarmen-release.txt || true)
+            if [ "$sha" = "$EXPECTED_SHA" ]; then break; fi
+            sleep 10
+          done
+          test "$sha" = "$EXPECTED_SHA"
+          echo 'ENC034_FINAL_RELEASE_SHA=VERIFIED'
+          status=$(curl -sSL -o /dev/null -w '%{http_code}' --max-time 15 https://staging.encarmen.org/api/ratings)
+          test "$status" = 200
+          echo 'ENC034_FINAL_RATINGS_READ=PASS'
+          manifest=$(curl -fsSL --max-time 15 -H 'Cache-Control: no-cache' https://staging.encarmen.org/encarmen-release.json)
+          RELEASE_JSON="$manifest" node -e 'const d=JSON.parse(process.env.RELEASE_JSON);if(d.sha!==process.env.EXPECTED_SHA||!Number.isFinite(Date.parse(d.updatedAt)))process.exit(1);console.log("ENC034_FINAL_MANIFEST=PASS")'
+          body=$(curl -sSL --max-time 15 https://staging.encarmen.org/api/_enc034_staging_gate_check || true)
+          if echo "$body" | grep -q '"ratingsWritePermitted"'; then echo 'ENC034_TEMPORARY_DIAGNOSTIC_STILL_PRESENT'; exit 1; fi
+          echo 'ENC034_DIAGNOSTIC_REMOVED=PASS'
