@@ -31,9 +31,10 @@ function fakePool({ approved = [], pending = [], hasSchema = true, ratingExists 
   return { pool: { async getConnection() { return connection; } }, log, state: () => ({commit,rollback,released}) };
 }
 test('public comments require approved moderation INNER JOIN and never expose visitor identifiers', async () => {
-  const m = fakePool({approved:[{id:'r1',businessId:'966',comment:'Correcto',createdAt:'2026-11-07'}]});
+  const m = fakePool({approved:[{id:'r1',businessId:'966',rating:4,comment:'Correcto',createdAt:'2026-11-07'}]});
   const result = await createRatingModerationRepository(m.pool).approved('966',20,0);
-  assert.deepEqual(result,[{id:'r1',businessId:'966',comment:'Correcto',createdAt:'2026-11-07'}]);
+  assert.deepEqual(result,[{id:'r1',businessId:'966',rating:4,comment:'Correcto',createdAt:'2026-11-07'}]);
+  assert.match(m.log.find(x=>x.sql.includes('INNER JOIN')).sql,/r.rating/);
   const sql=m.log.find(x=>x.sql.includes('INNER JOIN'));
   assert.match(sql.sql, /m.status = 'approved'/);
   assert.match(sql.sql, /WHERE r.business_id = \?/);
