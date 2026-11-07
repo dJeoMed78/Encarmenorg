@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Business } from "./BusinessCard";
 import { StarRatingWidget } from "./StarRatingWidget";
+import { BusinessComments } from "./BusinessComments";
 import { getBusinessPublicUrl } from "../utils/businessUrl";
 import { BusinessDescription } from "./BusinessDescription";
 import "./BusinessPublicDetail.css";
@@ -733,14 +734,7 @@ export function BusinessPublicDetail({
                 <Star /> Opiniones de la comunidad
               </h2>
               <StarRatingWidget businessId={b.id} businessName={b.name} />
-              <div className="bpd-comments">
-                <MessageCircle size={20} />
-                <strong>Comentarios todavía no disponibles</strong>
-                <p>
-                  Puedes calificar con estrellas. Aún no se pueden publicar
-                  comentarios ni fotografías de reseñas.
-                </p>
-              </div>
+              <BusinessComments businessId={b.id} />
             </section>
         </div>
         <footer className="bpd-footer">

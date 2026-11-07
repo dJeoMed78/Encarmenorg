@@ -511,3 +511,7 @@ normal; ninguna migración/dato remoto que revertir. No force push.
 Pendientes:revisión independiente,lockfile,Node22Hostinger,atestación SHA remoto,
 integración/despliegue y ventana de pruebas públicas separadamente autorizadas.
 Dictamen de revisión/integración:RESERVADO EXCLUSIVAMENTE A COORDINACIÓN.
+
+
+## ENC-RATINGS-COMMENTS-034 — 2026-11-07, W1
+Rama work/enc-ratings-comments-034-w1; base db34778138b7f028761cbff057c010bc35d33204. Correcciones parciales de agregados/vigencia/distribución/diagnóstico, 24 pruebas PASS, lint/Vite/esbuild PASS. Lecturas Staging HTTP200. Comentarios bloqueados por autorización de esquema y moderación; escritura MariaDB no probada. Chromium ausente, npm ci EUSAGE, regresión Radar 14 PASS/1 FAIL. Detalle, comandos y reversión: docs/work-tasks/ENC-RATINGS-COMMENTS-034.md. No integrado, no desplegado, no aprobado.

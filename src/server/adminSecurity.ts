@@ -47,6 +47,7 @@ export function adminPermission(requestPath:string,method:string):string|null {
  if(path==='/api/upload-logo'&&mutable)return 'business:manage';
  if(/^\/(?:api\/)?admin(?:\/|$)/.test(path))return 'admin:manage';
  if(/^\/api\/(?:mariadb|database-status)(?:\/|$)/.test(path) || /^\/api\/(?:sync|webhook)(?:[-/]|$)/.test(path))return 'admin:manage';
+ if(/^\/api\/reviews\/moderation(?:\/|$)/.test(path))return 'admin:manage';
  if(/^\/api\/businesses\/approve-(?:candidate|multiple-candidates)$/.test(path))return 'business:publish';
  if(method.toUpperCase()==='POST'&&/^\/api\/businesses\/(?:auto-search|auto-search-ai|parse-whatsapp-group)$/.test(path))return null;
  if(/^\/(?:api\/)?businesses\/[^/]+(?:\/(?:sync-wp|verify-edit-pin))?$/.test(path)&&mutable)return method.toUpperCase()==='DELETE'?'business:delete':'business:manage';
@@ -119,5 +120,6 @@ export function registerAdminSecurity(app:express.Express,options:{provider?:Cre
  app.all('/api/admin/change-password',(_req,res)=>fail(res,503,'La rotación de credenciales requiere el procedimiento seguro del servidor.'));
  app.get('/api/admin/accounts',(_req,res)=>res.set('Cache-Control','no-store').json({success:true,accounts:currentProvider()?.accounts || []}));
  app.use('/api/admin/login',(error:any,_req:Request,res:Response,_next:NextFunction)=>fail(res,error?.status===413?413:400,'Cuerpo de acceso inválido o demasiado grande.'));
- return {isAuthorized:(req:Request,permission='business:manage')=>Boolean(read(req)?.principal.permissions.includes(permission))};
+ return {isAuthorized:(req:Request,permission='business:manage')=>Boolean(read(req)?.principal.permissions.includes(permission)),
+  getPrincipal:(req:Request):Principal|null=>read(req)?.principal || null};
 }

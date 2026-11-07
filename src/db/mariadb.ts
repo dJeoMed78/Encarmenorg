@@ -2,6 +2,8 @@ import {STAGING_BUSINESS_DATABASE,stagingBusinessConfiguration,privateStagingBus
 import {verifyStagingIsolation, evaluateGrants} from '../server/stagingIsolationProof';
 import {createStagingBusinessStore} from './stagingBusinessStore';
 import {createStagingClassifiedStore} from './stagingClassifiedStore';
+import {createRatingModerationRepository} from './ratingModeration';
+import {stagingRatingsWindowValid} from './stagingRatingWrite';
 import mysql from 'mysql2/promise';
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -1358,16 +1360,55 @@ export function createRatingsRepository(db: Pick<mysql.Pool, 'getConnection'>) {
     }
   };
 }
+// An isolated rating lane never changes the general isWritePermitted() policy.
+export function isStagingRatingsWritePermitted(): boolean {
+  if (!isStagingEnvironment() || !isConnected || !pool ||
+      connectedDatabase !== STAGING_BUSINESS_DATABASE) return false;
+  const effectiveUser = connectedUser || getMariaDbConfig()?.user || null;
+  const snapshot = getPrivateStagingSnapshot({ connectionUser: effectiveUser || undefined });
+  return stagingRatingsWindowValid(snapshot, effectiveUser);
+}
+function ratingSchemaApproved(): boolean {
+  if (isStagingEnvironment()) {
+    const effectiveUser = connectedUser || getMariaDbConfig()?.user || null;
+    const snapshot = getPrivateStagingSnapshot({ connectionUser: effectiveUser || undefined });
+    return snapshot?.RATINGS_SCHEMA_APPROVED === 'true' || process.env.RATINGS_SCHEMA_APPROVED === 'true';
+  }
+  return process.env.RATINGS_SCHEMA_APPROVED === 'true';
+}
+function moderationSchemaApproved(): boolean {
+  if (!isStagingEnvironment()) return false; // ENC-034 pilot never activates in production.
+  const effectiveUser = connectedUser || getMariaDbConfig()?.user || null;
+  const snapshot = getPrivateStagingSnapshot({ connectionUser: effectiveUser || undefined });
+  return snapshot?.RATINGS_MODERATION_APPROVED === 'true';
+}
+function ratingModerationRepository() {
+  if (!pool) throw ratingsError('RATINGS_DATABASE_UNAVAILABLE');
+  if (!ratingSchemaApproved() || !moderationSchemaApproved()) {
+    throw ratingsError('COMMENTS_SCHEMA_APPROVAL_REQUIRED');
+  }
+  return createRatingModerationRepository(pool);
+}
+export async function dbGetApprovedRatingComments(id: string, limit: number, offset: number) {
+  return ratingModerationRepository().approved(id, limit, offset);
+}
+export async function dbGetPendingRatingComments(limit: number, offset: number) {
+  return ratingModerationRepository().pending(limit, offset);
+}
+export async function dbModerateRatingComment(id: string, status: 'approved'|'rejected', adminId: string) {
+  if (!isStagingRatingsWritePermitted()) throw ratingsError('RATINGS_DATABASE_READ_ONLY');
+  return ratingModerationRepository().decide(id, status, adminId);
+}
 function ratingsRepository() {
   if (!pool) throw ratingsError('RATINGS_DATABASE_UNAVAILABLE');
   // Fail closed until the coordinator confirms schema/key provenance and enables this feature.
-  if (process.env.RATINGS_SCHEMA_APPROVED !== 'true') throw ratingsError('RATINGS_SCHEMA_APPROVAL_REQUIRED');
+  if (!ratingSchemaApproved()) throw ratingsError('RATINGS_SCHEMA_APPROVAL_REQUIRED');
   return createRatingsRepository(pool);
 }
 export async function dbGetRatingStats() { return ratingsRepository().getAll(); }
 export async function dbGetBusinessRating(id: string, visitorKey: string | null) { return ratingsRepository().getBusiness(id, visitorKey); }
 export async function dbInsertRating(id: string, visitorKey: string, rating: number, comment: string) {
-  if (!isWritePermitted()) throw ratingsError('RATINGS_DATABASE_READ_ONLY');
+  if (!(isWritePermitted() || isStagingRatingsWritePermitted())) throw ratingsError('RATINGS_DATABASE_READ_ONLY');
   return ratingsRepository().insert(id, visitorKey, rating, comment);
 }
 // ENC-REVIEWS-006 RATINGS REPOSITORY END

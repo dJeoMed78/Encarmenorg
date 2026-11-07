@@ -109,6 +109,8 @@ import {
   dbSaveDismissedCandidate,
   dbLoadDismissedCandidates,
   dbGetRatingStats, dbGetBusinessRating, dbInsertRating,
+  dbGetApprovedRatingComments, dbGetPendingRatingComments, dbModerateRatingComment,
+  isStagingRatingsWritePermitted,
   isStagingEnvironment,
   isWritePermitted,
   isBusinessWritePermitted,
@@ -233,6 +235,10 @@ const adminSecurity = registerAdminSecurity(app, {
       return isStaging ? isStagingClassifiedWritePermitted() : (isMariaDbActive() && isWritePermitted());
     }
     const cleanPath = (req.path || '').replace(/\/+$/, '') || '/';
+    // Review moderation is authorized only by the time-limited private Staging ratings lane.
+    if (req.method === 'POST' && /^\/api\/reviews\/moderation\/[A-Za-z0-9_-]+$/.test(cleanPath)) {
+      return isStaging && isStagingRatingsWritePermitted();
+    }
     if (req.method === 'POST' && (cleanPath === '/api/businesses/approve-candidate' || cleanPath === '/api/businesses/approve-multiple-candidates')) {
       return isStaging ? (businessWrites && mutationsEnabled) : (isMariaDbActive() && isWritePermitted());
     }
@@ -270,6 +276,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.method === 'POST' && ['/api/businesses/approve-candidate','/api/businesses/approve-multiple-candidates'].includes(req.path) &&
         adminSecurity.isAuthorized(req, 'business:publish') && isBusinessWritePermitted() &&
         getPrivateStagingSnapshot()?.ENC_ADMIN_MUTATIONS_ENABLED === 'true') return next();
+    if (req.method === 'POST' && req.path === '/api/ratings' && isStagingRatingsWritePermitted()) return next();
+    if (req.method === 'POST' && /^\/api\/reviews\/moderation\/[A-Za-z0-9_-]+$/.test(req.path) &&
+        adminSecurity.isAuthorized(req, 'admin:manage') && isStagingRatingsWritePermitted()) return next();
     if (req.method.toUpperCase() === 'POST' && (req.path === '/api/ratings/get' || req.path === '/api/events/radar-search')) return next();
     // Authenticated POST search is read-only; classified approvals remain blocked.
     if (req.method === 'POST' && req.path === '/api/classifieds/radar-search' && adminSecurity.isAuthorized(req, 'admin:manage')) return next();
@@ -2059,7 +2068,11 @@ export function registerRatingsRoutes(app: Pick<express.Express, 'get' | 'post'>
   const ratingVisitorKey = (visitor: string) => crypto.createHash('sha256').update(visitor).digest('hex');
   const ratingError = (res: Response, error: any) => {
     const status = error?.code === 'ER_DUP_ENTRY' ? 409 : error?.code === 'RATING_BUSINESS_NOT_FOUND' ? 404 : 503;
-    return res.status(status).json({ success: false, message: status === 409
+    const knownCodes = new Set(['RATINGS_SCHEMA_APPROVAL_REQUIRED', 'RATINGS_SCHEMA_REQUIRED',
+      'RATINGS_UNIQUE_INDEX_REQUIRED', 'RATINGS_DATA_REVIEW_REQUIRED', 'RATINGS_DATABASE_UNAVAILABLE',
+      'RATINGS_DATABASE_READ_ONLY', 'RATINGS_BUSY', 'RATING_BUSINESS_NOT_FOUND', 'ER_DUP_ENTRY']);
+    const code = knownCodes.has(error?.code) ? error.code : 'RATINGS_UNAVAILABLE';
+    return res.status(status).json({ success: false, error: code, message: status === 409
       ? 'Ya existe una calificación para este identificador de visitante en el negocio.'
       : status === 404 ? 'Negocio no encontrado.' : 'No fue posible consultar o guardar la calificación. Intenta más tarde.' });
   };
@@ -2102,6 +2115,55 @@ export function registerRatingsRoutes(app: Pick<express.Express, 'get' | 'post'>
   });
 }
 // ENC-REVIEWS-006 RATINGS ROUTES END
+// ENC-034. Comments stay private unless a separate verified moderation record
+// marks them approved. Historical reviews have no moderation records.
+const validCommentId = (value: unknown): value is string =>
+  typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value);
+const paging = (query: any) => {
+  const page = query?.page === undefined ? '1' : String(query.page);
+  if (!/^[1-9][0-9]{0,5}$/.test(page)) return null;
+  const p = Number(page);
+  if (!Number.isSafeInteger(p)) return null;
+  return { limit: 20, offset: (p - 1) * 20 };
+};
+function commentsFailure(res: Response, error: any) {
+  const code = ['COMMENTS_SCHEMA_APPROVAL_REQUIRED','COMMENTS_SCHEMA_REQUIRED','RATINGS_DATABASE_UNAVAILABLE',
+    'RATINGS_DATABASE_READ_ONLY'].includes(error?.code) ? error.code : 'COMMENTS_UNAVAILABLE';
+  return res.status(503).set('Cache-Control','no-store').json({ success:false, error:code });
+}
+app.get('/api/ratings/:businessId/comments', async (req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!validCommentId(req.params.businessId)) return res.status(400).json({ success:false, error:'INVALID_BUSINESS_ID' });
+  const pg = paging(req.query);
+  if (!pg) return res.status(400).json({ success:false, error:'INVALID_PAGE' });
+  try {
+    const comments = await dbGetApprovedRatingComments(req.params.businessId, pg.limit, pg.offset);
+    return res.json({ success:true, comments, page: Number(req.query.page || 1) });
+  } catch (error) { return commentsFailure(res,error); }
+});
+app.get('/api/reviews/moderation/pending', async (req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!adminSecurity.isAuthorized(req,'admin:manage')) return res.status(401).json({success:false,error:'ADMIN_REQUIRED'});
+  const pg = paging(req.query);
+  if (!pg) return res.status(400).json({success:false,error:'INVALID_PAGE'});
+  try { return res.json({success:true, comments: await dbGetPendingRatingComments(pg.limit,pg.offset)}); }
+  catch(error) { return commentsFailure(res,error); }
+});
+app.post('/api/reviews/moderation/:id', async (req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const principal = adminSecurity.getPrincipal(req);
+  if (!principal || !adminSecurity.isAuthorized(req,'admin:manage')) return res.status(401).json({success:false,error:'ADMIN_REQUIRED'});
+  // Defense in depth; Staging global write guard additionally blocks this route.
+  if (!isStagingRatingsWritePermitted()) return res.status(503).json({success:false,error:'RATINGS_DATABASE_READ_ONLY'});
+  if (!validCommentId(req.params.id) || !['approved','rejected'].includes(req.body?.status)) {
+    return res.status(400).json({success:false,error:'INVALID_MODERATION_DECISION'});
+  }
+  try {
+    const found = await dbModerateRatingComment(req.params.id,req.body.status,principal.username);
+    return found ? res.json({success:true}) : res.status(404).json({success:false,error:'COMMENT_NOT_FOUND'});
+  } catch(error) { return commentsFailure(res,error); }
+});
+
 registerRatingsRoutes(app);
 
 // Businesses List with search & filters
