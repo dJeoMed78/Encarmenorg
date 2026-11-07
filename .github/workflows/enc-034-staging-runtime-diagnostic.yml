@@ -93,3 +93,6 @@ jobs:
           curl -fsSL --max-time 20 https://staging.encarmen.org/api/version | head -c 1000
           printf '\n'
           echo "ENC034_HTTP_RELEASE_SHA=$(curl -fsSL --max-time 20 https://staging.encarmen.org/encarmen-release.txt)"
+          curl -fsSL --max-time 20 https://staging.encarmen.org/api/_enc034_staging_gate_check || true
+          printf '\\n'
+
