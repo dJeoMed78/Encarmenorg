@@ -162,7 +162,7 @@
   height: 100%;
   object-fit: cover;
 }
-/* The logo is the initial hero, not a cropped gallery photograph. */
+/* The logo fallback stays contained; a registered cover uses the default cover crop. */
 .bpd-hero > img.bpd-hero-logo {
   object-fit: contain;
   padding: clamp(16px, 4%, 32px);

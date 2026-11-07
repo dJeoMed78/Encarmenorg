@@ -6,7 +6,7 @@ import vm from 'node:vm';
 
 const source = readFileSync(new URL('../src/components/BusinessPublicDetail.tsx', import.meta.url), 'utf8');
 const start = source.indexOf('export function businessMapPresentation(');
-const end = source.indexOf('\nfunction companyLogo(', start);
+const end = source.indexOf('\nfunction Photo(', start);
 assert.ok(start >= 0 && end > start, 'map helper must exist');
 const isolated = source.slice(start, end).replace('export function', 'function');
 const js = transformSync(isolated, { loader: 'ts', target: 'es2022' }).code;
@@ -60,13 +60,12 @@ test('untrusted domains cannot become iframe sources', () => {
   }
 });
 
-test('business media fallbacks remain in the existing component', () => {
-  assert.match(source, /registeredLogo = companyLogo\(b\.logo_url\)/);
-  assert.match(source, /coverPhoto = companyLogo\(extra\.cover_url\)/);
-  assert.match(source, /displayBrandImage =/);
-  assert.match(source, /onError=\{\(\) => displayBrandImage === registeredLogo/);
+test('business media roles remain separated in the existing component', () => {
+  assert.match(source, /const photos = media\.gallery/);
+  assert.match(source, /heroBrandImage = \(coverPhoto && !coverFailed \? coverPhoto : undefined\) \|\| displayBrandImage/);
+  assert.match(source, /displayBrandImage = registeredLogo && !logoFailed \? registeredLogo : undefined/);
+  assert.match(source, /onError=\{\(\) => setLogoFailed\(true\)\}/);
 });
-
 test('iframe loads automatically with lazy loading and preserves external fallback', () => {
   assert.doesNotMatch(source, /mapConsent/);
   assert.doesNotMatch(source, /Cargar mapa de Google/);

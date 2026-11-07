@@ -1,4 +1,5 @@
 import { contactDigits } from '../utils/businessContacts';
+import { resolveBusinessMedia } from '../utils/businessMediaPresentation';
 import React, { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -43,15 +44,6 @@ interface Props {
   onDeleteBusiness?: (b: Business) => void;
   onToggleTop?: (b: Business) => Promise<boolean> | boolean | void;
   onToggleRecommended?: (b: Business) => Promise<boolean> | boolean | void;
-}
-function safeUrl(value?: string): string | undefined {
-  if (!value) return;
-  try {
-    const u = new URL(value, window.location.origin);
-    if (["http:", "https:"].includes(u.protocol)) return u.href;
-  } catch {
-    /* Unusable registered URL. */
-  }
 }
 function phone(value?: string) {
   const digits = contactDigits(value);
@@ -150,20 +142,6 @@ export function businessMapPresentation(b: {
     }
   return { link: coordinateLink || link || searchLink, embed: coordinateEmbed || embed || searchEmbed };
 }
-function companyLogo(value: unknown) {
-  if (typeof value !== "string" || !value || value.length > 2048)
-    return undefined;
-  try {
-    const u = new URL(value, window.location.origin);
-    return ["https:", "http:"].includes(u.protocol) &&
-      !u.username &&
-      !u.password
-      ? u.href
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
 function Photo({ src, alt }: { src?: string; alt: string }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
@@ -193,20 +171,12 @@ export function BusinessPublicDetail({
   onToggleTop,
   onToggleRecommended,
 }: Props) {
-  const extra = b as Business & { cover_url?: string; logo_url?: string };
-  const photos = [
-    ...new Set(
-      [
-        extra.cover_url,
-        ...(Array.isArray(b.gallery) ? b.gallery : []),
-        b.image || b.imageUrl,
-      ]
-        .map(safeUrl)
-        .filter(Boolean),
-    ),
-  ] as string[];
+  const media = resolveBusinessMedia(b, window.location.origin);
+  // Only product/service images belong to the thumbnail gallery.
+  const photos = media.gallery;
+  const galleryKey = photos.join("|");
   const [index, setIndex] = useState(0),
-    [heroLogoMode, setHeroLogoMode] = useState(true),
+    [heroBrandMode, setHeroBrandMode] = useState(true),
     [gallery, setGallery] = useState(false),
     [admin, setAdmin] = useState(false),
     [notice, setNotice] = useState("");
@@ -235,18 +205,17 @@ export function BusinessPublicDetail({
     [mapWide, setMapWide] = useState(false);
   const mapBox = useRef<HTMLDivElement>(null);
   const mapPresentation = businessMapPresentation(b),
-    // Presentation-only fallback: the stored cover remains a separate field.
-    registeredLogo = companyLogo(b.logo_url),
-    // Cover is a separate business asset: use it only when no usable logo exists.
-    coverPhoto = companyLogo(extra.cover_url) || companyLogo(b.image) || companyLogo(b.imageUrl),
-    displayBrandImage = (registeredLogo && !logoFailed ? registeredLogo : undefined) ||
-      (coverPhoto && !coverFailed ? coverPhoto : undefined);
+    registeredLogo = media.logo,
+    coverPhoto = media.cover,
+    // The identity card is always the logo; the hero prioritizes the cover and only falls back to the logo.
+    displayBrandImage = registeredLogo && !logoFailed ? registeredLogo : undefined,
+    heroBrandImage = (coverPhoto && !coverFailed ? coverPhoto : undefined) || displayBrandImage;
   useEffect(() => {
     setLogoFailed(false);
     setCoverFailed(false);
-    setHeroLogoMode(true);
+    setHeroBrandMode(true);
     setIndex(0);
-  }, [b.id, b.logo_url, extra.cover_url, b.image, b.imageUrl]);
+  }, [b.id, registeredLogo, coverPhoto, galleryKey]);
   useEffect(() => {
     setMapFailed(false);
   }, [b.id, b.mapsUrl, b.latitude, b.longitude]);
@@ -433,12 +402,12 @@ export function BusinessPublicDetail({
     (b.hasDelivery === true ? "Entrega a domicilio" : "");
   const turn = (n: number) => {
     if (!photos.length) return;
-    if (heroLogoMode && displayBrandImage) {
+    if (heroBrandMode && heroBrandImage) {
       setIndex(n < 0 ? photos.length - 1 : 0);
     } else {
       setIndex((i) => (i + n + photos.length) % photos.length);
     }
-    setHeroLogoMode(false);
+    setHeroBrandMode(false);
   };
   return (
     <div ref={root} className={`bpd-shell ${modal ? "bpd-modal" : ""}`}>
@@ -484,13 +453,20 @@ export function BusinessPublicDetail({
         <div className="bpd-grid">
           <aside className="bpd-media">
             <div className="bpd-hero">
-              {displayBrandImage && (heroLogoMode || !photos.length) ? (
-                <img
-                  className="bpd-hero-logo"
-                  src={displayBrandImage}
-                  alt={`${displayBrandImage === registeredLogo ? 'Logotipo' : 'Fotografía de portada'} de ${b.name}`}
-                  onError={() => displayBrandImage === registeredLogo ? setLogoFailed(true) : setCoverFailed(true)}
-                />
+              {heroBrandMode ? (
+                heroBrandImage ? (
+                  <img
+                    className={heroBrandImage === coverPhoto ? "bpd-hero-cover" : "bpd-hero-logo"}
+                    src={heroBrandImage}
+                    alt={heroBrandImage === coverPhoto ? "Fotografía de fachada de " + b.name : "Logotipo de " + b.name}
+                    onError={() => {
+                      if (heroBrandImage === coverPhoto && coverPhoto !== registeredLogo) setCoverFailed(true);
+                      else setLogoFailed(true);
+                    }}
+                  />
+                ) : (
+                  <Photo alt={"Imagen principal de " + b.name} />
+                )
               ) : (
                 <Photo src={photos[index]} alt={`${b.name}, foto ${index + 1}`} />
               )}
@@ -517,7 +493,7 @@ export function BusinessPublicDetail({
                   ref={galleryButton}
                   className="bpd-allphotos"
                   onClick={() => {
-                    setHeroLogoMode(false);
+                    setHeroBrandMode(false);
                     setGallery(true);
                   }}
                 >
@@ -525,15 +501,15 @@ export function BusinessPublicDetail({
                 </button>
               )}
             </div>
-            {photos.length > 1 && (
+            {photos.length > 0 && (
               <div className="bpd-thumbnails">
                 {photos.slice(0, 5).map((src, i) => (
                   <button
                     key={src}
                     aria-label={`Ver foto ${i + 1}${i === 4 && photos.length > 5 ? ` y ${photos.length - 5} más` : ""}`}
-                    aria-pressed={!heroLogoMode && index === i}
+                    aria-pressed={!heroBrandMode && index === i}
                     onClick={() => {
-                      setHeroLogoMode(false);
+                      setHeroBrandMode(false);
                       setIndex(i);
                       if (i === 4 && photos.length > 5) setGallery(true);
                     }}
@@ -647,8 +623,8 @@ export function BusinessPublicDetail({
             {displayBrandImage ? (
               <img
                 src={displayBrandImage}
-                alt={`${displayBrandImage === registeredLogo ? 'Logotipo' : 'Fotografía de portada'} de ${b.name}`}
-                onError={() => displayBrandImage === registeredLogo ? setLogoFailed(true) : setCoverFailed(true)}
+                alt={"Logotipo de " + b.name}
+                onError={() => setLogoFailed(true)}
               />
             ) : (
               <>

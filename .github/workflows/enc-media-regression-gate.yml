@@ -18,6 +18,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
-      - run: node --import tsx --test tests/enc-staging-public-media-001.test.mjs tests/enc-media-regression-guard.test.mjs tests/business-detail-logo-hero.test.mjs tests/gallery-to-logo-migration.test.mjs tests/business-cover-brand-fallback.test.mjs tests/enc-maps-embed-032.test.mjs
+      - run: node --import tsx --test tests/enc-staging-public-media-001.test.mjs tests/enc-media-regression-guard.test.mjs tests/business-detail-logo-hero.test.mjs tests/business-media-presentation.test.mjs tests/gallery-to-logo-migration.test.mjs tests/business-cover-brand-fallback.test.mjs tests/enc-maps-embed-032.test.mjs
       - run: npm run build
       - run: node --test tests/release-stamp.test.mjs
