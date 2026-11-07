@@ -1,0 +1,41 @@
+name: ENC-034 verify released Staging without enabling private writes
+on:
+  pull_request:
+    branches: [ia-desarrollo]
+    paths: [.github/workflows/enc-034-staging-observe.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_SHA: 08f7db16863f4a2f15be9884401c947ba809d70f
+    steps:
+      - name: Read deployment workflow status, no mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${{ github.repository }}/actions/workflows/enc-radars-041-043-staging-deploy.yml/runs?per_page=6" --jq '.workflow_runs[] | [.id,.event,.status,.conclusion,.head_sha] | @tsv'
+      - name: Verify active Staging release over HTTP
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4; do
+            code=$(curl -sSL --max-time 20 -o /dev/null -w '%{http_code}' https://staging.encarmen.org/ || true)
+            sha=$(curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' https://staging.encarmen.org/encarmen-release.txt || true)
+            if [ "$code" = 200 ] && [ "$sha" = "$EXPECTED_SHA" ]; then
+              echo "ENC034_STAGING_RELEASE=VERIFIED"
+              echo "ENC034_STAGING_SHA=$sha"
+              break
+            fi
+            sleep 5
+          done
+          test "${sha:-}" = "$EXPECTED_SHA"
+          json=$(curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' https://staging.encarmen.org/encarmen-release.json)
+          RELEASE_JSON="$json" node -e 'const j=JSON.parse(process.env.RELEASE_JSON);if(j.sha!==process.env.EXPECTED_SHA||!Number.isFinite(Date.parse(j.updatedAt)))process.exit(1);console.log("ENC034_RELEASE_DATE="+j.updatedAt)'
+          status=$(curl -sSL --max-time 20 -o /tmp/enc034-rating-read -w '%{http_code}' https://staging.encarmen.org/api/ratings || true)
+          echo "ENC034_RATINGS_READ_HTTP=$status"
+          # This verification has no POST, migrations, flags, or configuration updates.
