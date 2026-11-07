@@ -44,7 +44,9 @@ jobs:
           release=$(readlink "$root/current")
           case "$release" in versions/*) ;; *) echo "STAGING_RELEASE_UNEXPECTED"; exit 12;; esac
           test -f "$root/current/nodejs/server.js" || { echo "STAGING_SERVER_BUNDLE_MISSING"; exit 13; }
+          echo "STAGING_RELEASE_TARGET=$(basename "$release")"
           echo "STAGING_RELEASE_PATH_VALID=yes"
+          if [ -f "$root/current/nodejs/dist/encarmen-release.txt" ]; then echo "STAGING_RELEASE_MARKER_PRESENT=yes"; else echo "STAGING_RELEASE_MARKER_PRESENT=no"; fi
           if [ -f "$root/current/nodejs/dist/encarmen-release.txt" ]; then
             rev=$(head -c 80 "$root/current/nodejs/dist/encarmen-release.txt" | tr -cd 'a-fA-F0-9')
             echo "STAGING_BUNDLE_SHA=${rev:-unknown}"
