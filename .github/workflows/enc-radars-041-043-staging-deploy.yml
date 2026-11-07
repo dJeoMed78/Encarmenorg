@@ -1,5 +1,6 @@
 name: ENC radars 041+043 authorized reversible staging deployment
 # ENC-034 moderation-context PR #82: merge 56d6b7f7673845b829afd097172e8b0885fce81b; owner-authorized Staging deployment after CI PASS; no production; 2026-11-07.
+# Deployment guard: allow Hostinger-managed release activation to settle before switching; require a stable current symlink and retain fail-closed compare-before-switch.
 # ENC-034 authorized staging release: PR #80 comment-before-rating UX and PR #81 iOS Glass review toast; merges cd8854faafb908a9e569dc2cd4ac8e4787c3004d and d5855d4c8141aa4a9ab56e275e186a07254b43c5; owner-authorized Staging only 2026-11-07; preserve isolated DB backup and rollback.
 # ENC-034 verified live: remove temporary gate diagnostic after real Staging SQL E2E PASS.
 # Release only Staging; no private write flags, no production modification.
@@ -122,6 +123,10 @@ jobs:
       - name: Verify backup baseline and deploy only staging
         run: |
           set -euo pipefail
+          # Hostinger may finish its own hbuilds release activation after the Git push.
+          # Wait for that external switch to settle before capturing the active baseline.
+          echo "STAGING_WAITING_FOR_HOSTINGER_RELEASE_STABILITY=90s"
+          sleep 90
           host=u293982346@45.137.159.114
           short=$(printf '%s' "$GITHUB_SHA" | cut -c1-12)
           sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no "$host" 'bash -s' <<'REMOTE'
@@ -161,6 +166,15 @@ jobs:
           set -euo pipefail
           sha="$1"
           root="$HOME/domains/staging.encarmen.org/hbuilds"
+          previous=""
+          stable=0
+          for attempt in 1 2 3 4 5 6 7 8; do
+            current=$(readlink "$root/current")
+            if [ "$current" = "$previous" ]; then stable=$((stable+5)); else stable=0; previous="$current"; fi
+            sleep 5
+          done
+          test "$stable" -ge 30 || { echo "STAGING_ACTIVE_RELEASE_NOT_STABLE"; exit 5; }
+          echo "STAGING_ACTIVE_RELEASE_STABLE=yes"
           old=$(readlink "$root/current")
           bash "$HOME/encarmen-staging-backups/enc041-deploy.sh" "$sha" "$old"
           echo "ENC041_STAGING_SWITCH=PASS"
