@@ -8,11 +8,16 @@ export function createRatingModerationRepository(db: { getConnection(): Promise<
     try {
       const [tables]: any = await c.query(
         "SELECT TABLE_NAME, ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('business_ratings','business_rating_moderation')");
-      if (tables.length !== 2 || tables.some((t: any) => t.ENGINE !== 'InnoDB')) fail('COMMENTS_SCHEMA_REQUIRED');
+      if (tables.length !== 2 || tables.some((t: any) => t.ENGINE !== 'InnoDB') ||
+          !['business_ratings','business_rating_moderation'].every(name => tables.some((t:any) => t.TABLE_NAME === name))) fail('COMMENTS_SCHEMA_REQUIRED');
       const [cols]: any = await c.query('SHOW FULL COLUMNS FROM business_rating_moderation');
       for (const field of ['rating_id', 'status', 'moderated_at', 'moderated_by']) {
         if (!cols.some((col: any) => col.Field === field)) fail('COMMENTS_SCHEMA_REQUIRED');
       }
+      const [indexes]:any = await c.query('SHOW INDEX FROM business_rating_moderation');
+      const primary = indexes.filter((i:any) => i.Key_name === 'PRIMARY');
+      if (primary.length !== 1 || primary[0].Column_name !== 'rating_id' ||
+          Number(primary[0].Non_unique) !== 0 || primary[0].Sub_part != null) fail('COMMENTS_SCHEMA_REQUIRED');
       return await work(c);
     } finally { c.release(); }
   }
