@@ -348,24 +348,11 @@
   fill: #ffcf4f;
 }
 .bpd-comments {
-  border-top: 1px solid #d6e1ec;
-  margin-top: 15px;
-  padding: 20px 6px 6px;
-  text-align: center;
-  color: #61738b;
+  text-align: left;
+  color: #334155;
 }
-.bpd-comments > svg {
-  margin: 0 auto 9px;
-}
-.bpd-comments strong {
-  display: block;
-  font-size: 13px;
-  color: #304663;
-}
-.bpd-comments p {
-  font-size: 12px;
-  margin-top: 8px;
-}
+/* Allow Tailwind's glass cards, typography and compact spacing to govern
+   the moderated review list; avoid legacy global p centering/size overrides. */
 .bpd-identity {
   height: 175px;
   background: linear-gradient(130deg, #ffede3e0, #fff9f1ba);

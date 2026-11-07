@@ -512,19 +512,14 @@ Pendientes:revisión independiente,lockfile,Node22Hostinger,atestación SHA remo
 integración/despliegue y ventana de pruebas públicas separadamente autorizadas.
 Dictamen de revisión/integración:RESERVADO EXCLUSIVAMENTE A COORDINACIÓN.
 
+## ENC-RATINGS-COMMENTS-034 — 2026-11-07, W1
+Rama work/enc-ratings-comments-034-w1; base db34778138b7f028761cbff057c010bc35d33204. Correcciones parciales de agregados/vigencia/distribución/diagnóstico, 24 pruebas PASS, lint/Vite/esbuild PASS. Lecturas Staging HTTP200. Comentarios bloqueados por autorización de esquema y moderación; escritura MariaDB no probada. Chromium ausente, npm ci EUSAGE, regresión Radar 14 PASS/1 FAIL. Detalle, comandos y reversión: docs/work-tasks/ENC-RATINGS-COMMENTS-034.md. No integrado, no desplegado, no aprobado.
+
 ---
 
 ## TAREA: ENC-RADAR-EMPRESAS-043 (Cierre Definitivo)
 - **Fecha:** 2026-11-07
 - **Ejecutor:** Google AI Studio (GAS)
 - **Rama Exclusiva:** `work/enc-radar-empresas-043-final-gas`
-- **Rama Base:** `ia-desarrollo` (commit: `db34778138b7f028761cbff057c010bc35d33204`)
-- **Estado:** Completada y validada al 100% (20/20 escenarios aprobados).
-- **Alcance de Solución:**
-  1. Persistencia estricta en MariaDB con verificación de lectura posterior (`readback verification`) para aprobación individual y por lotes.
-  2. Comportamiento fail-closed ante fallos de conexión o lectura posterior (503 Service Unavailable, cero contaminación de caché).
-  3. Gestión de concurrencia e IDs con `withBusinessAllocationLock` y `getNextBusinessId`: reutilización segura de conexión bajo el bloqueo consultivo `GET_LOCK` de MariaDB para evitar agotamiento de pools pequeños o interbloqueos (*deadlocks*).
-  4. Eliminación total de efectos colaterales hacia WordPress/WooCommerce.
-  5. Descarte de claims sintéticos en candidatos IA (`isLiveWebDiscovery: false`, `requiresAdminVerification: true`).
-  6. Suite de 20 pruebas automatizadas ejecutando los controladores reales de `server.ts` con inyección de dependencias (`tests/radar-business-approval.test.mjs`).
-  7. Procedimiento E2E para auditoría en Staging y documentación exhaustiva en `docs/work-tasks/ENC-RADAR-EMPRESAS-043.md`.
+- **Rama Base:** `ia-desarrollo` (HEAD: `9683d63560fc6a9cc63c54d7c107c39eb8420fd2`)
+- **Estado:** En proceso de corrección definitiva según Orden de NIA.

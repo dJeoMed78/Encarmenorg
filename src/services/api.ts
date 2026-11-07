@@ -1221,7 +1221,23 @@ export function parseRatingStats(value: unknown): BusinessRatingStats {
       (data.count === 0 ? data.average !== 0 : data.average < 1 || data.average > 5)) {
     throw new RatingApiError('Respuesta de calificaciones inválida.');
   }
-  return { average: data.average, count: data.count, distribution: data.distribution };
+  let distribution: Record<number, number> | undefined;
+  if (data.distribution !== undefined) {
+    if (!data.distribution || typeof data.distribution !== 'object' || Array.isArray(data.distribution) ||
+        Object.keys(data.distribution).some(key => !/^[1-5]$/.test(key))) throw new RatingApiError('Distribución de calificaciones inválida.');
+    distribution = {};
+    let total = 0, weighted = 0;
+    for (let star = 1; star <= 5; star++) {
+      const votes = data.distribution[star];
+      if (!Number.isSafeInteger(votes) || votes < 0) throw new RatingApiError('Distribución de calificaciones inválida.');
+      distribution[star] = votes; total += votes; weighted += star * votes;
+    }
+    if (!Number.isSafeInteger(total) || total !== data.count ||
+        (total ? Math.round(weighted / total * 10) / 10 : 0) !== data.average) {
+      throw new RatingApiError('Agregados de calificaciones inconsistentes.');
+    }
+  }
+  return { average: data.average, count: data.count, distribution };
 }
 
 async function ratingResponse(res: Response): Promise<any> {

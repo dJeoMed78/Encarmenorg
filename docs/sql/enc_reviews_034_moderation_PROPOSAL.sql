@@ -1,0 +1,25 @@
+-- ENC-034 / PROPUESTA DE ESQUEMA DE MODERACIÓN — NO EJECUTAR AUTOMÁTICAMENTE.
+-- Este archivo es solo para revisión. Nunca integrar DDL en prebuild o arranque.
+-- Verificar primero SHOW CREATE TABLE business_ratings y permisos/aislamiento Staging.
+-- Confirmar backup recuperable y autorizar explícitamente la operación.
+-- No aplicar a producción ni a bases distintas de Staging.
+--
+-- CREATE TABLE `u293982346_encarmentest`.`business_rating_moderation` (
+--   `rating_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+--   `status` VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+--   `moderated_at` DATETIME NULL,
+--   `moderated_by` VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+--   PRIMARY KEY (`rating_id`),
+--   CONSTRAINT `ck_enc034_status` CHECK (`status` IN ('pending','approved','rejected','hidden'))
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+--
+-- No foreign key added before verifying existing ID column's effective collation and type.
+-- Existing comments are intentionally private: INNER JOIN on approved moderation
+-- excludes every historical rating without a moderation record.
+-- Status transitions need administrator identity, transactional row locking and audit.
+-- Current code records current moderator and time, not immutable change history.
+-- If immutable moderation audit is required, design and approve a separate log table.
+-- Prior to enabling: compare schema, test in isolated clone, validate indexes and
+-- account grants, apply with dedicated short-lived permission and backup/rollback.
+-- Enable RATINGS_MODERATION_APPROVED only after successful approval and proof.
+-- Staging writes remain denied until a dedicated, scoped write lane is authorized.

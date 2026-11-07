@@ -1,5 +1,11 @@
 name: ENC radars 041+043 authorized reversible staging deployment
-# Authorized ENC-062 deployment: source metadata and approval security validated by CI; Staging only.
+# ENC-034 public reviews cards PR #83; deploy approved 2026-11-07 after CI: 1e81692e99ef6eb0231227290541a5bc9fad035a; Staging only.
+# ENC-034 moderation-context PR #82: merge 56d6b7f7673845b829afd097172e8b0885fce81b; owner-authorized Staging deployment after CI PASS; no production; 2026-11-07.
+# Deployment guard: allow Hostinger-managed release activation to settle before switching; require a stable current symlink and retain fail-closed compare-before-switch.
+# ENC-034 authorized staging release: PR #80 comment-before-rating UX and PR #81 iOS Glass review toast; merges cd8854faafb908a9e569dc2cd4ac8e4787c3004d and d5855d4c8141aa4a9ab56e275e186a07254b43c5; owner-authorized Staging only 2026-11-07; preserve isolated DB backup and rollback.
+# ENC-034 verified live: remove temporary gate diagnostic after real Staging SQL E2E PASS.
+# Release only Staging; no private write flags, no production modification.
+# Staging ONLY. main/production excluded; deployment keeps automatic rollback on failed HTTP.
 on:
   push:
     branches: [ia-desarrollo]
@@ -9,7 +15,7 @@ permissions:
   contents: read
 concurrency:
   group: encarmen-authorized-staging-deploy
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -51,6 +57,7 @@ jobs:
           tar -czf ../enc041-payload.tar.gz server.js dist api/server.bundle.js
           gzip -t ../enc041-payload.tar.gz
       - name: Verify pinned SSH host identity
+        id: pinned_host
         run: |
           set -euo pipefail
           test -n "$SSHPASS"
@@ -118,6 +125,10 @@ jobs:
       - name: Verify backup baseline and deploy only staging
         run: |
           set -euo pipefail
+          # Hostinger may finish its own hbuilds release activation after the Git push.
+          # Wait for that external switch to settle before capturing the active baseline.
+          echo "STAGING_WAITING_FOR_HOSTINGER_RELEASE_STABILITY=90s"
+          sleep 90
           host=u293982346@45.137.159.114
           short=$(printf '%s' "$GITHUB_SHA" | cut -c1-12)
           sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no "$host" 'bash -s' <<'REMOTE'
@@ -157,6 +168,15 @@ jobs:
           set -euo pipefail
           sha="$1"
           root="$HOME/domains/staging.encarmen.org/hbuilds"
+          previous=""
+          stable=0
+          for attempt in 1 2 3 4 5 6 7 8; do
+            current=$(readlink "$root/current")
+            if [ "$current" = "$previous" ]; then stable=$((stable+5)); else stable=0; previous="$current"; fi
+            sleep 5
+          done
+          test "$stable" -ge 30 || { echo "STAGING_ACTIVE_RELEASE_NOT_STABLE"; exit 5; }
+          echo "STAGING_ACTIVE_RELEASE_STABLE=yes"
           old=$(readlink "$root/current")
           bash "$HOME/encarmen-staging-backups/enc041-deploy.sh" "$sha" "$old"
           echo "ENC041_STAGING_SWITCH=PASS"
@@ -177,7 +197,7 @@ jobs:
           done
           exit 1
       - name: Restore prior staging release if required
-        if: failure()
+        if: failure() && steps.pinned_host.conclusion == 'success'
         run: |
           set -u
           test -n "$SSHPASS" && test -f "$HOME/.ssh/known_hosts" || exit 0

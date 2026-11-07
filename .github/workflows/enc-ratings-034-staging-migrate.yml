@@ -1,0 +1,132 @@
+name: ENC-034 authorized Staging moderation schema migration
+on:
+  pull_request:
+    branches: [ia-desarrollo]
+    paths: [.github/workflows/enc-ratings-034-staging-migrate.yml]
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-authorized-staging-deploy
+  cancel-in-progress: false
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Verify private SSH key fingerprint, no credentials exposed
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+      - name: Verify identity, backup and create ONLY moderation table in Staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 -' <<'PY'
+          import pathlib,os,shutil,tempfile,subprocess,gzip,hashlib,datetime,sys
+          home=pathlib.Path.home()
+          root=home/'domains/staging.encarmen.org/hbuilds'
+          prod=home/'domains/encarmen.org'
+          config=root/'config/.env'
+          dbdir=home/'encarmen-staging-backups/database'
+          db='u293982346_encarmentest'
+          if root.resolve()==prod.resolve() or not (root/'current').is_symlink():
+              raise SystemExit('STAGING_ROOT_ISOLATION_FAILED')
+          if not config.is_file() or config.is_symlink() or config.stat().st_mode & 0o077:
+              raise SystemExit('STAGING_PRIVATE_CONFIGURATION_UNSAFE')
+          if not dbdir.is_dir() or dbdir.is_symlink() or dbdir.stat().st_mode & 0o077:
+              raise SystemExit('STAGING_BACKUP_DIR_UNSAFE')
+          values={}
+          for original in config.read_text().splitlines():
+              line=original.strip().removeprefix('export ').strip()
+              if not line or line.startswith('#') or '=' not in line:continue
+              k,v=line.split('=',1);k=k.strip()
+              if k in values and k in ('APP_ENV','DB_NAME','DB_USER','DB_HOST','DB_PASSWORD'):raise SystemExit('STAGING_DUPLICATE_CONFIG')
+              values[k]=v.strip().strip('"').strip("'")
+          if values.get('APP_ENV')!='staging' or values.get('DB_NAME')!=db or values.get('DB_USER')=='u293982346_appuser' or not all(values.get(k) for k in ('DB_USER','DB_HOST','DB_PASSWORD')):
+              raise SystemExit('STAGING_DATABASE_IDENTITY_UNVERIFIED')
+          cli=shutil.which('mariadb');dump=shutil.which('mariadb-dump') or shutil.which('mysqldump')
+          if not cli or not dump:raise SystemExit('DATABASE_CLIENT_UNAVAILABLE')
+          cnf=None;temp=None
+          def call(args,timeout=45):
+              p=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
+              if p.returncode:raise RuntimeError('STAGING_SQL_OPERATION_FAILED')
+              return p.stdout.strip()
+          try:
+              with tempfile.NamedTemporaryFile(mode='w',dir=dbdir,prefix='.enc034-auth-',delete=False) as f:
+                  cnf=pathlib.Path(f.name);os.chmod(cnf,0o600)
+                  f.write('[client]\n')
+                  for k,v in (('host',values['DB_HOST']),('port',values.get('DB_PORT','3306')),('user',values['DB_USER']),('password',values['DB_PASSWORD'])):
+                      f.write(k+'="'+str(v).replace('\\','\\\\').replace('"','\\"').replace('\n','')+'"\n')
+              base=[cli,'--defaults-extra-file='+str(cnf),'--batch','--skip-column-names','-D',db]
+              def sql(query):
+                  return call([*base,'-e',query],45)
+              identity=sql('SELECT DATABASE(), CURRENT_USER(), VERSION()').split('\t')
+              if len(identity)!=3 or identity[0]!=db or identity[1].split('@')[0]=='u293982346_appuser':
+                  raise SystemExit('SQL_IDENTITY_FAILED')
+              grants=sql('SHOW GRANTS FOR CURRENT_USER()')
+              if 'u293982346_encarmenapp' in grants:raise SystemExit('PRODUCTION_GRANTS_PRESENT')
+              print('ENC034_SQL_IDENTITY=STAGING_VERIFIED')
+              print('ENC034_MARIADB_VERSION='+identity[2])
+              table=sql("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='business_ratings'")
+              if table!='1':raise SystemExit('HISTORIC_RATINGS_TABLE_MISSING')
+              count_before=sql('SELECT COUNT(*) FROM business_ratings')
+              indexes=sql("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='business_ratings' AND INDEX_NAME='uq_business_ratings_biz_visitor' AND NON_UNIQUE=0")
+              if indexes!='2':raise SystemExit('HISTORIC_UNIQUE_INDEX_MISSING')
+              existing=sql("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='business_rating_moderation'")
+              if existing not in ('0','1'):raise SystemExit('MODERATION_SCHEMA_UNEXPECTED')
+              if existing=='0':
+                  stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d-%H%M%S')
+                  name='staging-db-enc034-before-ddl-'+stamp+'.sql.gz'
+                  dest=dbdir/name
+                  with tempfile.NamedTemporaryFile(dir=dbdir,prefix='.enc034-backup-',delete=False) as f:
+                      temp=pathlib.Path(f.name);os.chmod(temp,0o600)
+                  args=[dump,'--defaults-extra-file='+str(cnf),'--single-transaction','--quick','--skip-lock-tables','--databases',db]
+                  with open(temp,'wb') as raw:
+                      with gzip.GzipFile(fileobj=raw,mode='wb') as output:
+                          proc=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+                          shutil.copyfileobj(proc.stdout,output)
+                          proc.stdout.close()
+                          _,err=proc.communicate(timeout=180)
+                          if proc.returncode:raise SystemExit('STAGING_BACKUP_DUMP_FAILED')
+                  if temp.stat().st_size<100:raise SystemExit('STAGING_BACKUP_EMPTY')
+                  with gzip.open(temp,'rb') as handle:
+                      if b'CREATE TABLE' not in handle.read():raise SystemExit('STAGING_BACKUP_DDL_MISSING')
+                  temp.rename(dest);temp=None
+                  digest=hashlib.sha256(dest.read_bytes()).hexdigest()
+                  (dbdir/(name+'.sha256')).write_text(digest+'  '+name+'\n')
+                  os.chmod(dbdir/(name+'.sha256'),0o600)
+                  print('ENC034_PREDDL_BACKUP=VERIFIED')
+                  print('ENC034_BACKUP_SHA256='+digest)
+                  ddl="""CREATE TABLE `u293982346_encarmentest`.`business_rating_moderation` (
+                     `rating_id` VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                     `status` VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+                     `moderated_at` DATETIME NULL,
+                     `moderated_by` VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+                     PRIMARY KEY (`rating_id`),
+                     CONSTRAINT `ck_enc034_status` CHECK (`status` IN ('pending','approved','rejected','hidden'))
+                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"""
+                  sql(ddl)
+                  print('ENC034_SCHEMA_CREATED=yes')
+              else:print('ENC034_SCHEMA_ALREADY_PRESENT=verify_only')
+              detail=sql("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='business_rating_moderation' ORDER BY ORDINAL_POSITION").splitlines()
+              if detail!=['rating_id','status','moderated_at','moderated_by']:raise SystemExit('MODERATION_COLUMNS_MISMATCH')
+              engine=sql("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='business_rating_moderation'")
+              if engine!='InnoDB':raise SystemExit('MODERATION_ENGINE_MISMATCH')
+              pk=sql("SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='business_rating_moderation' AND INDEX_NAME='PRIMARY'")
+              if pk!='rating_id':raise SystemExit('MODERATION_PK_MISMATCH')
+              if sql('SELECT COUNT(*) FROM business_ratings')!=count_before:raise SystemExit('HISTORICAL_RATINGS_CHANGED')
+              print('ENC034_MODERATION_SCHEMA=VERIFIED')
+              print('ENC034_HISTORIC_RATINGS_UNCHANGED=yes')
+              print('ENC034_MODERATION_MIGRATION=PASS')
+          finally:
+              if cnf:cnf.unlink(missing_ok=True)
+              if temp:temp.unlink(missing_ok=True)
+          PY
