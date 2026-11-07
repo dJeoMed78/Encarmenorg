@@ -39,3 +39,9 @@ export function stagingRatingsPublicWriteValid(snapshot: Record<string,string> |
     /^[a-zA-Z0-9._-]{12,128}$/.test(String(snapshot.STAGING_RATINGS_BACKUP_ID || '')) &&
     Number.isFinite(Date.parse(String(snapshot.STAGING_RATINGS_BACKUP_CHECKED_AT || '')));
 }
+
+export function stagingRatingsModerationWriteValid(snapshot: Record<string,string> | null, user: string | null): boolean {
+  return stagingRatingsPublicWriteValid(
+    snapshot && {...snapshot, STAGING_RATINGS_PUBLIC_WRITES_ENABLED: 'true'}, user) &&
+    snapshot?.STAGING_RATINGS_MODERATION_WRITES_ENABLED === 'true';
+}
