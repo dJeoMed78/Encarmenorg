@@ -1,4 +1,5 @@
 name: ENC radars 041+043 authorized reversible staging deployment
+# ENC-034 moderation-context PR #82: merge 56d6b7f7673845b829afd097172e8b0885fce81b; owner-authorized Staging deployment after CI PASS; no production; 2026-11-07.
 # ENC-034 authorized staging release: PR #80 comment-before-rating UX and PR #81 iOS Glass review toast; merges cd8854faafb908a9e569dc2cd4ac8e4787c3004d and d5855d4c8141aa4a9ab56e275e186a07254b43c5; owner-authorized Staging only 2026-11-07; preserve isolated DB backup and rollback.
 # ENC-034 verified live: remove temporary gate diagnostic after real Staging SQL E2E PASS.
 # Release only Staging; no private write flags, no production modification.
