@@ -47,6 +47,19 @@ jobs:
                       match=needle in str(cwd) and cwd.name=='nodejs'
                       candidates.append((item.name,match,cwd==((root/'current/nodejs').resolve())))
               except (OSError,PermissionError):pass
+          # Compare actual frontend hash seen by /api/version with each running process cwd.
+          import hashlib,datetime
+          for idx,(pid,known,active) in enumerate(candidates[:12]):
+              try:
+                  cwd=(pathlib.Path('/proc')/pid/'cwd').resolve()
+                  htmlpath=cwd/'dist/index.html'
+                  html=htmlpath.read_bytes()
+                  assets=sorted(re.findall(rb'(?:src|href)="([^"]*/assets/[^"]+\.(?:js|css))"',html))
+                  digest=hashlib.sha256(html+b''.join(assets if len(assets)<2 else [b'|'.join(assets)])).hexdigest()[:16]
+                  mtime=round(htmlpath.stat().st_mtime_ns/1e6)
+                  print('ENC034_PROC_'+str(idx)+'_RELEASE_HASH='+digest+'-'+str(mtime))
+              except OSError:
+                  print('ENC034_PROC_'+str(idx)+'_RELEASE_HASH=UNAVAILABLE')
           print('ENC034_NODE_PROCESS_CANDIDATES='+str(len(candidates)))
           for idx,(pid,known,active) in enumerate(candidates[:12]):
               print('ENC034_PROC_'+str(idx)+'_PATH_MATCH='+str(known))
