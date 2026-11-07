@@ -79,7 +79,7 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
 
   return (
     <section className="w-full min-w-0" aria-label={`Calificaciones y opinión sobre ${businessName}`}>
-      <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] md:items-stretch lg:gap-5">
+      <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] md:items-start lg:gap-5">
         {/* Two independent glass panes avoid stretching the rating bars across the page. */}
         <div className="min-w-0 rounded-[26px] border border-white/75 bg-white/55 p-4 shadow-[0_12px_35px_rgba(30,41,59,0.08)] backdrop-blur-2xl sm:p-5"
           style={{ WebkitBackdropFilter: 'blur(22px) saturate(160%)', backdropFilter: 'blur(22px) saturate(160%)' }}>
@@ -133,7 +133,7 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
           </p>
         </div>
 
-        <div className="min-w-0 rounded-[26px] border border-white/80 bg-white/65 p-4 shadow-[0_12px_35px_rgba(30,41,59,0.08)] backdrop-blur-2xl sm:p-5"
+        <div className="min-w-0 self-start rounded-[26px] border border-white/80 bg-white/65 p-4 shadow-[0_12px_35px_rgba(30,41,59,0.08)] backdrop-blur-2xl sm:p-5"
           style={{ WebkitBackdropFilter: 'blur(22px) saturate(160%)', backdropFilter: 'blur(22px) saturate(160%)' }}>
           <div className="flex items-center gap-2">
             <Star className="h-[18px] w-[18px] text-amber-500" aria-hidden="true" />
@@ -213,9 +213,9 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
               </div>
             )}
           </div>
-          <p className="mt-4 border-t border-white/65 pt-3 text-[11px] leading-relaxed text-slate-500">
+          {!hasRated && <p className="mt-4 border-t border-white/65 pt-3 text-[11px] leading-relaxed text-slate-500">
             El identificador del navegador ayuda a detectar duplicados; no confirma la identidad de una persona.
-          </p>
+          </p>}
         </div>
       </div>
       {toast && (
