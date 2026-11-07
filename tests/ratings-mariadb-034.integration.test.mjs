@@ -14,8 +14,11 @@ test('MariaDB real: insert, readback, duplicate reject, moderation, approval/rej
   const pool=mysql.createPool({host:'127.0.0.1',port:3306,user:'enc034_test',password:'local-ci-test-only',
     database:'enc034_ephemeral',waitForConnections:true,connectionLimit:3});
   try {
-    await pool.query(`CREATE TABLE businesses (id VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL PRIMARY KEY)
-        ENGINE=InnoDB`);
+    await pool.query(`CREATE TABLE businesses (
+      id VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL PRIMARY KEY,
+      name VARCHAR(160) NOT NULL, category VARCHAR(100) NOT NULL,
+      address VARCHAR(255) NOT NULL, colonia VARCHAR(120) NOT NULL
+    ) ENGINE=InnoDB`);
     await pool.query(`CREATE TABLE business_ratings (
       id VARCHAR(64) NOT NULL PRIMARY KEY, business_id VARCHAR(64) NOT NULL,
       visitor_id VARCHAR(100) NOT NULL, rating TINYINT NOT NULL,
@@ -27,7 +30,8 @@ test('MariaDB real: insert, readback, duplicate reject, moderation, approval/rej
       status VARCHAR(16) NOT NULL, moderated_at DATETIME NULL, moderated_by VARCHAR(64) NULL,
       CONSTRAINT ck_enc034_status CHECK(status IN ('pending','approved','rejected','hidden'))
     ) ENGINE=InnoDB`);
-    await pool.query('INSERT INTO businesses (id) VALUES (?)',['enc034-test-biz']);
+    await pool.query('INSERT INTO businesses (id,name,category,address,colonia) VALUES (?,?,?,?,?)',
+      ['enc034-test-biz','Negocio de prueba ENC-034','Servicios','Calle de prueba 123','Centro']);
     const ratingStore=createRatingsRepository(pool);
     const reviews=createRatingModerationRepository(pool);
     const visitor=createHash('sha256').update('enc034-ci-visitor').digest('hex');
@@ -41,6 +45,11 @@ test('MariaDB real: insert, readback, duplicate reject, moderation, approval/rej
     assert.equal((await reviews.approved('enc034-test-biz',20,0)).length,0);
     const pending=await reviews.pending(20,0);
     assert.equal(pending.length,1);
+    assert.equal(pending[0].rating,4);
+    assert.equal(pending[0].businessName,'Negocio de prueba ENC-034');
+    assert.equal(pending[0].category,'Servicios');
+    assert.equal(pending[0].address,'Calle de prueba 123');
+    assert.equal(pending[0].colonia,'Centro');
     const id=pending[0].id;
     assert.equal(await reviews.decide(id,'approved','enc034-admin'),true);
     assert.equal((await reviews.approved('enc034-test-biz',20,0)).length,1);
