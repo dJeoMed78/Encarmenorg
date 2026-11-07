@@ -17,3 +17,9 @@
 - Regla permanente: doble publicación Drive + GitHub, evidencia antes de declarar implementado/probado/integrado/desplegado.
 
 **Próxima acción:** validación manual del propietario #34 en Staging, corrección dirigida si falla, auditoría de moderación admin y registro del resultado sin cerrar el Issue hasta aceptación expresa.
+
+## Hallazgo del propietario y corrección aislada #34 — 7 noviembre
+
+Captura del propietario muestra que pulsar 4 estrellas registra el voto y oculta el campo de comentario. **Causa confirmada en código:** `StarRatingWidget.tsx` invocaba envío de voto directamente en `onClick` de estrella; luego `hasRated=true` ocultaba estrellas y comentario. Invertir solamente el orden visual no corrige la causa.
+
+**PR [#80](https://github.com/dJeoMed78/Encarmenorg/pull/80)** DRAFT contra `ia-desarrollo`, rama `work/enc-ratings-034-comment-before-submit-nia`, head `fa56eaf4ebb6d2ae0bf84bb34abd72d62c2b58a8`. Se coloca comentario antes de estrellas, el clic en estrella solo selecciona valor local y un botón explícito «Publicar mi opinión» envía ambos datos juntos; se conservan `hasRated`, anti-duplicado y moderación. **No probado en CI, no integrado, no desplegado.** Debe comprobarse TypeScript, pruebas frontend, flujo HTTP real, moderación y móvil antes de integración. El voto de 4 estrellas ya registrado del propietario debe preservarse.
