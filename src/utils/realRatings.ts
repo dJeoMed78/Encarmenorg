@@ -23,8 +23,8 @@ export async function getRealBusinessRating(businessId: string | number): Promis
   return fetchBusinessRating(businessId, getRatingVisitorId());
 }
 
-export async function submitRealBusinessRating(businessId: string | number, stars: number): Promise<BusinessRatingStats> {
-  const result = await submitBusinessRating({ businessId, rating: stars, visitorId: getRatingVisitorId() });
+export async function submitRealBusinessRating(businessId: string | number, stars: number, comment = ''): Promise<BusinessRatingStats> {
+  const result = await submitBusinessRating({ businessId, rating: stars, visitorId: getRatingVisitorId(), comment });
   window.dispatchEvent(new Event(RATINGS_UPDATED));
   return { ...result.stats, hasRated: true, userRating: stars };
 }
@@ -76,7 +76,7 @@ export function useBusinessRatings(businessId: string | number | undefined, acti
     };
   }, [key]);
 
-  const rate = async (stars: number): Promise<BusinessRatingStats | null> => {
+  const rate = async (stars: number, comment = ''): Promise<BusinessRatingStats | null> => {
     if (key === undefined || state.key !== key || busy.current || state.loading || !state.available || Boolean(state.error) || state.summary.hasRated) return null;
     const version = generation.current;
     const valid = () => generation.current === version && currentKey.current === key;
@@ -84,7 +84,7 @@ export function useBusinessRatings(businessId: string | number | undefined, acti
     busy.current = true;
     setState(prev => ({ ...prev, submitting: true, error: null, saved: false }));
     try {
-      const summary = await submitRealBusinessRating(key, stars);
+      const summary = await submitRealBusinessRating(key, stars, comment);
       if (!valid()) return null;
       requestVersion.current++; // Discard refreshes started by the confirmation event.
       setState(prev => ({ ...prev, summary, loading: false, error: null, available: true, saved: true }));
