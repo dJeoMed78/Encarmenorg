@@ -44,3 +44,34 @@ Coordinación: comprobar DATABASE/cuenta/grants/topología reales, respaldo recu
 Diff funcional limitado a server.ts (serializador de errores ratings), api.ts (agregados), realRatings.ts (vigencia), StarRatingWidget.tsx (distribución), cinco tests ratings y documentación. Código MariaDB, políticas compartidas, otros componentes y bundles no se publican modificados. Revertir commit de tarea por PR revisada; no modifica datos ni requiere rollback SQL. No cerrar #34. Revisión independiente y autorización de esquema/política pendientes; entrega no autoaprobada.
 
 Instalación reproducible: `npm ci --ignore-scripts` sobre copia temporal de package/lock de la base falló EUSAGE por lock desincronizado (dependencias opcionales ausentes). No se modificaron ambos archivos. Las validaciones usaron node_modules recuperado de instalación anterior sin regenerar lock; no equivalen a npm ci exitoso. Resolver lock por tarea autorizada antes de exigir CI verde.
+
+
+## Intervención directa de Coordinación 01 — 2026-11-07 (continuación por límite Work)
+
+**Objetivo:** completar el código de comentarios moderados sin reabrir W1 ni modificar producción.
+**Rama aislada Nia:** `work/enc-ratings-comments-034-nia-completion` basada en head W1 `86863c11fb06884e48d9c643469d1e345a2e865e`.
+**PR Nia:** https://github.com/dJeoMed78/Encarmenorg/pull/67 (DRAFT, destino rama W1, no integrada).
+
+Implementado en código:
+- Repositorio `src/db/ratingModeration.ts`: comentarios públicos sólo con estado `approved`; comentarios sin registro de moderación (incluidos históricos) permanecen privados; revisión de pendientes y decisión transaccional con locking y rollback.
+- Nuevas rutas de consulta pública y moderación administrativa en `server.ts`, autenticación y nombre real de la sesión administrativa; respuestas sin caché, validación de identificadores y paginación.
+- Gating de esquema y datos en `src/db/mariadb.ts`: requieren `RATINGS_SCHEMA_APPROVED` y `RATINGS_MODERATION_APPROVED` y no abren escrituras generales.
+- Interfaz pública con lista de aprobados y paginación, campo de comentario opcional al enviar una calificación, y cola administrativa para aprobar/rechazar mediante respuesta real del servidor.
+- `docs/sql/enc_reviews_034_moderation_PROPOSAL.sql` contiene **DDL comentado, no ejecutado**. No se modifica información histórica.
+
+**Restricciones:** El módulo NO se activa en Staging hasta confirmar el esquema y autorizar su aplicación; las escrituras siguen denegadas por `isWritePermitted()` sin un carril específico autorizado. No se han ejecutado pruebas de escritura MariaDB real, migraciones, ni despliegues. El código propuesto no constituye autorización para activar esas funciones.
+
+**Prueba E2E reversible a cargo de Coordinación tras autorización separada:**
+1. Verificar Hostinger Staging, `DATABASE()`, `CURRENT_USER()`, grants, motor y tablas, e independencia de producción. Inspeccionar esquema real sin cambios.
+2. Crear respaldo lógico consistente de sólo Staging, conservar integridad/verificabilidad y tener reversión preparada. Confirmar estado inicial de los registros sintéticos.
+3. Revisar y aprobar DDL compatible con esquema real, probar en copia aislada antes de aplicarlo en Staging. Evitar DDL sin autorización: implica commit implícito.
+4. Activar temporalmente sólo la capacidad específica de ratings y comentarios con usuario administrativo y restricciones temporales; **nunca** abrir `isWritePermitted()` general o tocar producción.
+5. Enviar voto y comentario sintéticos autorizados sobre empresa de prueba previamente verificada; confirmar HTTP, `COMMIT`, lectura SQL en segunda conexión y GET público sin comentario aprobado.
+6. Moderar un comentario desde sesión administrativa; confirmar auditoría de nombre, fecha, estado y consulta pública tras aprobación. Rechazar otro, verificar que no aparece al público.
+7. Repetir voto para comprobar respuesta de duplicado, rechazar acceso anónimo, probar interrupción de SQL y concurrencia. Ejecutar Playwright en 320/390/834/1440 px.
+8. Cerrar ventana de escritura, confirmar bloqueo; limpiar exclusivamente IDs sintéticos bajo autorización y verificar que los agregados históricos no cambiaron.
+9. Confirmar versión exacta y fecha de release en Staging, monitorear regresiones, documentar evidencias antes de cerrar Issue #34.
+
+**Riesgos abiertos:** no existen todavía permisos de escritura de ratings en Staging; no se probó SQL real ni compatibilidad DDL con tablas activas. La moderación guarda última decisión, usuario y hora pero no historial inmutable de cambios. Identificadores de visitantes no prueban identidad humana; exigir política antiabuso antes de habilitar votos públicos.
+
+**Estado:** IMPLEMENTACIÓN AISLADA; integración, migración, E2E real y despliegue BLOQUEADOS hasta verificaciones y autorizaciones correspondientes.
