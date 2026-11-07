@@ -1,0 +1,156 @@
+name: ENC-034 activate ONLY Staging ratings and moderation
+on:
+  pull_request:
+    branches: [ia-desarrollo]
+    paths: [.github/workflows/enc-034-activate-ratings-staging.yml]
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-authorized-staging-deploy
+  cancel-in-progress: false
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Verify SSH identity and capability
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+      - name: Backup exact Staging DB; enable only two ratings capabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 -' <<'PY'
+          import pathlib,os,tempfile,subprocess,shutil,hashlib,gzip,datetime,re
+          home=pathlib.Path.home()
+          root=home/'domains/staging.encarmen.org/hbuilds'
+          prod=home/'domains/encarmen.org'
+          config=root/'config/.env'
+          dbdir=home/'encarmen-staging-backups/database'
+          private=home/'encarmen-staging-backups'
+          if root.resolve()==prod.resolve() or not (root/'current').is_symlink():
+              raise SystemExit('ENC034_ROOT_NOT_ISOLATED')
+          if not config.is_file() or config.is_symlink() or config.stat().st_mode&0o077:
+              raise SystemExit('ENC034_CONFIG_UNSAFE')
+          if not dbdir.is_dir() or dbdir.is_symlink() or dbdir.stat().st_mode&0o077:
+              raise SystemExit('ENC034_BACKUP_DIRECTORY_UNSAFE')
+          orig=config.read_bytes()
+          pairs={};seen=set()
+          for line in orig.decode().splitlines():
+              item=line.strip().removeprefix('export ').strip()
+              if not item or item.startswith('#') or '=' not in item:continue
+              k,v=item.split('=',1);k=k.strip()
+              if k in seen and k in ('APP_ENV','DB_NAME','DB_USER','DB_HOST','DB_PASSWORD','STAGING_READ_ONLY','STAGING_DB_CONFIRMED',
+                 'RATINGS_SCHEMA_APPROVED','RATINGS_MODERATION_APPROVED','STAGING_RATINGS_PUBLIC_WRITES_ENABLED',
+                 'STAGING_RATINGS_MODERATION_WRITES_ENABLED','STAGING_RATINGS_BACKUP_ID','STAGING_RATINGS_BACKUP_CHECKED_AT'):
+                  raise SystemExit('ENC034_DUPLICATE_CRITICAL_CONFIG')
+              seen.add(k);pairs[k]=v.strip().strip('"').strip("'")
+          if pairs.get('APP_ENV')!='staging' or pairs.get('DB_NAME')!='u293982346_encarmentest' or pairs.get('DB_USER')=='u293982346_appuser' or not all(pairs.get(k) for k in ('DB_HOST','DB_USER','DB_PASSWORD')):
+              raise SystemExit('ENC034_STAGING_IDENTITY_REJECTED')
+          if pairs.get('STAGING_DB_CONFIRMED')!='true':
+              raise SystemExit('ENC034_STAGING_DB_NOT_CONFIRMED')
+          mysql=shutil.which('mariadb');dump=shutil.which('mariadb-dump') or shutil.which('mysqldump')
+          if not mysql or not dump:raise SystemExit('ENC034_MARIADB_CLI_MISSING')
+          cnf=None;temporary=None
+          try:
+              with tempfile.NamedTemporaryFile(mode='w',dir=dbdir,prefix='.enc034-private-',delete=False) as f:
+                  cnf=pathlib.Path(f.name);os.chmod(cnf,0o600)
+                  f.write('[client]\n')
+                  for k,v in (('host',pairs['DB_HOST']),('port',pairs.get('DB_PORT','3306')),('user',pairs['DB_USER']),('password',pairs['DB_PASSWORD'])):
+                      f.write(k+'="'+v.replace('\\','\\\\').replace('"','\\"').replace('\n','')+'"\n')
+              def sql(query):
+                  p=subprocess.run([mysql,'--defaults-extra-file='+str(cnf),'--batch','--skip-column-names','-D',pairs['DB_NAME'],'-e',query],capture_output=True,text=True,timeout=35)
+                  if p.returncode:raise SystemExit('ENC034_SQL_PRECHECK_FAILED')
+                  return p.stdout.strip()
+              identity=sql('SELECT DATABASE(),CURRENT_USER()').split('\t')
+              if len(identity)!=2 or identity[0]!='u293982346_encarmentest' or identity[1].split('@')[0]=='u293982346_appuser':raise SystemExit('ENC034_CONNECTED_IDENTITY_MISMATCH')
+              grants=sql('SHOW GRANTS FOR CURRENT_USER()')
+              if 'u293982346_encarmenapp' in grants:raise SystemExit('ENC034_PRODUCTION_GRANT_PRESENT')
+              tables=sql("SELECT TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('business_ratings','business_rating_moderation') ORDER BY TABLE_NAME")
+              if tables.splitlines()!=['business_rating_moderation\tInnoDB','business_ratings\tInnoDB']:raise SystemExit('ENC034_TABLES_UNVERIFIED')
+              fields=sql("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='business_rating_moderation' ORDER BY ORDINAL_POSITION").splitlines()
+              if fields!=['rating_id','status','moderated_at','moderated_by']:raise SystemExit('ENC034_SCHEMA_MISMATCH')
+              if sql("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='business_rating_moderation' AND INDEX_NAME='PRIMARY' AND COLUMN_NAME='rating_id' AND NON_UNIQUE=0")!='1':raise SystemExit('ENC034_MODERATION_KEY_MISSING')
+              if sql("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='business_ratings' AND INDEX_NAME='uq_business_ratings_biz_visitor' AND NON_UNIQUE=0")!='2':raise SystemExit('ENC034_RATING_UNIQUE_INDEX_MISSING')
+              count=sql('SELECT COUNT(*) FROM business_ratings')
+              stamp=datetime.datetime.now(datetime.timezone.utc)
+              name='staging-db-enc034-activation-'+stamp.strftime('%Y%m%d-%H%M%S')+'.sql.gz'
+              dest=dbdir/name
+              with tempfile.NamedTemporaryFile(dir=dbdir,prefix='.enc034-snapshot-',delete=False) as f:
+                  temporary=pathlib.Path(f.name);os.chmod(temporary,0o600)
+              with open(temporary,'wb') as raw:
+                  with gzip.GzipFile(fileobj=raw,mode='wb') as out:
+                      cmd=[dump,'--defaults-extra-file='+str(cnf),'--single-transaction','--quick','--skip-lock-tables','--databases',pairs['DB_NAME']]
+                      p=subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+                      shutil.copyfileobj(p.stdout,out);p.stdout.close()
+                      _,err=p.communicate(timeout=180)
+                      if p.returncode:raise SystemExit('ENC034_STAGING_DUMP_FAILED')
+              if temporary.stat().st_size<200:raise SystemExit('ENC034_BACKUP_EMPTY')
+              with gzip.open(temporary,'rb') as f:
+                  if b'CREATE TABLE' not in f.read():raise SystemExit('ENC034_BACKUP_INTEGRITY_FAILED')
+              temporary.rename(dest);temporary=None
+              digest=hashlib.sha256(dest.read_bytes()).hexdigest()
+              sha=dbdir/(name+'.sha256')
+              sha.write_text(digest+'  '+name+'\n');os.chmod(sha,0o600)
+              cfg_backup=private/('enc034-config-before-'+stamp.strftime('%Y%m%d-%H%M%S')+'.backup')
+              with open(cfg_backup,'xb') as handle:os.chmod(cfg_backup,0o600);handle.write(orig)
+              changes={
+                  'RATINGS_SCHEMA_APPROVED':'true',
+                  'RATINGS_MODERATION_APPROVED':'true',
+                  'STAGING_RATINGS_PUBLIC_WRITES_ENABLED':'true',
+                  'STAGING_RATINGS_MODERATION_WRITES_ENABLED':'true',
+                  'STAGING_RATINGS_BACKUP_ID':'enc034-'+stamp.strftime('%Y%m%d-%H%M%S'),
+                  'STAGING_RATINGS_BACKUP_CHECKED_AT':stamp.isoformat().replace('+00:00','Z'),
+              }
+              lines=orig.decode().splitlines()
+              for key,val in changes.items():
+                  found=False
+                  for i,line in enumerate(lines):
+                      if re.match(r'^\s*(?:export\s+)?'+re.escape(key)+r'\s*=',line):
+                          lines[i]=key+'='+val;found=True
+                  if not found:lines.append(key+'='+val)
+              # Never change general read-only/admin/business/classified settings.
+              with tempfile.NamedTemporaryFile(mode='w',dir=config.parent,prefix='.enc034-env-',delete=False) as f:
+                  tmp=pathlib.Path(f.name);os.chmod(tmp,0o600)
+                  f.write('\n'.join(lines)+'\n')
+              os.replace(tmp,config)
+              current=root/'current/nodejs'
+              (current/'tmp').mkdir(exist_ok=True)
+              (current/'tmp/restart.txt').touch()
+              actual={}
+              for line in config.read_text().splitlines():
+                  if '=' in line and not line.lstrip().startswith('#'):
+                      k,v=line.split('=',1);actual[k.strip()]=v.strip().strip('"').strip("'")
+              if any(actual.get(k)!=v for k,v in changes.items()):raise SystemExit('ENC034_FLAGS_NOT_PERSISTED')
+              for k in ('STAGING_READ_ONLY','STAGING_BUSINESS_WRITES_ENABLED','STAGING_CLASSIFIED_WRITES_ENABLED','ENC_ADMIN_MUTATIONS_ENABLED'):
+                  if actual.get(k)!=pairs.get(k):raise SystemExit('ENC034_OTHER_PERMISSIONS_CHANGED')
+              if sql('SELECT COUNT(*) FROM business_ratings')!=count:raise SystemExit('ENC034_PREVIOUS_RATING_COUNT_CHANGED')
+              print('ENC034_SQL_ISOLATION=VERIFIED')
+              print('ENC034_FRESH_DB_BACKUP=VERIFIED')
+              print('ENC034_BACKUP_SHA256='+digest)
+              print('ENC034_PRIVATE_CONFIG_BACKUP=VERIFIED')
+              print('ENC034_ONLY_RATINGS_AND_MODERATION_ENABLED=VERIFIED')
+              print('ENC034_HISTORICAL_RATINGS_UNCHANGED=VERIFIED')
+          finally:
+              if cnf:cnf.unlink(missing_ok=True)
+              if temporary:temporary.unlink(missing_ok=True)
+          PY
+      - name: Check read-only HTTP health after server restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 10); do
+            code=$(curl -sSL --max-time 15 -o /dev/null -w '%{http_code}' https://staging.encarmen.org/api/ratings || true)
+            if [ "$code" = 200 ]; then echo 'ENC034_STAGING_READ_AFTER_ACTIVATION=PASS'; exit 0; fi
+            sleep 6
+          done
+          exit 1
