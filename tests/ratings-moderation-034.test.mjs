@@ -13,6 +13,7 @@ function fakePool({ approved = [], pending = [], hasSchema = true, ratingExists 
         ...(hasSchema ? [{ TABLE_NAME: 'business_rating_moderation', ENGINE: 'InnoDB' }] : [])]];
       if (sql.startsWith('SHOW FULL COLUMNS')) return [[
         { Field: 'rating_id' }, { Field: 'status' }, { Field: 'moderated_at' }, { Field: 'moderated_by' }]];
+      if (sql.startsWith('SHOW INDEX FROM business_rating_moderation')) return [[{Key_name:'PRIMARY',Column_name:'rating_id',Non_unique:0,Sub_part:null}]];
       if (sql.includes('INNER JOIN')) return [approved];
       if (sql.includes('LEFT JOIN')) return [pending];
       if (sql.includes('FOR UPDATE')) return [ratingExists ? [{ id: values[0] }] : []];
