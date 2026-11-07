@@ -100,6 +100,18 @@ export const StarRatingWidget: React.FC<StarRatingWidgetProps> = ({
         </div>
       </div>
 
+      {available && !loading && stats.distribution && (
+        <div aria-label="Distribución de calificaciones" className="space-y-1 text-xs">
+          {[5, 4, 3, 2, 1].map(star => (
+            <div key={star} className="flex items-center gap-2">
+              <span className="w-16">{star} estrellas</span>
+              <progress className="min-w-0 flex-1" max={Math.max(stats.count, 1)} value={stats.distribution?.[star] || 0} aria-label={`${star} estrellas`} />
+              <span>{stats.distribution?.[star] || 0}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Interactive Rating Area */}
       <div className="space-y-2">
         {hasRated ? (

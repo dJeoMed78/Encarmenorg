@@ -36,6 +36,7 @@ export function useBusinessRatings(businessId: string | number | undefined, acti
     { summary: emptyRatingSummary(), loading: true, available: false, submitting: false, error: null, saved: false }
   );
   const generation = useRef(0);
+  const requestVersion = useRef(0);
   const busy = useRef(false);
   const currentKey = useRef(key);
   currentKey.current = key;
@@ -43,21 +44,21 @@ export function useBusinessRatings(businessId: string | number | undefined, acti
 
   useEffect(() => {
     const version = ++generation.current;
-    let request = 0;
+    requestVersion.current++;
     let alive = true;
     busy.current = false;
     setState({ key, summary: emptyRatingSummary(), loading: key !== undefined, available: false, submitting: false, error: null, saved: false });
     const load = async () => {
       if (key === undefined) return;
-      const order = ++request;
+      const order = ++requestVersion.current;
       setState(prev => ({ ...prev, loading: true, available: false, error: null }));
       try {
         const summary = await getRealBusinessRating(key);
-        if (alive && generation.current === version && order === request) {
+        if (alive && generation.current === version && order === requestVersion.current) {
           setState(prev => ({ ...prev, key, summary, loading: false, available: true }));
         }
       } catch {
-        if (alive && generation.current === version && order === request) {
+        if (alive && generation.current === version && order === requestVersion.current) {
           setState(prev => ({ ...prev, key, summary: emptyRatingSummary(), loading: false, available: false, error: 'No fue posible consultar las calificaciones. Intenta de nuevo.' }));
         }
       }
@@ -79,12 +80,14 @@ export function useBusinessRatings(businessId: string | number | undefined, acti
     if (key === undefined || state.key !== key || busy.current || state.loading || !state.available || Boolean(state.error) || state.summary.hasRated) return null;
     const version = generation.current;
     const valid = () => generation.current === version && currentKey.current === key;
+    requestVersion.current++; // Invalidate pre-vote reads.
     busy.current = true;
     setState(prev => ({ ...prev, submitting: true, error: null, saved: false }));
     try {
       const summary = await submitRealBusinessRating(key, stars);
       if (!valid()) return null;
-      setState(prev => ({ ...prev, summary, available: true, saved: true }));
+      requestVersion.current++; // Discard refreshes started by the confirmation event.
+      setState(prev => ({ ...prev, summary, loading: false, error: null, available: true, saved: true }));
       return summary;
     } catch (error) {
       if (!valid()) return null;

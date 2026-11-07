@@ -2059,7 +2059,11 @@ export function registerRatingsRoutes(app: Pick<express.Express, 'get' | 'post'>
   const ratingVisitorKey = (visitor: string) => crypto.createHash('sha256').update(visitor).digest('hex');
   const ratingError = (res: Response, error: any) => {
     const status = error?.code === 'ER_DUP_ENTRY' ? 409 : error?.code === 'RATING_BUSINESS_NOT_FOUND' ? 404 : 503;
-    return res.status(status).json({ success: false, message: status === 409
+    const knownCodes = new Set(['RATINGS_SCHEMA_APPROVAL_REQUIRED', 'RATINGS_SCHEMA_REQUIRED',
+      'RATINGS_UNIQUE_INDEX_REQUIRED', 'RATINGS_DATA_REVIEW_REQUIRED', 'RATINGS_DATABASE_UNAVAILABLE',
+      'RATINGS_DATABASE_READ_ONLY', 'RATINGS_BUSY', 'RATING_BUSINESS_NOT_FOUND', 'ER_DUP_ENTRY']);
+    const code = knownCodes.has(error?.code) ? error.code : 'RATINGS_UNAVAILABLE';
+    return res.status(status).json({ success: false, error: code, message: status === 409
       ? 'Ya existe una calificación para este identificador de visitante en el negocio.'
       : status === 404 ? 'Negocio no encontrado.' : 'No fue posible consultar o guardar la calificación. Intenta más tarde.' });
   };
