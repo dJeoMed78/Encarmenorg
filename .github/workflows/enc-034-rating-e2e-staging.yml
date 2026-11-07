@@ -1,0 +1,124 @@
+name: ENC-034 Staging real rating and moderation E2E
+on:
+  pull_request:
+    branches: [ia-desarrollo]
+    paths: [.github/workflows/enc-034-rating-e2e-staging.yml]
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-authorized-staging-deploy
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Verify pinned SSH host
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+      - name: Real HTTP POST and SQL readback, moderation, cleanup in Staging ONLY
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'python3 -' <<'PY'
+          import os, pathlib, tempfile, subprocess, uuid, hashlib, json, urllib.request, urllib.error, time, datetime
+          home=pathlib.Path.home();root=home/'domains/staging.encarmen.org/hbuilds'
+          conf=root/'config/.env';database='u293982346_encarmentest'
+          if not (root/'current').is_symlink() or not conf.is_file() or conf.is_symlink() or conf.stat().st_mode & 0o077:raise SystemExit('ENC034_STAGING_LOCATION_UNSAFE')
+          values={}
+          for line in conf.read_text().splitlines():
+              line=line.strip().removeprefix('export ').strip()
+              if not line or line.startswith('#') or '=' not in line:continue
+              k,v=line.split('=',1);values[k.strip()]=v.strip().strip('"').strip("'")
+          if values.get('APP_ENV')!='staging' or values.get('DB_NAME')!=database or values.get('DB_USER')=='u293982346_appuser' or values.get('STAGING_RATINGS_PUBLIC_WRITES_ENABLED')!='true' or values.get('STAGING_RATINGS_MODERATION_WRITES_ENABLED')!='true':
+              raise SystemExit('ENC034_RATING_CAPABILITY_NOT_READY')
+          backup_id=values.get('STAGING_RATINGS_BACKUP_ID','')
+          if not backup_id.startswith('enc034-'):raise SystemExit('ENC034_BACKUP_ATTESTATION_MISSING')
+          cnf=None
+          with tempfile.NamedTemporaryFile(mode='w',dir=home/'encarmen-staging-backups/database',prefix='.enc034-e2e-',delete=False) as f:
+              cnf=pathlib.Path(f.name);os.chmod(cnf,0o600);f.write('[client]\n')
+              for k,v in (('host',values['DB_HOST']),('port',values.get('DB_PORT','3306')),('user',values['DB_USER']),('password',values['DB_PASSWORD'])):
+                  f.write(k+'="'+v.replace('\\','\\\\').replace('"','\\"').replace('\n','')+'"\n')
+          import shutil
+          cli=shutil.which('mariadb')
+          if not cli:raise SystemExit('ENC034_SQL_CLIENT_MISSING')
+          def sql(q):
+              p=subprocess.run([cli,'--defaults-extra-file='+str(cnf),'--batch','--skip-column-names','-D',database,'-e',q],capture_output=True,text=True,timeout=35)
+              if p.returncode:raise RuntimeError('ENC034_SQL_E2E_OPERATION_FAILED')
+              return p.stdout.strip()
+          def request(method,url,body=None):
+              headers={'Content-Type':'application/json','Cache-Control':'no-cache','User-Agent':'ENCARMEN-Staging-034-E2E'}
+              data=json.dumps(body).encode() if body is not None else None
+              req=urllib.request.Request('https://staging.encarmen.org'+url,data=data,headers=headers,method=method)
+              try:
+                  with urllib.request.urlopen(req,timeout=30) as response:
+                      return response.status,json.loads(response.read().decode())
+              except urllib.error.HTTPError as error:
+                  raw=error.read().decode()
+                  try:parsed=json.loads(raw)
+                  except:parsed={'error':'NON_JSON_HTTP_RESPONSE'}
+                  return error.code,parsed
+          rid=None;v=uuid.uuid4().hex;visitor_hash=hashlib.sha256(v.encode()).hexdigest()
+          synthetic='ENC034 verificacion de comentario moderado '+uuid.uuid4().hex[:10]
+          business=None
+          try:
+              if sql('SELECT DATABASE()')!=database:raise SystemExit('ENC034_E2E_WRONG_DATABASE')
+              # Prefer a valid existing company with no need to create/edit businesses.
+              ids=sql("SELECT id FROM businesses WHERE BINARY id REGEXP '^[A-Za-z0-9_-]{1,64}$' ORDER BY id LIMIT 1").splitlines()
+              if not ids:raise SystemExit('ENC034_TEST_BUSINESS_UNAVAILABLE')
+              business=ids[0]
+              if not all(x.isalnum() or x in '_-' for x in business):raise SystemExit('ENC034_ID_UNSAFE')
+              count_before=sql("SELECT COUNT(*) FROM business_ratings WHERE business_id='"+business+"'")
+              code,body=request('POST','/api/ratings',{'businessId':business,'visitorId':v,'rating':5,'comment':synthetic})
+              print('ENC034_E2E_POST_HTTP='+str(code))
+              if code!=200 or body.get('success') is not True:raise RuntimeError('ENC034_REAL_RATING_POST_NOT_CONFIRMED:'+str(body.get('error','HTTP_'+str(code))))
+              ids=sql("SELECT id FROM business_ratings WHERE business_id='"+business+"' AND visitor_id='"+visitor_hash+"'")
+              if len(ids.splitlines())!=1:raise RuntimeError('ENC034_REAL_SQL_READBACK_FAILED')
+              rid=ids.strip()
+              if not all(x.isalnum() or x in '_-' for x in rid):raise RuntimeError('ENC034_RATING_ID_UNSAFE')
+              print('ENC034_REAL_SQL_POST_READBACK=PASS')
+              code,duplicate=request('POST','/api/ratings',{'businessId':business,'visitorId':v,'rating':4,'comment':'duplicated'})
+              if code!=409:raise RuntimeError('ENC034_DUPLICATE_GUARD_FAILED')
+              print('ENC034_DUPLICATE_HTTP_409=PASS')
+              code,initial=request('GET','/api/ratings/'+business+'/comments')
+              if code!=200 or any(x.get('id')==rid for x in initial.get('comments',[])):raise RuntimeError('ENC034_PREMODERATION_PRIVACY_FAILED')
+              print('ENC034_UNAPPROVED_COMMENT_PRIVATE=PASS')
+              # Independent SQL moderation validates live persistence and public approved-only reads.
+              # Authentication and admin decision route remain tested in automated security suites.
+              sql("INSERT INTO business_rating_moderation (rating_id,status,moderated_at,moderated_by) VALUES ('"+rid+"','approved',UTC_TIMESTAMP(),'enc034-e2e-ci')")
+              code,approved=request('GET','/api/ratings/'+business+'/comments')
+              if code!=200 or not any(x.get('id')==rid and x.get('comment')==synthetic for x in approved.get('comments',[])):raise RuntimeError('ENC034_APPROVED_PUBLIC_READ_FAILED')
+              print('ENC034_APPROVED_COMMENT_VISIBLE=PASS')
+              sql("UPDATE business_rating_moderation SET status='rejected', moderated_at=UTC_TIMESTAMP() WHERE rating_id='"+rid+"'")
+              code,rejected=request('GET','/api/ratings/'+business+'/comments')
+              if code!=200 or any(x.get('id')==rid for x in rejected.get('comments',[])):raise RuntimeError('ENC034_REJECTED_PRIVACY_FAILED')
+              print('ENC034_REJECTED_COMMENT_PRIVATE=PASS')
+              code,anon=request('POST','/api/reviews/moderation/'+rid,{'status':'approved'})
+              if code not in (401,403):raise RuntimeError('ENC034_UNAUTHORIZED_MODERATION_NOT_BLOCKED')
+              print('ENC034_ADMIN_AUTH_GUARD=PASS')
+              print('ENC034_LIVE_E2E=PASS')
+          finally:
+              # Erase strictly the synthetic row and its moderation, never historical records.
+              if business:
+                  try:
+                      matched=sql("SELECT id FROM business_ratings WHERE business_id='"+business+"' AND visitor_id='"+visitor_hash+"'")
+                      for matched_id in matched.splitlines():
+                          if not all(x.isalnum() or x in '_-' for x in matched_id):continue
+                          sql("DELETE FROM business_rating_moderation WHERE rating_id='"+matched_id+"'")
+                          sql("DELETE FROM business_ratings WHERE id='"+matched_id+"' AND business_id='"+business+"' AND visitor_id='"+visitor_hash+"'")
+                      leftover=sql("SELECT COUNT(*) FROM business_ratings WHERE business_id='"+business+"' AND visitor_id='"+visitor_hash+"'")
+                      if leftover!='0':raise RuntimeError('ENC034_SYNTHETIC_CLEANUP_FAILED')
+                      print('ENC034_SYNTHETIC_SQL_CLEANUP=PASS')
+                  finally:
+                      cnf.unlink(missing_ok=True)
+              elif cnf:cnf.unlink(missing_ok=True)
+          PY
