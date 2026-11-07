@@ -1,5 +1,5 @@
 name: ENC radars 041+043 authorized reversible staging deployment
-# ENC-034 controlled diagnostic: stage-only boolean gate status. No mutation of permissions.
+# ENC-034 verified live: remove temporary gate diagnostic after real Staging SQL E2E PASS.
 # Release only Staging; no private write flags, no production modification.
 # Staging ONLY. main/production excluded; deployment keeps automatic rollback on failed HTTP.
 on:
