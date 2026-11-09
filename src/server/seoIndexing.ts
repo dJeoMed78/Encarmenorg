@@ -19,6 +19,11 @@ export function isStagingSeoRequest(rawHost?: string | null, appEnv?: string | n
   return String(appEnv || '').trim().toLowerCase() === 'staging' || normalizeSeoHost(rawHost) === SEO_STAGING_HOST;
 }
 
+/** Identify temporary Hostinger PR preview hosts; they must never be indexable. */
+export function isHostingerPreviewHost(rawHost?: string | null): boolean {
+  return normalizeSeoHost(rawHost).endsWith('.hostingersite.com');
+}
+
 export function isCanonicalSeoHost(rawHost?: string | null): boolean {
   return normalizeSeoHost(rawHost) === SEO_PRIMARY_HOST;
 }
@@ -81,6 +86,17 @@ export function getMissingBusinessRoute(
   const normalized = pathname.split(/[?#]/, 1)[0].replace(/\/+$/, '') || '/';
   if (!/^\/(?:empresa|negocio)\/[^/]+$/i.test(normalized)) return null;
   return { status: 404, reason: 'business-not-found' };
+}
+
+/** Return a real 404 for category paths that do not match a published top-level category. */
+export function getMissingCategoryRoute(
+  pathname?: string | null,
+  categoryExists: boolean = false
+): { status: 404; reason: string } | null {
+  if (categoryExists || typeof pathname !== 'string') return null;
+  const normalized = pathname.split(/[?#]/, 1)[0].replace(/\/+$/, '') || '/';
+  if (!/^\/categoria\/[^/]+$/i.test(normalized)) return null;
+  return { status: 404, reason: 'category-not-found' };
 }
 
 /** Retire public WordPress/WooCommerce routes without exposing directory listings or blocking individual media files. */

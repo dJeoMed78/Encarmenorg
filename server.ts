@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 import { reverse as dnsReverse, lookup as dnsLookup } from 'node:dns/promises';
-import { isGoogleCrawlerHostname, isGoogleCrawlerUserAgent, isVerifiedGoogleCrawlerDns, SEO_PRIMARY_ORIGIN, buildSeoRobotsTxt, getCanonicalSeoOrigin, getSeoCanonicalRedirect, getLegacyWordPressRetirement, getMissingBusinessRoute, isCanonicalSeoHost, isStagingSeoRequest } from './src/server/seoIndexing.ts';
+import { isGoogleCrawlerHostname, isGoogleCrawlerUserAgent, isVerifiedGoogleCrawlerDns, SEO_PRIMARY_ORIGIN, buildSeoRobotsTxt, getCanonicalSeoOrigin, getSeoCanonicalRedirect, getLegacyWordPressRetirement, getMissingBusinessRoute, getMissingCategoryRoute, isCanonicalSeoHost, isStagingSeoRequest, isHostingerPreviewHost } from './src/server/seoIndexing.ts';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import path from 'path';
@@ -109,7 +109,7 @@ app.use((req: Request, res: Response, next) => {
 // Staging remains crawlable only so search engines can read its explicit noindex directive.
 app.use((req: Request, res: Response, next: NextFunction) => {
   const requestHost = req.get('x-forwarded-host') || req.get('host');
-  if (isStagingSeoRequest(requestHost, process.env.APP_ENV)) {
+  if (isStagingSeoRequest(requestHost, process.env.APP_ENV) || isHostingerPreviewHost(requestHost)) {
     res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
   }
   next();
@@ -8628,6 +8628,47 @@ if (!isProduction && !process.env.VERCEL) {
         return res.status(missingBusinessRoute.status).type('text/plain').send(missingBusinessRoute.reason);
       }
 
+      // Category routes must resolve to a real top-level category before serving the SPA.
+      const categoryPathMatch = req.path.match(/^\/categoria\/([^/]+)\/?$/i);
+      let categorySlug = '';
+      if (categoryPathMatch) {
+        try {
+          categorySlug = decodeURIComponent(categoryPathMatch[1]).toLowerCase();
+        } catch {
+          categorySlug = '';
+        }
+      }
+      const resolvedCategory = categorySlug
+        ? categoriesCache.find(category =>
+            Number(category.parent) === 0 && String(category.slug || '').toLowerCase() === categorySlug
+          )
+        : null;
+      const categoryExists = Boolean(resolvedCategory);
+      const missingCategoryRoute = getMissingCategoryRoute(req.path, categoryExists);
+      if (missingCategoryRoute) {
+        res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+        return res.status(missingCategoryRoute.status).type('text/plain').send(missingCategoryRoute.reason);
+      }
+
+      if (resolvedCategory) {
+        const categoryTitle = `${String(resolvedCategory.name)} | Empresas en Carmen`;
+        const categoryDescription = `Encuentra empresas de ${String(resolvedCategory.name).toLowerCase()} en Ciudad del Carmen, Campeche. Consulta servicios, ubicaciones y datos de contacto.`;
+        const escapeMeta = (value: string) => value
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+        const safeTitle = escapeMeta(categoryTitle);
+        const safeDescription = escapeMeta(categoryDescription);
+        html = html.replace(new RegExp('<title>.*?</title>', 'i'), `<title>${safeTitle}</title>`);
+        html = html.replace(/<meta name="description"[^>]*>/i, `<meta name="description" content="${safeDescription}" />`);
+        html = html.replace(/<meta property="og:title"[^>]*>/i, `<meta property="og:title" content="${safeTitle}" />`);
+        html = html.replace(/<meta property="og:description"[^>]*>/i, `<meta property="og:description" content="${safeDescription}" />`);
+        html = html.replace(/<meta name="twitter:title"[^>]*>/i, `<meta name="twitter:title" content="${safeTitle}" />`);
+        html = html.replace(/<meta name="twitter:description"[^>]*>/i, `<meta name="twitter:description" content="${safeDescription}" />`);
+      }
+
       // Inyección garantizada de canonical y og:url dinámicos para indexación en cualquier dominio
       const baseUrl = getRequestBaseUrl(req);
       const reqPath = req.path === '/' ? '' : req.path;
@@ -8643,7 +8684,10 @@ if (!isProduction && !process.env.VERCEL) {
         html = html.replace('</head>', `  <meta property="og:url" content="${pageCanonical}" />\n</head>`);
       }
 
-      if (isStagingSeoRequest(req.get('x-forwarded-host') || req.get('host'), process.env.APP_ENV)) {
+      if (
+        isStagingSeoRequest(req.get('x-forwarded-host') || req.get('host'), process.env.APP_ENV) ||
+        isHostingerPreviewHost(req.get('x-forwarded-host') || req.get('host'))
+      ) {
         const noindexMeta = '<meta name="robots" content="noindex, nofollow, noarchive" />';
         const robotsMetaStart = html.indexOf('<meta name="robots"');
         if (robotsMetaStart >= 0) {
