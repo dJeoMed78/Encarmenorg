@@ -72,6 +72,17 @@ export function isVerifiedGoogleCrawlerDns(
   });
 }
 
+/** Return a real 404 for unresolved business-detail routes instead of serving the SPA directory as HTTP 200. */
+export function getMissingBusinessRoute(
+  pathname?: string | null,
+  businessExists: boolean = false
+): { status: 404; reason: string } | null {
+  if (businessExists || typeof pathname !== 'string') return null;
+  const normalized = pathname.split(/[?#]/, 1)[0].replace(/\/+$/, '') || '/';
+  if (!/^\/(?:empresa|negocio)\/[^/]+$/i.test(normalized)) return null;
+  return { status: 404, reason: 'business-not-found' };
+}
+
 /** Retire public WordPress/WooCommerce routes without exposing directory listings or blocking individual media files. */
 export function getLegacyWordPressRetirement(pathname?: string | null): { status: 404 | 410; reason: string } | null {
   if (typeof pathname !== 'string') return null;

@@ -11,6 +11,7 @@ import {
   getSeoCanonicalRedirect,
   buildSeoRobotsTxt,
   getLegacyWordPressRetirement,
+  getMissingBusinessRoute,
   isGoogleCrawlerUserAgent,
   isGoogleCrawlerHostname,
   isVerifiedGoogleCrawlerDns
@@ -77,6 +78,24 @@ test('legacy WordPress and WooCommerce URLs return explicit retirement statuses'
   const scannerIndex = server.indexOf('Bot & Scanner Protection Middleware');
   const uploadsStaticIndex = server.indexOf("app.use('/wp-content', express.static");
   assert.ok(retirementIndex > 0 && retirementIndex < scannerIndex && retirementIndex < uploadsStaticIndex);
+});
+
+test('unknown business detail routes return a real 404 instead of a generic directory soft-404', () => {
+  assert.deepEqual(getMissingBusinessRoute('/empresa/empresa-3235', false), {
+    status: 404,
+    reason: 'business-not-found'
+  });
+  assert.deepEqual(getMissingBusinessRoute('/empresa/empresa-3235?utm_source=google', false), {
+    status: 404,
+    reason: 'business-not-found'
+  });
+  assert.equal(getMissingBusinessRoute('/empresa/uniformescddelcarmen', true), null);
+  assert.equal(getMissingBusinessRoute('/empresa/unitamp', true), null);
+  assert.equal(getMissingBusinessRoute('/categoria/automotriz-y-motocicletas', false), null);
+  assert.equal(getMissingBusinessRoute('/empresa', false), null);
+  assert.ok(server.includes('getMissingBusinessRoute(req.path, Boolean(matchedBusiness))'));
+  assert.ok(server.includes("res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive')"));
+  assert.ok(server.includes("return res.status(missingBusinessRoute.status).type('text/plain').send(missingBusinessRoute.reason)"));
 });
 
 test('Google crawler country bypass requires reverse and forward DNS verification', () => {
