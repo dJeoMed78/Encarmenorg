@@ -13,6 +13,7 @@ test('production aliases converge to the official canonical origin', () => {
   assert.equal(isCanonicalSeoHost('www.encarmen.org'), false);
   assert.equal(isCanonicalSeoHost('encarmen.org:443'), true);
   assert.equal(normalizeSeoHost('WWW.EmpresasEnCarmen.com:443'), 'www.empresasencarmen.com');
+  assert.equal(normalizeSeoHost('encarmen.org:99999'), 'encarmen.org', 'invalid numeric ports must be stripped by fallback');
 });
 
 test('known duplicate hosts redirect permanently while Staging and official host stay put', () => {
