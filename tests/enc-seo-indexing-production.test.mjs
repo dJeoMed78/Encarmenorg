@@ -105,6 +105,6 @@ test('canonical redirects and legacy retirement run before GeoIP and static/fall
   assert.ok(retirementIndex > 0 && retirementIndex < geoIndex);
   assert.ok(retirementIndex < staticIndex && retirementIndex < fallbackIndex);
   assert.ok(server.includes("return res.redirect(301, redirectUrl);"));
-  assert.ok(server.includes('getCanonicalSeoOrigin(req.get(\\'x-forwarded-host\\') || req.get(\\'host\\'), process.env.APP_ENV)'));
+  assert.ok(server.includes("getCanonicalSeoOrigin(req.get('x-forwarded-host') || req.get('host'), process.env.APP_ENV)"));
   assert.ok(server.includes('const baseUrl = SEO_PRIMARY_ORIGIN;'));
 });
