@@ -35,6 +35,8 @@ test('production robots exposes only the official sitemap and disallows private 
   assert.ok(robots.includes('Allow: /'));
   assert.ok(robots.includes('Disallow: /api/'));
   assert.ok(robots.includes('Disallow: /admin/'));
+  assert.ok(robots.includes('\n'), 'robots directives must be separated by real newline characters');
+  assert.ok(!robots.includes('\\n'), 'robots must not contain literal backslash-n sequences');
   assert.equal((robots.match(/Sitemap:/g) || []).length, 1);
   assert.ok(robots.includes('Sitemap: https://encarmen.org/sitemap.xml'));
   assert.ok(!robots.includes('empresasencarmen.com'));
