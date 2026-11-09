@@ -90,3 +90,27 @@ Después, continuar la auditoría de PR #68 / Issue #43. Producción no se debe 
 - TinyFish tiene solo perfil `Default`, sin sitios autenticados. No se intentó acceder a Hostinger.
 - No se modificó código, Cloudflare, Hostinger ni producción.
 - Próximo paso: autorización del propietario para abrir sesión TinyFish de Hostinger en `https://hpanel.hostinger.com`; después comprobar release/medio de publicación y revisar configuración Cloudflare según evidencia.
+
+
+## Reauditoría pública después de desactivar Cloudflare — 2026-11-09
+
+El propietario informó que desactivó Cloudflare. Se repitieron pruebas públicas de solo lectura; no se modificaron Cloudflare, Hostinger, DNS, código ni datos.
+
+### Evidencia confirmada
+
+- `https://encarmen.org`: extracción directa exitosa; navegador real mostró empresas del directorio. Título: `Directorio Empresas en Carmen | Ciudad del Carmen, Campeche`.
+- HTML `<head>`: canonical `https://encarmen.org`; meta robots `index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1`; description y Open Graph presentes. La automatización de navegador informó que no halló esas etiquetas, pero la extracción directa del `<head>` sí las contiene.
+- `robots.txt`: `User-agent: *`, `Allow: /`, `Disallow: /api/`, `Disallow: /admin/`, `Sitemap: https://encarmen.org/sitemap.xml`. Ya no se extraen las reglas adicionales atribuidas a Cloudflare en la prueba anterior.
+- `sitemap.xml`: recuperado; **220 URLs**, todas bajo `https://encarmen.org`.
+- Dominios alternativos `empresasencarmen.com`, `www.empresasencarmen.com`, `www.encarmen.org`: URL final reportada `https://encarmen.org/`. La URL `https://empresasencarmen.com/prueba-seo?x=1` terminó en `https://encarmen.org/prueba-seo?x=1`, preservando ruta/query. No se expuso el status HTTP; destino final sí, código 301/308 no.
+- `/wp-admin/`: HTTP **410**.
+- `/wp-content/uploads/`: HTTP **404** para el directorio; no extrapolar a cada archivo individual.
+- Ficha `/empresa/bendita-carmelita`: title/description propios, canonical exacto de la ficha, meta robots index/follow y Open Graph con imagen.
+
+### Limitación observada
+
+- Una navegación automatizada de múltiples URLs recibió HTTP **429** tras varias peticiones y esperó por rate limit. Las llamadas directas posteriores y separadas sí recuperaron home, head, sitemap, alias con ruta/query y rutas 404/410. No extrapolar el 429 a todos los visitantes ni a Googlebot.
+- No se verificó el 403 de Search Console ni la respuesta de inspección de Google.
+- GitHub `main` continúa en `1e94f16db03e2347c18d933002e25c3f79495765`; todavía no se conoce el SHA del artefacto activo en Hostinger.
+
+**Estado:** mejoras SEO visibles en respuestas públicas después de desactivar Cloudflare. Issue #85 permanece OPEN hasta confirmar 301/308, diagnosticar el 403 de Search Console y verificar release activo de Hostinger. Sin cambios productivos.
