@@ -13,6 +13,7 @@ import {
   getLegacyWordPressRetirement,
   getMissingBusinessRoute,
   getMissingCategoryRoute,
+  isHostingerPreviewHost,
   isGoogleCrawlerUserAgent,
   isGoogleCrawlerHostname,
   isVerifiedGoogleCrawlerDns
@@ -131,6 +132,17 @@ test('unknown category routes return a real 404 instead of the generic directory
   assert.equal(getMissingCategoryRoute('/empresa/empresa-3235', false), null);
   assert.ok(server.includes('getMissingCategoryRoute(req.path, categoryExists)'));
   assert.ok(server.includes('Number(category.parent) === 0'));
+  assert.ok(server.includes('categoryTitle'));
+  assert.ok(server.includes('categoryDescription'));
+});
+
+test('temporary Hostinger PR previews are marked noindex without changing the official canonical origin', () => {
+  assert.equal(isHostingerPreviewHost('azure-tiger-296096.hostingersite.com'), true);
+  assert.equal(isHostingerPreviewHost('HOSTINGERSITE.COM'), false);
+  assert.equal(isHostingerPreviewHost('encarmen.org'), false);
+  assert.ok(server.includes('isHostingerPreviewHost(requestHost)'));
+  assert.ok(server.includes("isHostingerPreviewHost(req.get('x-forwarded-host') || req.get('host'))"));
+  assert.ok(server.includes("res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive')"));
 });
 
 test('Google crawler country bypass requires reverse and forward DNS verification', () => {

@@ -19,6 +19,11 @@ export function isStagingSeoRequest(rawHost?: string | null, appEnv?: string | n
   return String(appEnv || '').trim().toLowerCase() === 'staging' || normalizeSeoHost(rawHost) === SEO_STAGING_HOST;
 }
 
+/** Identify temporary Hostinger PR preview hosts; they must never be indexable. */
+export function isHostingerPreviewHost(rawHost?: string | null): boolean {
+  return normalizeSeoHost(rawHost).endsWith('.hostingersite.com');
+}
+
 export function isCanonicalSeoHost(rawHost?: string | null): boolean {
   return normalizeSeoHost(rawHost) === SEO_PRIMARY_HOST;
 }
