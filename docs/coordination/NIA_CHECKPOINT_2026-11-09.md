@@ -78,3 +78,15 @@ Después, continuar la auditoría de PR #68 / Issue #43. Producción no se debe 
 - TinyFish tiene solo perfil `Default`, sin sitios autenticados. No se intentó acceder a Hostinger.
 - No se modificó código, Cloudflare, Hostinger ni producción.
 - Próximo paso: autorización del propietario para abrir sesión TinyFish de Hostinger en `https://hpanel.hostinger.com`; después comprobar release/medio de publicación y revisar configuración Cloudflare según evidencia.
+
+
+## Auditoría pública adicional — TinyFish (2026-11-09)
+
+- Run navegador solo lectura: `cf4f694f-47dc-4902-90ed-750733245025`.
+- El navegador de auditoría recibió pantalla Cloudflare **Attention Required!** en `https://encarmen.org` y `/sitemap.xml`. No se obtuvo código HTTP ni HTML real. Es evidencia de bloqueo para ese navegador/entorno, no de bloqueo universal ni de Googlebot.
+- `https://empresasencarmen.com/prueba-seo?x=1` terminó en `https://encarmen.org/prueba-seo?x=1`, conservando ruta y query; no se observó código HTTP, por lo que no confirma 301.
+- La extracción directa de `robots.txt` devolvió directivas de estilo Cloudflare (`Content-Signal`, reglas para agentes de IA y `Google-Extended`), diferentes del texto construido por `app.get('/robots.txt')` en `main`. Posible Cloudflare Managed Robots/respuesta edge; investigar configuración antes de modificarla. No se observó bloqueo explícito de Googlebot en el texto recuperado, pero falta prueba directa de Googlebot.
+- Revisión estática de `server.ts`: verificación Google usa `cf-connecting-ip` o `req.ip`, DNS inverso/directo y caché positiva 30 min / negativa 2 min; bypass GeoIP solo para crawlers verificados en GET/HEAD; visitantes no MX no verificados reciben 302 a Google. Código integrado; runtime no confirmado.
+- TinyFish tiene solo perfil `Default`, sin sitios autenticados. No se intentó acceder a Hostinger.
+- No se modificó código, Cloudflare, Hostinger ni producción.
+- Próximo paso: autorización del propietario para abrir sesión TinyFish de Hostinger en `https://hpanel.hostinger.com`; después comprobar release/medio de publicación y revisar configuración Cloudflare según evidencia.
