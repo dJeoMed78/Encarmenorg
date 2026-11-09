@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - 'main'
+  pull_request:
+    branches:
+      - 'main'
   workflow_dispatch:
 
 jobs:
@@ -20,7 +23,9 @@ jobs:
         with:
           node-version: '22.x'
 
-      - name: npm install, build, and test
+      - name: Install, test SEO controls, and build
         run: |
-          npm install
+          npm ci
+          # Full-project tsc --noEmit is currently blocked by an unchanged baseline error in AdminEventsTab.tsx:1499.
+          node --import tsx --test tests/enc-seo-indexing-production.test.mjs
           npm run build --if-present
