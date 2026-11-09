@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { SEO_PRIMARY_ORIGIN, SEO_STAGING_HOST, normalizeSeoHost, isStagingSeoRequest, isCanonicalSeoHost, getCanonicalSeoOrigin, getSeoCanonicalRedirect, buildSeoRobotsTxt } from '../src/server/seoIndexing.ts';
+import { SEO_PRIMARY_ORIGIN, SEO_STAGING_HOST, normalizeSeoHost, isStagingSeoRequest, isCanonicalSeoHost, getCanonicalSeoOrigin, getSeoCanonicalRedirect, getLegacyWordPressRetirement, buildSeoRobotsTxt } from '../src/server/seoIndexing.ts';
 
 const server = fs.readFileSync(new URL('../server.ts', import.meta.url), 'utf8');
 const deploy = fs.readFileSync(new URL('../.github/workflows/enc-radars-041-043-staging-deploy.yml', import.meta.url), 'utf8');
@@ -71,4 +71,34 @@ test('Server canonical and sitemap use fixed SEO origin, not incoming production
   assert.ok(server.includes('getCanonicalSeoOrigin(req.get(\'x-forwarded-host\') || req.get(\'host\'), process.env.APP_ENV)'));
   assert.ok(server.includes('const baseUrl = SEO_PRIMARY_ORIGIN;'));
   assert.ok(deploy.includes('tests/enc-seo-indexing-001.test.mjs'));
+});
+
+
+test('legacy WordPress routes are retired without disabling migrated media assets', () => {
+  assert.deepEqual(getLegacyWordPressRetirement('/wp-admin/admin-ajax.php'), {
+    status: 410,
+    reason: 'legacy-wordpress-admin-retired'
+  });
+  assert.deepEqual(getLegacyWordPressRetirement('/wp-admin/admin-ajax.php?action=rest-nonce'), {
+    status: 410,
+    reason: 'legacy-wordpress-admin-retired'
+  });
+  assert.deepEqual(getLegacyWordPressRetirement('/product-category/servicios-logisticos/mandaditos-a-domicilio/'), {
+    status: 410,
+    reason: 'legacy-woocommerce-category-retired'
+  });
+  assert.deepEqual(getLegacyWordPressRetirement('/wp-content/uploads'), {
+    status: 404,
+    reason: 'legacy-uploads-directory-not-public'
+  });
+  assert.equal(getLegacyWordPressRetirement('/wp-content/uploads/2026/10/logo.png'), null,
+    'individual migrated legacy media files must continue through the existing asset handler');
+  assert.equal(getLegacyWordPressRetirement('/empresa/negocio-ejemplo'), null);
+  const middlewareIndex = server.indexOf('getLegacyWordPressRetirement(req.path)');
+  const legacyUploadsHandlerIndex = server.indexOf("app.get('/wp-content/uploads/*'");
+  const fallbackIndex = server.indexOf("app.get('*'");
+  assert.ok(middlewareIndex > 0 && middlewareIndex < legacyUploadsHandlerIndex,
+    'legacy route retirement must precede the legacy uploads handler');
+  assert.ok(middlewareIndex < fallbackIndex,
+    'legacy route retirement must precede the SPA fallback');
 });
