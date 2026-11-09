@@ -43,11 +43,11 @@ export function buildSeoRobotsTxt(rawHost?: string | null, appEnv?: string | nul
 /** Retire public WordPress/WooCommerce routes without exposing legacy admin handlers or directory listings. */
 export function getLegacyWordPressRetirement(pathname?: string | null): { status: 404 | 410; reason: string } | null {
   if (typeof pathname !== 'string') return null;
-  const normalized = pathname.split('?')[0].replace(/\\/+$/, '').toLowerCase() || '/';
-  if (/^\\/wp-admin(?:\\/|$)/.test(normalized)) {
+  const normalized = pathname.split('?')[0].replace(/\/+$/, '').toLowerCase() || '/';
+  if (/^\/wp-admin(?:\/|$)/.test(normalized)) {
     return { status: 410, reason: 'legacy-wordpress-admin-retired' };
   }
-  if (/^\\/product-category(?:\\/|$)/.test(normalized)) {
+  if (/^\/product-category(?:\/|$)/.test(normalized)) {
     return { status: 410, reason: 'legacy-woocommerce-category-retired' };
   }
   if (normalized === '/wp-content/uploads') {
