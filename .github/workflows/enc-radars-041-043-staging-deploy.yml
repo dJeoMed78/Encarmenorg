@@ -21,6 +21,11 @@ on:
       - tests/enc-seo-indexing-001.test.mjs
       - robots.txt
       - public/robots.txt
+      - server.ts
+      - src/server/seoIndexing.ts
+      - tests/enc-seo-indexing-001.test.mjs
+      - robots.txt
+      - public/robots.txt
   workflow_dispatch:
 permissions:
   contents: read
@@ -57,7 +62,7 @@ jobs:
           npm ci
           npm run lint
           node --import tsx --test tests/enc-radar-classifieds-041.test.mjs tests/enc-staging-classified-lane-041.test.mjs
-          node --import tsx --test tests/business-media-presentation.test.mjs tests/business-cover-brand-fallback.test.mjs tests/business-detail-logo-hero.test.mjs tests/enc-staging-public-media-001.test.mjs tests/enc-media-regression-guard.test.mjs tests/enc-seo-indexing-001.test.mjs
+          node --import tsx --test tests/business-media-presentation.test.mjs tests/business-cover-brand-fallback.test.mjs tests/business-detail-logo-hero.test.mjs tests/enc-staging-public-media-001.test.mjs tests/enc-media-regression-guard.test.mjs tests/enc-seo-indexing-001.test.mjs tests/enc-seo-indexing-001.test.mjs
           npm run build
           ENCARMEN_EXPECTED_SHA="$GITHUB_SHA" node scripts/verify_footer_release.cjs
           test -f server.js && test -f api/server.bundle.js && test -f dist/index.html
