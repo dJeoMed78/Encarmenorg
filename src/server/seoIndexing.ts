@@ -9,9 +9,9 @@ export function normalizeSeoHost(rawHost?: string | null): string {
   if (typeof rawHost !== 'string' || !rawHost.trim()) return '';
   const candidate = rawHost.split(',')[0].trim().toLowerCase();
   try {
-    return new URL(candidate.includes('://') ? candidate : `https://${candidate}`).hostname.toLowerCase();
+    return new URL(candidate.includes('://') ? candidate : 'https://' + candidate).hostname.toLowerCase();
   } catch {
-    return candidate.replace(/:\\d+$/, '');
+    return candidate.replace(/:\d+$/, '');
   }
 }
 
@@ -24,7 +24,7 @@ export function isCanonicalSeoHost(rawHost?: string | null): boolean {
 }
 
 export function getCanonicalSeoOrigin(rawHost?: string | null, appEnv?: string | null): string {
-  return isStagingSeoRequest(rawHost, appEnv) ? `https://${SEO_STAGING_HOST}` : SEO_PRIMARY_ORIGIN;
+  return isStagingSeoRequest(rawHost, appEnv) ? 'https://' + SEO_STAGING_HOST : SEO_PRIMARY_ORIGIN;
 }
 
 /** Redirect known public aliases to the official origin, preserving path and query. */
@@ -32,13 +32,13 @@ export function getSeoCanonicalRedirect(rawHost?: string | null, requestUrl?: st
   const host = normalizeSeoHost(rawHost);
   if (isStagingSeoRequest(host, appEnv) || !SEO_ALIAS_HOSTS.has(host)) return null;
   const suffix = typeof requestUrl === 'string' && requestUrl.startsWith('/') ? requestUrl : '/';
-  return `${SEO_PRIMARY_ORIGIN}${suffix}`;
+  return SEO_PRIMARY_ORIGIN + suffix;
 }
 
 export function buildSeoRobotsTxt(rawHost?: string | null, appEnv?: string | null): string {
-  const common = 'User-agent: *\\nAllow: /\\nDisallow: /api/\\nDisallow: /admin/\\n';
+  const common = 'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin/\n';
   if (isStagingSeoRequest(rawHost, appEnv)) return common;
-  return `${common}\\nSitemap: ${SEO_PRIMARY_ORIGIN}/sitemap.xml\\n`;
+  return common + '\nSitemap: ' + SEO_PRIMARY_ORIGIN + '/sitemap.xml\n';
 }
 
 /** Match crawler tokens only; the caller must still verify the source IP using reverse and forward DNS. */
@@ -47,8 +47,8 @@ export function isGoogleCrawlerUserAgent(userAgent?: string | null): boolean {
 }
 
 export function isGoogleCrawlerHostname(hostname?: string | null): boolean {
-  const host = typeof hostname === 'string' ? hostname.toLowerCase().replace(/\\.$/, '') : '';
-  return ['googlebot.com', 'google.com', 'googleusercontent.com'].some(domain => host === domain || host.endsWith(`.${domain}`));
+  const host = typeof hostname === 'string' ? hostname.toLowerCase().replace(/\.$/, '') : '';
+  return ['googlebot.com', 'google.com', 'googleusercontent.com'].some(domain => host === domain || host.endsWith('.' + domain));
 }
 
 function normalizeIp(value: string): string {
@@ -66,7 +66,7 @@ export function isVerifiedGoogleCrawlerDns(
   if (!isGoogleCrawlerUserAgent(userAgent) || !clientIp || isIP(normalizeIp(clientIp)) === 0) return false;
   const ip = normalizeIp(clientIp);
   return reverseHosts.some(rawHost => {
-    const host = rawHost.toLowerCase().replace(/\\.$/, '');
+    const host = rawHost.toLowerCase().replace(/\.$/, '');
     if (!isGoogleCrawlerHostname(host)) return false;
     return (forwardAddressesByHost[host] || []).some(address => normalizeIp(address) === ip);
   });
@@ -75,11 +75,11 @@ export function isVerifiedGoogleCrawlerDns(
 /** Retire public WordPress/WooCommerce routes without exposing directory listings or blocking individual media files. */
 export function getLegacyWordPressRetirement(pathname?: string | null): { status: 404 | 410; reason: string } | null {
   if (typeof pathname !== 'string') return null;
-  const normalized = pathname.split('?')[0].replace(/\\/+$/, '').toLowerCase() || '/';
-  if (/^\\/wp-admin(?:\\/|$)/.test(normalized)) {
+  const normalized = pathname.split('?')[0].replace(/\/+$/, '').toLowerCase() || '/';
+  if (/^\/wp-admin(?:\/|$)/.test(normalized)) {
     return { status: 410, reason: 'legacy-wordpress-admin-retired' };
   }
-  if (/^\\/product-category(?:\\/|$)/.test(normalized)) {
+  if (/^\/product-category(?:\/|$)/.test(normalized)) {
     return { status: 410, reason: 'legacy-woocommerce-category-retired' };
   }
   if (normalized === '/wp-content/uploads') {
