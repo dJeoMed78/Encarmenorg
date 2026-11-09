@@ -148,7 +148,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // Consolidate the verified public alias domain on the official origin.
-// Preserve the requested path and query; use 301 for safe reads and 308 for writes.
+// Preserve the requested path and query; redirect only safe GET/HEAD navigation requests.
 app.use((req: Request, res: Response, next: NextFunction) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
   const redirectUrl = getSeoCanonicalRedirect(
