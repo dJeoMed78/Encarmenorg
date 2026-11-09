@@ -8,7 +8,7 @@ export function normalizeSeoHost(rawHost?: string | null): string {
   try {
     return new URL(candidate.includes('://') ? candidate : `https://${candidate}`).hostname.toLowerCase();
   } catch {
-    return candidate.replace(/:\\d+$/, '');
+    return candidate.replace(/:\d+$/, '');
   }
 }
 
@@ -25,7 +25,7 @@ export function getCanonicalSeoOrigin(rawHost?: string | null, appEnv?: string |
 }
 
 export function buildSeoRobotsTxt(rawHost?: string | null, appEnv?: string | null): string {
-  const common = 'User-agent: *\\nAllow: /\\nDisallow: /api/\\nDisallow: /admin/\\n';
+  const common = 'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin/\n';
   if (isStagingSeoRequest(rawHost, appEnv)) return common;
-  return `${common}\\nSitemap: ${SEO_PRIMARY_ORIGIN}/sitemap.xml\\n`;
+  return `${common}\nSitemap: ${SEO_PRIMARY_ORIGIN}/sitemap.xml\n`;
 }
