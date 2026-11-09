@@ -4,7 +4,7 @@ import {registerStagingBusinessRoutes} from './src/server/stagingBusinessRoutes'
 import {mountPublicRegistration,publicRegistrationBodyLimit} from './src/server/publicRegistrationWiring.ts';
 import {verifyStagingAdmin,createLoginLimiter,stagingBusinessConfiguration,getPrivateStagingSnapshot} from './src/server/stagingBusinessSecurity';
 import { prepareContactPatch, contactsMatchReadback, ContactPatchError, contactDigits, contactCounts, matchesContactFilter, CONTACT_FILTERS, type ContactFilter } from './src/utils/businessContacts';
-import { SEO_PRIMARY_ORIGIN, buildSeoRobotsTxt, getCanonicalSeoOrigin, getSeoCanonicalRedirect, isCanonicalSeoHost, isStagingSeoRequest } from './src/server/seoIndexing.ts';
+import { SEO_PRIMARY_ORIGIN, buildSeoRobotsTxt, getCanonicalSeoOrigin, getSeoCanonicalRedirect, getLegacyWordPressRetirement, isCanonicalSeoHost, isStagingSeoRequest } from './src/server/seoIndexing.ts';
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 // Hostinger may restart Node without injecting the build's database environment.
@@ -158,6 +158,16 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   );
   if (!redirectUrl) return next();
   return res.redirect(301, redirectUrl);
+});
+
+// Retire legacy WordPress/WooCommerce routes after alias consolidation.
+// Keep individual /wp-content/uploads/<file> assets available through the existing handler;
+// never expose a directory listing or a legacy WordPress admin endpoint.
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const retired = getLegacyWordPressRetirement(req.path);
+  if (!retired) return next();
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  return res.status(retired.status).type('text/plain').send(retired.reason);
 });
 
 // ENC-BACKUP-SECURITY-002 CONTAINMENT START
