@@ -760,3 +760,14 @@ Verificación independiente: GitHub Actions run `41691726413` completed SUCCESS;
 **#43 Radar de empresas (GAS).** GAS reportó correcciones locales en `work/enc-radar-empresas-043-gas`: persistencia SQL verificada en mocks, eliminación de éxitos optimistas y WooCommerce, validaciones de permisos/teléfonos/duplicados y procedencia local/web; 12 pruebas propias reportadas. **Revisión de Nia: rama remota y PR no disponibles en GitHub al consultar; SHA local no suministrado, diff y pruebas no verificables independientemente.** Solicitar a GAS publicar commit + rama remota y abrir PR a `ia-desarrollo` sin fusionar. Revisar conflictos potenciales en `server.ts` y `src/services/api.ts` con PR #54. Issue #43 sigue abierto, sin integrar ni desplegar.
 
 **Próxima prioridad:** (1) recuperar acceso Work a Facebook para auditar hasta 10 enlaces reales; (2) pedir a GAS publicación verificable de #43; (3) resolver extracción real de #41 y prueba HTTP administrativa antes de cualquier integración. `main` / `encarmen.org` protegidos. No repetir pruebas SQL destructivas ni respaldos innecesarios.
+
+
+## 2026-11-09 — Relevo Nia y checkpoint ENC-SEO-INDEXING-001
+
+- Memoria narrativa de esta conversación: [NIA-2026-11-09.md](https://docs.google.com/document/d/1GlBH-jeqIayumtzfjFvwPiTK2KlMUrrujV9D2bE95HU/edit), Drive ID `1GlBH-jeqIayumtzfjFvwPiTK2KlMUrrujV9D2bE95HU`.
+- Checkpoint técnico: [NIA_CHECKPOINT_2026-11-09.md](NIA_CHECKPOINT_2026-11-09.md).
+- **Issue #85 SEO:** PR #87 fusionada a `main`, HEAD `1e94f16db03e2347c18d933002e25c3f79495765`; CI run `42660316602` SUCCESS (pruebas SEO + build, sin deploy SSH). Issue #85 continúa OPEN porque Hostinger y HTTP de producción no están verificados.
+- **Staging separado:** PR #86 integrada en `ia-desarrollo`, SHA `830602beb0a0b59f009458c5bce8f0a22f46e46a`; run `42651774101` SUCCESS con respaldo aislado y comprobación HTTP del SHA en Staging. No prueba publicación productiva.
+- **#43:** Issue abierto; PR #68 sigue OPEN/DRAFT, sin integración ni despliegue. Mantener auditoría de MariaDB, concurrencia, deduplicación y pruebas reales.
+- Prioridad inmediata: confirmar release Hostinger `1e94f16db03e2347c18d933002e25c3f79495765`, validar 301/canonical/robots/sitemap/410/404/Googlebot y actualizar Issue #85 con evidencia.
+- No se realizaron cambios de código, datos ni despliegues de producción durante esta reactivación.
