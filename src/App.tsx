@@ -15,6 +15,8 @@ import { WordPressSyncModal } from './components/WordPressSyncModal';
 import { MessageSquare, RefreshCw, Lock, X, Globe, ChevronDown } from 'lucide-react';
 import seedBusinesses from './data/businesses_seed.json';
 import seedPromotions from './data/promotions_seed.json';
+import seedCategories from './data/categories_seed.json';
+import { getCategoryRouteName } from './utils/categoryRoutes';
 import seedEvents from './data/events_carmen.json';
 import seedRatings from '../ratings_db.json';
 import ALL_COLONIAS_CARMEN from './data/colonias_carmen.json';
@@ -32,6 +34,7 @@ import { getSavedPortalLinks } from './components/AdminLinksAndAdsManager';
 function getBusinessSlugFromUrl(): string | null {
   if (typeof window === 'undefined') return null;
   const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
+  if (/^categoria\//i.test(path)) return null;
   const urlParams = new URLSearchParams(window.location.search);
   const slugFromQuery = urlParams.get('empresa') || urlParams.get('negocio') || urlParams.get('slug');
 
@@ -72,6 +75,11 @@ function getBusinessSlugFromUrl(): string | null {
   }
 
   return cleanPath;
+}
+
+function getCategoryFromUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  return getCategoryRouteName(window.location.pathname, seedCategories as any[]);
 }
 
 function findBusinessInList(list: Business[], candidateSlug: string): Business | null {
@@ -301,6 +309,16 @@ export default function App() {
 
   // Detect direct business landing page or tab on initial load
   useEffect(() => {
+    const categoryName = getCategoryFromUrl();
+    if (categoryName) {
+      setLandingBusiness(null);
+      setSelectedCategory(categoryName);
+      setSelectedColonia('Todas');
+      setSearchQuery('');
+      setActiveTab('negocios');
+      return;
+    }
+
     const slug = getBusinessSlugFromUrl();
     if (slug) {
       const match = findBusinessInList(businessesList, slug);
@@ -332,6 +350,16 @@ export default function App() {
   // Listen to browser Back/Forward (popstate)
   useEffect(() => {
     const handlePopState = () => {
+      const categoryName = getCategoryFromUrl();
+      if (categoryName) {
+        setLandingBusiness(null);
+        setSelectedCategory(categoryName);
+        setSelectedColonia('Todas');
+        setSearchQuery('');
+        setActiveTab('negocios');
+        return;
+      }
+
       const slug = getBusinessSlugFromUrl();
       if (slug) {
         const match = findBusinessInList(businessesList, slug);
@@ -364,12 +392,15 @@ export default function App() {
 
   // Synchronize document title with active landing page
   useEffect(() => {
-    if (landingBusiness) {
+    const categoryName = getCategoryFromUrl();
+    if (categoryName) {
+      document.title = `${categoryName} | Empresas en Carmen`;
+    } else if (landingBusiness) {
       document.title = `${landingBusiness.name} | Empresas en Carmen`;
     } else {
       document.title = 'Directorio Empresas en Carmen | Ciudad del Carmen, Campeche';
     }
-  }, [landingBusiness]);
+  }, [landingBusiness, selectedCategory]);
 
   const openBusinessLanding = (b: Business) => {
     setSelectedBusiness(null);
