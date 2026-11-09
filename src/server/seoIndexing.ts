@@ -34,7 +34,7 @@ export function getSeoCanonicalRedirect(rawHost?: string | null, requestUrl?: st
 }
 
 export function buildSeoRobotsTxt(rawHost?: string | null, appEnv?: string | null): string {
-  const common = 'User-agent: *\\nAllow: /\\nDisallow: /api/\\nDisallow: /admin/\\n';
+  const common = 'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin/\n';
   if (isStagingSeoRequest(rawHost, appEnv)) return common;
-  return `${common}\\nSitemap: ${SEO_PRIMARY_ORIGIN}/sitemap.xml\\n`;
+  return `${common}\nSitemap: ${SEO_PRIMARY_ORIGIN}/sitemap.xml\n`;
 }
