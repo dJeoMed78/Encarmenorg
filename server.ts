@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 import { reverse as dnsReverse, lookup as dnsLookup } from 'node:dns/promises';
-import { isGoogleCrawlerHostname, isGoogleCrawlerUserAgent, isVerifiedGoogleCrawlerDns, SEO_PRIMARY_ORIGIN, buildSeoRobotsTxt, getCanonicalSeoOrigin, getSeoCanonicalRedirect, getLegacyWordPressRetirement, isCanonicalSeoHost, isStagingSeoRequest } from './src/server/seoIndexing.ts';
+import { isGoogleCrawlerHostname, isGoogleCrawlerUserAgent, isVerifiedGoogleCrawlerDns, SEO_PRIMARY_ORIGIN, buildSeoRobotsTxt, getCanonicalSeoOrigin, getSeoCanonicalRedirect, getLegacyWordPressRetirement, getMissingBusinessRoute, isCanonicalSeoHost, isStagingSeoRequest } from './src/server/seoIndexing.ts';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import path from 'path';
@@ -8572,6 +8572,7 @@ if (!isProduction && !process.env.VERCEL) {
       const cleanPath = req.path.replace(/^\/+|\/+$/g, '').replace(/^(empresa|negocio|producto)\//i, '');
       const queryEmpresa = req.query.empresa as string;
       const candidateSlug = queryEmpresa || cleanPath;
+      let matchedBusiness: any = null;
 
       if (candidateSlug && candidateSlug !== 'index.html' && businessesCache && businessesCache.length > 0) {
         const cleanCandidate = candidateSlug.toLowerCase().trim();
@@ -8585,6 +8586,7 @@ if (!isProduction && !process.env.VERCEL) {
         );
 
         if (biz) {
+          matchedBusiness = biz;
           // Inyectar el slug en el HTML para que el cliente SPA lo abra instantáneamente
           const targetSlug = biz.slug || cleanCandidate;
           html = html.replace('</head>', `  <script>window.__INITIAL_BUSINESS_SLUG__ = ${JSON.stringify(targetSlug)};</script>\n</head>`);
@@ -8617,6 +8619,13 @@ if (!isProduction && !process.env.VERCEL) {
             html = html.replace('</head>', `  <meta property="og:url" content="${bizUrl}" />\n</head>`);
           }
         }
+      }
+
+      // Unknown business URLs must not fall through to the SPA homepage as HTTP 200 soft-404s.
+      const missingBusinessRoute = getMissingBusinessRoute(req.path, Boolean(matchedBusiness));
+      if (missingBusinessRoute) {
+        res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+        return res.status(missingBusinessRoute.status).type('text/plain').send(missingBusinessRoute.reason);
       }
 
       // Inyección garantizada de canonical y og:url dinámicos para indexación en cualquier dominio
