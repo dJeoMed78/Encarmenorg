@@ -771,3 +771,13 @@ Verificación independiente: GitHub Actions run `41691726413` completed SUCCESS;
 - **#43:** Issue abierto; PR #68 sigue OPEN/DRAFT, sin integración ni despliegue. Mantener auditoría de MariaDB, concurrencia, deduplicación y pruebas reales.
 - Prioridad inmediata: confirmar release Hostinger `1e94f16db03e2347c18d933002e25c3f79495765`, validar 301/canonical/robots/sitemap/410/404/Googlebot y actualizar Issue #85 con evidencia.
 - No se realizaron cambios de código, datos ni despliegues de producción durante esta reactivación.
+
+
+## 2026-11-09 — Auditoría pública adicional ENC-SEO-INDEXING-001
+
+- TinyFish run `cf4f694f-47dc-4902-90ed-750733245025`: navegador de auditoría recibió Cloudflare Attention Required en `encarmen.org` y `/sitemap.xml`; no se obtuvieron códigos HTTP ni HTML. No extrapolar a Googlebot/visitantes.
+- Prueba de alias `empresasencarmen.com/prueba-seo?x=1` terminó en `https://encarmen.org/prueba-seo?x=1`; ruta/query conservadas, status 301 no observado.
+- `robots.txt` recuperado directamente contiene directivas de estilo Cloudflare y difiere del contenido generado por el handler de `main`. Investigar Cloudflare Managed Robots o edge response antes de cambiar configuración. No se vio regla explícita de bloqueo Googlebot en lo extraído.
+- Revisión estática confirma que `server.ts` incluye validación DNS inversa/directa para Google crawlers y bypass GeoIP de solo lectura, pero no hay prueba de runtime en producción.
+- Perfil TinyFish Default sin sitios autenticados; no se accedió al panel Hostinger.
+- Sin cambios en producción. Pendiente: autorización del propietario para iniciar sesión en `https://hpanel.hostinger.com` mediante perfil TinyFish, verificar release y continuar auditoría.
