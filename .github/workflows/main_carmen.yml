@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: '22.x'
 
-      - name: Install, lint, test SEO controls, and build
+      - name: Install, test SEO controls, and build
         run: |
           npm ci
           # Full-project tsc --noEmit is currently blocked by an unchanged baseline error in AdminEventsTab.tsx:1499.
