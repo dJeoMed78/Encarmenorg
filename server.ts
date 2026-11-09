@@ -4,6 +4,7 @@ import {registerStagingBusinessRoutes} from './src/server/stagingBusinessRoutes'
 import {mountPublicRegistration,publicRegistrationBodyLimit} from './src/server/publicRegistrationWiring.ts';
 import {verifyStagingAdmin,createLoginLimiter,stagingBusinessConfiguration,getPrivateStagingSnapshot} from './src/server/stagingBusinessSecurity';
 import { prepareContactPatch, contactsMatchReadback, ContactPatchError, contactDigits, contactCounts, matchesContactFilter, CONTACT_FILTERS, type ContactFilter } from './src/utils/businessContacts';
+import { SEO_PRIMARY_ORIGIN, buildSeoRobotsTxt, getCanonicalSeoOrigin, isCanonicalSeoHost, isStagingSeoRequest } from './src/server/seoIndexing.ts';
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 // Hostinger may restart Node without injecting the build's database environment.
@@ -136,6 +137,15 @@ const __dirname = _dirnameStr || process.cwd();
 
 const app = express();
 const PORT = Number(process.env.PORT || process.env.DEFAULT_APP_PORT) || 3000;
+
+// Staging is crawlable only so search engines can read the explicit noindex directive.
+// This header applies to HTML, static assets, JSON and error responses in Staging.
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (isStagingSeoRequest(req.get('x-forwarded-host') || req.get('host'), process.env.APP_ENV)) {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  }
+  next();
+});
 
 // ENC-BACKUP-SECURITY-002 CONTAINMENT START
 // Containment only: no backup creation, filesystem access or authentication changes.
@@ -1312,22 +1322,9 @@ try {
 
 // Legacy PIN files and embedded administrative credentials are not identity sources.
 
-// Helper: Resolve dynamic base URL based on incoming host
+// Canonical SEO origin is fixed for production; Staging is explicitly isolated and noindexed.
 function getRequestBaseUrl(req: Request): string {
-  const rawHost = req.get('x-forwarded-host') || req.get('host') || 'empresasencarmen.com';
-  const hostHeader = rawHost.toLowerCase().split(':')[0];
-  let domain = hostHeader;
-  if (hostHeader.includes('encarmen.org')) {
-    domain = hostHeader.startsWith('www.') ? 'www.encarmen.org' : 'encarmen.org';
-  } else if (hostHeader.includes('empresasencarmen.com')) {
-    domain = hostHeader.startsWith('www.') ? 'www.empresasencarmen.com' : 'empresasencarmen.com';
-  } else if (hostHeader.includes('encarmen.com')) {
-    domain = hostHeader.startsWith('www.') ? 'www.encarmen.com' : 'encarmen.com';
-  } else if (hostHeader.includes('encarmen.mx')) {
-    domain = hostHeader.startsWith('www.') ? 'www.encarmen.mx' : 'encarmen.mx';
-  }
-  const proto = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
-  return `${proto}://${domain}`;
+  return getCanonicalSeoOrigin(req.get('x-forwarded-host') || req.get('host'), process.env.APP_ENV);
 }
 
 // Helper: Generador estándar de categorySlugs para evitar slugs residuales
@@ -8404,8 +8401,7 @@ app.get('/api/admin/banner-and-logo', (_req: Request, res: Response) => {
 
 // Robots.txt
 app.get('/robots.txt', (req: Request, res: Response) => {
-  const baseUrl = getRequestBaseUrl(req);
-  const robots = `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${baseUrl}/sitemap.xml\nSitemap: https://empresasencarmen.com/sitemap.xml\nSitemap: https://encarmen.org/sitemap.xml\n`;
+  const robots = buildSeoRobotsTxt(req.get('x-forwarded-host') || req.get('host'), process.env.APP_ENV);
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Cache-Control', 'public, max-age=86400');
   res.send(robots);
@@ -8413,7 +8409,15 @@ app.get('/robots.txt', (req: Request, res: Response) => {
 
 // Sitemap.xml
 app.get('/sitemap.xml', (req: Request, res: Response) => {
-  const baseUrl = getRequestBaseUrl(req);
+  const requestHost = req.get('x-forwarded-host') || req.get('host');
+  if (isStagingSeoRequest(requestHost, process.env.APP_ENV)) {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    return res.status(410).type('text/plain').send('Sitemap is disabled on Staging.');
+  }
+  if (!isCanonicalSeoHost(requestHost)) {
+    return res.redirect(301, `${SEO_PRIMARY_ORIGIN}/sitemap.xml`);
+  }
+  const baseUrl = SEO_PRIMARY_ORIGIN;
   const today = new Date().toISOString().split('T')[0];
 
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
@@ -8625,6 +8629,17 @@ if (!isProduction && !process.env.VERCEL) {
         html = html.replace('</head>', `  <meta property="og:url" content="${pageCanonical}" />\n</head>`);
       }
 
+      if (isStagingSeoRequest(req.get('x-forwarded-host') || req.get('host'), process.env.APP_ENV)) {
+        const noindexMeta = '<meta name="robots" content="noindex, nofollow, noarchive" />';
+        const robotsMetaStart = html.indexOf('<meta name="robots"');
+        if (robotsMetaStart >= 0) {
+          const robotsMetaEnd = html.indexOf('>', robotsMetaStart);
+          if (robotsMetaEnd >= 0) html = html.slice(0, robotsMetaStart) + noindexMeta + html.slice(robotsMetaEnd + 1);
+          else html = html.replace('</head>', `  ${noindexMeta}\n</head>`);
+        } else {
+          html = html.replace('</head>', `  ${noindexMeta}\n</head>`);
+        }
+      }
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, proxy-revalidate, max-age=0');
       res.setHeader('CDN-Cache-Control', 'no-store');
       res.setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
