@@ -1,16 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { SEO_PRIMARY_ORIGIN, SEO_STAGING_HOST, normalizeSeoHost, isStagingSeoRequest, isCanonicalSeoHost, getCanonicalSeoOrigin, buildSeoRobotsTxt } from '../src/server/seoIndexing.ts';
+import { SEO_PRIMARY_ORIGIN, SEO_STAGING_HOST, normalizeSeoHost, isStagingSeoRequest, isCanonicalSeoHost, getCanonicalSeoOrigin, getSeoCanonicalRedirect, buildSeoRobotsTxt } from '../src/server/seoIndexing.ts';
 
 const server = fs.readFileSync(new URL('../server.ts', import.meta.url), 'utf8');
 const deploy = fs.readFileSync(new URL('../.github/workflows/enc-radars-041-043-staging-deploy.yml', import.meta.url), 'utf8');
+const rootRobots = fs.readFileSync(new URL('../robots.txt', import.meta.url), 'utf8');
+const publicRobots = fs.readFileSync(new URL('../public/robots.txt', import.meta.url), 'utf8');
 
 test('production aliases converge to the official canonical origin', () => {
   for (const host of ['encarmen.org', 'www.encarmen.org', 'empresasencarmen.com', 'www.empresasencarmen.com']) assert.equal(getCanonicalSeoOrigin(host, 'production'), SEO_PRIMARY_ORIGIN);
   assert.equal(isCanonicalSeoHost('www.encarmen.org'), false);
   assert.equal(isCanonicalSeoHost('encarmen.org:443'), true);
   assert.equal(normalizeSeoHost('WWW.EmpresasEnCarmen.com:443'), 'www.empresasencarmen.com');
+});
+
+test('known duplicate hosts redirect permanently while Staging and official host stay put', () => {
+  assert.equal(getSeoCanonicalRedirect('www.empresasencarmen.com', '/negocio/prueba?ref=google', 'production'), 'https://encarmen.org/negocio/prueba?ref=google');
+  assert.equal(getSeoCanonicalRedirect('empresasencarmen.com', '/', 'production'), 'https://encarmen.org/');
+  assert.equal(getSeoCanonicalRedirect('encarmen.org', '/empresas', 'production'), null);
+  assert.equal(getSeoCanonicalRedirect(SEO_STAGING_HOST, '/empresas', 'staging'), null);
 });
 
 test('Staging is detected by exact host or trusted APP_ENV', () => {
@@ -29,6 +38,11 @@ test('production robots exposes only the official sitemap and disallows private 
   assert.equal((robots.match(/Sitemap:/g) || []).length, 1);
   assert.ok(robots.includes('Sitemap: https://encarmen.org/sitemap.xml'));
   assert.ok(!robots.includes('empresasencarmen.com'));
+  for (const file of [rootRobots, publicRobots]) {
+    assert.equal((file.match(/Sitemap:/g) || []).length, 1);
+    assert.ok(file.includes('Sitemap: https://encarmen.org/sitemap.xml'));
+    assert.ok(!file.includes('empresasencarmen.com'));
+  }
 });
 
 test('Staging robots remains crawlable for noindex discovery and advertises no sitemap', () => {
@@ -38,7 +52,10 @@ test('Staging robots remains crawlable for noindex discovery and advertises no s
   assert.ok(!robots.includes('Sitemap:'));
 });
 
-test('Express applies noindex header and HTML meta on Staging and disables its sitemap', () => {
+test('Express redirects alias requests before static serving and adds noindex to Staging', () => {
+  const redirectIndex = server.indexOf('getSeoCanonicalRedirect(');
+  const staticIndex = server.indexOf('app.use(express.static(path.resolve(__dirname, \'public\')');
+  assert.ok(redirectIndex > 0 && staticIndex > redirectIndex, 'domain redirect must run before static files');
   assert.ok(server.includes("res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive')"));
   assert.ok(server.includes('<meta name="robots" content="noindex, nofollow, noarchive" />'));
   assert.ok(server.includes('return res.status(410).type(\'text/plain\').send(\'Sitemap is disabled on Staging.\')'));
