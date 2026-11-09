@@ -56,6 +56,8 @@ test('Express redirects alias requests before static serving and adds noindex to
   const redirectIndex = server.indexOf('getSeoCanonicalRedirect(');
   const staticIndex = server.indexOf('app.use(express.static(path.resolve(__dirname, \'public\')');
   assert.ok(redirectIndex > 0 && staticIndex > redirectIndex, 'domain redirect must run before static files');
+  assert.ok(server.includes("if (req.method !== 'GET' && req.method !== 'HEAD') return next();"));
+  assert.ok(server.includes('return res.redirect(301, redirectUrl);'));
   assert.ok(server.includes("res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive')"));
   assert.ok(server.includes('<meta name="robots" content="noindex, nofollow, noarchive" />'));
   assert.ok(server.includes('return res.status(410).type(\'text/plain\').send(\'Sitemap is disabled on Staging.\')'));
