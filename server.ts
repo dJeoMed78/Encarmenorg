@@ -8630,7 +8630,14 @@ if (!isProduction && !process.env.VERCEL) {
 
       // Category routes must resolve to a real top-level category before serving the SPA.
       const categoryPathMatch = req.path.match(/^\/categoria\/([^/]+)\/?$/i);
-      const categorySlug = categoryPathMatch ? decodeURIComponent(categoryPathMatch[1]).toLowerCase() : '';
+      let categorySlug = '';
+      if (categoryPathMatch) {
+        try {
+          categorySlug = decodeURIComponent(categoryPathMatch[1]).toLowerCase();
+        } catch {
+          categorySlug = '';
+        }
+      }
       const categoryExists = Boolean(categorySlug) && categoriesCache.some(category =>
         Number(category.parent) === 0 && String(category.slug || '').toLowerCase() === categorySlug
       );
