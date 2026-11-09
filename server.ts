@@ -4,7 +4,7 @@ import {registerStagingBusinessRoutes} from './src/server/stagingBusinessRoutes'
 import {mountPublicRegistration,publicRegistrationBodyLimit} from './src/server/publicRegistrationWiring.ts';
 import {verifyStagingAdmin,createLoginLimiter,stagingBusinessConfiguration,getPrivateStagingSnapshot} from './src/server/stagingBusinessSecurity';
 import { prepareContactPatch, contactsMatchReadback, ContactPatchError, contactDigits, contactCounts, matchesContactFilter, CONTACT_FILTERS, type ContactFilter } from './src/utils/businessContacts';
-import { SEO_PRIMARY_ORIGIN, buildSeoRobotsTxt, getCanonicalSeoOrigin, isCanonicalSeoHost, isStagingSeoRequest } from './src/server/seoIndexing.ts';
+import { SEO_PRIMARY_ORIGIN, buildSeoRobotsTxt, getCanonicalSeoOrigin, getSeoCanonicalRedirect, isCanonicalSeoHost, isStagingSeoRequest } from './src/server/seoIndexing.ts';
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 // Hostinger may restart Node without injecting the build's database environment.
@@ -145,6 +145,19 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
   }
   next();
+});
+
+// Consolidate the verified public alias domain on the official origin.
+// Preserve the requested path and query; use 301 for safe reads and 308 for writes.
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const redirectUrl = getSeoCanonicalRedirect(
+    req.get('x-forwarded-host') || req.get('host'),
+    req.originalUrl,
+    process.env.APP_ENV
+  );
+  if (!redirectUrl) return next();
+  const status = req.method === 'GET' || req.method === 'HEAD' ? 301 : 308;
+  return res.redirect(status, redirectUrl);
 });
 
 // ENC-BACKUP-SECURITY-002 CONTAINMENT START
