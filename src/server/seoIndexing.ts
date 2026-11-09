@@ -83,6 +83,17 @@ export function getMissingBusinessRoute(
   return { status: 404, reason: 'business-not-found' };
 }
 
+/** Return a real 404 for category paths that do not match a published top-level category. */
+export function getMissingCategoryRoute(
+  pathname?: string | null,
+  categoryExists: boolean = false
+): { status: 404; reason: string } | null {
+  if (categoryExists || typeof pathname !== 'string') return null;
+  const normalized = pathname.split(/[?#]/, 1)[0].replace(/\/+$/, '') || '/';
+  if (!/^\/categoria\/[^/]+$/i.test(normalized)) return null;
+  return { status: 404, reason: 'category-not-found' };
+}
+
 /** Retire public WordPress/WooCommerce routes without exposing directory listings or blocking individual media files. */
 export function getLegacyWordPressRetirement(pathname?: string | null): { status: 404 | 410; reason: string } | null {
   if (typeof pathname !== 'string') return null;

@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 import { reverse as dnsReverse, lookup as dnsLookup } from 'node:dns/promises';
-import { isGoogleCrawlerHostname, isGoogleCrawlerUserAgent, isVerifiedGoogleCrawlerDns, SEO_PRIMARY_ORIGIN, buildSeoRobotsTxt, getCanonicalSeoOrigin, getSeoCanonicalRedirect, getLegacyWordPressRetirement, getMissingBusinessRoute, isCanonicalSeoHost, isStagingSeoRequest } from './src/server/seoIndexing.ts';
+import { isGoogleCrawlerHostname, isGoogleCrawlerUserAgent, isVerifiedGoogleCrawlerDns, SEO_PRIMARY_ORIGIN, buildSeoRobotsTxt, getCanonicalSeoOrigin, getSeoCanonicalRedirect, getLegacyWordPressRetirement, getMissingBusinessRoute, getMissingCategoryRoute, isCanonicalSeoHost, isStagingSeoRequest } from './src/server/seoIndexing.ts';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import path from 'path';
@@ -8626,6 +8626,18 @@ if (!isProduction && !process.env.VERCEL) {
       if (missingBusinessRoute) {
         res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
         return res.status(missingBusinessRoute.status).type('text/plain').send(missingBusinessRoute.reason);
+      }
+
+      // Category routes must resolve to a real top-level category before serving the SPA.
+      const categoryPathMatch = req.path.match(/^\/categoria\/([^/]+)\/?$/i);
+      const categorySlug = categoryPathMatch ? decodeURIComponent(categoryPathMatch[1]).toLowerCase() : '';
+      const categoryExists = Boolean(categorySlug) && categoriesCache.some(category =>
+        Number(category.parent) === 0 && String(category.slug || '').toLowerCase() === categorySlug
+      );
+      const missingCategoryRoute = getMissingCategoryRoute(req.path, categoryExists);
+      if (missingCategoryRoute) {
+        res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+        return res.status(missingCategoryRoute.status).type('text/plain').send(missingCategoryRoute.reason);
       }
 
       // Inyección garantizada de canonical y og:url dinámicos para indexación en cualquier dominio
