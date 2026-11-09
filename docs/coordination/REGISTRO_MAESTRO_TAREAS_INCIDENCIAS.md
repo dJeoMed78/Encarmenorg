@@ -781,3 +781,16 @@ Verificación independiente: GitHub Actions run `41691726413` completed SUCCESS;
 - Revisión estática confirma que `server.ts` incluye validación DNS inversa/directa para Google crawlers y bypass GeoIP de solo lectura, pero no hay prueba de runtime en producción.
 - Perfil TinyFish Default sin sitios autenticados; no se accedió al panel Hostinger.
 - Sin cambios en producción. Pendiente: autorización del propietario para iniciar sesión en `https://hpanel.hostinger.com` mediante perfil TinyFish, verificar release y continuar auditoría.
+
+
+## 2026-11-09 — Reauditoría SEO después de desactivar Cloudflare
+
+- El propietario desactivó Cloudflare. TinyFish pudo recuperar directamente el HTML público de `encarmen.org`, incluyendo `<link rel="canonical" href="https://encarmen.org">` y meta robots `index, follow`.
+- `robots.txt` ahora entrega `User-agent: *`, `Allow: /`, `Disallow: /api/`, `Disallow: /admin/`, y `Sitemap: https://encarmen.org/sitemap.xml`.
+- `sitemap.xml` se recuperó con 220 URLs, todas bajo `https://encarmen.org`.
+- Los tres dominios alternativos consultados resolvieron a `https://encarmen.org/`. La prueba `empresasencarmen.com/prueba-seo?x=1` terminó en `https://encarmen.org/prueba-seo?x=1`, conservando ruta y query. El extractor no mostró código HTTP, así que 301/308 aún no está probado por status.
+- `/wp-admin/` devolvió 410; el directorio `/wp-content/uploads/` devolvió 404 (no extrapolar a cada archivo de imagen).
+- Ficha `/empresa/bendita-carmelita`: title/description propios, canonical exacto, robots index/follow y Open Graph con imagen.
+- Una navegación automatizada de múltiples URLs obtuvo 429 después de varias peticiones; fetches directos posteriores y separados funcionaron. No concluir bloqueo general ni Googlebot.
+- No se verificó aún el 403 de Search Console ni el SHA del release activo de Hostinger. GitHub `main` = `1e94f16db03e2347c18d933002e25c3f79495765`.
+- Issue #85 permanece OPEN. Sin cambios en DNS, Cloudflare, Hostinger, código o datos de producción durante esta auditoría.
