@@ -9,7 +9,7 @@ export function normalizeSeoHost(rawHost?: string | null): string {
   try {
     return new URL(candidate.includes('://') ? candidate : `https://${candidate}`).hostname.toLowerCase();
   } catch {
-    return candidate.replace(/:\\d+$/, '');
+    return candidate.replace(/:\d+$/, '');
   }
 }
 
