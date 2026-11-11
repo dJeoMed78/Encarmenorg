@@ -117,7 +117,7 @@ Decisión expresa del propietario: **mantener únicamente Google Drive y GitHub 
 | ENC-INT-008 | Consolidación H01–H04 y contratos de registro/edición | Alta | W1 publicó correcciones H01/H02/H03/H04 con SHA documentados; faltan revisiones integrales/validación independiente de ciertas rutas, sin reimplementar |
 | ENC-RADAR-CLASIFICADOS-041 | Radar de clasificados — Issue #41 | Alta | PR #54 **fusionada** a ia-desarrollo el 2026-11-06, merge d5b056f; Issue #41 sigue abierto. Pendiente E2E HTTP con sesión administrativa real, aceptación del propietario, selección explícita (la UI selecciona todos), reintento que conserve modo IA/Sin IA, conciliación de lotes parciales y validación CRUD. No afirmar que el radar está terminado por el merge. |
 | ENC-SEC-SSRF-IMG-20261109-001 | Riesgo SSRF en GET /api/img?url= | Alta (P1) | Revisión estática confirma descarga de URL HTTP/HTTPS arbitrarias, redirecciones automáticas y lectura completa de respuesta sin allowlist de hosts/IP ni límite explícito de bytes. **Explotabilidad no probada**. Pendiente restringir dominios/CDN necesarios, validar DNS/IP y cada redirect, bloquear loopback/privadas/link-local/metadata, limitar tamaño/tipo y agregar pruebas negativas. |
-| ENC-BUILD-SERVER-ARTIFACT-20261109-001 | Sincronización server.ts → server.js / runtime Staging | Alta (P1) | server.ts recibió commit 830602b el 2026-11-09; el último commit identificado sobre server.js es b27d769 del 2026-10-30. package.json indica start: node server.js y build:server regenera el bundle. **No está confirmado qué build/artefacto ejecuta Hostinger**. Pendiente inspeccionar logs de build y release/HTTP de Staging; no asumir runtime obsoleto ni desplegar para probar. |
+| ENC-BUILD-SERVER-ARTIFACT-20261109-001 | Sincronización server.ts → server.js / runtime Staging | Alta (P1, parcial) | **Compilación y entrega a Staging verificadas** en Actions run 42651774101, SHA 830602b (Node 22): npm ci, lint, 81 pruebas, npm run build, bundle server.js generado y release enc-coord-830602beb0a0 activada; marcador HTTP del SHA PASS. El server.js versionado sigue antiguo, pero este workflow compila server.ts y despliega el bundle generado. **Proceso Node/hash del ejecutable activo no verificado**. Pendiente comprobar entrypoint real, hash y dependencias efectivas de la release actual; no repetir despliegue solo por la fecha del archivo versionado. |
 | ENC-API-FAIL-CLOSED-20261109-001 | Respuestas de respaldo que aparentan éxito en API | Alta (P1) | fetchStats() calcula cifras desde seed y declara lastSyncStatus: success al fallar; getMaintenanceMode() devuelve success:true, enabled:false ante error; trackAnalyticsEvent() deriva isAdmin de localStorage/parámetro cliente y fetchAnalytics() devuelve ceros ante error. Pendiente representar estado error/unknown, eliminar estadísticas ficticias y resolver/confirmar rutas servidor de analíticas. |
 | ENC-HTTP-PERIMETER-20261109-001 | Endurecimiento de perímetro HTTP | Media (P2) | Código actual usa CORS *, primer x-forwarded-for sin proxy de confianza, confía en cf-ipcountry, exime hosts por subcadena (run.app/localhost), JSON/urlencoded global de 50 MB, dotenv.config({override:true}) y filtro de bots por subcadenas. Pendiente revisión por rutas y entorno, límites específicos, proxy/Cloudflare confiables, hosts exactos y filtros por segmentos. CORS abierto no equivale por sí solo a bypass de autenticación. |
 
@@ -839,3 +839,46 @@ Verificación independiente: GitHub Actions run `41691726413` completed SUCCESS;
 6. **P2 — ENC-HTTP-PERIMETER-20261109-001:** endurecimiento por ruta y entorno, con pruebas de regresión y compatibilidad.
 
 **Restricciones:** todo trabajo de corrección debe iniciar en rama aislada basada en HEAD vigente de ia-desarrollo; no integrar hasta revisión independiente y CI; no abrir ventana de escritura ni ejecutar E2E mutante hasta comprobar aislamiento, backup y rollback; Staging únicamente con autorización y alcance específico; main y encarmen.org permanecen protegidos. Los hallazgos de esta auditoría quedan registrados como pendientes, no como trabajo implementado, probado, integrado o desplegado.
+
+
+---
+
+## 2026-11-11 — Revisión independiente de W1: ENC-BUILD-SERVER-ARTIFACT-20261109-001
+
+**Ejecutor:** W1. **Revisión:** Coordinación 01. **Resultado:** compilación y entrega CI→Staging verificadas para el SHA auditado; identidad del proceso Node activo permanece sin verificar.
+
+### Evidencia comprobada directamente por Coordinación
+
+- HEAD de `ia-desarrollo` continúa en `830602beb0a0b59f009458c5bce8f0a22f46e46a`.
+- GitHub Actions [run 42651774101](https://github.com/dJeoMed78/Encarmenorg/actions/runs/42651774101) concluyó SUCCESS el 2026-11-09, workflow `ENC radars 041+043 authorized reversible staging deployment`, job `deploy`.
+- Los logs demuestran ejecución de `npm ci` con Node 22: 262 paquetes instalados; `npm run lint` completó; primera suite 44/44 PASS; segunda suite 37/37 PASS; `npm run build` completó.
+- El build ejecutó Vite y esbuild sobre `server.ts`, generó `server.js` y copió `api/server.bundle.js`. La identidad de build registró SHA `830602beb0a0b59f009458c5bce8f0a22f46e46a`.
+- El workflow generó un paquete con `server.js`, `api/server.bundle.js` y `dist`; lo transfirió por SSH al entorno Staging.
+- El script de despliegue creó la release `enc-coord-830602beb0a0`, cambió el enlace `hbuilds/current`, y tocó `nodejs/tmp/restart.txt`. Logs: `SWITCHED_TO=enc-coord-830602beb0a0`, `ENC041_STAGING_SWITCH=PASS`.
+- La comprobación HTTP devolvió el marcador `encarmen-release.txt/json` con el SHA esperado: `ENCARMEN_STAGING_FOOTER_RELEASE_IDENTITY=PASS`.
+- El job completo concluyó SUCCESS. No se localizaron artifacts retenidos en GitHub Actions; el bundle fue transportado por el flujo SSH.
+
+### Correcciones a la interpretación del informe W1
+
+1. El fallo local de `npm ci --ignore-scripts` en Node 24/npm 11 no demuestra un defecto del lockfile: el workflow reproducible de Node 22 ejecutó `npm ci` sin ese flag y tuvo éxito. No modificar `package-lock.json` por ese único fallo local.
+2. La diferencia de fecha del `server.js` versionado no significa que el workflow haya desplegado ese archivo antiguo. El job compila `server.ts` en el runner y empaqueta el bundle recién generado.
+3. El marcador HTTP comprueba la release estática/identidad del paquete publicado, no el hash del archivo abierto por el proceso Node ni la ruta de entrada efectiva. El cambio de symlink y `restart.txt` aportan evidencia de activación solicitada, pero no son prueba directa del proceso Node en ejecución.
+4. El script de despliegue copia el `node_modules` de la release anterior y luego reemplaza los bundles y `dist`. Por tanto, las dependencias externas del bundle podrían no coincidir con el lockfile del candidato si hubo cambios de dependencias. No se comprobó que exista actualmente esa discrepancia; queda como riesgo de paridad.
+5. `npm run build` ejecuta `update_version.cjs` por el hook `prebuild` y también por el comando explícito del script `build`. Es una duplicación confirmada, pero no se demostró que cause un defecto funcional; limpieza de prioridad baja.
+6. El trigger `push.paths` del workflow no enumera `package.json`, `package-lock.json`, `vite.config.ts` ni `scripts/update_version.cjs`. Cambios aislados en esos archivos no activarían automáticamente este workflow por el filtro de rutas, salvo ejecución manual u otro evento. Registrar como mejora preventiva.
+
+### Estado actualizado
+
+- **Verificado:** CI limpio en Node 22, compilación de bundle desde `server.ts`, 81 pruebas, entrega de artefacto a una release Staging y marcador HTTP del SHA para el despliegue del 2026-11-09.
+- **No verificado:** proceso Node activo, ruta exacta del entrypoint configurado en Hostinger, hash del `server.js` realmente cargado y paridad de `node_modules` con el lockfile del candidato.
+- **No se autoriza** un nuevo despliegue, cambios de configuración ni intervención en producción para resolver la verificación pendiente.
+
+### Siguientes acciones registradas
+
+1. Mantener ENC-BUILD-SERVER-ARTIFACT-20261109-001 como **PARCIAL / RUNTIME_HOSTINGER_NO_VERIFICADO**, no como fallo de compilación.
+2. Obtener evidencia de solo lectura del panel/configuración Node de Staging: application root, startup file, release actual y mecanismo de reinicio. Si no está disponible, solicitar al propietario una captura de la configuración sin secretos.
+3. Verificar hash de `server.js` dentro de la release activa y comparar dependencias externas instaladas con el lockfile del SHA desplegado. No mostrar ni copiar secretos.
+4. Registrar como mejora P2 la inclusión de manifiestos de dependencias y la validación de paridad en el despliegue; revisar también los filtros `push.paths`.
+5. No repetir compilación ni despliegue para este mismo SHA: ya existe evidencia CI y de activación de release en Staging.
+
+**Clasificación final:** IMPLEMENTACIÓN DE BUILD — VERIFICADA; PRUEBAS CI — PASS; PAQUETE STAGING — ENTREGADO Y RELEASE SWITCH — PASS; MARCADOR HTTP SHA — PASS; PROCESO NODE ACTIVO — NO VERIFICADO; PRODUCCIÓN — SIN CAMBIOS.
