@@ -69,6 +69,9 @@ export function isPublicImageProxyAddress(address: string): boolean {
     if (a === 192 && b === 0 && c === 0) return false;
     if (a === 192 && b === 0 && c === 2) return false;
     if (a === 192 && b === 88 && c === 99) return false;
+    if (a === 192 && b === 31 && c === 196) return false;
+    if (a === 192 && b === 52 && c === 193) return false;
+    if (a === 192 && b === 175 && c === 48) return false;
     if (a === 192 && b === 168) return false;
     if (a === 198 && (b === 18 || b === 19)) return false;
     if (a === 198 && b === 51 && c === 100) return false;
@@ -84,10 +87,9 @@ export function isPublicImageProxyAddress(address: string): boolean {
     // unique-local, unspecified, IPv4-mapped and transition addresses by default.
     if ((value >> 125n) !== 1n) return false;
     const prefix32 = value >> 96n;
-    const prefix28 = value >> 100n;
+    const prefix23 = value >> 105n;
     const prefix20 = value >> 108n;
-    if (prefix32 === 0x20010db8n || prefix32 === 0x20010000n) return false;
-    if (prefix28 === 0x2001001n || prefix28 === 0x2001002n) return false;
+    if (prefix32 === 0x20010db8n || prefix23 === 0x200100n) return false;
     if ((value >> 112n) === 0x2002n || prefix20 === 0x3fff0n) return false;
     return true;
   }
@@ -237,17 +239,32 @@ export async function fetchRemoteImageBuffer(rawUrl: string, options: any = {}):
 
     let resolved: ResolvedAddress[];
     try {
-      resolved = net.isIP(host)
-        ? [{address: host, family: net.isIP(host)}]
-        : await lookup(host);
-    } catch {
+      if (net.isIP(host)) {
+        resolved = [{address: host, family: net.isIP(host)}];
+      } else {
+        let dnsTimer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          resolved = await Promise.race([
+            lookup(host),
+            new Promise<never>((_resolve, reject) => {
+              dnsTimer = setTimeout(() => reject(new Error('IMAGE_PROXY_TIMEOUT')), remaining);
+            })
+          ]);
+        } finally {
+          if (dnsTimer) clearTimeout(dnsTimer);
+        }
+      }
+    } catch (error: any) {
+      if (error?.message === 'IMAGE_PROXY_TIMEOUT') throw error;
       throw new Error('IMAGE_PROXY_DNS_FAILED');
     }
     if (!Array.isArray(resolved) || resolved.length === 0) throw new Error('IMAGE_PROXY_DNS_EMPTY');
     if (resolved.some(item => !item || !isPublicImageProxyAddress(item.address))) throw new Error('IMAGE_PROXY_NON_PUBLIC_ADDRESS');
 
     const selected = resolved[0];
-    const response: RemoteResponse = await request(current, selected, remaining, maxBytes);
+    const remainingAfterDns = deadline - Date.now();
+    if (remainingAfterDns <= 0) throw new Error('IMAGE_PROXY_TIMEOUT');
+    const response: RemoteResponse = await request(current, selected, remainingAfterDns, maxBytes);
     if (REDIRECT_STATUSES.has(response.statusCode)) {
       const location = response.headers && response.headers.location;
       if (typeof location !== 'string' || !location.trim()) throw new Error('IMAGE_PROXY_REDIRECT_INVALID');
