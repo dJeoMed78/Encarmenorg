@@ -117,7 +117,7 @@ Decisión expresa del propietario: **mantener únicamente Google Drive y GitHub 
 | ENC-INT-008 | Consolidación H01–H04 y contratos de registro/edición | Alta | W1 publicó correcciones H01/H02/H03/H04 con SHA documentados; faltan revisiones integrales/validación independiente de ciertas rutas, sin reimplementar |
 | ENC-RADAR-CLASIFICADOS-041 | Radar de clasificados — Issue #41 | Alta | PR #54 **fusionada** a ia-desarrollo el 2026-11-06, merge d5b056f; Issue #41 sigue abierto. Pendiente E2E HTTP con sesión administrativa real, aceptación del propietario, selección explícita (la UI selecciona todos), reintento que conserve modo IA/Sin IA, conciliación de lotes parciales y validación CRUD. No afirmar que el radar está terminado por el merge. |
 | ENC-SEC-SSRF-IMG-20261109-001 | Riesgo SSRF en GET /api/img?url= | Alta (P1) | Revisión estática confirma descarga de URL HTTP/HTTPS arbitrarias, redirecciones automáticas y lectura completa de respuesta sin allowlist de hosts/IP ni límite explícito de bytes. **Explotabilidad no probada**. Pendiente restringir dominios/CDN necesarios, validar DNS/IP y cada redirect, bloquear loopback/privadas/link-local/metadata, limitar tamaño/tipo y agregar pruebas negativas. |
-| ENC-BUILD-SERVER-ARTIFACT-20261109-001 | Sincronización server.ts → server.js / runtime Staging | Alta (P1, parcial) | **Compilación y entrega a Staging verificadas** en Actions run 42651774101, SHA 830602b (Node 22): npm ci, lint, 81 pruebas, npm run build, bundle server.js generado y release enc-coord-830602beb0a0 activada; marcador HTTP del SHA PASS. El server.js versionado sigue antiguo, pero este workflow compila server.ts y despliega el bundle generado. **Proceso Node/hash del ejecutable activo no verificado**. Pendiente comprobar entrypoint real, hash y dependencias efectivas de la release actual; no repetir despliegue solo por la fecha del archivo versionado. |
+| ENC-BUILD-SERVER-ARTIFACT-20261109-001 | Sincronización server.ts → server.js / runtime Staging | Alta (P1, **CERRADO TÉCNICAMENTE**) | **Runtime Staging CONFIRMADO** en auditoría SSH de solo lectura, Actions run [43277110058](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43277110058): PID LiteSpeed Node 3067741 (Node 22), inicio 2026-11-12 16:49:44 UTC; CWD exacto `/home/u293982346/domains/staging.encarmen.org/hbuilds/versions/enc-coord-830602beb0a0/nodejs`, coincidente con `hbuilds/current/nodejs`. Symlink `current=versions/enc-coord-830602beb0a0`; marcador SHA completo `830602beb0a0b59f009458c5bce8f0a22f46e46a`. SHA-256 de `server.js` y `api/server.bundle.js` idénticos: `d799d5ea77abc6a88b767cf9aabcdc798e1322630ccc7808251b7bccc9180c05`. `/api/health` uptime 4912 s a las 18:11:36.227Z coincide exactamente con inicio del PID. Hostinger configura `server.js` como entrypoint y package.json declara `node server.js`. Sin recompilar, reiniciar ni desplegar. **Cerrado para Staging; no extrapolar a Producción.** |
 | ENC-API-FAIL-CLOSED-20261109-001 | Respuestas de respaldo que aparentan éxito en API | Alta (P1) | fetchStats() calcula cifras desde seed y declara lastSyncStatus: success al fallar; getMaintenanceMode() devuelve success:true, enabled:false ante error; trackAnalyticsEvent() deriva isAdmin de localStorage/parámetro cliente y fetchAnalytics() devuelve ceros ante error. Pendiente representar estado error/unknown, eliminar estadísticas ficticias y resolver/confirmar rutas servidor de analíticas. |
 | ENC-HTTP-PERIMETER-20261109-001 | Endurecimiento de perímetro HTTP | Media (P2) | Código actual usa CORS *, primer x-forwarded-for sin proxy de confianza, confía en cf-ipcountry, exime hosts por subcadena (run.app/localhost), JSON/urlencoded global de 50 MB, dotenv.config({override:true}) y filtro de bots por subcadenas. Pendiente revisión por rutas y entorno, límites específicos, proxy/Cloudflare confiables, hosts exactos y filtros por segmentos. CORS abierto no equivale por sí solo a bypass de autenticación. |
 
@@ -882,3 +882,21 @@ Verificación independiente: GitHub Actions run `41691726413` completed SUCCESS;
 5. No repetir compilación ni despliegue para este mismo SHA: ya existe evidencia CI y de activación de release en Staging.
 
 **Clasificación final:** IMPLEMENTACIÓN DE BUILD — VERIFICADA; PRUEBAS CI — PASS; PAQUETE STAGING — ENTREGADO Y RELEASE SWITCH — PASS; MARCADOR HTTP SHA — PASS; PROCESO NODE ACTIVO — NO VERIFICADO; PRODUCCIÓN — SIN CAMBIOS.
+
+
+---
+
+## 2026-11-12 — Cierre técnico ENC-BUILD-SERVER-ARTIFACT-20261109-001
+
+La nota del 2026-11-11 que clasificaba el proceso Node como no verificado queda superada por la auditoría directa SSH de solo lectura.
+
+- Run de evidencia: [GitHub Actions #43277110058](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43277110058), SUCCESS.
+- Proceso Staging: PID `3067741`, proceso LiteSpeed Node 22, inicio `2026-11-12 16:49:44 UTC`.
+- CWD del PID: `/home/u293982346/domains/staging.encarmen.org/hbuilds/versions/enc-coord-830602beb0a0/nodejs`.
+- Symlink actual `current`: `versions/enc-coord-830602beb0a0`; mismo destino físico.
+- Release marker: SHA completo `830602beb0a0b59f009458c5bce8f0a22f46e46a`.
+- SHA-256 de `server.js` y `api/server.bundle.js`: `d799d5ea77abc6a88b767cf9aabcdc798e1322630ccc7808251b7bccc9180c05`.
+- La API `/api/health` reportó `uptime=4912` a las `18:11:36.227Z`; el inicio calculado coincide con `ps` para PID 3067741.
+- El argumento de entrada no se muestra en cmdline de LiteSpeed; Hostinger indicó que `server.js` es el startup file configurado. El directorio de trabajo del PID coincide con la release que contiene ese archivo.
+
+**Resolución:** identidad de runtime Staging CONFIRMADA. No hubo cambios en el servidor durante la auditoría. No se modificó `main` ni Producción. El pendiente P1 se retira de la lista activa para Staging.
