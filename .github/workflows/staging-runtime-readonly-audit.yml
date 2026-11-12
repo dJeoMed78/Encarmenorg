@@ -1,0 +1,119 @@
+name: ENCARMEN Staging runtime audit (read-only)
+
+on:
+  push:
+    branches:
+      - audit/staging-runtime-readonly-20261112
+    paths:
+      - .github/workflows/staging-runtime-readonly-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Install SSH client helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sshpass
+          test -n "$SSHPASS"
+
+      - name: Pin Hostinger SSH host key
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          actual="$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')"
+          test "$actual" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+
+      - name: Inspect active Staging release and Node process (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -p 65002 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o PreferredAuthentications=password \
+            -o PubkeyAuthentication=no \
+            u293982346@45.137.159.114 'bash -s' <<'REMOTE'
+          set +e
+          ROOT="$HOME/domains/staging.encarmen.org/hbuilds"
+          ACTIVE="$ROOT/current"
+          NODEDIR="$ACTIVE/nodejs"
+          EXPECTED="$ROOT/versions/enc-coord-830602beb0a0/nodejs"
+          ACTIVE_REAL="$(readlink -f "$NODEDIR" 2>/dev/null)"
+          EXPECTED_REAL="$(readlink -f "$EXPECTED" 2>/dev/null)"
+
+          echo "=== STAGING RUNTIME AUDIT: READ ONLY ==="
+          printf 'UTC_NOW='; date -u '+%Y-%m-%dT%H:%M:%SZ'
+          printf 'CURRENT_LINK='; readlink "$ACTIVE" 2>/dev/null || echo NOT_FOUND
+          printf 'CURRENT_REAL_NODEJS=%s\n' "${ACTIVE_REAL:-NOT_FOUND}"
+          printf 'EXPECTED_RELEASE_NODEJS=%s\n' "${EXPECTED_REAL:-NOT_FOUND}"
+          if [ -n "$ACTIVE_REAL" ] && [ "$ACTIVE_REAL" = "$EXPECTED_REAL" ]; then
+            echo 'ACTIVE_RELEASE_MATCHES_830602=yes'
+          else
+            echo 'ACTIVE_RELEASE_MATCHES_830602=no'
+          fi
+
+          printf 'RELEASE_MARKER='
+          if [ -r "$NODEDIR/dist/encarmen-release.json" ]; then
+            cat "$NODEDIR/dist/encarmen-release.json"
+          else
+            echo NOT_READABLE
+          fi
+
+          echo '=== ACTIVE FILE HASHES ==='
+          for rel in server.js api/server.bundle.js dist/encarmen-release.json package-lock.json; do
+            file="$NODEDIR/$rel"
+            if [ -r "$file" ]; then
+              sha256sum "$file"
+              stat -c 'FILE_META=%n|size=%s|mtime=%y' "$file" 2>/dev/null
+            else
+              echo "FILE_NOT_READABLE=$file"
+            fi
+          done
+
+          echo '=== MATCHING NODE PROCESSES ==='
+          found=0
+          for proc in /proc/[0-9]*; do
+            [ -r "$proc/comm" ] || continue
+            pid="${proc##*/}"
+            comm="$(cat "$proc/comm" 2>/dev/null)"
+            case "$comm" in node|nodejs) ;; *) continue ;; esac
+            cwd="$(readlink -f "$proc/cwd" 2>/dev/null)"
+            script_arg="$(tr '\0' '\n' < "$proc/cmdline" 2>/dev/null | awk '/server\.js/ {print; exit}')"
+            case "$cwd $script_arg" in
+              *staging.encarmen.org*|*hbuilds*|*server.js*)
+                found=1
+                echo "--- NODE_PROCESS ---"
+                ps -p "$pid" -o pid=,ppid=,lstart=,comm= 2>/dev/null
+                printf 'PROCESS_EXE=%s\n' "$(readlink "$proc/exe" 2>/dev/null)"
+                printf 'PROCESS_CWD=%s\n' "$cwd"
+                printf 'PROCESS_SCRIPT_ARG=%s\n' "${script_arg:-NOT_VISIBLE}"
+                if [ -n "$ACTIVE_REAL" ] && [ "$cwd" = "$ACTIVE_REAL" ]; then
+                  echo 'PROCESS_CWD_MATCHES_ACTIVE_RELEASE=yes'
+                else
+                  echo 'PROCESS_CWD_MATCHES_ACTIVE_RELEASE=no_or_indirect'
+                fi
+                if [ -n "$EXPECTED_REAL" ] && [ "$cwd" = "$EXPECTED_REAL" ]; then
+                  echo 'PROCESS_CWD_MATCHES_830602_RELEASE=yes'
+                else
+                  echo 'PROCESS_CWD_MATCHES_830602_RELEASE=no_or_indirect'
+                fi
+                ;;
+            esac
+          done
+          if [ "$found" -eq 0 ]; then
+            echo 'NODE_PROCESS_MATCH=NOT_FOUND_OR_PROC_ACCESS_DENIED'
+          fi
+          echo '=== END READ-ONLY AUDIT ==='
+          REMOTE
