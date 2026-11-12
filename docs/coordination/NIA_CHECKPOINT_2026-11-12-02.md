@@ -97,3 +97,20 @@ La limitación de acceso reportada inicialmente quedó superada mediante un work
 ## 8. Siguiente prioridad
 
 Retirar la duda de identidad del runtime Staging de la lista P1. Siguiente acción recomendada: completar la remediación SSRF de `/api/img?url=` en rama aislada, con validación de destinos, redirects, IP privadas y límites de respuesta; ejecutar pruebas dirigidas, revisión final y preparar integración en `ia-desarrollo`. No modificar Producción.
+
+## 9. Actualización — PR #91 SSRF integrada y publicada en Staging (2026-11-12)
+
+El propietario autorizó expresamente fusionar el PR #91 a `ia-desarrollo` y verificar la corrección en Staging; **no autorizó producción**.
+
+- PR #91 fusionada (merge commit `a9f177ba62ceec5eb4ea43cf17d7dbbcdc4c7fc6`, 2026-11-12 18:59:33 UTC).
+- Merge mediante GitHub, con SHA del HEAD esperado para evitar mezclar un cambio ajeno; pruebas previas en 6 workflows SUCCESS.
+- GitHub Actions no registró ejecución inicial asociada al merge. Se añadió al workflow de despliegue reversible de Staging la prueba SSRF (`tests/image-proxy-security.test.mjs`) y se publicó un commit controlado en `ia-desarrollo`: `41bbaac6dbf2cd8a66819b5119928f6e18ab9dcd`.
+- CI de regresiones [run #43285907607](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43285907607) SUCCESS; test SSRF, npm ci, lint, build y release-stamp.
+- Deploy reversible [run #43285907644](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43285907644) SUCCESS; build Node22 y tests, comprobación SSH, respaldo SQL de Staging, cambio de release y verificación HTTP SHA exacto.
+- Auditoría SSH de solo lectura independiente [run #43286803394](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43286803394) SUCCESS. `current` apunta a `versions/enc-coord-41bbaac6dbf2`; PID de Staging `726253`, cwd real en `/home/u293982346/domains/staging.encarmen.org/hbuilds/versions/enc-coord-41bbaac6dbf2/nodejs`.
+- `server.js` y `api/server.bundle.js`: SHA-256 `ef362ae92aaa6c69a3bf99b0131d770862b9284eff0e08c5405cd38b33a29d84`, archivos idénticos; el bundle incluye textos de las guardias `IMAGE_PROXY_NON_PUBLIC_ADDRESS` y `IMAGE_PROXY_REDIRECT_NOT_ALLOWED`.
+- En Staging `/api/health` responde `ok`, MariaDB de pruebas, `readOnly=true`, `writesPermitted=false`.
+- `main` permanece en `65cc5f85389639d72f5101c8bc20eb488a247beb`: **Producción no se modificó; sigue pendiente de publicar y comprobar la corrección en encarmen.org bajo autorización expresa**.
+- Registro maestro actualizado con estado **STAGING VERIFICADO / PRODUCCIÓN PENDIENTE**, commit `6224570b786ff12a823312d568fd31398f9382ec`.
+
+**Próximo pendiente funcional:** Issue #41, radar de clasificados, sigue OPEN y pendiente E2E de aprobación/selección/persistencia. El pendiente de seguridad SSRF no debe cerrarse globalmente hasta que producción también esté corregida.
