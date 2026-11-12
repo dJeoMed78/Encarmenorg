@@ -131,3 +131,20 @@ El propietario autorizó expresamente fusionar el PR #91 a `ia-desarrollo` y ver
 - **Clasificación:** SSRF implementada, probada en CI, integrada en main, desplegada y verificada en el runtime real de Producción. La auditoría no es un pentest exhaustivo. Staging permanece en su release separada `41bbaac6dbf2`.
 - Registro maestro actualizado: commit `4e2e114857c41e5f0c8fb909a473bdd796df877f`.
 - Siguiente prioridad funcional sigue siendo Radar Clasificados Issue #41 (selección, aprobación, persistencia), manteniendo autorización específica para operaciones de escritura.
+
+
+## 11. Verificación final independiente de producción — SSRF (2026-11-12)
+
+La publicación autorizada del PR #92 ya fue comprobada por GitHub Actions y directamente en el servidor Hostinger.
+
+- PR [#92](https://github.com/dJeoMed78/Encarmenorg/pull/92), fusionada a `main` commit `46d96c71673bd5b93a28a6dc0ce661c7fe1df63e`. Se copiaron únicamente guardias SSRF, pruebas y CI; Staging permanece en `41bbaac6dbf2cd8a66819b5119928f6e18ab9dcd`.
+- CI producción [#43290483778](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43290483778): SUCCESS.
+- Backup de código anterior (sin operaciones DB) [#43290228543](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43290228543): SUCCESS, archivo privado `code-pre-ssrf-main-65cc5f853896.tar.gz`, 307,960,317 bytes, manifiesto y release anterior conservada.
+- Auditoría final SSH + HTTP [#43292023346](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43292023346): **SUCCESS**; `server.ts`, `src/server/imageProxySecurity.ts` y `tests/image-proxy-security.test.mjs` del servidor coinciden bit por bit con el commit de `main`.
+- Proceso LiteSpeed Node: PIDs `1045424`, `1048671`, `1049599`; los tres `cwd` apuntan a `/home/u293982346/domains/encarmen.org/hbuilds/versions/01a1d13b-7679-7141-b290-f91d74e8453d/nodejs`, mismo directorio `current/nodejs`, sin procesos productivos detectados en release antigua.
+- `server.js` y `api/server.bundle.js` tienen SHA-256 idéntico `83dcad35b24c0a0f2d21cb358f147d5ebdc00273d234d17d337099a0ec54c706`. Guardias SSRF compiladas y comprobadas en archivos reales.
+- Smoke HTTP producción: `/api/health` status ok, MariaDB activa, 208 negocios, 12 clasificados; `/api/businesses` 208; URL externa no autorizada responde imagen placeholder segura `image/jpeg` sin redirección (PASS).
+- Nota de auditoría estricta [#43290736858](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43290736858): FAILURE únicamente al comparar el `package-lock.json` de Hostinger con el lock de GitHub. La comparación previa de hash de `server.js`/bundle había pasado; el hash del lock Hostinger `e238a678152b252e40b55eabeba2649971311d6313d5e159c746453346ceddb6` es idéntico al anterior al deploy, por lo que es una divergencia **preexistente**, no una regresión introducida por PR #92. La prueba actualizada #43292023346 acepta el hash antiguo verificado y pasa. Dejar seguimiento de higiene de lockfile separado, sin alterar producción innecesariamente.
+- Actualización del registro maestro: commit `583b11152bf4cf69e7eced92450423847d3b9f38`.
+
+**Conclusión definitiva de alcance:** riesgo SSRF corregido, CI probado, integrado, publicado y comprobado en runtime real tanto en Staging como en producción. No se demuestra pentest exhaustivo. Siguiente tarea funcional: Issue #41 Radar Clasificados, sin autorización implícita para escrituras nuevas.
