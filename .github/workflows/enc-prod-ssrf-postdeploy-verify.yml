@@ -1,0 +1,104 @@
+name: ENCARMEN production SSRF release verification
+on:
+  push:
+    branches:
+      - audit/enc-prod-ssrf-readonly-20261112
+    paths:
+      - .github/workflows/enc-prod-ssrf-postdeploy-verify.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Checkout precisely the approved production merge commit
+        uses: actions/checkout@v4
+        with:
+          ref: 46d96c71673bd5b93a28a6dc0ce661c7fe1df63e
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Build exact production candidate and compute bundle fingerprint
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "46d96c71673bd5b93a28a6dc0ce661c7fe1df63e"
+          npm ci
+          node --import tsx --test tests/enc-seo-indexing-production.test.mjs tests/image-proxy-security.test.mjs
+          npm run build
+          test -f server.js && test -f api/server.bundle.js
+          cmp -s server.js api/server.bundle.js
+          grep -Fq 'IMAGE_PROXY_NON_PUBLIC_ADDRESS' server.js
+          grep -Fq 'IMAGE_PROXY_REDIRECT_NOT_ALLOWED' server.js
+          echo "EXPECTED_SERVER_SHA=$(sha256sum server.js | awk '{print $1}')" >> "$GITHUB_ENV"
+          echo "EXPECTED_LOCK_SHA=$(sha256sum package-lock.json | awk '{print $1}')" >> "$GITHUB_ENV"
+          echo 'PRODUCTION_CANDIDATE_REBUILT=PASS'
+      - name: Pin SSH host identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq sshpass >/dev/null
+          test -n "$SSHPASS"
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+      - name: Wait for Hostinger production activation and attest process in read only mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          host=u293982346@45.137.159.114
+          for attempt in $(seq 1 32); do
+            if sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no "$host" "bash -s '$EXPECTED_SERVER_SHA' '$EXPECTED_LOCK_SHA'" <<'REMOTE'
+          set -euo pipefail
+          expected_server="$1"
+          expected_lock="$2"
+          root="$HOME/domains/encarmen.org/hbuilds"
+          active="$root/current/nodejs"
+          link="$(readlink "$root/current" || true)"
+          case "$link" in versions/*) ;; *) echo 'PROD_CURRENT_LINK_INVALID'; exit 2;; esac
+          real="$(readlink -f "$active" || true)"
+          test -r "$active/server.js" && test -r "$active/api/server.bundle.js" || exit 3
+          actual_server="$(sha256sum "$active/server.js" | awk '{print $1}')"
+          actual_bundle="$(sha256sum "$active/api/server.bundle.js" | awk '{print $1}')"
+          actual_lock="$(sha256sum "$active/package-lock.json" | awk '{print $1}')"
+          test "$actual_server" = "$expected_server" || { echo 'PROD_CANDIDATE_NOT_ACTIVE'; exit 4; }
+          test "$actual_bundle" = "$actual_server" || { echo 'PROD_BUNDLE_MISMATCH'; exit 5; }
+          test "$actual_lock" = "$expected_lock" || { echo 'PROD_LOCK_MISMATCH'; exit 6; }
+          grep -Fq 'IMAGE_PROXY_NON_PUBLIC_ADDRESS' "$active/server.js"
+          grep -Fq 'IMAGE_PROXY_REDIRECT_NOT_ALLOWED' "$active/server.js"
+          count=0
+          pids=""
+          for pid in $(ps -u "$(id -u)" -o pid=,comm= 2>/dev/null | awk '$2 ~ /^lsnode|^node|^nodejs/ {print $1}'); do
+            cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+            if [ "$cwd" = "$real" ]; then
+              count=$((count+1))
+              pids="$pids $pid"
+            fi
+          done
+          test "$count" -ge 1 || { echo 'PROD_NEW_RELEASE_PROCESS_NOT_YET_ACTIVE'; exit 7; }
+          echo "PROD_RUNTIME_MATCH=PASS"
+          echo "PROD_COMMIT=46d96c71673bd5b93a28a6dc0ce661c7fe1df63e"
+          echo "PROD_CURRENT_LINK=$link"
+          echo "PROD_PROCESS_CWD=$real"
+          echo "PROD_PIDS=$pids"
+          echo "PROD_SERVER_SHA256=$actual_server"
+          echo "PROD_LOCK_SHA256=$actual_lock"
+          echo 'PROD_GUARDS_COMPILED=PASS'
+          REMOTE
+            then
+              echo 'PROD_SSRF_RUNTIME_ATTESTED=PASS'
+              exit 0
+            fi
+            echo "PROD_WAITING_FOR_HOSTINGER_ACTIVATION=$attempt/32"
+            sleep 12
+          done
+          echo 'PROD_SSRF_RUNTIME_ATTESTED=FAIL'
+          exit 1
