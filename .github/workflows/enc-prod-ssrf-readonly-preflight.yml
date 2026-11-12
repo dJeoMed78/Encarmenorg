@@ -83,5 +83,19 @@ jobs:
               find "$d" -maxdepth 2 -type f -printf 'BACKUP_FILE=%f|bytes=%s|modified=%TY-%Tm-%TdT%TH:%TM:%TS\n' 2>/dev/null | tail -12
             fi
           done
+
+          echo '=== SSRF ACTIVE PRODUCTION SECURITY GUARDS ==='
+          if grep -Fq 'IMAGE_PROXY_NON_PUBLIC_ADDRESS' "$node/server.js" &&
+             grep -Fq 'IMAGE_PROXY_REDIRECT_NOT_ALLOWED' "$node/server.js"; then
+            echo 'PROD_SSRF_COMPILED_GUARDS_PRESENT=yes'
+          else
+            echo 'PROD_SSRF_COMPILED_GUARDS_PRESENT=no'
+          fi
+          if [ -f "$node/tests/image-proxy-security.test.mjs" ]; then
+            echo 'PROD_SECURITY_TEST_FILE_PRESENT=yes'
+          else
+            echo 'PROD_SECURITY_TEST_FILE_PRESENT=no'
+          fi
+          echo '=== END SSRF PRODUCTION CHECK ==='
           echo '=== END PRODUCTION PREFLIGHT ==='
           REMOTE
