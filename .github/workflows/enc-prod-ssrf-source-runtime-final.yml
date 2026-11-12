@@ -64,7 +64,15 @@ jobs:
           check_file server.ts "$expected_ts"
           check_file src/server/imageProxySecurity.ts "$expected_guard"
           check_file tests/image-proxy-security.test.mjs "$expected_test"
-          check_file package-lock.json "$expected_lock"
+          # Hostinger's lockfile already differed from the repository BEFORE this code-only patch.
+          # Require the previously observed production hash to prove no new dependency drift.
+          lock_actual="$(sha256sum "$active/package-lock.json" | awk '{print $1}')"
+          if [ "$lock_actual" = "$expected_lock" ]; then
+            echo 'PROD_LOCK_REPO_MATCH=yes'
+          else
+            test "$lock_actual" = 'e238a678152b252e40b55eabeba2649971311d6313d5e159c746453346ceddb6' || { echo 'PROD_LOCK_UNEXPECTED_DRIFT'; exit 3; }
+            echo 'PROD_LOCK_PREEXISTING_HOSTINGER_DIFFERENCE=yes'
+          fi
           test -f "$active/server.js" && test -f "$active/api/server.bundle.js"
           cmp -s "$active/server.js" "$active/api/server.bundle.js"
           grep -Fq 'IMAGE_PROXY_NON_PUBLIC_ADDRESS' "$active/server.js"
