@@ -115,5 +115,22 @@ jobs:
           if [ "$found" -eq 0 ]; then
             echo 'NODE_PROCESS_MATCH=NOT_FOUND_OR_PROC_ACCESS_DENIED'
           fi
+          echo '=== PROCESS VISIBILITY CROSS-CHECK ==='
+          printf 'ACCOUNT_UID='; id -u
+          printf 'PS_NODE_PROCESSES='
+          ps -eo pid,ppid,uid,lstart,comm 2>/dev/null | awk 'tolower($0) ~ /node|passenger|lsnode/ {print}' || true
+          printf 'ACCOUNT_NODE_PROCESSES='
+          ps -u "$(id -u)" -o pid=,ppid=,lstart=,comm= 2>/dev/null | awk 'tolower($0) ~ /node|passenger|lsnode/ {print}' || true
+          printf 'RESTART_MARKER='
+          if [ -e "$NODEDIR/tmp/restart.txt" ]; then
+            stat -c '%n|mtime=%y|inode=%i' "$NODEDIR/tmp/restart.txt"
+          else
+            echo NOT_FOUND
+          fi
+          printf 'PASSENGER_STATUS_COMMAND='
+          command -v passenger-status 2>/dev/null || echo NOT_AVAILABLE
+          if command -v passenger-status >/dev/null 2>&1; then
+            passenger-status --show=xml 2>&1 | sed -n '1,80p'
+          fi
           echo '=== END READ-ONLY AUDIT ==='
           REMOTE
