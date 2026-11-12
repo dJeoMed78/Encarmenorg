@@ -73,7 +73,6 @@ import {fetchRemoteImageBuffer, isAllowedRemoteImageUrl} from './src/server/imag
 import {
   initMariaDb,
   isMariaDbActive,
-  getPool,
   dbLoadAllBusinesses,
   dbSaveBusiness,
   dbDeleteBusiness,
