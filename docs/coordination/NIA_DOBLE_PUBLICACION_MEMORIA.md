@@ -128,3 +128,18 @@ Después de integrar PR #57 a `ia-desarrollo` (merge `d809015fa7e6ff32ca9c00baa7
 - **Memoria narrativa:** [NIA-2026-11-12-02.md](https://docs.google.com/document/d/1k4a-KgQx8OgVBaiQxaX9xbhHqoNAljccQN6GBArxb_k/edit), Drive ID `1k4a-KgQx8OgVBaiQxaX9xbhHqoNAljccQN6GBArxb_k`.
 - **Estado P1:** resuelto y verificado en Staging, **Producción aún sin esta corrección y pendiente de autorización**.
 - **Siguiente pendiente funcional:** Issue [#41](https://github.com/dJeoMed78/Encarmenorg/issues/41) (Radar de clasificados, E2E/persistencia).
+
+
+## 2026-11-12 — SSRF en Producción corregida y publicada
+
+- Autorización final expresa del propietario para publicar `encarmen.org`.
+- PR [#92](https://github.com/dJeoMed78/Encarmenorg/pull/92) MERGED, main commit `46d96c71673bd5b93a28a6dc0ce661c7fe1df63e`; cambio quirúrgico SSRF, sin integrar todas las funciones de Staging.
+- CI producción [43290483778](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43290483778) SUCCESS; backup previo de código [43290228543](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43290228543) SUCCESS.
+- Auditoría Hostinger [43291068294](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43291068294) SUCCESS: `current` apunta a `versions/01a1d13b-7679-7141-b290-f91d74e8453d`, procesos Node PIDs 1045424, 1048671, 1049599 en esa release, guardias SSRF en bundle.
+- Hash SHA-256 `server.js` = `api/server.bundle.js` = `83dcad35b24c0a0f2d21cb358f147d5ebdc00273d234d17d337099a0ec54c706`.
+- Segundo run de auditoría [43291249780](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43291249780): SUCCESS.
+- Producción `/api/health`: status ok, MariaDB activa, 208 negocios, 12 clasificados, 5 eventos, 1 promoción, a `2026-11-12T19:32:37.542Z`. Runtime activo posterior al despliegue.
+- Verificador opcional del hash reconstruido [43290736858](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43290736858) estaba en progreso al primer informe; no afirmar PASS antes de verificar.
+- Registro maestro actualizado en commit `4e2e114857c41e5f0c8fb909a473bdd796df877f`; checkpoint actualizado `aaa9eceb70e42b1c7a8c0a3df8a3ba03260c1828`.
+- Drive: `NIA-2026-11-12-02.md`, ID `1k4a-KgQx8OgVBaiQxaX9xbhHqoNAljccQN6GBArxb_k` actualizado.
+- Próximo pendiente prioritario: Radar Clasificados, Issue #41.
