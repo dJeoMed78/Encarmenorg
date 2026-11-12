@@ -71,3 +71,29 @@ Aplicar desde ahora el protocolo de delegación end-to-end. Priorizar un P1 y as
 - Distinguir implementado, probado, integrado, desplegado, verificado en runtime y aceptado.
 
 **Estado:** memoria narrativa Drive creada y leída de vuelta; checkpoint GitHub creado en rama de coordinación. Falta lectura posterior de GitHub y actualización/verificación del índice de doble publicación.
+
+
+## 7. Actualización posterior — Auditoría SSH de runtime (2026-11-12)
+
+La limitación de acceso reportada inicialmente quedó superada mediante un workflow temporal de solo lectura que utilizó la conexión SSH de Staging ya configurada en GitHub Actions. Esta evidencia posterior reemplaza la nota inicial de que no se había verificado acceso SSH.
+
+- Workflow de auditoría en rama aislada: `audit/staging-runtime-readonly-20261112`.
+- Commit del workflow: `8056b2612e07dd3b310fd18d0cc88f0555ebd8f9`.
+- Run exitoso: [43277110058](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43277110058).
+- PID de Staging: `3067741`; ejecutable Node 22: `/opt/alt/alt-nodejs22/root/usr/bin/node`.
+- CWD del PID: `/home/u293982346/domains/staging.encarmen.org/hbuilds/versions/enc-coord-830602beb0a0/nodejs`, idéntico a la ruta física de `current/nodejs`.
+- Inicio del PID: `2026-11-12 16:49:44 UTC`; coincide al segundo con el inicio calculado desde `/api/health` (`uptime=4912` a `18:11:36.227Z`).
+- Symlink actual: `versions/enc-coord-830602beb0a0`; release marker SHA: `830602beb0a0b59f009458c5bce8f0a22f46e46a`.
+- SHA-256 `server.js` = SHA-256 `api/server.bundle.js` = `d799d5ea77abc6a88b767cf9aabcdc798e1322630ccc7808251b7bccc9180c05`.
+- `dist/encarmen-release.json`: `963e835186dcfff5f3873f20dd3498f6d028eb3a6601b888e18d94bec6af2156`.
+- `package-lock.json`: `2e46802e4cd9aef96f9463b9ccaac8654995099928d9f244b20dc70cf792c813`.
+- `tmp/restart.txt` conserva mtime `2026-11-09 16:12:45.782 UTC`, coincidente con el cambio de symlink.
+- Los demás procesos `lsnode` listados pertenecen al path físico de `encarmen.org`; el PID `3067741` es el proceso ubicado en Staging.
+
+**Conclusión:** CONFIRMADO. El proceso Node/LiteSpeed de Staging se ejecuta desde la release activa del commit `830602beb0a0...`. El argumento server.js no aparece en el cmdline de LiteSpeed, pero Hostinger reportó `server.js` como entrypoint configurado, `package.json` declara `node server.js`, y el CWD del proceso coincide con la carpeta física de esa release. Auditoría sin cambios, reinicios ni despliegues.
+
+**Estado de tarea:** `ENC-BUILD-SERVER-ARTIFACT-20261109-001` queda cerrada técnicamente para Staging. No se extrapola esta conclusión a Producción.
+
+## 8. Siguiente prioridad
+
+Retirar la duda de identidad del runtime Staging de la lista P1. Siguiente acción recomendada: completar la remediación SSRF de `/api/img?url=` en rama aislada, con validación de destinos, redirects, IP privadas y límites de respuesta; ejecutar pruebas dirigidas, revisión final y preparar integración en `ia-desarrollo`. No modificar Producción.
