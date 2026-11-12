@@ -114,3 +114,20 @@ El propietario autorizó expresamente fusionar el PR #91 a `ia-desarrollo` y ver
 - Registro maestro actualizado con estado **STAGING VERIFICADO / PRODUCCIÓN PENDIENTE**, commit `6224570b786ff12a823312d568fd31398f9382ec`.
 
 **Próximo pendiente funcional:** Issue #41, radar de clasificados, sigue OPEN y pendiente E2E de aprobación/selección/persistencia. El pendiente de seguridad SSRF no debe cerrarse globalmente hasta que producción también esté corregida.
+
+
+## 10. Producción — SSRF /api/img corregida y publicada (2026-11-12)
+
+**Autorización:** el propietario ordenó expresamente ejecutar la corrección y publicarla en producción.
+
+- PR #92 fusionada en `main`, SHA `46d96c71673bd5b93a28a6dc0ce661c7fe1df63e`. Parche quirúrgico: `server.ts`, `src/server/imageProxySecurity.ts`, pruebas SSRF y workflow CI, sin fusionar el resto de `ia-desarrollo`.
+- CI de build producción: [run 43290483778](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43290483778), SUCCESS.
+- Respaldo previo del código de producción: [run 43290228543](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43290228543), SUCCESS. No se registraron operaciones destructivas a DB.
+- Auditoría de Hostinger SSH read-only: [run 43291068294](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43291068294), SUCCESS. Symlink `current` de producción `versions/01a1d13b-7679-7141-b290-f91d74e8453d`. PIDs `1045424`, `1048671`, `1049599` ejecutan con cwd exactamente en esa versión. `server.js` y `api/server.bundle.js`: SHA-256 `83dcad35b24c0a0f2d21cb358f147d5ebdc00273d234d17d337099a0ec54c706`.
+- El bundle productivo tiene los mensajes `IMAGE_PROXY_NON_PUBLIC_ADDRESS` y `IMAGE_PROXY_REDIRECT_NOT_ALLOWED`, evidencia de código SSRF compilado.
+- Auditoría SSH adicional [run 43291249780](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43291249780) SUCCESS.
+- `GET https://encarmen.org/api/health`: status ok, uptime=139, MariaDB activa, 208 negocios a `2026-11-12T19:32:37.542Z`.
+- Verificador de hash reconstruido por CI [run 43290736858](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43290736858) en curso al registrar esta actualización; no afirmar PASS antes de verificar resultado.
+- **Clasificación:** SSRF implementada, probada en CI, integrada en main, desplegada y verificada en el runtime real de Producción. La auditoría no es un pentest exhaustivo. Staging permanece en su release separada `41bbaac6dbf2`.
+- Registro maestro actualizado: commit `4e2e114857c41e5f0c8fb909a473bdd796df877f`.
+- Siguiente prioridad funcional sigue siendo Radar Clasificados Issue #41 (selección, aprobación, persistencia), manteniendo autorización específica para operaciones de escritura.
