@@ -97,5 +97,11 @@ jobs:
             echo 'PROD_SECURITY_TEST_FILE_PRESENT=no'
           fi
           echo '=== END SSRF PRODUCTION CHECK ==='
+          echo '=== SSRF RELEASE CHECK ==='
+          if grep -Fq 'IMAGE_PROXY_NON_PUBLIC_ADDRESS' "$node/server.js" && grep -Fq 'IMAGE_PROXY_REDIRECT_NOT_ALLOWED' "$node/server.js"; then
+            echo 'PROD_SSRF_COMPILED_GUARDS=YES'
+          else
+            echo 'PROD_SSRF_COMPILED_GUARDS=NO'
+          fi
           echo '=== END PRODUCTION PREFLIGHT ==='
           REMOTE
