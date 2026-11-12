@@ -93,3 +93,14 @@ Después de integrar PR #57 a `ia-desarrollo` (merge `d809015fa7e6ff32ca9c00baa7
 - El pendiente ENC-BUILD-SERVER-ARTIFACT-20261109-001 queda resuelto para identidad de runtime Staging; no extrapolar a Producción.
 - Evidencia y detalle: `NIA_CHECKPOINT_2026-11-12-02.md`.
 
+
+
+## Verificación final de runtime Staging — 2026-11-12
+
+- Estado: **CONFIRMADO**.
+- PID LiteSpeed Node: `3067741`; CWD coincide con release activa `enc-coord-830602beb0a0`.
+- SHA del commit de release: `830602beb0a0b59f009458c5bce8f0a22f46e46a`.
+- SHA-256 `server.js` y `api/server.bundle.js`: `d799d5ea77abc6a88b767cf9aabcdc798e1322630ccc7808251b7bccc9180c05`.
+- GitHub Actions evidencia: [run 43277110058](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43277110058).
+- Checkpoint ampliado: `NIA_CHECKPOINT_2026-11-12-02.md`, commit `29a2958e96375e8de0955248fc93ba38be81230f`.
+- Memoria narrativa Drive: `NIA-2026-11-12-02.md`, ID `1k4a-KgQx8OgVBaiQxaX9xbhHqoNAljccQN6GBArxb_k`.
