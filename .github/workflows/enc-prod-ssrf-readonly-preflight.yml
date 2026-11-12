@@ -1,0 +1,87 @@
+name: ENCARMEN production SSRF read-only preflight
+on:
+  push:
+    branches:
+      - audit/enc-prod-ssrf-readonly-20261112
+    paths:
+      - .github/workflows/enc-prod-ssrf-readonly-preflight.yml
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Install SSH helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq sshpass >/dev/null
+          test -n "$SSHPASS"
+      - name: Verify pinned Hostinger SSH host key
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          actual="$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')"
+          test "$actual" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+      - name: Inspect production deployment runtime and backup readiness (read only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'bash -s' <<'REMOTE'
+          set -uo pipefail
+          root="$HOME/domains/encarmen.org/hbuilds"
+          active="$root/current"
+          node="$active/nodejs"
+          staging="$HOME/domains/staging.encarmen.org/hbuilds/current/nodejs"
+          echo "=== PRODUCTION PREFLIGHT (READ ONLY) ==="
+          date -u '+UTC=%Y-%m-%dT%H:%M:%SZ'
+          printf 'PROD_CURRENT_LINK='; readlink "$active" || echo MISSING
+          printf 'PROD_NODEJS_REAL='; readlink -f "$node" || echo MISSING
+          printf 'STAGING_NODEJS_REAL='; readlink -f "$staging" || echo MISSING
+          for rel in server.js api/server.bundle.js package-lock.json dist/encarmen-release.json dist/index.html; do
+            f="$node/$rel"
+            if [ -r "$f" ]; then
+              sha256sum "$f"
+              stat -c 'FILE_META=%n|bytes=%s|modified=%y' "$f"
+            else
+              echo "PROD_FILE_MISSING=$rel"
+            fi
+          done
+          echo '=== PRODUCTION NODE PROCESSES ==='
+          seen=0
+          for pid in $(ps -u "$(id -u)" -o pid=,comm= 2>/dev/null | awk '$2 ~ /^lsnode|^node|^nodejs/ {print $1}'); do
+            cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null)"
+            case "$cwd" in
+              *"/domains/encarmen.org/hbuilds/"*)
+                seen=1
+                printf 'PROD_PID=%s\n' "$pid"
+                ps -p "$pid" -o pid=,ppid=,lstart=,comm=
+                printf 'PROD_PROCESS_CWD=%s\n' "$cwd"
+                ;;
+            esac
+          done
+          test "$seen" -eq 1 || echo 'PROD_PROCESSES_NOT_VISIBLE'
+          echo '=== PRIVATE CONFIG IDENTITY (NONSECRET FIELDS ONLY) ==='
+          for cfg in "$root/config/.env" "$node/.env"; do
+            if [ -r "$cfg" ]; then
+              printf 'CONFIG_FILE=%s\n' "$cfg"
+              stat -c 'CONFIG_PERMISSIONS=%a' "$cfg"
+              awk -F= '/^(APP_ENV|DB_NAME|STAGING_READ_ONLY)=/ {print "CONFIG_"$1"="$2}' "$cfg"
+            fi
+          done
+          echo '=== BACKUP DIRECTORY METADATA ==='
+          for d in "$HOME/encarmen-production-backups" "$HOME/encarmen-prod-backups" "$HOME/domains/encarmen.org/backups"; do
+            if [ -d "$d" ]; then
+              stat -c 'BACKUP_DIR=%n|mode=%a|modified=%y' "$d"
+              find "$d" -maxdepth 2 -type f -printf 'BACKUP_FILE=%f|bytes=%s|modified=%TY-%Tm-%TdT%TH:%TM:%TS\n' 2>/dev/null | tail -12
+            fi
+          done
+          echo '=== END PRODUCTION PREFLIGHT ==='
+          REMOTE
