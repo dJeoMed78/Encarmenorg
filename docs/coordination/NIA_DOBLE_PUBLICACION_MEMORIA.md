@@ -79,3 +79,17 @@ Después de integrar PR #57 a `ia-desarrollo` (merge `d809015fa7e6ff32ca9c00baa7
 - Directriz nueva: delegación de extremo a extremo, una revisión final independiente de Nia, edición directa del sitio cuando sea más práctica y exista acceso autenticado, y publicación posterior conforme a las autorizaciones vigentes.
 - Metodología permanente actualizada en `LA_JEFA_METODOLOGIA_PERMANENTE.md`.
 - HEAD previos a esta actualización: main `65cc5f85389639d72f5101c8bc20eb488a247beb`, ia-desarrollo `830602beb0a0b59f009458c5bce8f0a22f46e46a`, coord `2662b20c9a1484e1b829fcc0bb760308ef584d7a`.
+
+
+## Auditoría runtime Staging — 2026-11-12 (CONFIRMADA)
+
+- Ejecución de solo lectura: [GitHub Actions #43277110058](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43277110058).
+- PID Staging: `3067741`; Node 22; inicio `2026-11-12 16:49:44 UTC`.
+- CWD del proceso coincide con la ruta física activa `hbuilds/versions/enc-coord-830602beb0a0/nodejs`.
+- Symlink `current` y release marker corresponden al commit `830602beb0a0b59f009458c5bce8f0a22f46e46a`.
+- SHA-256 `server.js` y `api/server.bundle.js`: `d799d5ea77abc6a88b767cf9aabcdc798e1322630ccc7808251b7bccc9180c05` (idénticos).
+- La API `/api/health` confirmó uptime compatible exactamente con el inicio del PID.
+- Conclusión: **CONFIRMADO — Staging ejecuta la release del commit 830602beb0a0...**. Sin cambios, reinicio ni despliegue durante la auditoría.
+- El pendiente ENC-BUILD-SERVER-ARTIFACT-20261109-001 queda resuelto para identidad de runtime Staging; no extrapolar a Producción.
+- Evidencia y detalle: `NIA_CHECKPOINT_2026-11-12-02.md`.
+
