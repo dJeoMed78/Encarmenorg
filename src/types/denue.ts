@@ -1,0 +1,34 @@
+export type DenueDuplicate = 'NUEVO' | 'POSIBLE DUPLICADO' | 'DUPLICADO CONFIRMADO' | 'PENDIENTE DE VERIFICACIÓN';
+export interface DenueCandidate {
+  denueId: string;
+  revision?: string;
+  name: string;
+  legalName: string;
+  activity: string;
+  category: string;
+  streetType: string;
+  street: string;
+  exterior: string;
+  interior: string;
+  address: string;
+  colonia: string;
+  postalCode: string;
+  locality: string;
+  municipality: string;
+  state: string;
+  areaGeo: string;
+  phone: string;
+  email: string;
+  website: string;
+  latitude: number | null;
+  longitude: number | null;
+  clee: string;
+  sourceUpdatedAt: string;
+  sourceRegisteredAt: string;
+  source: 'INEGI_DENUE';
+  sourceUrl: string;
+  consultedAt: string;
+  geography: 'VERIFICADA' | 'FUERA DE LOCALIDAD' | 'PENDIENTE DE VERIFICACIÓN GEOGRÁFICA';
+  duplicate: DenueDuplicate;
+  sourceReview: 'PENDIENTE DE REVISIÓN DEL VISOR';
+}

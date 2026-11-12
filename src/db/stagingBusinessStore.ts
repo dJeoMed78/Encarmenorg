@@ -34,7 +34,7 @@ export function createStagingBusinessStore(deps:{canWrite:()=>boolean;getConnect
     const proof=await verify(conn);if(!proof.ok)throw new BusinessWriteError(403,'STAGING_ISOLATION_UNPROVEN',`No se comprobó el aislamiento de Staging (${proof.code}); escritura bloqueada.`);return conn;}catch(e){conn.release();throw e;}}
  async function transaction<T>(conn:any, action:()=>Promise<T>){let committing=false;try {await conn.beginTransaction();const value=await action();assertWrite();committing=true;await conn.commit();return value;}catch(e){try{await conn.rollback();}catch{}if(e instanceof BusinessWriteError)throw e;throw new BusinessWriteError(503,'BUSINESS_WRITE_UNCONFIRMED','No se confirmó el guardado. Recarga antes de reintentar; conserva la clave de registro.',committing);} }
  return {
-  async create(draft:any,requestId:string){
+  async create(draft:any,requestId:string,duplicateCheck?:(records:any[])=>boolean){
    if(!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(requestId))throw new BusinessWriteError(400,'REQUEST_ID_REQUIRED','Se requiere una clave de registro UUID para reintentos seguros.');
    const digest=createHash('sha256').update(JSON.stringify(draft)).digest('hex');const conn=await connection();let locked=false;
    try {
@@ -45,7 +45,7 @@ export function createStagingBusinessStore(deps:{canWrite:()=>boolean;getConnect
      const replay=rows.find((r:any)=>raw(r)._stagingRegistrationId===requestId);
      if(replay){if(raw(replay)._stagingRegistrationDigest!==digest)throw new BusinessWriteError(409,'IDEMPOTENCY_CONFLICT','La clave ya corresponde a otros datos.');return {business:deps.serialize(replay),replayed:true};}
      const digits=[contactDigits(draft.phone),contactDigits(draft.whatsapp)].filter(Boolean);
-     if(rows.some((r:any)=>norm(r.name)===norm(draft.name)||digits.some(n=>n===contactDigits(r.phone)||n===contactDigits(r.whatsapp))))throw new BusinessWriteError(409,'BUSINESS_DUPLICATE','Ya existe un negocio con ese nombre o contacto.');
+     if(duplicateCheck ? duplicateCheck(rows.map(deps.serialize)) : rows.some((r:any)=>norm(r.name)===norm(draft.name)||digits.some(n=>n===contactDigits(r.phone)||n===contactDigits(r.whatsapp))))throw new BusinessWriteError(409,'BUSINESS_DUPLICATE','Ya existe un negocio con ese nombre o contacto.');
      const id=Math.max(4000,...rows.map((r:any)=>Number(r.id)).filter(Number.isSafeInteger))+1;
      if(!Number.isSafeInteger(id))throw new BusinessWriteError(409,'ID_EXHAUSTED','No se pudo asignar un ID seguro.');
      const base=String(draft.name).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'empresa';

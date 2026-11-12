@@ -1,4 +1,5 @@
 export interface Business {
+  denue?: import('./types/denue').DenueCandidate;
   id: number;
   name: string;
   slug: string;
