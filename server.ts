@@ -40,7 +40,7 @@ if (process.env.HOME) {
       const keys = ['DB_HOST','DB_PORT','DB_USER','DB_NAME','DB_PASSWORD',
         'STAGING_READ_ONLY','STAGING_DB_CONFIRMED',
         'STAGING_BUSINESS_WRITES_ENABLED','ENC_ADMIN_MUTATIONS_ENABLED',
-        'ENC_ADMIN_PUBLIC_ORIGIN','ENC_ADMIN_CREDENTIALS_JSON'] as const;
+        'ENC_ADMIN_PUBLIC_ORIGIN','ENC_ADMIN_CREDENTIALS_JSON','ENC_IMAGE_PROXY_ALLOWED_HOSTS'] as const;
       process.env.APP_ENV = 'staging';
       for (const key of keys) {
         if (typeof staged[key] === 'string') process.env[key] = staged[key];
@@ -69,6 +69,7 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import sharp from 'sharp';
+import {fetchRemoteImageBuffer, isAllowedRemoteImageUrl} from './src/server/imageProxySecurity.ts';
 import {
   initMariaDb,
   isMariaDbActive,
@@ -678,31 +679,26 @@ app.get('/api/version', (_req: Request, res: Response) => {
 });
 
 app.get('/api/img', async (req: Request, res: Response) => {
-  const rawUrl = (req.query.url as string) || '';
-  if (!rawUrl) {
+  const rawParam = req.query.url;
+  if (typeof rawParam !== 'string' || !rawParam.trim()) {
     return res.status(400).send('Missing url param');
   }
+  const rawUrl = rawParam.trim();
+  if (rawUrl.length > 4096) return res.status(414).send('Image URL too long');
 
-  const width = Math.min(Math.max(parseInt((req.query.w as string) || '480', 10), 40), 1920);
-  const quality = Math.min(Math.max(parseInt((req.query.q as string) || '80', 10), 30), 95);
-  const format = ((req.query.format as string) || 'webp').toLowerCase();
-
-  // Create unique hash for disk caching
-  const hash = crypto.createHash('sha1').update(`${rawUrl}_w${width}_q${quality}_f${format}`).digest('hex');
-  const cacheFile = path.join(imgCacheDir, `${hash}.${format}`);
-
-  // Serve directly from disk cache if already compiled
-  if (fs.existsSync(cacheFile)) {
-    res.setHeader('Content-Type', `image/${format}`);
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    return res.sendFile(cacheFile);
-  }
+  const requestedWidth = Number.parseInt(String(req.query.w || '480'), 10);
+  const requestedQuality = Number.parseInt(String(req.query.q || '80'), 10);
+  const width = Number.isFinite(requestedWidth) ? Math.min(Math.max(requestedWidth, 40), 1920) : 480;
+  const quality = Number.isFinite(requestedQuality) ? Math.min(Math.max(requestedQuality, 30), 95) : 80;
+  const requestedFormat = String(req.query.format || 'webp').toLowerCase();
+  const format = requestedFormat === 'jpg' ? 'jpeg' : ['webp', 'jpeg', 'png'].includes(requestedFormat) ? requestedFormat : 'webp';
 
   try {
-    let inputBuffer: Buffer | null = null;
-    let decodedUrl = decodeURIComponent(rawUrl).trim();
+    // Express ya decodificó el parámetro de consulta. No volver a aplicar decodeURIComponent:
+    // hacerlo aquí produciría una segunda decodificación controlable por el solicitante.
+    let decodedUrl = rawUrl;
 
-    // Map any lingering empresasencarmen.com URLs to local disk files
+    // Las rutas históricas de WordPress se resuelven localmente; nunca requieren una descarga remota.
     if (decodedUrl.includes('empresasencarmen.com/wp-content/')) {
       decodedUrl = decodedUrl.substring(decodedUrl.indexOf('/wp-content/'));
     } else if (decodedUrl.includes('empresasencarmen.com/media/')) {
@@ -711,16 +707,46 @@ app.get('/api/img', async (req: Request, res: Response) => {
       decodedUrl = '/wp-content/uploads/2026/10/' + decodedUrl.substring(decodedUrl.indexOf('/uploads/') + 9);
     }
 
-    // 1. Check local public file system
+    const isRemoteUrl = /^https?:\/\//i.test(decodedUrl);
+    // Rechazar dominios externos no aprobados incluso si ya existe una entrada de caché.
+    if (isRemoteUrl && !isAllowedRemoteImageUrl(decodedUrl)) {
+      return sendImagePlaceholder(res, path.basename(decodedUrl.split('?')[0]) || 'Empresa');
+    }
+
+    // El formato está limitado a extensiones conocidas antes de construir la ruta de caché.
+    const hash = crypto.createHash('sha1').update(rawUrl + '_w' + width + '_q' + quality + '_f' + format).digest('hex');
+    const cacheFile = path.join(imgCacheDir, hash + '.' + format);
+    if (fs.existsSync(cacheFile)) {
+      res.setHeader('Content-Type', 'image/' + format);
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.sendFile(cacheFile);
+    }
+
+    let inputBuffer: Buffer | null = null;
+
+    // 1. Archivos locales. La ruta resuelta y su destino real deben permanecer dentro de public/.
     if (decodedUrl.startsWith('/')) {
       const relPath = decodedUrl.replace(/^\/+/, '');
-      const localDirect = path.resolve(__dirname, 'public', relPath);
-      if (fs.existsSync(localDirect) && !fs.statSync(localDirect).isDirectory()) {
-        inputBuffer = fs.readFileSync(localDirect);
+      const publicRoot = path.resolve(__dirname, 'public');
+      const localDirect = path.resolve(publicRoot, relPath);
+      const relative = path.relative(publicRoot, localDirect);
+      const insidePublic = relative !== '' && relative !== '..' &&
+        !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative);
+      if (insidePublic && fs.existsSync(localDirect)) {
+        try {
+          const realRoot = fs.realpathSync(publicRoot);
+          const realFile = fs.realpathSync(localDirect);
+          const realRelative = path.relative(realRoot, realFile);
+          const realInsidePublic = realRelative !== '' && realRelative !== '..' &&
+            !realRelative.startsWith('..' + path.sep) && !path.isAbsolute(realRelative);
+          if (realInsidePublic && !fs.statSync(realFile).isDirectory()) {
+            inputBuffer = fs.readFileSync(realFile);
+          }
+        } catch {}
       }
     }
 
-    // 2. Search all wp-content/uploads subdirectories if filename didn't match the exact month/year
+    // 2. Compatibilidad con imágenes históricas de WordPress guardadas localmente.
     if (!inputBuffer && (decodedUrl.includes('/wp-content/uploads/') || decodedUrl.includes('/uploads/'))) {
       const baseFn = path.basename(decodedUrl.split('?')[0]);
       const possibleYears = ['2026/10', '2026/01', '2026/09', '2024/07', '2024/08', '2024/09', '2024/10', '2024/11', '2024/12', '2025/01', '2025/02', '2025/03'];
@@ -733,80 +759,56 @@ app.get('/api/img', async (req: Request, res: Response) => {
       }
     }
 
-    // 3. Fallback to MariaDB uploaded_files for /uploads/ or WordPress assets
+    // 3. Respaldo MariaDB para archivos que ya pertenecen al almacenamiento de ENCARMEN.
     if (!inputBuffer && (decodedUrl.includes('/uploads/') || decodedUrl.includes('/wp-content/'))) {
       const fn = path.basename(decodedUrl.split('?')[0]);
       if (fn && isMariaDbActive()) {
         try {
           const file = await dbGetUploadedFile(fn);
-          if (file && file.data) {
-            inputBuffer = file.data;
-          }
+          if (file && file.data) inputBuffer = file.data;
         } catch (_) {}
       }
     }
 
-    // 4. Remote fetch only for other external non-empresasencarmen domains (e.g. CDNs, Google, Unsplash)
-    if (!inputBuffer && (decodedUrl.startsWith('http://') || decodedUrl.startsWith('https://')) && !decodedUrl.includes('empresasencarmen.com')) {
+    // 4. Descarga externa exclusivamente por HTTPS/HTTP, dominio permitido, DNS público fijado,
+    // redirecciones revalidadas, MIME de imagen y límite estricto de bytes.
+    if (!inputBuffer && isRemoteUrl) {
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 7000);
-        const remoteRes = await fetch(decodedUrl, {
-          signal: controller.signal,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          }
-        });
-        clearTimeout(timeout);
-        if (remoteRes.ok) {
-          inputBuffer = Buffer.from(await remoteRes.arrayBuffer());
-        }
-      } catch (_) {}
+        inputBuffer = await fetchRemoteImageBuffer(decodedUrl);
+      } catch (_) {
+        inputBuffer = null;
+      }
     }
 
     if (!inputBuffer) {
-      // Return clean fallback placeholder image instead of failing
-      const baseFn = path.basename(decodedUrl.split('?')[0]) || 'Empresa';
-      return sendImagePlaceholder(res, baseFn);
+      return sendImagePlaceholder(res, path.basename(decodedUrl.split('?')[0]) || 'Empresa');
     }
 
-    // Process and optimize with Sharp
-    const sharpInstance = sharp(inputBuffer).rotate();
-    if (width > 0) {
-      sharpInstance.resize({
-        width,
-        withoutEnlargement: true,
-        fit: 'inside'
-      });
-    }
+    // Sharp valida el contenido real y limita el tamaño de imagen decodificada.
+    const sharpInstance = sharp(inputBuffer, {limitInputPixels: 40000000}).rotate();
+    sharpInstance.resize({width, withoutEnlargement: true, fit: 'inside'});
 
     let outputBuffer: Buffer;
     if (format === 'webp') {
-      outputBuffer = await sharpInstance.webp({ quality, effort: 4 }).toBuffer();
-    } else if (format === 'jpeg' || format === 'jpg') {
-      outputBuffer = await sharpInstance.jpeg({ quality, mozjpeg: true }).toBuffer();
-    } else if (format === 'png') {
-      outputBuffer = await sharpInstance.png({ compressionLevel: 8 }).toBuffer();
+      outputBuffer = await sharpInstance.webp({quality, effort: 4}).toBuffer();
+    } else if (format === 'jpeg') {
+      outputBuffer = await sharpInstance.jpeg({quality, mozjpeg: true}).toBuffer();
     } else {
-      outputBuffer = await sharpInstance.webp({ quality }).toBuffer();
+      outputBuffer = await sharpInstance.png({compressionLevel: 8}).toBuffer();
     }
 
-    // Save to disk cache asynchronously
     try {
       fs.writeFileSync(cacheFile, outputBuffer);
     } catch (_) {}
 
-    res.setHeader('Content-Type', `image/${format}`);
+    res.setHeader('Content-Type', 'image/' + format);
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     return res.send(outputBuffer);
-  } catch (err: any) {
-    if (rawUrl.startsWith('http')) {
-      return res.redirect(302, rawUrl);
-    }
-    return res.status(500).send('Image processing error');
+  } catch (_) {
+    // No reflejar ni redirigir la URL controlada por el solicitante.
+    return sendImagePlaceholder(res, path.basename(rawUrl.split('?')[0]) || 'Empresa');
   }
 });
-
 
 // Archivo de Configuración Persistente (portal_config.json & MariaDB)
 const portalConfigPath = path.resolve(__dirname, 'portal_config.json');
