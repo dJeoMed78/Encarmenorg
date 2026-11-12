@@ -112,3 +112,19 @@ Después de integrar PR #57 a `ia-desarrollo` (merge `d809015fa7e6ff32ca9c00baa7
 - Commit del registro: `00ce6d3fa933462ec6420fa1b2441762787171e1`.
 - HEAD actual de coordinación al cierre: `00ce6d3fa933462ec6420fa1b2441762787171e1`.
 - Producción no fue modificada ni auditada con esta conclusión.
+
+
+## SSRF — Staging verificado, Producción pendiente (2026-11-12)
+
+- **Autorización:** PR #91 a ia-desarrollo + verificación en Staging, sin producción.
+- **PR #91 fusionada:** [ver PR](https://github.com/dJeoMed78/Encarmenorg/pull/91), merge SHA `a9f177ba62ceec5eb4ea43cf17d7dbbcdc4c7fc6`.
+- **SHA de Staging:** `41bbaac6dbf2cd8a66819b5119928f6e18ab9dcd`.
+- **CI media y seguridad:** [run 43285907607](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43285907607) SUCCESS.
+- **Deploy reversible:** [run 43285907644](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43285907644) SUCCESS; respaldo Staging y prueba de marcador.
+- **Auditoría SSH read-only:** [run 43286803394](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43286803394) SUCCESS; PID `726253`; cwd exactamente en `enc-coord-41bbaac6dbf2/nodejs`; bundle compilado incluye protecciones SSRF.
+- **SHA-256 `server.js` / `api/server.bundle.js`:** `ef362ae92aaa6c69a3bf99b0131d770862b9284eff0e08c5405cd38b33a29d84`.
+- **Registro maestro actualizado**: commit `6224570b786ff12a823312d568fd31398f9382ec`.
+- **Checkpoint actualizado**: `NIA_CHECKPOINT_2026-11-12-02.md`, commit `2a8c10dccae54b1d89921e1757b9a3d7acba7ab7`.
+- **Memoria narrativa:** [NIA-2026-11-12-02.md](https://docs.google.com/document/d/1k4a-KgQx8OgVBaiQxaX9xbhHqoNAljccQN6GBArxb_k/edit), Drive ID `1k4a-KgQx8OgVBaiQxaX9xbhHqoNAljccQN6GBArxb_k`.
+- **Estado P1:** resuelto y verificado en Staging, **Producción aún sin esta corrección y pendiente de autorización**.
+- **Siguiente pendiente funcional:** Issue [#41](https://github.com/dJeoMed78/Encarmenorg/issues/41) (Radar de clasificados, E2E/persistencia).
