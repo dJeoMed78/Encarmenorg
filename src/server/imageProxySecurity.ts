@@ -89,7 +89,7 @@ export function isPublicImageProxyAddress(address: string): boolean {
     const prefix32 = value >> 96n;
     const prefix23 = value >> 105n;
     const prefix20 = value >> 108n;
-    if (prefix32 === 0x20010db8n || prefix23 === 0x200100n) return false;
+    if (prefix32 === 0x20010db8n || prefix23 === 0x100080n) return false;
     if ((value >> 112n) === 0x2002n || prefix20 === 0x3fff0n) return false;
     return true;
   }
