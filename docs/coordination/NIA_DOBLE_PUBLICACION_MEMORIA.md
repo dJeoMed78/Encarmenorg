@@ -69,3 +69,13 @@ Después de integrar PR #57 a `ia-desarrollo` (merge `d809015fa7e6ff32ca9c00baa7
 - ENC-BUILD-SERVER-ARTIFACT: CI/build, 81 pruebas, paquete Staging, release switch y marcador HTTP SHA verificados; proceso Node activo/hash cargado/paridad de dependencias siguen pendientes.
 - Issue #85 SEO y Issue #41 radar siguen abiertos.
 - Los pendientes P1/P2 y las restricciones de producción están detallados en el checkpoint técnico y en el Registro Maestro.
+
+
+## Checkpoint — 2026-11-12, conversación 02
+
+- Memoria narrativa Drive: [NIA-2026-11-12-02.md](https://docs.google.com/document/d/1k4a-KgQx8OgVBaiQxaX9xbhHqoNAljccQN6GBArxb_k/edit), Google Docs ID `1k4a-KgQx8OgVBaiQxaX9xbhHqoNAljccQN6GBArxb_k`, carpeta privada `memoria NIA`.
+- Memoria anterior: [NIA-2026-11-12.md](https://docs.google.com/document/d/1A1jNq2ZWPBspdzMLHzAqbreCO7fuhNrKNUpoaKo93m4/edit), ID `1A1jNq2ZWPBspdzMLHzAqbreCO7fuhNrKNUpoaKo93m4`.
+- Checkpoint técnico: [NIA_CHECKPOINT_2026-11-12-02.md](NIA_CHECKPOINT_2026-11-12-02.md).
+- Directriz nueva: delegación de extremo a extremo, una revisión final independiente de Nia, edición directa del sitio cuando sea más práctica y exista acceso autenticado, y publicación posterior conforme a las autorizaciones vigentes.
+- Metodología permanente actualizada en `LA_JEFA_METODOLOGIA_PERMANENTE.md`.
+- HEAD previos a esta actualización: main `65cc5f85389639d72f5101c8bc20eb488a247beb`, ia-desarrollo `830602beb0a0b59f009458c5bce8f0a22f46e46a`, coord `2662b20c9a1484e1b829fcc0bb760308ef584d7a`.
