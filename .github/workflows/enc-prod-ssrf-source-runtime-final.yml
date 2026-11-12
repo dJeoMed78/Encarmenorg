@@ -1,0 +1,125 @@
+name: ENCARMEN production SSRF source and runtime final attestation
+on:
+  push:
+    branches:
+      - audit/enc-prod-ssrf-readonly-20261112
+    paths:
+      - .github/workflows/enc-prod-ssrf-source-runtime-final.yml
+permissions:
+  contents: read
+jobs:
+  attest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 46d96c71673bd5b93a28a6dc0ce661c7fe1df63e
+          persist-credentials: false
+      - name: Collect exact GitHub source fingerprints without rebuilding or purge
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '46d96c71673bd5b93a28a6dc0ce661c7fe1df63e'
+          for item in server.ts src/server/imageProxySecurity.ts tests/image-proxy-security.test.mjs package-lock.json; do
+            test -f "$item"
+          done
+          echo "EXPECTED_TS=$(sha256sum server.ts | awk '{print $1}')" >> "$GITHUB_ENV"
+          echo "EXPECTED_GUARD=$(sha256sum src/server/imageProxySecurity.ts | awk '{print $1}')" >> "$GITHUB_ENV"
+          echo "EXPECTED_TEST=$(sha256sum tests/image-proxy-security.test.mjs | awk '{print $1}')" >> "$GITHUB_ENV"
+          echo "EXPECTED_LOCK=$(sha256sum package-lock.json | awk '{print $1}')" >> "$GITHUB_ENV"
+      - name: Establish verified Hostinger SSH session
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq sshpass >/dev/null
+          test -n "$SSHPASS"
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+      - name: Independently attest deployed source and active Node runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 "bash -s '$EXPECTED_TS' '$EXPECTED_GUARD' '$EXPECTED_TEST' '$EXPECTED_LOCK'" <<'REMOTE'
+          set -euo pipefail
+          expected_ts="$1"; expected_guard="$2"; expected_test="$3"; expected_lock="$4"
+          root="$HOME/domains/encarmen.org/hbuilds"
+          link="$(readlink "$root/current")"
+          case "$link" in versions/*) ;; *) echo 'PROD_LINK_INVALID'; exit 1;; esac
+          test "$link" != 'versions/01a1c1e0-740f-7359-949c-f89446fb5068'
+          active="$(readlink -f "$root/current/nodejs")"
+          test "$active" = "$(readlink -f "$root/$link/nodejs")"
+          check_file() {
+            f="$1"; expected="$2"
+            test -r "$active/$f" || { echo "PROD_SOURCE_MISSING=$f"; exit 2; }
+            actual="$(sha256sum "$active/$f" | awk '{print $1}')"
+            test "$actual" = "$expected" || { echo "PROD_SOURCE_MISMATCH=$f"; exit 3; }
+            echo "PROD_SOURCE_MATCH=$f"
+          }
+          check_file server.ts "$expected_ts"
+          check_file src/server/imageProxySecurity.ts "$expected_guard"
+          check_file tests/image-proxy-security.test.mjs "$expected_test"
+          check_file package-lock.json "$expected_lock"
+          test -f "$active/server.js" && test -f "$active/api/server.bundle.js"
+          cmp -s "$active/server.js" "$active/api/server.bundle.js"
+          grep -Fq 'IMAGE_PROXY_NON_PUBLIC_ADDRESS' "$active/server.js"
+          grep -Fq 'IMAGE_PROXY_REDIRECT_NOT_ALLOWED' "$active/server.js"
+          test -f "$HOME/encarmen-ssrf-prod-20261112-backups/code-pre-ssrf-main-65cc5f853896.manifest"
+          gzip -t "$HOME/encarmen-ssrf-prod-20261112-backups/code-pre-ssrf-main-65cc5f853896.tar.gz"
+          echo "PROD_BACKUP_READABLE=PASS"
+          echo "PROD_ACTIVE_LINK=$link"
+          echo "PROD_BUNDLE_SHA256=$(sha256sum "$active/server.js" | awk '{print $1}')"
+          echo 'PROD_SECURITY_BUNDLE_CHECK=PASS'
+          found=0
+          stale=0
+          for pid in $(ps -u "$(id -u)" -o pid=,comm= 2>/dev/null | awk '$2 ~ /^lsnode|^node|^nodejs/ {print $1}'); do
+            cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+            case "$cwd" in
+              *"/domains/encarmen.org/hbuilds/versions/"*)
+                if [ "$cwd" = "$active" ]; then
+                  found=$((found+1))
+                  echo "PROD_ACTIVE_PID=$pid"
+                else
+                  stale=$((stale+1))
+                  echo "PROD_STALE_PID=$pid"
+                fi;;
+            esac
+          done
+          test "$found" -ge 1 && test "$stale" -eq 0 || { echo 'PROD_PROCESS_MISMATCH'; exit 4; }
+          echo "PROD_ACTIVE_NODE_PROCESS_COUNT=$found"
+          echo 'PRODUCTION_SSRF_SOURCE_RUNTIME=PASS'
+          REMOTE
+      - name: Live production HTTP smoke checks — read only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          const base='https://encarmen.org';
+          const targets=[
+            ['/api/health',200,'json'],
+            ['/api/businesses',200,'json'],
+            ['/api/img?url='+encodeURIComponent('https://example.com/not-approved-image.png'),200,'image']
+          ];
+          for(const [url,status,kind] of targets){
+            const response=await fetch(base+url,{redirect:'manual',signal:AbortSignal.timeout(15000),headers:{'Cache-Control':'no-cache'}});
+            if(response.status!==status)throw Error('HTTP_SMOKE_STATUS '+url+' '+response.status);
+            if(kind==='json'){
+              const body=await response.json();
+              if(url==='/api/health'&&!(body.status==='ok'&&body.database==='mariadb'))throw Error('HEALTH_DB_NOT_OK');
+              if(url==='/api/businesses'&&!(body.total>0))throw Error('BUSINESS_DIRECTORY_EMPTY');
+              if(url==='/api/health')console.log('PROD_HEALTH=PASS businesses='+body.businesses+' classifieds='+body.classifieds);
+              if(url==='/api/businesses')console.log('PROD_DIRECTORY=PASS total='+body.total);
+            }else{
+              const type=response.headers.get('content-type')||'';
+              if(!type.startsWith('image/'))throw Error('PROD_IMAGE_FALLBACK_NOT_IMAGE '+type);
+              const buffer=await response.arrayBuffer();
+              if(buffer.byteLength<100)throw Error('PROD_IMAGE_FALLBACK_EMPTY');
+              console.log('PROD_UNAPPROVED_REMOTE_IMAGE=BLOCKED_WITH_PLACEHOLDER '+type);
+            }
+          }
+          JS
