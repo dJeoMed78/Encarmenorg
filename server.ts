@@ -1,3 +1,4 @@
+import {createDenueClient, createDenueRadar} from './src/server/denueRadar';
 import {registerAdminSecurity,environmentAdminProvider} from './src/server/adminSecurity';
 import {administrativeWritesReady} from './src/server/consolidatedWritePolicy';
 import {registerStagingBusinessRoutes} from './src/server/stagingBusinessRoutes';
@@ -7053,6 +7054,9 @@ function generateAutonomousAdCopy(name: string, category: string, deliveryOption
 }
 
 // 1. Endpoint: Búsqueda Automática de Empresas en Ciudad del Carmen (Sin IA)
+// Legacy synthetic/static discovery cannot be presented as a live DENUE search.
+app.all(['/api/businesses/auto-search','/api/businesses/auto-search-ai'],(_req,res)=>
+  res.status(410).json({success:false,candidates:[],message:'Usa el radar administrativo DENUE.'}));
 app.post('/api/businesses/auto-search', (req: Request, res: Response) => {
   try {
     const query = (req.body?.query || '').toLowerCase().trim();
@@ -8271,8 +8275,21 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
 
 export const defaultApprovalHandlers = createBusinessApprovalHandlers();
 
-app.post('/api/businesses/approve-candidate', defaultApprovalHandlers.handleApproveCandidate);
-app.post('/api/businesses/approve-multiple-candidates', defaultApprovalHandlers.handleApproveMultipleCandidates);
+// DENUE reuses the isolated, transactional store; no general write gate is widened.
+const denueRadar = createDenueRadar({
+  client: createDenueClient({token:()=>process.env.INEGI_DENUE_TOKEN}),
+  authorized:req=>adminSecurity.isAuthorized(req,'business:publish'),
+  canWrite:()=>isStagingEnvironment() && isMariaDbActive() && isBusinessWritePermitted() &&
+    getPrivateStagingSnapshot()?.ENC_ADMIN_MUTATIONS_ENABLED === 'true',
+  readAll:()=>{if(!isMariaDbActive())throw new Error('MariaDB required');return dbLoadAllBusinesses(true);},
+  create:(draft,key,duplicateCheck)=>stagingBusinessStore.create(draft,key,duplicateCheck),
+  publishCache:business=>{const index=businessesCache.findIndex(b=>String(b.id)===String(business.id));
+    if(index<0)businessesCache.unshift(business);else businessesCache[index]=business;}
+});
+app.get('/api/business-radar/denue',denueRadar.search);
+app.all('/api/business-radar/denue',(_req,res)=>res.status(405).json({success:false,code:'METHOD_NOT_ALLOWED'}));
+app.post('/api/businesses/approve-candidate', denueRadar.single);
+app.post('/api/businesses/approve-multiple-candidates', denueRadar.batch);
 
 // Login, session, logout and credentials are owned by adminSecurity.
 

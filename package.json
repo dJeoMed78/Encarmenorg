@@ -46,5 +46,7 @@
     },
     "qs": "6.16.1"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "jsdom": "31.0.0"
+  }
 }

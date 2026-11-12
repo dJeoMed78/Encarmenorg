@@ -607,6 +607,11 @@ export function BusinessPublicDetail({
               </h2>
               <p className="bpd-description">
                 <BusinessDescription text={b.description} fallback="El negocio todavía no ha registrado una descripción." />
+                {b.denue?.denueId && /^[1-9]\d{0,11}$/.test(String(b.denue.denueId)) && <span className="block text-sm mt-2">
+                  Fuente: INEGI, DENUE. Actividad económica: {b.denue.activity || 'No disponible'}. Datos normalizados por ENCARMEN.{' '}
+                  <a href={`https://www.inegi.org.mx/app/mapa/denue/default.aspx?idee=${b.denue.denueId}`} target="_blank" rel="noopener noreferrer">Ver fuente original</a>
+                </span>}
+
               </p>
             </section>
             {activePromotion && onOpenPromotion && (
