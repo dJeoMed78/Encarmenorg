@@ -1,0 +1,82 @@
+name: ENCARMEN production SSRF predeploy code snapshot
+on:
+  push:
+    branches:
+      - audit/enc-prod-ssrf-readonly-20261112
+    paths:
+      - .github/workflows/enc-prod-ssrf-code-backup.yml
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Install pinned SSH helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq sshpass >/dev/null
+          test -n "$SSHPASS"
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+      - name: Back up exactly the current production code; no app changes or database operations
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          umask 077
+          root="$HOME/domains/encarmen.org/hbuilds"
+          link="$root/current"
+          expected='versions/01a1c1e0-740f-7359-949c-f89446fb5068'
+          actual="$(readlink "$link")"
+          [ "$actual" = "$expected" ] || { echo 'PROD_BASELINE_CHANGED_ABORT'; exit 11; }
+          node="$root/$actual/nodejs"
+          test "$(readlink -f "$link/nodejs")" = "$(readlink -f "$node")"
+          for path in server.js api/server.bundle.js package-lock.json dist/index.html; do
+            test -f "$node/$path" || { echo "PROD_BASELINE_MISSING=$path"; exit 12; }
+          done
+          previous_hash="$(sha256sum "$node/server.js" | awk '{print $1}')"
+          test "$previous_hash" = '18565137ce026c4cd25c1840f1366556cb508a5675ce3634af4ac15f5d5fd9b7' || { echo 'PROD_BASELINE_HASH_CHANGED_ABORT'; exit 13; }
+          dest="$HOME/encarmen-ssrf-prod-20261112-backups"
+          if [ -L "$dest" ]; then echo 'BACKUP_SYMLINK_UNSAFE'; exit 14; fi
+          if [ ! -e "$dest" ]; then mkdir -m 700 "$dest"; fi
+          test -d "$dest" && test "$(stat -c %a "$dest")" = 700 || { echo 'BACKUP_MODE_UNSAFE'; exit 15; }
+          archive="$dest/code-pre-ssrf-main-65cc5f853896.tar.gz"
+          manifest="$dest/code-pre-ssrf-main-65cc5f853896.manifest"
+          test ! -e "$archive" && test ! -e "$manifest" || { echo 'BACKUP_EXISTS_NO_OVERWRITE'; exit 16; }
+          bytes="$(du -sk "$node/server.js" "$node/api/server.bundle.js" "$node/package-lock.json" "$node/dist" | awk '{sum+=$1} END{print sum}')"
+          free="$(df -Pk "$dest" | awk 'NR==2 {print $4}')"
+          test -n "$free" && test -n "$bytes" && test "$free" -gt $((bytes*2 + 20000)) || { echo 'BACKUP_DISK_SPACE_INSUFFICIENT'; exit 17; }
+          tmp="$archive.partial.$$"
+          trap 'rm -f "$tmp"' EXIT
+          tar -C "$node" -czf "$tmp" server.js api/server.bundle.js package-lock.json dist
+          gzip -t "$tmp"
+          for item in server.js api/server.bundle.js package-lock.json dist/index.html; do
+            tar -tzf "$tmp" "$item" >/dev/null
+          done
+          mv "$tmp" "$archive"
+          trap - EXIT
+          {
+            echo "BASE_COMMIT=65cc5f85389639d72f5101c8bc20eb488a247beb"
+            echo "OLD_LINK=$actual"
+            echo "OLD_SERVER_SHA256=$previous_hash"
+            printf 'BACKED_UP_AT=';date -u '+%Y-%m-%dT%H:%M:%SZ'
+            echo "ARCHIVE=$(basename "$archive")"
+            sha256sum "$archive" | awk '{print "ARCHIVE_SHA256="$1}'
+          } > "$manifest"
+          chmod 600 "$archive" "$manifest"
+          test -f "$root/$actual/nodejs/server.js"
+          [ "$(readlink "$link")" = "$expected" ] || { echo 'PROD_SYMLINK_DRIFTED_ABORT'; exit 18; }
+          echo 'PROD_PRE_SSRF_CODE_BACKUP=PASS'
+          echo "PROD_BASELINE_LINK=$actual"
+          echo "PROD_BACKUP_ARCHIVE=$(basename "$archive")"
+          echo "PROD_BACKUP_SIZE=$(stat -c %s "$archive")"
+          echo 'PROD_Database_OPERATIONS=NONE'
+          REMOTE
