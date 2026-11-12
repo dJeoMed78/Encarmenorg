@@ -73,6 +73,7 @@ import {fetchRemoteImageBuffer, isAllowedRemoteImageUrl} from './src/server/imag
 import {
   initMariaDb,
   isMariaDbActive,
+  getPool,
   dbLoadAllBusinesses,
   dbSaveBusiness,
   dbDeleteBusiness,
@@ -3323,6 +3324,26 @@ app.get('/api/events', async (_req: Request, res: Response) => {
   res.json({ success: true, events: eventsWithImages });
 });
 
+
+type Int007Table = 'events' | 'promotions' | 'classifieds';
+async function int007Readback(table: Int007Table, id: string): Promise<any | null> {
+  const pool = getPool();
+  if (!isMariaDbActive() || !isWritePermitted() || !pool) throw new Error('PERSISTENCE_UNAVAILABLE');
+  const [rows]: any = await pool.query(`SELECT raw_data FROM \`${table}\` WHERE id = ? LIMIT 1`, [id]);
+  if (!Array.isArray(rows)) throw new Error('PERSISTENCE_READBACK_INVALID');
+  if (!rows.length) return null;
+  if (typeof rows[0].raw_data !== 'string') throw new Error('PERSISTENCE_READBACK_INVALID');
+  return JSON.parse(rows[0].raw_data);
+}
+function int007Error(res: Response, error: unknown) {
+  console.warn('[ENC-INT-007] SQL no confirmado:', error instanceof Error ? error.message : String(error));
+  return res.status(503).json({success:false,error:'PERSISTENCE_NOT_CONFIRMED',message:'No se pudo confirmar la operación en MariaDB. Verifique el estado antes de reintentar.'});
+}
+function int007WriteJson(filename: string, data: unknown) {
+  try { fs.writeFileSync(path.resolve(__dirname, filename), JSON.stringify(data, null, 2), 'utf8'); }
+  catch (error) { console.warn('[ENC-INT-007] Error sincronizando JSON:', error); }
+}
+
 app.post('/api/events', async (req: Request, res: Response) => {
   try {
     const newEvent = {
@@ -3342,22 +3363,16 @@ app.post('/api/events', async (req: Request, res: Response) => {
       updatedAt: new Date().toISOString()
     };
 
-    eventsCache = [newEvent, ...eventsCache.filter(e => e.id !== newEvent.id)];
-    fs.writeFileSync(path.resolve(__dirname, 'events_db.json'), JSON.stringify(eventsCache, null, 2), 'utf8');
-
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveEvent(newEvent);
-      } catch (mErr: any) {
-        console.warn('Error saving event to MariaDB:', mErr.message);
-      }
-    }
-
+ 
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await dbSaveEvent(newEvent)) return int007Error(res, 'SQL_WRITE_FAILED');
+    const confirmed = await int007Readback('events', String(newEvent.id));
+    if (!confirmed || String(confirmed.id) !== String(newEvent.id) || String(confirmed.title) !== String(newEvent.title)) return int007Error(res, 'SQL_READBACK_FAILED');
+    eventsCache = [confirmed, ...eventsCache.filter(x => x.id !== confirmed.id)];
+    int007WriteJson('events_db.json', eventsCache);
     res.json({ success: true, event: newEvent });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
@@ -3379,22 +3394,16 @@ app.put('/api/events/:id', async (req: Request, res: Response) => {
       id,
       updatedAt: new Date().toISOString()
     };
-    eventsCache[idx] = updated;
-    fs.writeFileSync(path.resolve(__dirname, 'events_db.json'), JSON.stringify(eventsCache, null, 2), 'utf8');
-
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveEvent(updated);
-      } catch (mErr: any) {
-        console.warn('Error updating event in MariaDB:', mErr.message);
-      }
-    }
-
+ 
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await dbSaveEvent(updated)) return int007Error(res, 'SQL_WRITE_FAILED');
+    const confirmed = await int007Readback('events', String(id));
+    if (!confirmed || String(confirmed.id) !== String(id) || String(confirmed.title) !== String(updated.title)) return int007Error(res, 'SQL_READBACK_FAILED');
+    eventsCache[idx] = confirmed;
+    int007WriteJson('events_db.json', eventsCache);
     res.json({ success: true, event: updated });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
@@ -3405,22 +3414,16 @@ app.delete('/api/events/:id', async (req: Request, res: Response) => {
     if (['radar-search','reset','publish-candidates','radar-scan','radar-status'].includes(String(id).toLowerCase())) {
       return res.status(405).json({success:false,error:'RESERVED_RESOURCE_ID',message:'Identificador reservado para una operación del servicio.'});
     }
-    eventsCache = eventsCache.filter(e => e.id !== id);
-    fs.writeFileSync(path.resolve(__dirname, 'events_db.json'), JSON.stringify(eventsCache, null, 2), 'utf8');
 
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbDeleteEvent(id);
-      } catch (mErr: any) {
-        console.warn('Error deleting event from MariaDB:', mErr.message);
-      }
-    }
-
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await int007Readback('events', id)) return res.status(404).json({success:false,message:'Registro no encontrado'});
+    if (!await dbDeleteEvent(id)) return int007Error(res, 'SQL_DELETE_FAILED');
+    if (await int007Readback('events', id)) return int007Error(res, 'SQL_DELETE_READBACK_FAILED');
+    eventsCache = eventsCache.filter(x => x.id !== id);
+    int007WriteJson('events_db.json', eventsCache);
     res.json({ success: true, message: 'Evento eliminado' });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
@@ -3567,32 +3570,20 @@ app.post('/api/admin/promotions', async (req: Request, res: Response) => {
       updatedAt: new Date().toISOString()
     };
 
-    const idx = promotionsCache.findIndex(p => p.id === id);
-    if (idx >= 0) {
-      promotionsCache[idx] = savedPromo;
-    } else {
-      promotionsCache.unshift(savedPromo);
-    }
-
-    fs.writeFileSync(path.resolve(__dirname, 'promotions_db.json'), JSON.stringify(promotionsCache, null, 2), 'utf8');
-
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSavePromotion(savedPromo);
-      } catch (mErr: any) {
-        console.warn('Error saving promo to MariaDB:', mErr.message);
-      }
-    }
-
+ 
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await dbSavePromotion(savedPromo)) return int007Error(res, 'SQL_WRITE_FAILED');
+    const confirmed = await int007Readback('promotions', String(savedPromo.id));
+    if (!confirmed || String(confirmed.id) !== String(savedPromo.id) || String(confirmed.title) !== String(savedPromo.title)) return int007Error(res, 'SQL_READBACK_FAILED');
+    promotionsCache = [confirmed, ...promotionsCache.filter(x => x.id !== confirmed.id)];
+    int007WriteJson('promotions_db.json', promotionsCache);
     res.json({
       success: true,
       message: 'Promoción guardada con éxito',
       promotion: savedPromo
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
@@ -3600,22 +3591,16 @@ app.post('/api/admin/promotions', async (req: Request, res: Response) => {
 app.delete('/api/admin/promotions/:id', async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
-    promotionsCache = promotionsCache.filter(p => p.id !== id);
-    fs.writeFileSync(path.resolve(__dirname, 'promotions_db.json'), JSON.stringify(promotionsCache, null, 2), 'utf8');
 
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbDeletePromotion(id);
-      } catch (mErr: any) {
-        console.warn('Error deleting promo from MariaDB:', mErr.message);
-      }
-    }
-
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await int007Readback('promotions', id)) return res.status(404).json({success:false,message:'Registro no encontrado'});
+    if (!await dbDeletePromotion(id)) return int007Error(res, 'SQL_DELETE_FAILED');
+    if (await int007Readback('promotions', id)) return int007Error(res, 'SQL_DELETE_READBACK_FAILED');
+    promotionsCache = promotionsCache.filter(x => x.id !== id);
+    int007WriteJson('promotions_db.json', promotionsCache);
     res.json({ success: true, message: 'Promoción eliminada con éxito' });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
@@ -3818,26 +3803,20 @@ app.post('/api/classifieds', async (req: Request, res: Response) => {
       createdAt: req.body.createdAt || new Date().toISOString()
     };
 
-    classifiedsCache.unshift(newAd);
-    try {
-      fs.writeFileSync(path.resolve(__dirname, 'classifieds_db.json'), JSON.stringify(classifiedsCache, null, 2), 'utf8');
-    } catch (_) {}
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveClassified(newAd);
-      } catch (mErr: any) {
-        console.warn('Error saving classified to MariaDB:', mErr.message);
-      }
-    }
-
+ 
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await dbSaveClassified(newAd)) return int007Error(res, 'SQL_WRITE_FAILED');
+    const confirmed = await int007Readback('classifieds', String(newAd.id));
+    if (!confirmed || String(confirmed.id) !== String(newAd.id) || String(confirmed.title) !== String(newAd.title)) return int007Error(res, 'SQL_READBACK_FAILED');
+    classifiedsCache = [confirmed, ...classifiedsCache.filter(x => x.id !== confirmed.id)];
+    int007WriteJson('classifieds_db.json', classifiedsCache);
     res.json({
       success: true,
       message: 'Aviso clasificado publicado exitosamente',
       classified: newAd
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
@@ -3858,26 +3837,20 @@ app.patch('/api/classifieds/:id', async (req: Request, res: Response) => {
       ...req.body,
       id
     };
-    classifiedsCache[idx] = updated;
-    try {
-      fs.writeFileSync(path.resolve(__dirname, 'classifieds_db.json'), JSON.stringify(classifiedsCache, null, 2), 'utf8');
-    } catch (_) {}
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveClassified(updated);
-      } catch (mErr: any) {
-        console.warn('Error updating classified in MariaDB:', mErr.message);
-      }
-    }
-
+ 
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await dbSaveClassified(updated)) return int007Error(res, 'SQL_WRITE_FAILED');
+    const confirmed = await int007Readback('classifieds', String(id));
+    if (!confirmed || String(confirmed.id) !== String(id) || String(confirmed.title) !== String(updated.title)) return int007Error(res, 'SQL_READBACK_FAILED');
+    classifiedsCache[idx] = confirmed;
+    int007WriteJson('classifieds_db.json', classifiedsCache);
     res.json({
       success: true,
       message: 'Aviso clasificado actualizado',
       classified: updated
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
@@ -3888,22 +3861,16 @@ app.delete('/api/classifieds/:id', async (req: Request, res: Response) => {
     if (['radar-search','reset','publish-candidates','radar-scan','radar-status'].includes(String(id).toLowerCase())) {
       return res.status(405).json({success:false,error:'RESERVED_RESOURCE_ID',message:'Identificador reservado para una operación del servicio.'});
     }
-    classifiedsCache = classifiedsCache.filter(c => c.id !== id);
-    try {
-      fs.writeFileSync(path.resolve(__dirname, 'classifieds_db.json'), JSON.stringify(classifiedsCache, null, 2), 'utf8');
-    } catch (_) {}
 
-    if (isMariaDbActive()) {
-      try {
-        await dbDeleteClassified(id);
-      } catch (mErr: any) {
-        console.warn('Error deleting classified from MariaDB:', mErr.message);
-      }
-    }
-
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await int007Readback('classifieds', id)) return res.status(404).json({success:false,message:'Registro no encontrado'});
+    if (!await dbDeleteClassified(id)) return int007Error(res, 'SQL_DELETE_FAILED');
+    if (await int007Readback('classifieds', id)) return int007Error(res, 'SQL_DELETE_READBACK_FAILED');
+    classifiedsCache = classifiedsCache.filter(x => x.id !== id);
+    int007WriteJson('classifieds_db.json', classifiedsCache);
     res.json({ success: true, message: 'Aviso clasificado eliminado' });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
