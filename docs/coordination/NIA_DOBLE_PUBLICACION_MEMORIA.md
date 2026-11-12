@@ -143,3 +143,18 @@ Después de integrar PR #57 a `ia-desarrollo` (merge `d809015fa7e6ff32ca9c00baa7
 - Registro maestro actualizado en commit `4e2e114857c41e5f0c8fb909a473bdd796df877f`; checkpoint actualizado `aaa9eceb70e42b1c7a8c0a3df8a3ba03260c1828`.
 - Drive: `NIA-2026-11-12-02.md`, ID `1k4a-KgQx8OgVBaiQxaX9xbhHqoNAljccQN6GBArxb_k` actualizado.
 - Próximo pendiente prioritario: Radar Clasificados, Issue #41.
+
+
+## 2026-11-12 — Cierre definitivo SSRF producción con auditoría post-publicación
+
+- PR [#92](https://github.com/dJeoMed78/Encarmenorg/pull/92) → `main` commit `46d96c71673bd5b93a28a6dc0ce661c7fe1df63e`.
+- CI producción [#43290483778](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43290483778): SUCCESS.
+- Snapshot privado código productivo anterior (sin operaciones DB): [#43290228543](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43290228543), SUCCESS, tamaño 307,960,317 bytes.
+- Auditoría final [#43292023346](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43292023346), SUCCESS: fuentes `server.ts`, `src/server/imageProxySecurity.ts` y tests idénticas a `main`; bundle compilado con guardias SSRF; tres PIDs productivos `1045424, 1048671, 1049599` sobre nueva release `versions/01a1d13b-7679-7141-b290-f91d74e8453d`.
+- SHA-256 server.js y api/server.bundle.js: `83dcad35b24c0a0f2d21cb358f147d5ebdc00273d234d17d337099a0ec54c706`.
+- Smoke HTTP: `/api/health`, `/api/businesses` y URL externa de imagen no autorizada PASS. 208 empresas, 12 clasificados, DB MariaDB OK.
+- Auditoría estricta [#43290736858](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43290736858) FAILURE solo por lockfile Hostinger divergente desde antes de la corrección; el bundle había igualado la huella recompilada, y el hash del lock Hostinger `e238a678...` no cambió tras despliegue. No representa fallo de SSRF; documentar como desviación previa de lockfile.
+- Registro maestro definitivo GitHub: commit `583b11152bf4cf69e7eced92450423847d3b9f38`.
+- Checkpoint NIA GitHub: commit `241c7c4e997e3625ef93b54a38a68bbdaf8d4b75`.
+- Memoria narrativa Drive: `NIA-2026-11-12-02.md`, ID `1k4a-KgQx8OgVBaiQxaX9xbhHqoNAljccQN6GBArxb_k`.
+- Estado: **SSRF P1 CERRADO para Staging y Producción**, no extrapolar a pentest general. Siguiente pendiente: Radar de clasificados Issue #41.
