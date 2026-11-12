@@ -3324,7 +3324,7 @@ app.get('/api/events', async (_req: Request, res: Response) => {
 });
 
 
-type Int007Table = 'events' | 'promotions' | 'classifieds';
+type Int007Table = 'events' | 'promotions' | 'classifieds' | 'claimed_coupons';
 async function int007Readback(table: Int007Table, id: string): Promise<any | null> {
   const pool = getPool();
   if (!isMariaDbActive() || !isWritePermitted() || !pool) throw new Error('PERSISTENCE_UNAVAILABLE');
@@ -3426,28 +3426,10 @@ app.delete('/api/events/:id', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/events/reset', async (_req: Request, res: Response) => {
-  try {
-    const defaultEventsPath = path.resolve(__dirname, 'src/data/events_carmen.json');
-    if (fs.existsSync(defaultEventsPath)) {
-      eventsCache = JSON.parse(fs.readFileSync(defaultEventsPath, 'utf8'));
-    } else {
-      const evPath = path.resolve(__dirname, 'events_db.json');
-      if (fs.existsSync(evPath)) {
-        eventsCache = JSON.parse(fs.readFileSync(evPath, 'utf8'));
-      }
-    }
-    fs.writeFileSync(path.resolve(__dirname, 'events_db.json'), JSON.stringify(eventsCache, null, 2), 'utf8');
-    if (isMariaDbActive()) {
-      for (const evt of eventsCache) {
-        try { await dbSaveEvent(evt); } catch (_) {}
-      }
-    }
-    res.json({ success: true, count: eventsCache.length, events: eventsCache });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
+// Reset is deliberately blocked until it can be made transactional and verified.
+app.post('/api/events/reset', (_req: Request, res: Response) =>
+  res.status(503).json({success:false,error:'RESET_REQUIRES_SQL_TRANSACTION',message:'Restablecimiento suspendido para evitar pérdida o divergencia de datos.'})
+);
 
 // ==========================================
 // PROMOCIONES Y CUPONES FLASH (Endpoints API)
@@ -3481,64 +3463,11 @@ app.get('/api/promotions/business/:businessId', (req: Request, res: Response) =>
 });
 
 // Reclamar cupón con nombre y teléfono del cliente
-app.post('/api/promotions/:promotionId/claim', async (req: Request, res: Response) => {
-  try {
-    const promoId = req.params.promotionId;
-    const { customerName, customerPhone } = req.body;
-    const promoIdx = promotionsCache.findIndex(p => p.id === promoId);
-    if (promoIdx === -1) {
-      return res.status(404).json({ success: false, message: 'Promoción no encontrada' });
-    }
-
-    const promo = promotionsCache[promoIdx];
-    const code = `CPN-${Math.random().toString(36).substring(2, 7).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newCoupon = {
-      id: `cpn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      promotionId: promo.id,
-      promotionTitle: promo.title,
-      businessId: promo.businessId,
-      businessName: promo.businessName,
-      businessWhatsapp: promo.businessWhatsapp || '',
-      businessPhone: promo.businessPhone || '',
-      discount: promo.discount,
-      code,
-      claimedAt: new Date().toISOString(),
-      customerName: (customerName || 'Cliente').trim(),
-      customerPhone: (customerPhone || '').trim(),
-      status: 'active'
-    };
-
-    claimedCouponsCache.unshift(newCoupon);
-    promo.claimedCount = (promo.claimedCount || 0) + 1;
-    promotionsCache[promoIdx] = promo;
-
-    fs.writeFileSync(path.resolve(__dirname, 'promotions_db.json'), JSON.stringify(promotionsCache, null, 2), 'utf8');
-    fs.writeFileSync(path.resolve(__dirname, 'coupons_db.json'), JSON.stringify(claimedCouponsCache, null, 2), 'utf8');
-
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveCoupon(newCoupon);
-        await dbSavePromotion(promo);
-      } catch (mErr: any) {
-        console.warn('Error saving coupon to MariaDB:', mErr.message);
-      }
-    }
-
-    const max = promo.totalCoupons || promo.maxClaims || 50;
-    const remaining = Math.max(0, max - promo.claimedCount);
-
-    res.json({
-      success: true,
-      message: '¡Cupón reclamado con éxito!',
-      coupon: newCoupon,
-      remainingCoupons: remaining
-    });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
+// Claim must be atomic across promotions and claimed_coupons. Never report a
+// successful claim from cache or JSON while that transaction is unavailable.
+app.post('/api/promotions/:promotionId/claim', (_req: Request, res: Response) =>
+  res.status(503).json({success:false,error:'COUPON_CLAIM_REQUIRES_SQL_TRANSACTION',message:'Emisión temporalmente suspendida hasta verificar transacción MariaDB.'})
+);
 
 // Admin: Obtener lista completa de promociones
 app.get('/api/admin/promotions', (_req: Request, res: Response) => {
@@ -3615,84 +3544,38 @@ app.get('/api/admin/coupons', (_req: Request, res: Response) => {
 });
 
 // Admin: Cambiar estado de cupón (canjeado, activo, cancelado)
-app.post('/api/admin/coupons/:couponId/status', async (req: Request, res: Response) => {
+// SQL-first coupon mutations: never publish a success before database readback.
+async function int007CouponMutation(req: Request, res: Response, mode: 'status'|'redeem'|'delete') {
   try {
-    const couponId = req.params.couponId;
-    const { status } = req.body;
-    const idx = claimedCouponsCache.findIndex(c => c.id === couponId || c.code === couponId);
-    if (idx === -1) {
-      return res.status(404).json({ success: false, message: 'Cupón no encontrado' });
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    const key = String(mode === 'redeem' ? req.params.code : req.params.couponId);
+    const idx = claimedCouponsCache.findIndex(c => c.id === key || c.code === key);
+    if (idx < 0) return res.status(404).json({success:false,message:'Cupón no encontrado'});
+    const current = claimedCouponsCache[idx];
+    const id = String(current.id);
+    const before = await int007Readback('claimed_coupons', id);
+    if (!before) return res.status(404).json({success:false,message:'Cupón no encontrado en MariaDB'});
+    if (mode === 'delete') {
+      if (!await dbDeleteCoupon(id)) return int007Error(res, 'SQL_DELETE_FAILED');
+      if (await int007Readback('claimed_coupons', id)) return int007Error(res, 'SQL_DELETE_READBACK_FAILED');
+      claimedCouponsCache = claimedCouponsCache.filter(c => c.id !== id);
+      int007WriteJson('coupons_db.json', claimedCouponsCache);
+      return res.json({success:true,message:'Cupón eliminado'});
     }
-
-    claimedCouponsCache[idx].status = status;
-    fs.writeFileSync(path.resolve(__dirname, 'coupons_db.json'), JSON.stringify(claimedCouponsCache, null, 2), 'utf8');
-
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbUpdateCouponStatus(claimedCouponsCache[idx].id, status);
-      } catch (mErr: any) {
-        console.warn('Error updating coupon in MariaDB:', mErr.message);
-      }
-    }
-
-    res.json({ success: true, message: 'Estado del cupón actualizado', coupon: claimedCouponsCache[idx] });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// Admin: Canjear cupón por código
-app.post('/api/admin/coupons/:code/redeem', async (req: Request, res: Response) => {
-  try {
-    const code = req.params.code;
-    const idx = claimedCouponsCache.findIndex(c => c.code === code || c.id === code);
-    if (idx === -1) {
-      return res.status(404).json({ success: false, message: 'Cupón no encontrado con ese código' });
-    }
-
-    claimedCouponsCache[idx].status = 'redeemed';
-    fs.writeFileSync(path.resolve(__dirname, 'coupons_db.json'), JSON.stringify(claimedCouponsCache, null, 2), 'utf8');
-
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbUpdateCouponStatus(claimedCouponsCache[idx].id, 'redeemed');
-      } catch (mErr: any) {
-        console.warn('Error redeeming coupon in MariaDB:', mErr.message);
-      }
-    }
-
-    res.json({ success: true, message: 'Cupón canjeado con éxito', coupon: claimedCouponsCache[idx] });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// Admin: Eliminar cupón
-app.delete('/api/admin/coupons/:couponId', async (req: Request, res: Response) => {
-  try {
-    const couponId = req.params.couponId;
-    claimedCouponsCache = claimedCouponsCache.filter(c => c.id !== couponId && c.code !== couponId);
-    fs.writeFileSync(path.resolve(__dirname, 'coupons_db.json'), JSON.stringify(claimedCouponsCache, null, 2), 'utf8');
-
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbDeleteCoupon(couponId);
-      } catch (mErr: any) {
-        console.warn('Error deleting coupon from MariaDB:', mErr.message);
-      }
-    }
-
-    res.json({ success: true, message: 'Cupón eliminado' });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
+    const status = mode === 'redeem' ? 'redeemed' : req.body?.status;
+    if (!['active','redeemed','cancelled'].includes(status)) return res.status(400).json({success:false,error:'INVALID_COUPON_STATUS'});
+    const updated = {...before,status};
+    if (!await dbSaveCoupon(updated)) return int007Error(res, 'SQL_UPDATE_FAILED');
+    const confirmed = await int007Readback('claimed_coupons', id);
+    if (!confirmed || confirmed.status !== status || confirmed.id !== id) return int007Error(res, 'SQL_READBACK_FAILED');
+    claimedCouponsCache[idx] = confirmed;
+    int007WriteJson('coupons_db.json', claimedCouponsCache);
+    return res.json({success:true,message:mode==='redeem'?'Cupón canjeado con éxito':'Estado del cupón actualizado',coupon:confirmed});
+  } catch (error) { return int007Error(res,error); }
+}
+app.post('/api/admin/coupons/:couponId/status', (req: Request,res: Response) => int007CouponMutation(req,res,'status'));
+app.post('/api/admin/coupons/:code/redeem', (req: Request,res: Response) => int007CouponMutation(req,res,'redeem'));
+app.delete('/api/admin/coupons/:couponId', (req: Request,res: Response) => int007CouponMutation(req,res,'delete'));
 
 // ==========================================
 // AVISOS DE OCASIÓN (CLASIFICADOS)
