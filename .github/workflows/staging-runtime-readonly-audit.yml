@@ -49,7 +49,7 @@ jobs:
           ROOT="$HOME/domains/staging.encarmen.org/hbuilds"
           ACTIVE="$ROOT/current"
           NODEDIR="$ACTIVE/nodejs"
-          EXPECTED="$ROOT/versions/enc-coord-830602beb0a0/nodejs"
+          EXPECTED="$ROOT/versions/enc-coord-41bbaac6dbf2/nodejs"
           ACTIVE_REAL="$(readlink -f "$NODEDIR" 2>/dev/null)"
           EXPECTED_REAL="$(readlink -f "$EXPECTED" 2>/dev/null)"
 
@@ -59,9 +59,9 @@ jobs:
           printf 'CURRENT_REAL_NODEJS=%s\n' "${ACTIVE_REAL:-NOT_FOUND}"
           printf 'EXPECTED_RELEASE_NODEJS=%s\n' "${EXPECTED_REAL:-NOT_FOUND}"
           if [ -n "$ACTIVE_REAL" ] && [ "$ACTIVE_REAL" = "$EXPECTED_REAL" ]; then
-            echo 'ACTIVE_RELEASE_MATCHES_830602=yes'
+            echo 'ACTIVE_RELEASE_MATCHES_41bbaac6dbf2=yes'
           else
-            echo 'ACTIVE_RELEASE_MATCHES_830602=no'
+            echo 'ACTIVE_RELEASE_MATCHES_41bbaac6dbf2=no'
           fi
 
           printf 'RELEASE_MARKER='
@@ -105,15 +105,23 @@ jobs:
                   echo 'PROCESS_CWD_MATCHES_ACTIVE_RELEASE=no_or_indirect'
                 fi
                 if [ -n "$EXPECTED_REAL" ] && [ "$cwd" = "$EXPECTED_REAL" ]; then
-                  echo 'PROCESS_CWD_MATCHES_830602_RELEASE=yes'
+                  echo 'PROCESS_CWD_MATCHES_41bbaac6dbf2_RELEASE=yes'
                 else
-                  echo 'PROCESS_CWD_MATCHES_830602_RELEASE=no_or_indirect'
+                  echo 'PROCESS_CWD_MATCHES_41bbaac6dbf2_RELEASE=no_or_indirect'
                 fi
                 ;;
             esac
           done
           if [ "$found" -eq 0 ]; then
             echo 'NODE_PROCESS_MATCH=NOT_FOUND_OR_PROC_ACCESS_DENIED'
+          fi
+          echo '=== SSRF COMPILED GUARD ==='
+          if grep -Fq 'IMAGE_PROXY_NON_PUBLIC_ADDRESS' "$NODEDIR/server.js" && \
+             grep -Fq 'IMAGE_PROXY_REDIRECT_NOT_ALLOWED' "$NODEDIR/server.js"; then
+            echo 'SSR_IMAGE_PROXY_COMPILED_GUARDS_PRESENT=yes'
+          else
+            echo 'SSR_IMAGE_PROXY_COMPILED_GUARDS_PRESENT=no'
+            exit 20
           fi
           echo '=== PROCESS VISIBILITY CROSS-CHECK ==='
           printf 'ACCOUNT_UID='; id -u
