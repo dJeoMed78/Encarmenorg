@@ -56,3 +56,16 @@ A petición expresa del propietario, Nia creó rama aislada `work/enc-radars-041
 ## Despliegue Staging verificado radares 041+043 — 2026-11-06
 
 Después de integrar PR #57 a `ia-desarrollo` (merge `d809015fa7e6ff32ca9c00baa7ce60a93e380489`), se realizó preflight read-only de Staging en PR #58, workflow run `42271057064` SUCCESS: host SSH verificado, respaldo gzip existente, APP_ENV staging, DB_NAME staging, usuario no producción, SQL identity y SQL_SCHEMA_ISOLATED=yes. Se creó workflow de despliegue reversible `enc-radars-041-043-staging-deploy.yml`. Primer run `42271181039` FAIL SAFE por backup SQL anterior a 24h, sin cambio de release. Se agregó respaldo SQL nuevo aislado con `mariadb-dump`, run `42271440736`: respaldo creado, pero copia a nueva versión falló; rollback NOT REQUIRED, versión anterior intacta. Diagnóstico read-only run `42271786396`: staging release `versions/01a1b221-3510-7303-99e7-46cc9fae308f`, disco/inodos suficientes, candidato incompleto inexistente. Se creó script de despliegue nuevo `ops/staging-backups/deploy_staging_candidate_041_043.sh` que ensambla en carpeta temporal fuera de versions antes de mover atómicamente. **DESPLIEGUE EXITOSO** GitHub Actions run `42271985797`: npm build SUCCESS, SSH fingerprint SUCCESS, respaldo SQL Staging fresco VERIFIED, identidad DB Staging VERIFIED, backup predeploy PASS, switch `SWITCHED_TO=enc-coord-f29234181acc`, anterior `versions/01a1b221-3510-7303-99e7-46cc9fae308f`, HTTP exact SHA `ENC041_STAGING_HTTP_VERSION=PASS`. Commit exacto desplegado `f29234181acc9786e0221d80ed871d5b8d83ed94`. URL https://staging.encarmen.org. Producción no modificada. Pendiente E2E real de operaciones de aprobación (sin escrituras no autorizadas), pruebas de aceptación del propietario, comprobar versión en pie y UI. PR #58 preflight y PR #59 observador son auxiliares, no fusionados.
+
+
+---
+
+## Checkpoint — 2026-11-12
+
+- Memoria narrativa de esta conversación: [NIA-2026-11-12.md](https://docs.google.com/document/d/1A1jNq2ZWPBspdzMLHzAqbreCO7fuhNrKNUpoaKo93m4/edit), Google Docs ID `1A1jNq2ZWPBspdzMLHzAqbreCO7fuhNrKNUpoaKo93m4`, carpeta privada `memoria NIA` (`1Qy7yHshDTRsKg3XE-7DsuqjNhw2mbD6L`).
+- Checkpoint técnico de GitHub: `docs/coordination/NIA_CHECKPOINT_2026-11-12.md`.
+- Memoria anterior: `NIA-2026-11-09.md`, Drive ID `1GlBH-jeqIayumtzfjFvwPiTK2KlMUrrujV9D2bE95HU`.
+- HEADs verificados al 2026-11-12: main `65cc5f85389639d72f5101c8bc20eb488a247beb`; ia-desarrollo `830602beb0a0b59f009458c5bce8f0a22f46e46a`; coord previo `b1e4a748b9fb275c25fb28cad4e936c6b3190335`.
+- ENC-BUILD-SERVER-ARTIFACT: CI/build, 81 pruebas, paquete Staging, release switch y marcador HTTP SHA verificados; proceso Node activo/hash cargado/paridad de dependencias siguen pendientes.
+- Issue #85 SEO y Issue #41 radar siguen abiertos.
+- Los pendientes P1/P2 y las restricciones de producción están detallados en el checkpoint técnico y en el Registro Maestro.
