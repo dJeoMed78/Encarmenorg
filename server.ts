@@ -163,6 +163,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   return res.redirect(301, redirectUrl);
 });
 
+// Source of truth for runtime: CI must regenerate server.js and api/server.bundle.js from this server.ts.
 // Retire legacy WordPress/WooCommerce routes after alias consolidation.
 // Keep individual /wp-content/uploads/<file> assets available through the existing handler;
 // never expose a directory listing or a legacy WordPress admin endpoint.
