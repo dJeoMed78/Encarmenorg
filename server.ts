@@ -643,7 +643,28 @@ app.get('/media/*', (req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
     return res.sendFile(localPath);
   }
-  return res.redirect(301, `/wp-content/uploads/${encodeURIComponent(decodedSubpath)}`);
+  // Resolve missing canonical media from historical local layouts or MariaDB directly.
+  // Never redirect a canonical URL back to a retired path.
+  const basename = path.basename(decodedSubpath);
+  const possibleYears = ['2026/10', '2026/01', '2026/09', '2024/07', '2024/08', '2024/09', '2024/10', '2024/11', '2024/12', '2025/01', '2025/02', '2025/03'];
+  for (const yr of possibleYears) {
+    const candidatePath = path.resolve(__dirname, 'public/wp-content/uploads', yr, basename);
+    if (fs.existsSync(candidatePath) && !fs.statSync(candidatePath).isDirectory()) {
+      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+      return res.sendFile(candidatePath);
+    }
+  }
+  if (isMariaDbActive()) {
+    try {
+      const file = await dbGetUploadedFile(basename);
+      if (file && file.data) {
+        res.setHeader('Content-Type', file.mimeType || 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+        return res.send(file.data);
+      }
+    } catch (_) {}
+  }
+  return sendImagePlaceholder(res, basename);
 });
 
 // Direct download routes for all-in-one Hostinger master ZIP
