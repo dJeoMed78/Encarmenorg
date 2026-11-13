@@ -18,3 +18,7 @@ public/codigo-fuente-empresasencarmen.zip
 
 # Generated Vite build output. Keep runtime media in public/ intact.
 /dist/
+
+# Generated server bundles: build from server.ts for every deployment.
+/server.js
+/api/server.bundle.js
