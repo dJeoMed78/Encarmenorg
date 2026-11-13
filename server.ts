@@ -316,6 +316,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   if (isStagingEnvironment()) {
     if (['GET','HEAD','OPTIONS'].includes(req.method.toUpperCase())) return next();
     if (req.method === 'POST' && ['/api/admin/login','/api/admin/logout'].includes(req.path)) return next();
+    // Control writes are confined to the private Staging journal and separately gated
+    // by admin:manage, same-origin and revision checks in registerControlBoard.
+    if (req.method === 'POST' && req.path === '/api/control/events' &&
+        adminSecurity.isAuthorized(req, 'admin:manage')) return next();
     const businessMutation = (req.method === 'POST' && (req.path === '/api/submit-business' || req.path === '/api/public/business-registrations')) || (req.method === 'PATCH' && /^\/(?:api\/)?businesses\/[^/]+$/.test(req.path));
     // Permit only authenticated business deletion in the isolated Staging business-write lane.
     // Admin security runs before this middleware and requires business:delete.
