@@ -718,7 +718,7 @@ app.get('/api/img', async (req: Request, res: Response) => {
     // hacerlo aquí produciría una segunda decodificación controlable por el solicitante.
     let decodedUrl = rawUrl;
 
-    // Las rutas históricas de WordPress se resuelven localmente; nunca requieren una descarga remota.
+    // Las rutas históricas de imágenes se resuelven localmente; nunca requieren una descarga remota.
     if (decodedUrl.includes('empresasencarmen.com/wp-content/')) {
       decodedUrl = decodedUrl.substring(decodedUrl.indexOf('/wp-content/'));
     } else if (decodedUrl.includes('empresasencarmen.com/media/')) {
@@ -766,7 +766,7 @@ app.get('/api/img', async (req: Request, res: Response) => {
       }
     }
 
-    // 2. Compatibilidad con imágenes históricas de WordPress guardadas localmente.
+    // 2. Compatibilidad con imágenes históricas guardadas localmente.
     if (!inputBuffer && (decodedUrl.includes('/wp-content/uploads/') || decodedUrl.includes('/uploads/'))) {
       const baseFn = path.basename(decodedUrl.split('?')[0]);
       const possibleYears = ['2026/10', '2026/01', '2026/09', '2024/07', '2024/08', '2024/09', '2024/10', '2024/11', '2024/12', '2025/01', '2025/02', '2025/03'];
@@ -2587,7 +2587,7 @@ app.delete(['/api/businesses/:id', '/businesses/:id'], async (req:Request,res:Re
 
 // Keep the legacy health URL as a read-only compatibility response, without network access.
 app.get('/api/health-wp', (_req: Request, res: Response) => {
-  return res.json({connected:false,status:'retired',autonomousMode:true,message:'WordPress y WooCommerce retirados. MariaDB es la fuente autorizada.'});
+  return res.json({connected:false,status:'retired',autonomousMode:true,message:'Integraciones externas retiradas. MariaDB es la fuente autorizada.'});
 });
 
 // Reports endpoints
