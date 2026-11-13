@@ -8,7 +8,7 @@ Alcance autorizado: mantener el código del portal; crear ramas y PR; integrar c
 
 ## Interfaz del propietario
 
-En cada expediente: «Tus instrucciones para NIA» → «Indicar siguiente acción». Tres sugerencias contextuales + opción 4 con texto libre. El servidor resuelve el texto elegido y guarda actor, hora y estado pendiente. No ejecuta despliegues por seleccionar una opción. Vista global «Tus instrucciones». NIA registra en_curso, bloqueada o realizada, con detalle y enlace probatorio para realizada. Una tarea con instrucciones no atendidas no puede cerrarse.
+En cada expediente: «Tus instrucciones para NIA» → «Indicar siguiente acción». Tres sugerencias contextuales + opción 4 con texto libre. El servidor resuelve el texto elegido y guarda actor, hora y estado pendiente. Una instrucción guardada constituye una orden operativa del propietario para NIA: debe ser leída, analizada, puesta en ejecución y llevada hasta implementación, pruebas, despliegue autorizado y verificación, cuando corresponda. La selección no ejecuta por sí sola código ni despliegues en el navegador: activa la obligación de atención en la siguiente sesión de NIA o en una automatización explícitamente configurada. No se debe confundir registro con ejecución. Vista global «Tus instrucciones». NIA registra en_curso, bloqueada o realizada, con detalle y enlace probatorio para realizada. Una tarea con instrucciones no atendidas no puede cerrarse.
 
 El portal relee los avances cada 30 segundos mientras está visible, sin un formulario abierto y con actividad reciente; también dispone de Recargar. No hay vigilancia autónoma de conversaciones ni ejecución de órdenes mientras NIA está inactiva.
 
@@ -51,6 +51,15 @@ Estados permitidos: en_curso, bloqueada, realizada. Realizada exige url HTTPS co
 Eventos permitidos: create, meta, checkpoint, decision, evidence, failure, resolve, close, reopen, instruction_result. Ver contrato en controlBoard.mjs antes de construir payloads. Para actualizar texto visual de una tarea, meta requiere todos los campos owner, branch, priority, sha, target, status, notes; conservar valores vigentes no cambiados. Cualquier evidencia positiva exige lectura real y SHA/entorno, no solo un enlace.
 
 El canal valida huella SSH, configuración Staging aislada y coincidencia exacta entre HEAD ia-desarrollo y release desplegada antes de tocar la bitácora. Si falla por CONTROL_DEPLOYED_SOURCE_MISMATCH, terminar/verificar despliegue o diagnosticar la divergencia; no retirar la guardia. No imprime ni copia secretos. No modifica negocios, bases de datos, symlinks de releases ni producción.
+
+## Regla obligatoria de ejecución de instrucciones del propietario (13-nov-2026)
+
+1. Toda instrucción persistida con estado `pendiente` o `bloqueada` es una **orden de trabajo prioritaria**, no una nota informativa. NIA debe consultarla al iniciar o continuar una sesión y atenderla antes de tareas no prioritarias, salvo riesgo superior de seguridad o dependencia explícita.
+2. Sin pedir una segunda autorización para actividades ya comprendidas en el alcance vigente, NIA analiza la tarea, comprueba rama, SHA, entorno, dependencias, riesgos, pruebas y criterios de aceptación; registra inmediatamente `en_curso` con el ID real de instrucción y evidencia del inicio.
+3. Ejecuta las acciones autorizadas y realiza la implementación completa: rama, cambios, pruebas, PR, CI, integración autorizada, despliegue reversible a Staging y validación de runtime, cuando aplique. Si la instrucción exige acciones fuera del alcance (producción, secretos, operaciones destructivas, gastos, cambio de alcance), se registra `bloqueada` con motivo concreto y se solicita únicamente la autorización indispensable.
+4. Tras cada avance significativo, actualizar el expediente mediante `instruction_result`, `checkpoint` y evidencias, con `expectedRevision` real; comprobar SUCCESS, `ENC_CONTROL_REQUEST=VERIFIED` y lectura posterior. No declarar `realizada` sin evidencia HTTPS, pruebas de aceptación y resultados reales. Si hay fallo, corregir y volver a probar; no cerrar anticipadamente.
+5. La instrucción permanece en curso hasta su conclusión verificable o bloqueo documentado. No iniciar trabajo no relacionado si hay instrucciones ejecutables pendientes sin atender.
+6. **Límite operativo real:** guardar una instrucción en la web no despierta ni ejecuta automáticamente una conversación de ChatGPT. El cumplimiento autónomo entre sesiones requiere una automatización/agente con disparador y credenciales configurados explícitamente. En sesiones activas NIA debe operar sin esperar que el propietario repita la orden. Nunca afirmar ejecución en segundo plano si no hay un proceso activo comprobado.
 
 ## Rutina de sesión
 
