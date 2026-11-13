@@ -10,3 +10,30 @@
 .progress-live-head small,.progress-live>small{font-size:10px;color:var(--muted)}
 .progress-live p{font-size:12px;line-height:1.5;min-height:0;margin:8px 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .progress-live .stale{display:block;color:#a35b28;margin-top:7px}
+
+/* Issue-first control view: compact, legible, accessible, responsive. */
+.issues-panel{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 6px 24px rgba(24,57,50,.04)}
+.issues-heading{padding:20px 23px;display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid var(--line)}
+.issues-heading h2{font-size:19px;margin:0 0 3px;letter-spacing:-.3px}
+.issues-heading p{font-size:12px}
+.issues-count{white-space:nowrap;font-size:11px;color:var(--muted)}
+.issues-scroll{overflow-x:auto}
+.issues-table{border-collapse:collapse;width:100%;min-width:720px;table-layout:fixed}
+.issues-table th{text-align:left;background:#f4f7f5;color:#526963;font-size:11px;padding:13px 18px;font-weight:700;letter-spacing:.2px}
+.issues-table th:nth-child(1){width:31%}.issues-table th:nth-child(2){width:45%}.issues-table th:nth-child(3){width:24%}
+.issues-table td{border-top:1px solid var(--line);padding:18px;vertical-align:top;font-size:12px}
+.issues-table tr[data-task]{cursor:pointer;transition:background .15s}
+.issues-table tr[data-task]:hover,.issues-table tr[data-task]:focus{background:#edf7f2;outline:2px solid #87b8a4;outline-offset:-2px}
+.issues-table td strong{display:block;font-size:13px;margin:5px 0;color:var(--ink);line-height:1.4}
+.issues-table td small{display:block;font-size:10px;color:var(--muted);margin-top:7px;line-height:1.45}
+.issue-id{font-size:10px;font-weight:750;color:var(--teal);overflow-wrap:anywhere}
+.work-state{display:inline-block;font-weight:750;font-size:11px;color:#116a5b}
+.work-summary{font-size:12px;line-height:1.5;margin-top:7px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;overflow-wrap:anywhere}
+.final-status{display:inline-block;border-radius:7px;padding:5px 9px;font-weight:700;font-size:11px}
+.final-status.open{color:#835b18;background:#f9f1df}
+.final-status.blocked{color:#8c422a;background:#fce9e3}
+.final-status.finished{color:#13634e;background:#e1f5ea}
+.issue-open{display:block;color:var(--teal);font-weight:650;font-size:11px;margin-top:12px}
+.milestone-explain{font-size:12px;line-height:1.6;margin:7px 0 13px}
+.closure-gaps{font-size:12px;line-height:1.7;color:var(--muted);padding-left:20px}
+@media(max-width:800px){.issues-heading{padding:16px}.issues-table td{padding:13px}.issues-table th{padding:12px}.issues-table{min-width:650px}}
