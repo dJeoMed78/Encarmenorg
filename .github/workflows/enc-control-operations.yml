@@ -1,0 +1,83 @@
+name: ENC control authenticated Staging operations
+on:
+  push:
+    branches: [work/enc-control-ops]
+    paths: [ops/control/request.json]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: encarmen-control-journal
+  cancel-in-progress: false
+jobs:
+  control:
+    if: github.ref == 'refs/heads/work/enc-control-ops'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+      CONTROL_ACTOR: ${{ github.actor }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: request
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          path: source
+          ref: ia-desarrollo
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate request and tested journal module
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'work/enc-control-ops'
+          node --test source/tests/control-board.test.mjs source/tests/control-instructions.test.mjs
+          node -e 'const f=require("fs");const p="request/ops/control/request.json";if(f.statSync(p).size>24000)process.exit(1);const r=JSON.parse(f.readFileSync(p));if(!/^enc-control-[a-zA-Z0-9_-]{8,90}$/.test(r.requestId)||!["read","event"].includes(r.op))process.exit(1)'
+          cp request/ops/control/request.json source/ops/control/request.json
+          tar -czf control-request.tar.gz -C source src/server/controlBoard.mjs src/server/controlSeed.mjs ops/control/run-request.mjs ops/control/request.json
+      - name: Pin SSH identity and transfer request
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'set -eu; umask 077; d="$HOME/domains/staging.encarmen.org/hbuilds/control-bridge"; test ! -L "$d"; mkdir -p "$d"; chmod 700 "$d"; test ! -L "$d/request.tar.gz"; cat > "$d/request.tar.gz"' < control-request.tar.gz
+      - name: Apply only to isolated persistent control journal and verify readback
+        run: |
+          set -euo pipefail
+          control_sha=$(git -C source rev-parse HEAD)
+          [[ "$CONTROL_ACTOR" =~ ^[a-zA-Z0-9_-]+$ ]]
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 "bash -s '$control_sha' '$CONTROL_ACTOR'" <<'REMOTE'
+          set -euo pipefail
+          expected="$1"; actor="$2"
+          root="$HOME/domains/staging.encarmen.org/hbuilds"
+          case "$(realpath "$root/current")" in "$root/versions/"*) ;; *) exit 2;; esac
+          test "$(cat "$root/current/nodejs/dist/encarmen-release.txt")" = "$expected" || { echo 'CONTROL_DEPLOYED_SOURCE_MISMATCH'; exit 3; }
+          python3 - "$root/config/.env" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1])
+          if not p.is_file() or p.is_symlink() or p.stat().st_mode & 0o077: raise SystemExit('STAGING_CONFIG_UNSAFE')
+          vals={}
+          for line in p.read_text().splitlines():
+              if not line or line.lstrip().startswith('#') or '=' not in line: continue
+              k,v=line.split('=',1);vals[k.strip()]=v.strip().strip('"').strip("'")
+          if vals.get('APP_ENV')!='staging' or vals.get('DB_NAME')!='u293982346_encarmentest' or vals.get('DB_USER')=='u293982346_appuser': raise SystemExit('STAGING_IDENTITY_INVALID')
+          print('CONTROL_STAGING_ISOLATION=VERIFIED')
+          PY
+          scratch=$(mktemp -d "$root/.control-operation.XXXXXX")
+          trap 'rm -rf "$scratch"' EXIT
+          chmod 700 "$scratch"
+          tar -xzf "$root/control-bridge/request.tar.gz" -C "$scratch"
+          nodebin=$(command -v node || true)
+          if [ -x /opt/alt/alt-nodejs22/root/usr/bin/node ]; then nodebin=/opt/alt/alt-nodejs22/root/usr/bin/node; fi
+          test -n "$nodebin"
+          "$nodebin" -e 'if(Number(process.versions.node.split(".")[0])<22)process.exit(1)'
+          "$nodebin" "$scratch/ops/control/run-request.mjs" "$scratch/ops/control/request.json" "$root/control-data" "NIA vía GitHub: $actor"
+          echo 'ENC_CONTROL_REQUEST=VERIFIED'
+          REMOTE
