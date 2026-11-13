@@ -21,9 +21,16 @@ jobs:
       - run: node --test tests/control-board.test.mjs tests/control-instructions.test.mjs tests/control-instruction-auth-regression.test.mjs tests/control-issue-table.test.mjs tests/ai-admin-auth-regression.test.mjs tests/woo-retirement-regression.test.mjs
       - run: node --check public/control/app.js
       - run: npm run lint
+      - name: Reject tracked stale server bundles
+        run: |
+          ! git ls-files --error-unmatch server.js >/dev/null 2>&1
+          ! git ls-files --error-unmatch api/server.bundle.js >/dev/null 2>&1
       - run: npm run build
       - name: Verify deploy assets and runtime bundle
         run: |
+          test -s server.js
+          test -s api/server.bundle.js
+          cmp -s server.js api/server.bundle.js
           test -s dist/control/index.html
           test -s dist/control/style.css
           test -s dist/control/app.js
