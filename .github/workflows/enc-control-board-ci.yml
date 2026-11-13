@@ -1,0 +1,30 @@
+name: ENC control board verification
+on:
+  push:
+    branches: [work/enc-control-board-20261113]
+  pull_request:
+    branches: [ia-desarrollo]
+    paths: ['public/control/**', 'src/server/control*.mjs', 'tests/control-board.test.mjs', '.github/workflows/enc-control-board-ci.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/control-board.test.mjs
+      - run: node --check public/control/app.js
+      - run: npm run lint
+      - run: npm run build
+      - name: Verify deploy assets and runtime bundle
+        run: |
+          test -s dist/control/index.html
+          test -s dist/control/style.css
+          test -s dist/control/app.js
+          grep -q 'ENC-CONTROL-20261113' server.js
