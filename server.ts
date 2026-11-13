@@ -635,7 +635,7 @@ app.get('/wp-content/uploads/*', async (req: Request, res: Response) => {
 });
 
 // Historical /media/* requests mapped to local archived image assets
-app.get('/media/*', (req: Request, res: Response) => {
+app.get('/media/*', async (req: Request, res: Response) => {
   const rawSubpath = req.params[0] || '';
   const decodedSubpath = decodeURIComponent(rawSubpath).replace(/^\/+/, '');
   const localPath = path.resolve(__dirname, 'public/wp-content/uploads', decodedSubpath);
