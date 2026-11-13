@@ -206,8 +206,10 @@ jobs:
             manifest=$(curl -fsSL --max-time 15 -H 'Cache-Control: no-cache' https://staging.encarmen.org/encarmen-release.json || true)
             if [[ "$code" = 200 && "$sha" = "$GITHUB_SHA" && -n "$manifest" ]] &&
                 RELEASE_JSON="$manifest" node -e 'const d=JSON.parse(process.env.RELEASE_JSON);if(d.sha!==process.env.GITHUB_SHA||!Number.isFinite(Date.parse(d.updatedAt)))process.exit(1)'; then
-              curl -fsS --max-time 20 https://staging.encarmen.org/control | grep -q 'ENCARMEN · Control de entregas'
-              curl -fsS --max-time 20 https://staging.encarmen.org/control/app.js | grep -q 'closureGaps\|function gaps'
+              curl -fsS --max-time 20 -o /tmp/enc-control.html https://staging.encarmen.org/control
+              grep -q 'ENCARMEN · Control de entregas' /tmp/enc-control.html
+              curl -fsS --max-time 20 -o /tmp/enc-control-app.js https://staging.encarmen.org/control/app.js
+              grep -q 'function gaps' /tmp/enc-control-app.js
               test "$(curl -sS --max-time 20 -o /tmp/control-anonymous.json -w '%{http_code}' https://staging.encarmen.org/api/control/state)" = 401
               grep -q 'Inicia sesión administrativa' /tmp/control-anonymous.json
               echo "ENC_CONTROL_HTTP_AND_AUTH=PASS"
