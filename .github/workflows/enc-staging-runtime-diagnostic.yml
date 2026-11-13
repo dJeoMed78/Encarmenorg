@@ -1,4 +1,5 @@
 name: ENC Staging runtime artifact diagnostic (read-only)
+# Post-deploy verification after build server artifact fix.
 on:
   push:
     branches: [work/enc-staging-runtime-diagnostic-20261113]
