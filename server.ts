@@ -1,5 +1,4 @@
 import { registerControlBoard } from './src/server/controlBoard.mjs';
-import { homedir as controlHomeDirectory } from 'node:os';
 import {createDenueClient, createDenueRadar} from './src/server/denueRadar';
 import {registerAdminSecurity,environmentAdminProvider} from './src/server/adminSecurity';
 import {administrativeWritesReady} from './src/server/consolidatedWritePolicy';
