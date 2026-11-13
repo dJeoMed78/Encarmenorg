@@ -71,7 +71,7 @@ test('Production/default administrator authentication keeps the 12-character min
 });
 
 test('Login UI explicitly renders typed username and a keyboard-accessible show/hide password control', () => {
-  const source = fs.readFileSync(new URL('../src/components/WordPressSyncModal.tsx', import.meta.url), 'utf8');
+  const source = fs.readFileSync(new URL('../src/components/BusinessAdminModal.tsx', import.meta.url), 'utf8');
   assert.ok(source.includes('setAdminUsernameInput(account.username)'));
   assert.ok(source.includes('text-stone-900'));
   assert.ok(source.includes('WebkitTextFillColor'));

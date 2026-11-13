@@ -105,7 +105,7 @@ import {
 import { getEventsData, fetchEventsFromAPI } from '../services/eventsService';
 import { uploadRegistrationImage, MEDIA_MAX_GALLERY } from '../services/publicMediaClient';
 
-interface WordPressSyncModalProps {
+interface BusinessAdminModalProps {
   classifieds?: ClassifiedAd[];
   onOpenCreateClassified?: () => void;
   onOpenEditClassified?: (ad: ClassifiedAd) => void;
@@ -133,7 +133,7 @@ interface WordPressSyncModalProps {
   initialTab?: 'start' | 'businesses' | 'ai_assistant' | 'analytics' | 'reports' | 'classifieds' | 'new_business' | 'promotions' | 'status' | 'emergency' | 'events' | 'admins' | 'brand_media' | 'links' | 'publicidad';
 }
 
-export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
+export const BusinessAdminModal: React.FC<BusinessAdminModalProps> = ({
   isOpen,
   onClose,
   stats,
@@ -2006,7 +2006,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                     <span>Búsqueda directa de empresas para dar de baja permanente</span>
                   </h4>
                   <p className="text-xs text-stone-500 mt-0.5">
-                    Busca cualquier comercio por nombre para eliminarlo tanto de esta aplicación como de WordPress / WooCommerce.
+                    Busca cualquier comercio por nombre para administrarlo en ENCARMEN.
                   </p>
                 </div>
 
@@ -2043,7 +2043,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                                 type="button"
                                 onClick={() => handleDeleteBusiness(b.id, b.name)}
                                 className="shrink-0 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-                                title="Eliminar definitivamente de la app y de WordPress"
+                                title="Eliminar de ENCARMEN"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                                 <span>Dar de baja definitiva</span>
@@ -2192,7 +2192,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                     Conexión directa REST API activa
                   </p>
                   <p className="text-emerald-700 leading-relaxed">
-                    La aplicación se conecta directamente a la API de WooCommerce de tu WordPress en Hostinger.
+                    Los negocios se administran en ENCARMEN mediante MariaDB.
                     No requieres exponer contraseñas del panel: cada vez que añades un negocio en tu tienda, se sincroniza automáticamente.
                   </p>
                 </div>
@@ -2249,7 +2249,7 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                     <span className="font-mono text-stone-700">/wp-json/wc/v3/products</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-stone-500">WooCommerce REST API:</span>
+                    <span className="text-stone-500">Estado de integración externa:</span>
                     <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
                       Conectado (Lectura / Escritura)
@@ -2485,94 +2485,8 @@ export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
                 </div>
               </div>
 
-              {/* Módulo de Autonomía Total y Desvinculación Segura de WordPress */}
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-stone-900 via-stone-850 to-stone-900 text-white border border-amber-500/30 shadow-lg space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-800 pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                      <HardDrive className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                        <span>Preparación para Baja de WordPress & WooCommerce</span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                          100% Autónomo
-                        </span>
-                      </h4>
-                      <p className="text-xs text-stone-300">
-                        Todas las imágenes, videos y catálogos han sido descargados y resguardados localmente.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
-                  <div className="p-2.5 rounded-xl bg-stone-800/80 border border-stone-700/60">
-                    <p className="text-[10px] text-stone-400 font-medium">Archivos Locales</p>
-                    <p className="text-base font-bold text-amber-400">1,015</p>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-stone-800/80 border border-stone-700/60">
-                    <p className="text-[10px] text-stone-400 font-medium">Peso Total</p>
-                    <p className="text-base font-bold text-emerald-400">321.1 MB</p>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-stone-800/80 border border-stone-700/60">
-                    <p className="text-[10px] text-stone-400 font-medium">Empresas Migradas</p>
-                    <p className="text-base font-bold text-sky-400">206 / 206</p>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-stone-800/80 border border-stone-700/60">
-                    <p className="text-[10px] text-stone-400 font-medium">Dependencia Ext.</p>
-                    <p className="text-base font-bold text-emerald-400">0% (Ninguna)</p>
-                  </div>
-                </div>
-
-                <p className="text-xs text-stone-300 leading-relaxed bg-stone-950/50 p-3 rounded-xl border border-stone-800">
-                  <span className="font-semibold text-amber-400">Garantía de Cero Pérdida:</span> Cuando des de baja el WordPress en Hostinger, este portal seguirá funcionando sin enlaces rotos. Los logos, galerías y videos están guardados en el almacenamiento propio y optimizados en WebP.
-                </p>
-
-                <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-1">
-                  <a
-                    href="/api/backup/migrate-sql"
-                    download="mariadb_migrate_images.sql"
-                    className="w-full sm:flex-1 px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs transition-all flex items-center justify-center gap-2 border border-stone-600"
-                  >
-                    <Database className="w-4 h-4 text-amber-400" />
-                    <span>Descargar Script SQL MariaDB</span>
-                  </a>
-                  <a
-                    href="https://empresasencarmen.com/wp-admin/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full sm:w-auto px-3.5 py-2.5 rounded-xl bg-stone-800/80 hover:bg-stone-700 text-stone-400 hover:text-stone-200 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 border border-stone-750"
-                    title="Acceder al wp-admin de WordPress antes de darlo de baja"
-                  >
-                    <span>wp-admin</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              </div>
-
-              {/* Sync Trigger button */}
-              <div className="pt-1">
-                <button
-                  onClick={onTriggerSync}
-                  disabled={isSyncing}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:bg-stone-200 text-white font-bold text-sm shadow-md transition-all cursor-pointer"
-                >
-                  <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>
-                    {isSyncing
-                      ? 'Sincronizando bidireccionalmente...'
-                      : 'Sincronizar catálogo bidireccional (WordPress ⇄ Directorio)'}
-                  </span>
-                </button>
-                <p className="text-[11px] text-center text-stone-500 mt-1.5">
-                  Sincronización en tiempo real: trae negocios nuevos de WordPress y publica automáticamente en empresasencarmen.com los registrados aquí.
-                </p>
-                {syncResultMsg && (
-                  <div className="mt-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-center text-emerald-800 font-medium">
-                    {syncResultMsg}
-                  </div>
-                )}
+              <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-sm text-stone-600">
+                Los negocios se administran directamente en ENCARMEN con persistencia en MariaDB.
               </div>
             </div>
           ) : (
