@@ -9,6 +9,21 @@ const fail=m=>{throw new Error(m);};
 const text=(v,max=6000)=>typeof v==='string'&&v.trim()&&v.length<=max?v.trim():fail('Campo obligatorio o demasiado largo.');
 const sha=v=>/^[a-f0-9]{40}$/.test(v||'')?v:fail('Se requiere el SHA completo de 40 caracteres.');
 const url=v=>{let u;try{u=new URL(v);}catch{fail('Enlace HTTPS inválido.');}if(u.protocol!=='https:'||u.username||u.password)fail('Usa un enlace HTTPS sin credenciales.');return u.href;};
+export function suggestedActions(t) {
+ if(t.failures.some(f=>!f.resolved)||t.status==='bloqueado')return [
+  'Investigar el bloqueo, reproducir la falla y documentar su causa antes de modificar.',
+  'Preparar y probar una corrección aislada; publicar en Staging únicamente después de CI satisfactorio.',
+  'Revisar evidencias y dependencias; informar qué dato o acceso falta para continuar.'];
+ const focus=t.id.includes('REGISTRO')?'el alta pública y la persistencia tras recarga':t.id.includes('EMPRESAS-043')?'las fuentes DENUE y la aprobación con lectura posterior':t.id.includes('CLASIFICADOS')?'la localidad, los datos originales y la aprobación de clasificados':t.id.includes('MEDIOS')?'la carga independiente de logotipo, fachada y galería':t.id.includes('COMENTARIOS')?'el envío, la visualización y la moderación de comentarios':t.id.includes('BUILD')?'la identidad del proceso Node, el bundle y la release activa':'el flujo funcional y la persistencia';
+ if(!t.evidence.some(e=>e.kind==='integrado'&&e.verified&&e.sha===t.sha))return [
+  'Revisar la entrega, sus cambios y CI; documentar con precisión lo que falta.',
+  'Preparar la integración a ia-desarrollo y publicación en Staging con pruebas y reversión verificadas.',
+  'Verificar '+focus+' y registrar el resultado real sin cerrar anticipadamente.'];
+ return ['Verificar '+focus+' en Staging y registrar pruebas funcionales reales.',
+  'Cotejar rama, commit, PR y versión activa; completar únicamente las evidencias comprobadas.',
+  closureGaps(t).length?'Resolver los criterios faltantes y preparar una revisión manual de cierre.':'Revisar el expediente completo y cerrar solo si todas las evidencias siguen siendo válidas.'];
+}
+export function toClientState(s){return {...s,tasks:s.tasks.map(t=>({...t,suggestions:suggestedActions(t),instructions:t.instructions||[]}))};}
 export function closureGaps(t) {
  const gaps=[];
  if(!/^[a-f0-9]{40}$/.test(t.sha))gaps.push('Falta el SHA de la versión objetivo.');
@@ -17,6 +32,7 @@ export function closureGaps(t) {
   if(!t.evidence.some(e=>e.kind===kind&&e.sha===t.sha&&e.scope===scope&&e.verified&&e.result==='PASS'))gaps.push(`${kind}: falta evidencia verificada de la versión objetivo en ${scope}.`);
  }
  if(t.failures.some(f=>!f.resolved))gaps.push('Hay fallas abiertas.');
+ if((t.instructions||[]).some(i=>i.status!=='realizada'))gaps.push('Hay instrucciones pendientes de atender.');
  if(t.status==='bloqueado')gaps.push('La tarea está bloqueada.');
  if(t.target==='produccion')gaps.push('Producción protegida: este tablero no autoriza ni certifica cierres en producción.');
  return gaps;
@@ -31,7 +47,17 @@ export function applyEvent(state,event) {
  }else{
   const t=s.tasks.find(t=>t.id===taskId);if(!t)fail('Tarea inexistente.');
   if(type==='checkpoint'||type==='decision'){text(data.details);}
-  else if(type==='meta'){
+  else if(type==='instruction'){
+   if(!['1','2','3','custom'].includes(data.choice))fail('Elige una de las tres opciones o escribe una acción.');
+   const instruction={id,choice:data.choice,text:text(data.text),actor,at,status:'pendiente',updates:[]};
+   t.instructions=t.instructions||[];t.instructions.push(instruction);t.closed=false;
+  }else if(type==='instruction_result'){
+   const instruction=(t.instructions||[]).find(i=>i.id===data.instructionId);if(!instruction)fail('Instrucción no encontrada.');
+   if(!['en_curso','realizada','bloqueada'].includes(data.status))fail('Estado de instrucción inválido.');
+   const update={status:data.status,details:text(data.details),url:data.url?url(data.url):'',actor,at};
+   if(data.status==='realizada'&&!update.url)fail('La acción realizada requiere enlace a evidencia.');
+   instruction.status=data.status;instruction.updates.push(update);t.closed=false;
+  }else if(type==='meta'){
    t.owner=text(data.owner,100);t.branch=text(data.branch,200);t.priority=['P1','P2','P3'].includes(data.priority)?data.priority:fail('Prioridad inválida.');
    t.sha=data.sha?sha(data.sha):'';t.target=['staging','produccion'].includes(data.target)?data.target:fail('Entorno inválido.');
    t.status=['pendiente','bloqueado'].includes(data.status)?data.status:fail('Estado inválido.');t.notes=text(data.notes);t.closed=false;
@@ -73,12 +99,18 @@ export function createJournal(dir){
   for(const event of events){const {digest,...payload}=event;if(payload.previous!==previous||hash(payload)!==digest)fail('Integridad de bitácora inválida.');s=applyEvent(s,event);previous=digest;}
   return s;
  }
- function append(revision,type,taskId,data,actor){
+ function append(revision,type,taskId,data,actor,requestId){
   prepare();try{fs.mkdirSync(lock,{mode:0o700});}catch{fail('Otra escritura está en curso; vuelve a cargar.');}
   let temp;
   try{
-   const s=read();if(revision!==s.revision)fail('La sesión cambió. Vuelve a cargar antes de guardar.');
-   const e={id:randomUUID(),type,taskId,data,actor,at:new Date().toISOString(),previous:s.events.at(-1)?.digest||'0'};e.digest=hash(e);
+   const s=read();if(requestId&&s.events.some(e=>e.requestId===requestId))return s;
+   if(revision!==s.revision)fail('La sesión cambió. Vuelve a cargar antes de guardar.');
+   if(type==='instruction'){
+    const task=s.tasks.find(t=>t.id===taskId);if(!task)fail('Tarea inexistente.');
+    if(!['1','2','3','custom'].includes(data.choice))fail('Selecciona una acción.');
+    data={choice:data.choice,text:data.choice==='custom'?text(data.custom):suggestedActions(task)[Number(data.choice)-1]};
+   }
+   const e={id:randomUUID(),type,taskId,data,actor,at:new Date().toISOString(),previous:s.events.at(-1)?.digest||'0',...(requestId?{requestId}: {})};e.digest=hash(e);
    const next=applyEvent(s,e);temp=path.join(dir,'.journal-'+randomUUID());
    const fd=fs.openSync(temp,'wx',0o600);try{fs.writeFileSync(fd,JSON.stringify(next.events));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
    fs.renameSync(temp,file);temp=null;const dfd=fs.openSync(dir,'r');try{fs.fsyncSync(dfd);}finally{fs.closeSync(dfd);}
@@ -97,13 +129,13 @@ export function registerControlBoard(app,{security,enabled,directory,jsonParser,
   if(req.get('Origin')&&req.get('Origin')!=='https://staging.encarmen.org')return res.status(403).json({message:'Origen no permitido.'});
   next();
  };
- app.get('/api/control/state',gate,(_req,res)=>{try{res.json(journal.read());}catch{res.status(503).json({message:'No se pudo leer la bitácora. No se reemplazaron los datos.'});}});
+ app.get('/api/control/state',gate,(_req,res)=>{try{res.json(toClientState(journal.read()));}catch{res.status(503).json({message:'No se pudo leer la bitácora. No se reemplazaron los datos.'});}});
  app.post('/api/control/events',gate,jsonParser, (req,res)=>{
   try{
    if(!req.is('application/json'))return res.status(415).json({message:'Se requiere JSON.'});
    const b=req.body;if(!b||JSON.stringify(b).length>24000)return res.status(400).json({message:'Registro inválido o demasiado grande.'});
    const actor=security.getPrincipal(req)?.username;if(!actor)return res.status(401).json({message:'Sesión vencida.'});
-   const next=journal.append(b.revision,b.type,b.taskId,b.data||{},actor);res.json(next);
+   const next=journal.append(b.revision,b.type,b.taskId,b.data||{},actor);res.json(toClientState(next));
   }catch(e){res.status(409).json({message:e.message||'No se guardó el registro.'});}
  });
 }
