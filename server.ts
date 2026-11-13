@@ -5253,7 +5253,8 @@ async function runAIRadarScan(): Promise<{
 }
 
 // AI Status check (Checks Gemini API configuration and quota state)
-app.get('/api/ai/status', async (_req: Request, res: Response) => {
+app.get('/api/ai/status', async (req: Request, res: Response) => {
+  if (!adminSecurity.isAuthorized(req, 'admin:manage')) return res.status(401).json({success:false,error:'ADMIN_REQUIRED'});
   const key = process.env.GEMINI_API_KEY;
   if (!key || key.startsWith('MY_GEMINI') || key.length < 20) {
     return res.json({
@@ -5308,6 +5309,7 @@ app.get('/api/ai/status', async (_req: Request, res: Response) => {
 
 // Admin AI Business parser from unstructured text (WhatsApp / Facebook)
 app.post('/api/ai/parse-business', async (req: Request, res: Response) => {
+  if (!adminSecurity.isAuthorized(req, 'admin:manage')) return res.status(401).json({success:false,error:'ADMIN_REQUIRED'});
   const key = process.env.GEMINI_API_KEY;
   const rawText = req.body?.text || '';
   if (!rawText.trim()) {
