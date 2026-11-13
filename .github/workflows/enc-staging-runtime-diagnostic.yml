@@ -1,0 +1,41 @@
+name: ENC Staging runtime artifact diagnostic (read-only)
+on:
+  push:
+    branches: [work/enc-staging-runtime-diagnostic-20261113]
+    paths: [.github/workflows/enc-staging-runtime-diagnostic.yml]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      SSHPASS: ${{ secrets.ENC_STAGING_SSH_PASSWORD }}
+    steps:
+      - name: Read-only staging release and Node bundle inspection
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq sshpass >/dev/null
+          umask 077; mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 10 -p 65002 -t ed25519 45.137.159.114 2>/dev/null > "$HOME/.ssh/known_hosts"
+          test "$(ssh-keygen -lf "$HOME/.ssh/known_hosts" -E sha256 | awk '{print $2}')" = 'SHA256:EwoMB0mPfyo/zdh/+Fq7KAj6jsb80mEJB/UaqTK8E+4'
+          sshpass -e ssh -T -p 65002 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o PreferredAuthentications=password -o PubkeyAuthentication=no u293982346@45.137.159.114 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          root="$HOME/domains/staging.encarmen.org/hbuilds"
+          test -L "$root/current"
+          target=$(readlink "$root/current")
+          echo "STAGING_CURRENT_LINK=$target"
+          for item in nodejs nodejs/server.js nodejs/api/server.bundle.js nodejs/dist nodejs/dist/encarmen-release.txt; do
+            if test -e "$root/current/$item"; then echo "STAGING_ITEM_PRESENT=$item"; else echo "STAGING_ITEM_MISSING=$item"; fi
+          done
+          if test -f "$root/current/nodejs/dist/encarmen-release.txt"; then
+            echo "STAGING_RELEASE_SHA=$(head -c 40 "$root/current/nodejs/dist/encarmen-release.txt")"
+          fi
+          echo "STAGING_VERSIONS_COUNT=$(find "$root/versions" -mindepth 1 -maxdepth 1 -type d | wc -l)"
+          if test -f "$root/current/nodejs/server.js" && test -f "$root/current/nodejs/api/server.bundle.js"; then
+            if cmp -s "$root/current/nodejs/server.js" "$root/current/nodejs/api/server.bundle.js"; then echo "STAGING_RUNTIME_BUNDLES_IDENTICAL=YES"; else echo "STAGING_RUNTIME_BUNDLES_IDENTICAL=NO"; fi
+          fi
+          REMOTE
