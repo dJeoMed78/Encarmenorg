@@ -1,3 +1,5 @@
+import { registerControlBoard } from './src/server/controlBoard.mjs';
+import { homedir as controlHomeDirectory } from 'node:os';
 import {createDenueClient, createDenueRadar} from './src/server/denueRadar';
 import {registerAdminSecurity,environmentAdminProvider} from './src/server/adminSecurity';
 import {administrativeWritesReady} from './src/server/consolidatedWritePolicy';
@@ -284,6 +286,16 @@ const adminSecurity = registerAdminSecurity(app, {
 });
 
 
+
+// Control journal has its own authenticated, staging-only file lane. It does not
+// change any business/SQL write gate or expose journal files as static assets.
+registerControlBoard(app, {
+  security: adminSecurity,
+  enabled: () => stagingDynamicIdentity && Boolean(getPrivateStagingSnapshot()),
+  directory: path.join(controlHomeDirectory(), 'domains/staging.encarmen.org/hbuilds/control-data'),
+  jsonParser: express.json({limit:'24kb',strict:true}),
+  htmlPath: path.resolve(__dirname, 'dist/control/index.html')
+});
 
 // Permissive CORS and iframe embedding headers for AI Studio and development
 app.use((req: Request, res: Response, next) => {
@@ -8703,6 +8715,7 @@ if (!process.env.VERCEL && process.env.NODE_ENV !== 'test') {
 
 export { canonicalClassifiedListingUrl, resolveSourceSiteName, verifyClassifiedListingEvidence, extractClassifiedOriginFields };
 export default app;
+
 
 
 
