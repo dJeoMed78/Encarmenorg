@@ -164,6 +164,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // Source of truth for runtime: CI must regenerate server.js and api/server.bundle.js from this server.ts.
+// Staging deployment retry after Hostinger rotated its previous release during the initial copy.
 // Retire legacy WordPress/WooCommerce routes after alias consolidation.
 // Keep individual /wp-content/uploads/<file> assets available through the existing handler;
 // never expose a directory listing or a legacy WordPress admin endpoint.
