@@ -81,7 +81,7 @@ test('twelve distinct assets persist as one logo, one cover and ten product imag
 test('admin quick-create media contract preserves separate logo, storefront cover and ten gallery photos', async () => {
   const {validateBusinessInput} = await import('../src/server/stagingBusinessRoutes.ts');
   const {readFileSync} = await import('node:fs');
-  const source = readFileSync(new URL('../src/components/WordPressSyncModal.tsx', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../src/components/BusinessAdminModal.tsx', import.meta.url), 'utf8');
   assert.match(source, /uploadRegistrationImage\(file, 'logo', ensureNewBizMediaAttempt\(\)\)/);
   assert.match(source, /uploadRegistrationImage\(file, 'cover', ensureNewBizMediaAttempt\(\)\)/);
   assert.match(source, /uploadRegistrationImage\(file, 'gallery', ensureNewBizMediaAttempt\(\)\)/);
