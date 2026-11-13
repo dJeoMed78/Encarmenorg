@@ -11,7 +11,7 @@ import { ClientBusinessPageView } from './components/ClientBusinessPageView';
 import { DirectBusinessView } from './components/DirectBusinessView';
 import { DigitalCardModal } from './components/DigitalCardModal';
 import { EditBusinessModal } from './components/EditBusinessModal';
-import { WordPressSyncModal } from './components/WordPressSyncModal';
+import { BusinessAdminModal } from './components/BusinessAdminModal';
 import { MessageSquare, RefreshCw, Lock, X, Globe, ChevronDown } from 'lucide-react';
 import seedPromotions from './data/promotions_seed.json';
 import seedEvents from './data/events_carmen.json';
@@ -1344,7 +1344,7 @@ export default function App() {
       {adminActionToast && <div role="status" aria-live="polite" className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] rounded-xl bg-slate-900 px-6 py-3 text-white shadow-xl">{adminActionToast}</div>}
 
       {/* MODAL / SISTEMA OPERATIVO DE ADMINISTRACIÓN (VINCULADO AL BOTÓN π) */}
-      <WordPressSyncModal
+      <BusinessAdminModal
         isOpen={isAdminModalOpen}
         onClose={() => {
           setIsAdminModalOpen(false);
