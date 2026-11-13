@@ -18,7 +18,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: node --test tests/control-board.test.mjs tests/control-instructions.test.mjs tests/control-instruction-auth-regression.test.mjs tests/control-issue-table.test.mjs
+      - run: node --test tests/control-board.test.mjs tests/control-instructions.test.mjs tests/control-instruction-auth-regression.test.mjs tests/control-issue-table.test.mjs tests/woocommerce-retirement-regression.test.mjs
       - run: node --check public/control/app.js
       - run: npm run lint
       - run: npm run build
