@@ -7,7 +7,7 @@ test('canonical media handler never redirects back to legacy image path', () => 
   const end = source.indexOf('// Direct download routes', start);
   assert.ok(start >= 0 && end > start);
   const handler = source.slice(start, end);
-  assert.doesNotMatch(handler, /res\\.redirect\\(301/);
+  assert.ok(!handler.includes('res.redirect(301'));
   assert.match(handler, /dbGetUploadedFile/);
   assert.match(handler, /sendImagePlaceholder/);
 });
