@@ -292,7 +292,9 @@ const adminSecurity = registerAdminSecurity(app, {
 registerControlBoard(app, {
   security: adminSecurity,
   enabled: () => stagingDynamicIdentity && Boolean(getPrivateStagingSnapshot()),
-  directory: path.join(controlHomeDirectory(), 'domains/staging.encarmen.org/hbuilds/control-data'),
+  // Use the same absolute, SSH-verified journal directory as the authenticated control workflow.
+  // Do not derive it from the Node process HOME: the web runtime may use another home.
+  directory: path.join('/home/u293982346', 'domains/staging.encarmen.org/hbuilds/control-data'),
   jsonParser: express.json({limit:'24kb',strict:true}),
   htmlPath: path.resolve(__dirname, 'dist/control/index.html')
 });
