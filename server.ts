@@ -165,9 +165,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Source of truth for runtime: CI must regenerate server.js and api/server.bundle.js from this server.ts.
 // Staging deployment retry after Hostinger rotated its previous release during the initial copy.
-// Retire legacy WordPress/WooCommerce routes after alias consolidation.
+// Retire obsolete CMS routes after alias consolidation.
 // Keep individual /wp-content/uploads/<file> assets available through the existing handler;
-// never expose a directory listing or a legacy WordPress admin endpoint.
+// never expose a directory listing or a retired CMS administration endpoint.
 app.use((req: Request, res: Response, next: NextFunction) => {
   const retired = getLegacyWordPressRetirement(req.path);
   if (!retired) return next();
@@ -468,7 +468,7 @@ app.use('/media', express.static(path.resolve(__dirname, 'public/wp-content/uplo
   }
 }));
 
-// Serve WordPress uploads directly from public if present, with caching
+// Serve historical local image URLs from public if present, with caching
 app.use('/wp-content', express.static(path.resolve(__dirname, 'public/wp-content'), {
   maxAge: 7 * 24 * 60 * 60 * 1000,
   setHeaders: (res) => {
@@ -597,7 +597,7 @@ app.get('/uploads/:filename', async (req: Request, res: Response) => {
   return sendImagePlaceholder(res, filename);
 });
 
-// Autonomous WordPress uploads handler: serves 1,000+ local assets with zero external dependency
+// Historical local image handler: no external service dependency
 app.get('/wp-content/uploads/*', async (req: Request, res: Response) => {
   const rawSubpath = req.params[0] || '';
   const decodedSubpath = decodeURIComponent(rawSubpath).replace(/^\/+/, '');
@@ -634,7 +634,7 @@ app.get('/wp-content/uploads/*', async (req: Request, res: Response) => {
   return sendImagePlaceholder(res, basename);
 });
 
-// Legacy /media/* requests - mapped directly to local public/wp-content/uploads
+// Historical /media/* requests mapped to local archived image assets
 app.get('/media/*', (req: Request, res: Response) => {
   const rawSubpath = req.params[0] || '';
   const decodedSubpath = decodeURIComponent(rawSubpath).replace(/^\/+/, '');
@@ -1857,9 +1857,9 @@ app.post('/api/mariadb/reconnect', async (_req: Request, res: Response) => {
   }
 });
 
-// WordPress is retired. Block legacy imports before any historical handlers.
+// Block retired external synchronization routes before any historical handlers.
 app.post(['/api/sync', '/api/webhook/woocommerce', '/api/businesses/:id/sync-wp'], (_req: Request, res: Response) => {
-  return res.status(410).json({success:false, message:'Sincronización WooCommerce retirada. Los contactos se administran en MariaDB.'});
+  return res.status(410).json({success:false, message:'Sincronización externa retirada. Los contactos se administran en MariaDB.'});
 });
 
 // Retired seed/cache-to-database import. No stale catalog may overwrite restored contacts.
@@ -2334,10 +2334,10 @@ app.get('/api/businesses/:id', async (req: Request, res: Response, next: NextFun
   }
 });
 
-// Retired WordPress/WooCommerce export, webhook, cache-purge and import helpers were removed.
+// Retired external export, webhook, cache-purge and import helpers were removed.
 // MariaDB remains the authoritative directory source.
 app.post('/api/admin/purge-cache', (_req: Request, res: Response) => {
-  return res.status(410).json({success:false,message:'La purga externa de WordPress/Cloudflare fue retirada.'});
+  return res.status(410).json({success:false,message:'La purga externa fue retirada.'});
 });
 
 // Helper to check duplicates by phone or normalized name
@@ -2548,7 +2548,7 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
 
     
 
-    // WordPress/WooCommerce is retired. Never propagate Staging edits to legacy systems.
+    // External synchronization is retired. Never propagate Staging edits to external systems.
     return res.json({ success: true, message: 'Empresa actualizada con éxito', business: updated });
   } catch (err: any) {
     if (err instanceof ContactPatchError) return res.status(err.status).json({success:false, message:err.message});
@@ -2556,7 +2556,7 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
   }
 });
 
-// WordPress synchronization is denied by the retired-route guard registered earlier.
+// External synchronization is denied by the retired-route guard registered earlier.
 
 // Legacy PINs are retired; no generation, listing, master key or plaintext storage.
 app.all(['/api/admin/businesses-edit-pins', '/api/admin/businesses/:id/generate-pin', '/api/businesses/:id/verify-edit-pin'], (_req: Request, res: Response) => {
