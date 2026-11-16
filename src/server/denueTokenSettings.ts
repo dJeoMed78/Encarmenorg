@@ -8,11 +8,17 @@ function location():string|null {
   if(!process.env.HOME||process.env.APP_ENV!=='staging'||process.env.DB_NAME!=='u293982346_encarmentest')return null;
   const root=path.join(process.env.HOME,'domains/staging.encarmen.org/hbuilds');
   try {
-    const cwd=fs.realpathSync(process.cwd());
-    if(!cwd.startsWith(path.join(root,'versions')+path.sep)||path.basename(cwd)!=='nodejs')return null;
+    // The Hostinger process CWD may be the active symlink, not versions/<id>/nodejs.
+    // Authenticate the private Staging configuration instead of depending on CWD.
     const config=path.join(root,'config');
     const stat=fs.lstatSync(config);
     if(!stat.isDirectory()||stat.isSymbolicLink())return null;
+    const envFile=path.join(config,'.env');
+    const envStat=fs.lstatSync(envFile);
+    if(!envStat.isFile()||envStat.isSymbolicLink()||(envStat.mode&0o077)!==0)return null;
+    const raw=fs.readFileSync(envFile,'utf8');
+    const values=Object.fromEntries(raw.split(/\\r?\\n/).filter(line=>/^[A-Za-z_][A-Za-z0-9_]*=/.test(line)).map(line=>{const index=line.indexOf('=');return [line.slice(0,index),line.slice(index+1).replace(/^["']|["']$/g,'')]}));
+    if(values.APP_ENV!=='staging'||values.DB_NAME!=='u293982346_encarmentest'||!values.DB_PASSWORD||values.DB_USER==='u293982346_appuser')return null;
     return path.join(config,'denue-token.secret');
   }catch{return null;}
 }
