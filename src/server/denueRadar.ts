@@ -120,10 +120,12 @@ export function createDenueRadar(deps:{client:ReturnType<typeof createDenueClien
     if(!cached||!reviewed||revision!==cached.candidate.revision)throw new DenueError('DENUE_REVIEW_REQUIRED',422);
     const c=cached.candidate;
     if(c.geography!=='VERIFICADA'||!c.address)throw new DenueError('DENUE_GEOGRAPHY_OR_ADDRESS_UNVERIFIED',422);
-    const fresh=(await deps.client.search('',1,id)).find(x=>x.denueId===id);
+    // Revalidate against INEGI's official Ficha endpoint. BuscarAreaAct is a
+    // paginated discovery endpoint; using it as an ID lookup can return a
+    // non-record response even when the official Ficha is valid.
     const ficha=await deps.client.ficha(id);
-    if(!fresh||fresh.geography!=='VERIFICADA'||norm(ficha.name)!==norm(c.name)||norm(ficha.address)!==norm(c.address)||
-       ['name','address','phone','email','website','activity','clee','colonia'].some(k=>(fresh as any)[k] !== (c as any)[k]))throw new DenueError('DENUE_SOURCE_CHANGED_OR_UNAVAILABLE',422);
+    if(ficha.denueId!==id||ficha.geography!=='VERIFICADA'||norm(ficha.name)!==norm(c.name)||norm(ficha.address)!==norm(c.address)||
+       ['name','address','phone','email','website','activity','clee','colonia'].some(k=>(ficha as any)[k] !== (c as any)[k]))throw new DenueError('DENUE_SOURCE_CHANGED_OR_UNAVAILABLE',422);
     const catalog=await deps.readAll();
     const existing=catalog.find(b=>b.denue?.denueId===id);
     // Readback of an already committed exact import makes retries safe after a lost response.
