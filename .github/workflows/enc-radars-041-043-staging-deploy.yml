@@ -1,5 +1,5 @@
 name: ENC radars 041+043 authorized reversible staging deployment
-# ENC-043 persistent approval outcome: deploy current ia-desarrollo SHA to Staging only.
+# ENC-043 official Ficha revalidation correction: deploy current ia-desarrollo SHA to Staging only.
 # Re-dispatch staging deployment for validated ia-desarrollo HEAD; no workflow behavior change (Issue #43).
 # ENC-034 public reviews cards PR #83; deploy approved 2026-11-07 after CI: 1e81692e99ef6eb0231227290541a5bc9fad035a; Staging only.
 # ENC-034 moderation-context PR #82: merge 56d6b7f7673845b829afd097172e8b0885fce81b; owner-authorized Staging deployment after CI PASS; no production; 2026-11-07.
