@@ -14,6 +14,7 @@ export function DenueBusinessRadar({isOpen,onClose,onBusinessApproved}:DenueRada
   const [selected,setSelected]=useState<string[]>([]),[reviewed,setReviewed]=useState<string[]>([]);
   const [unavailable,setUnavailable]=useState<string[]>([]),[notice,setNotice]=useState('');
   const [busy,setBusy]=useState(false),[nextPage,setNextPage]=useState<number|null>(null);
+  const [approvalResult,setApprovalResult]=useState<{ok:number;failed:number;details:string}|null>(null);
   const [loadedQuery,setLoadedQuery]=useState(''),[confirming,setConfirming]=useState(false);
   const [token,setToken]=useState(''),[tokenConfigured,setTokenConfigured]=useState<boolean|null>(null),[tokenBusy,setTokenBusy]=useState(false);
   const generation=useRef(0),inFlight=useRef(false);
@@ -27,7 +28,7 @@ export function DenueBusinessRadar({isOpen,onClose,onBusinessApproved}:DenueRada
     }catch(error){setNotice(error instanceof Error?error.message:'No se pudo guardar el token.');}
     finally{setTokenBusy(false);}
   }
-  useEffect(()=>{generation.current++;setCandidates([]);setSelected([]);setReviewed([]);setUnavailable([]);setNextPage(null);setConfirming(false);setNotice('');
+  useEffect(()=>{generation.current++;setCandidates([]);setSelected([]);setReviewed([]);setUnavailable([]);setNextPage(null);setConfirming(false);setNotice('');setApprovalResult(null);
     return()=>{generation.current++;};},[isOpen]);
   async function search(page=1){
     if(inFlight.current)return;inFlight.current=true;const version=++generation.current;setBusy(true);setNotice('');
@@ -38,14 +39,16 @@ export function DenueBusinessRadar({isOpen,onClose,onBusinessApproved}:DenueRada
     finally{inFlight.current=false;setBusy(false);}
   }
   async function approve(){
-    if(inFlight.current||!selected.length)return;inFlight.current=true;setBusy(true);const version=generation.current;
+    if(inFlight.current||!selected.length)return;inFlight.current=true;setBusy(true);setApprovalResult(null);const version=generation.current;
     try{const list=candidates.filter(c=>selected.includes(c.denueId)&&reviewed.includes(c.denueId));
       const data=await approveDenue(list);if(version!==generation.current)return;
       const success=data.results.filter(r=>r.success).map(r=>r.denueId);
       setCandidates(prev=>prev.filter(c=>!success.includes(c.denueId)));setSelected(prev=>prev.filter(id=>!success.includes(id)));
       data.confirmed.forEach(b=>onBusinessApproved?.(b));
-      setNotice(data.results.map(r=>`${r.denueId}: ${r.success?'confirmado en MariaDB':r.code||'no confirmado'}`).join(' · '));
-    }catch(e){if(version===generation.current)setNotice(e instanceof Error?e.message:'No se confirmó la publicación.');}
+      const details=data.results.map(r=>`${r.denueId}: ${r.success?'confirmado en MariaDB':r.code||'no confirmado'}`).join(' · ');
+      setApprovalResult({ok:success.length,failed:data.results.length-success.length,details});
+      setNotice(details);
+    }catch(e){if(version===generation.current){const message=e instanceof Error?e.message:'No se confirmó la publicación.';setNotice(message);setApprovalResult({ok:0,failed:selected.length,details:message});}}
     finally{inFlight.current=false;setBusy(false);setConfirming(false);}
   }
   if(!isOpen)return null;
@@ -90,7 +93,8 @@ export function DenueBusinessRadar({isOpen,onClose,onBusinessApproved}:DenueRada
           </article>;
         })}
       </div>
-      <footer className="sticky bottom-0 bg-white/95 backdrop-blur-xl border-t p-3 rounded-xl">
+      <footer className="sticky bottom-0 z-30 bg-white/95 backdrop-blur-xl border-t p-3 rounded-xl shadow-[0_-8px_24px_rgba(15,23,42,0.12)] max-h-[40vh] overflow-y-auto">
+        {approvalResult&&<div role="alert" aria-live="assertive" className={`mb-3 rounded-xl border p-3 ${approvalResult.failed===0&&approvalResult.ok>0?'border-emerald-300 bg-emerald-50 text-emerald-950':'border-amber-300 bg-amber-50 text-amber-950'}`}><p className="font-bold">{approvalResult.ok>0?`${approvalResult.ok} empresa(s) confirmada(s) en MariaDB`:'Publicación no confirmada'}{approvalResult.failed>0?` · ${approvalResult.failed} rechazada(s) o sin confirmar`:''}</p><p className="text-sm break-words">{approvalResult.details}</p><button type="button" className="mt-2 rounded-lg border px-3 py-1 text-sm" onClick={()=>setApprovalResult(null)}>Entendido</button></div>}
         <p className="text-sm mb-2">{selected.length} seleccionados · Máximo 10 por lote · Ninguna publicación automática.</p>
         {confirming?<div><p>¿Publicar los {selected.length} establecimientos revisados? Los duplicados o errores se rechazarán individualmente.</p><button disabled={busy} onClick={()=>void approve()} className="bg-blue-600 text-white p-3 rounded-xl mr-2">Confirmar publicación</button><button disabled={busy} onClick={()=>setConfirming(false)}>Cancelar</button></div>
           :<button disabled={busy||!selected.length} onClick={()=>setConfirming(true)} className="bg-blue-600 text-white p-3 rounded-xl disabled:opacity-40">Revisar y aprobar selección</button>}
