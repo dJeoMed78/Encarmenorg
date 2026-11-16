@@ -192,7 +192,17 @@ jobs:
             if [ "$current" = "$previous" ]; then stable=$((stable+5)); else stable=0; previous="$current"; fi
             sleep 5
           done
-          test "$stable" -ge 30 || { echo "STAGING_ACTIVE_RELEASE_NOT_STABLE"; exit 5; }
+          if [ "$stable" -lt 30 ]; then
+            echo "STAGING_ACTIVE_RELEASE_NOT_STABLE stable_seconds=$stable"
+            echo "STAGING_ACTIVE_RELEASE_LAST_TARGET=$previous"
+            echo "STAGING_ACTIVE_RELEASE_DIAGNOSTIC=readlink-targets-only-no-secrets"
+            for probe in 1 2 3 4 5 6; do
+              target=$(readlink "$root/current" || true)
+              echo "STAGING_ACTIVE_RELEASE_PROBE_${probe}=$target"
+              sleep 5
+            done
+            exit 5
+          fi
           echo "STAGING_ACTIVE_RELEASE_STABLE=yes"
           old=$(readlink "$root/current")
           bash "$HOME/encarmen-staging-backups/enc041-deploy.sh" "$sha" "$old"
