@@ -80,10 +80,10 @@ export function createDenueClient(options:{token:()=>string|undefined;fetcher?:t
       // content: it may contain identifying details or a reflected token.
       let rows:any;
       try {
-        rows=JSON.parse(text.replace(/^\\uFEFF/,''));
-        if(typeof rows==='string' && /^[\\s]*[\\[{]/.test(rows))rows=JSON.parse(rows);
+        rows=JSON.parse(text.replace(/^\uFEFF/,''));
+        if(typeof rows==='string' && /^[\s]*[\[{]/.test(rows))rows=JSON.parse(rows);
       } catch {
-        throw new DenueError(/^\\s*</.test(text)?'DENUE_UPSTREAM_NON_JSON_HTML':'DENUE_UPSTREAM_INVALID_JSON');
+        throw new DenueError(/^\s*</.test(text)?'DENUE_UPSTREAM_NON_JSON_HTML':'DENUE_UPSTREAM_INVALID_JSON');
       }
       if(!Array.isArray(rows))throw new DenueError('DENUE_UPSTREAM_NOT_ARRAY');
       if(rows.length>20)throw new DenueError('DENUE_UPSTREAM_TOO_MANY_ROWS');
