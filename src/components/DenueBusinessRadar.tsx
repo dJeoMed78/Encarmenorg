@@ -19,7 +19,7 @@ export function DenueBusinessRadar({isOpen,onClose,onBusinessApproved}:DenueRada
   const generation=useRef(0),inFlight=useRef(false);
   useEffect(()=>{if(!isOpen)return;let cancelled=false;adminFetch('/api/admin/denue-token').then(r=>r.json()).then(data=>{if(!cancelled)setTokenConfigured(data.success?!!data.configured:null);}).catch(()=>{if(!cancelled)setTokenConfigured(null);});return()=>{cancelled=true;};},[isOpen]);
   async function saveToken(){
-    if(tokenBusy||!/^[A-Za-z0-9-]{8,128}$/.test(token)){setNotice('Token inválido: utiliza de 8 a 128 letras, números o guiones.');return;}
+    if(tokenBusy||!/^[^\s\x00-\x1f\x7f]{8,512}$/.test(token)){setNotice('Token inválido: utiliza de 8 a 512 caracteres sin espacios ni caracteres de control.');return;}
     setTokenBusy(true);setNotice('');
     try{const response=await adminFetch('/api/admin/denue-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
       const data=await response.json();if(!response.ok||!data.success)throw Error(data.code||'No se confirmó el guardado.');
