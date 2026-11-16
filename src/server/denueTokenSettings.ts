@@ -17,7 +17,7 @@ function location():string|null {
     const envStat=fs.lstatSync(envFile);
     if(!envStat.isFile()||envStat.isSymbolicLink()||(envStat.mode&0o077)!==0)return null;
     const raw=fs.readFileSync(envFile,'utf8');
-    const values=Object.fromEntries(raw.split(/\\r?\\n/).filter(line=>/^[A-Za-z_][A-Za-z0-9_]*=/.test(line)).map(line=>{const index=line.indexOf('=');return [line.slice(0,index),line.slice(index+1).replace(/^["']|["']$/g,'')]}));
+    const values=Object.fromEntries(raw.split(/\r?\n/).filter(line=>/^[A-Za-z_][A-Za-z0-9_]*=/.test(line)).map(line=>{const index=line.indexOf('=');return [line.slice(0,index),line.slice(index+1).replace(/^["']|["']$/g,'')]}));
     if(values.APP_ENV!=='staging'||values.DB_NAME!=='u293982346_encarmentest'||!values.DB_PASSWORD||values.DB_USER==='u293982346_appuser')return null;
     return path.join(config,'denue-token.secret');
   }catch{return null;}
