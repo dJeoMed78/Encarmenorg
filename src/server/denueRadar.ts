@@ -124,7 +124,7 @@ export function createDenueRadar(deps:{client:ReturnType<typeof createDenueClien
     // paginated discovery endpoint; using it as an ID lookup can return a
     // non-record response even when the official Ficha is valid.
     const ficha=await deps.client.ficha(id);
-    if(ficha.denueId!==id||ficha.geography!=='VERIFICADA'||norm(ficha.name)!==norm(c.name)||norm(ficha.address)!==norm(c.address)||
+    if(ficha.denueId!==id||norm(ficha.name)!==norm(c.name)||norm(ficha.address)!==norm(c.address)||
        ['name','address','phone','email','website','activity','clee','colonia'].some(k=>(ficha as any)[k] !== (c as any)[k]))throw new DenueError('DENUE_SOURCE_CHANGED_OR_UNAVAILABLE',422);
     const catalog=await deps.readAll();
     const existing=catalog.find(b=>b.denue?.denueId===id);
