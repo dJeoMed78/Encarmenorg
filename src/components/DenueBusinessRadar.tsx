@@ -3,6 +3,7 @@ import {Search,X,ExternalLink,Building2} from 'lucide-react';
 import type {Business} from '../types';
 import type {DenueCandidate} from '../types/denue';
 import {searchDenue,approveDenue} from '../services/denueApi';
+import {adminFetch} from '../utils/adminAuth';
 
 export interface DenueRadarProps {
   isOpen:boolean;onClose:()=>void;onBusinessApproved?:(business:Business)=>void;
@@ -14,7 +15,18 @@ export function DenueBusinessRadar({isOpen,onClose,onBusinessApproved}:DenueRada
   const [unavailable,setUnavailable]=useState<string[]>([]),[notice,setNotice]=useState('');
   const [busy,setBusy]=useState(false),[nextPage,setNextPage]=useState<number|null>(null);
   const [loadedQuery,setLoadedQuery]=useState(''),[confirming,setConfirming]=useState(false);
+  const [token,setToken]=useState(''),[tokenConfigured,setTokenConfigured]=useState<boolean|null>(null),[tokenBusy,setTokenBusy]=useState(false);
   const generation=useRef(0),inFlight=useRef(false);
+  useEffect(()=>{if(!isOpen)return;let cancelled=false;adminFetch('/api/admin/denue-token').then(r=>r.json()).then(data=>{if(!cancelled)setTokenConfigured(data.success?!!data.configured:null);}).catch(()=>{if(!cancelled)setTokenConfigured(null);});return()=>{cancelled=true;};},[isOpen]);
+  async function saveToken(){
+    if(tokenBusy||!/^[A-Za-z0-9-]{8,128}$/.test(token)){setNotice('Token inválido: utiliza de 8 a 128 letras, números o guiones.');return;}
+    setTokenBusy(true);setNotice('');
+    try{const response=await adminFetch('/api/admin/denue-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
+      const data=await response.json();if(!response.ok||!data.success)throw Error(data.code||'No se confirmó el guardado.');
+      setToken('');setTokenConfigured(true);setNotice('Token DENUE guardado de forma privada en Staging. Ya puedes consultar.');
+    }catch(error){setNotice(error instanceof Error?error.message:'No se pudo guardar el token.');}
+    finally{setTokenBusy(false);}
+  }
   useEffect(()=>{generation.current++;setCandidates([]);setSelected([]);setReviewed([]);setUnavailable([]);setNextPage(null);setConfirming(false);setNotice('');
     return()=>{generation.current++;};},[isOpen]);
   async function search(page=1){
@@ -44,6 +56,12 @@ export function DenueBusinessRadar({isOpen,onClose,onBusinessApproved}:DenueRada
         <p className="text-sm text-slate-600">Ciudad del Carmen, Campeche · 040030001</p></div>
         <button aria-label="Cerrar radar" onClick={onClose} disabled={busy}><X/></button></header>
       <p className="my-3 text-sm text-slate-600">Fuente: INEGI, Directorio Estadístico Nacional de Unidades Económicas. Campos normalizados por ENCARMEN; no implica aval del INEGI. Sin fotografías, horarios ni WhatsApp inferidos.</p>
+      <div className="my-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <p className="text-sm font-semibold mb-2">Configuración privada del token INEGI DENUE · {tokenConfigured===true?'Configurado':tokenConfigured===false?'No configurado':'Estado no disponible'}</p>
+        <div className="flex flex-wrap gap-2"><input type="password" autoComplete="off" aria-label="Token privado DENUE" value={token} onChange={e=>setToken(e.target.value)} placeholder="Pegar token INEGI (no se mostrará)" className="min-w-0 flex-1 rounded-xl border p-3" />
+        <button type="button" onClick={()=>void saveToken()} disabled={tokenBusy||!token} className="rounded-xl bg-slate-800 text-white px-4 py-2 disabled:opacity-40">Guardar token</button></div>
+        <p className="text-xs text-slate-500 mt-2">Solo administradores. El token se guarda en archivo privado del servidor Staging, nunca en el navegador ni en la configuración pública.</p>
+      </div>
       <form className="flex flex-wrap gap-2 my-4" onSubmit={e=>{e.preventDefault();void search();}}>
         <input aria-label="Nombre del establecimiento" value={query} maxLength={80} onChange={e=>setQuery(e.target.value)} className="min-w-0 flex-1 rounded-xl border p-3" placeholder="Nombre del establecimiento (vacío: todos)"/>
         <button disabled={busy} className="rounded-xl bg-blue-600 text-white px-4 py-2 flex gap-2"><Search/>Consultar DENUE</button>
