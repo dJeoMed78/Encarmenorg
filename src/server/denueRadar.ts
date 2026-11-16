@@ -76,8 +76,17 @@ export function createDenueClient(options:{token:()=>string|undefined;fetcher?:t
       while(true){const {done,value}=await reader.read();if(done)break;bytes+=value.length;
         if(bytes>2_000_000){await reader.cancel();throw new DenueError('DENUE_RESPONSE_TOO_LARGE');}chunks.push(value);}
       const text=Buffer.concat(chunks).toString('utf8');
-      let rows:any;try{rows=JSON.parse(text);}catch{throw new DenueError('DENUE_INVALID_RESPONSE');}
-      if(!Array.isArray(rows)||rows.length>20)throw new DenueError('DENUE_INVALID_RESPONSE');
+      // INEGI may return a JSON-encoded JSON string. Never log raw upstream
+      // content: it may contain identifying details or a reflected token.
+      let rows:any;
+      try {
+        rows=JSON.parse(text.replace(/^\\uFEFF/,''));
+        if(typeof rows==='string' && /^[\\s]*[\\[{]/.test(rows))rows=JSON.parse(rows);
+      } catch {
+        throw new DenueError(/^\\s*</.test(text)?'DENUE_UPSTREAM_NON_JSON_HTML':'DENUE_UPSTREAM_INVALID_JSON');
+      }
+      if(!Array.isArray(rows))throw new DenueError('DENUE_UPSTREAM_NOT_ARRAY');
+      if(rows.length>20)throw new DenueError('DENUE_UPSTREAM_TOO_MANY_ROWS');
       return rows;
     } catch(error){
       if(error instanceof DenueError)throw error;
