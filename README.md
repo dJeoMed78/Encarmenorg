@@ -60,3 +60,8 @@ WC_CONSUMER_SECRET=tu_consumer_secret
 - **Integración con Google Maps / Waze / WhatsApp directo.**
 - **Sincronización automática periódica y webhook de WooCommerce.**
 - **SEO optimizado:** OpenGraph dinámico para compartir en WhatsApp y Facebook con vista previa de cada negocio.
+
+
+## Colaboración con Google AI Studio
+
+Google AI Studio participa como herramienta auxiliar de desarrollo de ENCARMEN. Sus modificaciones deben revisarse y validarse antes de integrarse a la rama ia-desarrollo.
