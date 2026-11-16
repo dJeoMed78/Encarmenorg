@@ -3,7 +3,7 @@ import path from 'node:path';
 import type {Request,Response} from 'express';
 
 // Private Staging-only credential store. Never serialize this value to the browser.
-const valid=(value:unknown):value is string=>typeof value==='string'&&/^[A-Za-z0-9-]{8,128}$/.test(value);
+const valid=(value:unknown):value is string=>typeof value==='string'&&/^[^\s\x00-\x1f\x7f]{8,512}$/.test(value);
 function location():string|null {
   if(!process.env.HOME||process.env.APP_ENV!=='staging'||process.env.DB_NAME!=='u293982346_encarmentest')return null;
   const root=path.join(process.env.HOME,'domains/staging.encarmen.org/hbuilds');
