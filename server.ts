@@ -8,6 +8,7 @@ import {verifyStagingAdmin,createLoginLimiter,stagingBusinessConfiguration,getPr
 import { prepareContactPatch, contactsMatchReadback, ContactPatchError, contactDigits, contactCounts, matchesContactFilter, CONTACT_FILTERS, type ContactFilter } from './src/utils/businessContacts';
 import { SEO_PRIMARY_ORIGIN, buildSeoRobotsTxt, getCanonicalSeoOrigin, getSeoCanonicalRedirect, getLegacyWordPressRetirement, isCanonicalSeoHost, isStagingSeoRequest } from './src/server/seoIndexing.ts';
 import dotenv from 'dotenv';
+import {readDenueToken,registerDenueTokenSettings} from './src/server/denueTokenSettings';
 dotenv.config({ override: true });
 // Hostinger may restart Node without injecting the build's database environment.
 // Bootstrap from the PRIVATE Staging file only when the actual resolved CWD
@@ -266,6 +267,7 @@ const adminSecurity = registerAdminSecurity(app, {
     const mutationsEnabled = isStaging
       ? (businessWrites && Boolean(snapshot && snapshot.ENC_ADMIN_MUTATIONS_ENABLED === 'true'))
       : (process.env.ENC_ADMIN_MUTATIONS_ENABLED === 'true');
+    if (req.method === 'POST' && req.path === '/api/admin/denue-token') return isStaging && stagingDynamicIdentity;
     if (administrativeWritesReady(req, { mutationsEnabled, isStaging, businessWrites })) return true;
     // La autorización de clasificados tiene su propio carril privado, no depende
     // del interruptor de mutaciones empresariales. No ampliar a otras rutas.
@@ -287,6 +289,8 @@ const adminSecurity = registerAdminSecurity(app, {
 });
 
 
+
+registerDenueTokenSettings(app,req=>adminSecurity.isAuthorized(req,'admin:manage'));
 
 // Control journal has its own authenticated, staging-only file lane. It does not
 // change any business/SQL write gate or expose journal files as static assets.
@@ -7679,7 +7683,7 @@ export const defaultApprovalHandlers = createBusinessApprovalHandlers();
 
 // DENUE reuses the isolated, transactional store; no general write gate is widened.
 const denueRadar = createDenueRadar({
-  client: createDenueClient({token:()=>process.env.INEGI_DENUE_TOKEN}),
+  client: createDenueClient({token:readDenueToken}),
   authorized:req=>adminSecurity.isAuthorized(req,'business:publish'),
   canWrite:()=>isStagingEnvironment() && isMariaDbActive() && isBusinessWritePermitted() &&
     getPrivateStagingSnapshot()?.ENC_ADMIN_MUTATIONS_ENABLED === 'true',
