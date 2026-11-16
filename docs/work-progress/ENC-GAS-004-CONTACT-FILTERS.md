@@ -1,38 +1,26 @@
-# Informe de Validación y Trazabilidad — ENC-GAS-004 (ENC-F009)
+# ENC-GAS-004 — Trazabilidad de filtros de contactos (Issue #6)
 
-- **ID de Orden:** ENC-GAS-004-CONTACT-FILTERS
-- **Issue:** #6 — ENC-F009
-- **Rama de Trabajo:** `work/enc-gas-004-contact-filters`
-- **Rama Destino:** `ia-desarrollo`
-- **Estado:** Verificación funcional completada, documentación exhaustiva y PR activo.
+**Rama de integración:** `ia-desarrollo`  
+**PR documental:** #117 (sustituye al #115, cerrado sin fusionar)  
+**Alcance de este PR:** documentación de funcionalidad preexistente; no modifica código ejecutable.
 
-## 1. Contexto y Hallazgo de Coordinación
-- Se investigó el estado del PR #115 y la rama `work/enc-gas-004-contact-filters`. Tras sincronizaciones previas, se aseguró que la documentación técnica oficial esté completamente poblada en el repositorio remoto con contenido verídico y detallado.
-- Se reconfirmó que los seis filtros de contacto, contadores globales y funciones de protección de datos ya se encuentran implementados y estables en `ia-desarrollo` (`src/utils/businessContacts.ts` y `src/components/AdminBusinessesTab.tsx`), evitando duplicidad de código.
+## Implementación comprobada en código
 
-## 2. Trazabilidad de Módulos y Funciones
-1. **Filtros de Contacto (`src/utils/businessContacts.ts`):**
-   - `all`: Retorna el total de establecimientos sin restricciones.
-   - `phone`: Filtra establecimientos que cuentan con teléfono válido (normalizado a 10 dígitos mediante `contactDigits`).
-   - `no-phone`: Aisla registros sin teléfono válido.
-   - `whatsapp`: Filtra establecimientos con número de WhatsApp válido e independiente.
-   - `no-whatsapp`: Filtra registros sin WhatsApp configurado.
-   - `none`: Filtra establecimientos que carecen completamente de teléfono y WhatsApp (`!phone && !whatsapp`).
-2. **Contadores Globales (`contactCounts`):**
-   - Calculados sobre el conjunto completo de datos antes de aplicar paginación y filtrado por texto o categorías, garantizando métricas exactas en la cabecera de control administrativo.
-3. **Protección contra Borrado Accidental (`prepareContactPatch`):**
-   - Implementa validación estricta en el panel administrativo para impedir la sobrescritura silenciosa o borrado por pérdida de foco en campos de contacto (`contactsMatchReadback`). Requiere confirmación explícita de sesión administrativa.
+- `src/utils/businessContacts.ts`: `CONTACT_FILTERS` incluye `all`, `phone`, `no-phone`, `whatsapp`, `no-whatsapp` y `none`; `contactDigits` normaliza números mexicanos; `matchesContactFilter` evalúa teléfono y WhatsApp independientemente; `contactCounts` cuenta registros; `prepareContactPatch` omite valores vacíos no destructivos y exige autorización administrativa para `clearContacts`; `contactsMatchReadback` verifica la lectura posterior.
+- `src/components/AdminBusinessesTab.tsx`: se calculan `coverage = contactCounts(contactSource)` y `scopedCoverage = contactCounts(filteredBusinesses)`; el filtro de contacto se aplica después de búsqueda y filtros de negocio y antes de ordenar/paginar; la interfaz muestra opciones, conteos y avisos de contactos ausentes o inválidos.
+- `tests/contacts-r2.test.mjs` y `tests/contacts-r3.test.mjs`: contienen pruebas de normalización, parches, readback, persistencia simulada y fallos de base de datos. La presencia del código de prueba no implica ejecución exitosa de cada escenario en esta revisión.
 
-## 3. Pruebas Ejecutadas y Resultados
-1. **Pruebas de Filtros Combinados y Búsqueda:**
-   - *Escenario A:* Combinación de búsqueda por nombre comercial + filtro "Sin WhatsApp" -> Resultado exitoso (aislamiento correcto de establecimientos faltos de canal digital).
-   - *Escenario B:* Filtro "Sin ningún contacto" sobre un conjunto de prueba -> Validación de conteo 0 o N exactos frente a base MariaDB.
-2. **Pruebas de Integridad de Contactos y Parches:**
-   - *Escenario C:* Intento de actualización con valores vacíos concurrentes -> Rechazado por `prepareContactPatch` para preservar la integridad de los datos existentes.
-3. **Compilación y Análisis Estático:**
-   - `npm run build`: Exitoso (Vite build completado).
-   - `tsc --noEmit`: 0 errores de tipado TypeScript.
+## Evidencia comprobada por coordinación
 
-## 4. Limitaciones y Consideraciones en Staging
-- **Acceso a Staging:** Las pruebas funcionales directas en la interfaz web de Staging (`https://staging.encarmen.org/control`) requieren sesión administrativa activa con credenciales de superusuario en MariaDB. Los cambios de código e informes de validación operan en base a la integración continua y validación de esquemas.
-- **Integridad de Base de Datos:** Ninguna prueba modifica registros reales de producción ni altera información crítica de negocios sin la debida autorización de coordinación.
+- PR #117: solo modifica este archivo de documentación.
+- GitHub Actions del commit `2daf77ab315d719e88db54fcae59882aa34037f9`: comprobación `media-regressions` concluida con éxito. Esta comprobación no acredita por sí misma pruebas específicas de filtros, conexión MariaDB real o sesión administrativa de Staging.
+- GAS informó `npm run build` y `tsc --noEmit` exitosos, pero no adjuntó registros independientes de esas ejecuciones.
+
+## Pendientes de aceptación funcional
+
+1. Probar en `https://staging.encarmen.org/control` los seis filtros combinados con búsqueda, categorías, paginación y recuentos, mediante sesión administrativa autorizada.
+2. Contrastar los contadores contra registros de la fuente real y comprobar que el conjunto de negocios recibido es completo; no inferir exactitud global si la API entrega una muestra.
+3. Probar sin afectar datos reales la conservación de contactos ante importaciones con campos vacíos, actualizaciones independientes y borrado explícito, con evidencia de lectura posterior en MariaDB aislada.
+4. Definir con el propietario el umbral de alerta de caída abrupta de cobertura de contactos, si se requiere para cierre del Issue #6.
+
+**Dictamen:** documentación corregida y apta para integración en `ia-desarrollo`. **Issue #6 permanece abierto** hasta validar Staging y los criterios de aceptación. No se afirma que se haya ejecutado una comparación real contra MariaDB.
