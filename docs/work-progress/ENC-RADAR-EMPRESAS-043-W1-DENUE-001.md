@@ -42,3 +42,36 @@ La API Ficha valida ID/nombre/dirección; no demuestra que la interfaz JavaScrip
 6. Cerrar ventana de escritura y comprobar rechazo. Reversión de código: volver al release anterior por procedimiento de Coordinación. No borrar registros importados automáticamente.
 
 Pendientes externos: token, consultas DENUE reales, visor individual, MariaDB real y aceptación visual. No se usaron credenciales reales ni se ejecutó SQL real.
+
+## Continuación y preparación de PR — 2026-11-16
+
+### Estado remoto comprobado antes de publicar
+- HEAD de esta rama: `554975903518774ec7b9dfe3982537d4728933a4`.
+- HEAD vigente de ia-desarrollo: `792476f24fac377bf6b305d195f202ec20eb0f39`.
+- La implementación ya fue integrada mediante [PR #94](https://github.com/dJeoMed78/Encarmenorg/pull/94), cerrada y fusionada, merge `cc48003aeaf782d13992aae4fbc3b1b53e8fa9e5`. Esta continuación no realizó esa integración.
+- Comparación ia-desarrollo...rama funcional: 0 commits por delante, 20 por detrás y ningún archivo funcional pendiente. No corresponde duplicar la implementación.
+- La nueva PR será exclusivamente documental desde la rama solicitada. No se fusionan ramas, no se reescribe historial y no se restaura el servidor antiguo.
+
+### Compatibilidad con cambios posteriores
+Se revisó el diff entre el checkpoint funcional y el HEAD actual. De los archivos funcionales DENUE, server.ts recibió cambios posteriores: tablero de control autenticado, protección de Gemini, retiro de WooCommerce y limpieza del proceso de compilación. No se detectaron cambios posteriores en el cliente DENUE, el store transaccional ni sus componentes específicos. El cableado DENUE no aparece modificado en ese diff.
+El informe conserva el mismo blob en ambas ramas antes de esta actualización (`bc52e060f84f384be0987e28b684a47e76820264`); la modificación documental no colisiona con esos cambios funcionales. No se sustituye server.ts ni se importan bundles antiguos.
+Esto es revisión de diferencias, no una nueva prueba funcional del conjunto actualmente integrado.
+
+### Cierre de pruebas del checkpoint funcional
+[GitHub Actions 43305244261](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43305244261) finalizó SUCCESS; su estado se volvió a consultar en esta continuación.
+Evidencia de la ejecución original:
+- `npm ci --ignore-scripts --no-audit --no-fund`: PASS. Resuelve el pendiente de instalación limpia del checkpoint inicial.
+- `npm run lint`: PASS.
+- Suite DENUE: 32 PASS, 0 FAIL, con pipeline HTTP local y adaptadores SQL simulados, más pruebas React/jsdom.
+- Regresiones seleccionadas de radar/aislamiento: 81 PASS, 0 FAIL.
+- `npm run build`: PASS.
+Los resultados anteriores son históricos del commit funcional; no se presentan como pruebas ejecutadas de nuevo el 16 de noviembre.
+Se conservan explícitamente los tres fallos de la ejecución local ampliada documentada arriba: no equivalen a fallos del job seleccionado de CI ni se consideran resueltos por él.
+En esta continuación solo se ejecutaron consultas de GitHub y comparación de fuentes; no se repitieron pruebas para una modificación exclusivamente documental.
+
+### Seguridad, límites y pendientes
+Se conserva íntegramente el código: token solo en servidor, consulta autenticada, carril de escritura Staging, autorización administrativa y controles transaccionales. No se modificaron variables ni permisos.
+No se ejecutaron consultas autenticadas a INEGI, migraciones, SQL, despliegues ni escrituras reales. La revisión no acredita el estado actual de Hostinger, disponibilidad del token ni persistencia real.
+Pendientes de validación autorizada: consulta DENUE con token, apertura de fichas individuales, identidad y aislamiento de MariaDB, COMMIT y lectura independiente, duplicados/reintentos y aceptación visual. La CI con simulaciones no sustituye estas comprobaciones.
+Riesgo de integración: restaurar archivos de esta rama antigua podría revertir cambios posteriores; la PR propuesta contiene únicamente este informe. La integración funcional ya existente y su operación deben revisarse sobre el HEAD vigente, sin atribuirles las pruebas históricas como cobertura completa.
+Dictamen: informe actualizado preparado para revisión de Nia; sin aprobación propia, nueva integración ni despliegue.
