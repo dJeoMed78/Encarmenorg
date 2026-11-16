@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../server.ts',import.meta.url),'utf8');
 test('legacy mutation routes deny synchronization before any old handler',()=>{
  assert.match(source,/app\.post\(\['\/api\/sync', '\/api\/webhook\/woocommerce', '\/api\/businesses\/:id\/sync-wp'\]/);
- assert.match(source,/Sincronización WooCommerce retirada/);
+ assert.match(source,/Sincronización externa retirada/);
 });
 test('no executable WordPress export/import, webhook, or remote cache purge code remains',()=>{
  for(const name of ['exportBusinessToWooCommerce','syncAllWooCommerceProducts','getWpAuthHeader','parseWooCommerceProduct','purgeWordPressCache','IS_WP_SYNC_ENABLED']) assert.ok(!source.includes(name),name);
