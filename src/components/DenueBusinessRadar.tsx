@@ -52,9 +52,9 @@ export function DenueBusinessRadar({isOpen,onClose,onBusinessApproved}:DenueRada
   const toggle=(id:string)=>setSelected(prev=>prev.includes(id)?prev.filter(x=>x!==id):prev.length<10?[...prev,id]:prev);
   return <div className="fixed inset-0 z-[100] bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-2 sm:p-6" role="dialog" aria-modal="true" aria-label="Radar de empresas DENUE">
     <section className="w-full max-w-6xl max-h-[94vh] overflow-y-auto rounded-3xl border border-white/60 bg-white/95 backdrop-blur-2xl shadow-2xl p-4 sm:p-6">
-      <header className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-slate-900 flex gap-2"><Building2/>Radar de empresas · DENUE</h2>
+      <header className="sticky top-0 z-30 -mx-4 -mt-4 sm:-mx-6 sm:-mt-6 mb-3 px-4 py-3 sm:px-6 flex items-center justify-between gap-4 rounded-t-3xl bg-white/95 backdrop-blur-xl border-b border-slate-200 shadow-sm"><div><h2 className="text-xl font-bold text-slate-900 flex gap-2"><Building2/>Radar de empresas · DENUE</h2>
         <p className="text-sm text-slate-600">Ciudad del Carmen, Campeche · 040030001</p></div>
-        <button aria-label="Cerrar radar" onClick={onClose} disabled={busy}><X/></button></header>
+        <button type="button" aria-label="Cerrar radar y regresar al panel administrativo" onClick={onClose} disabled={busy} className="shrink-0 inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-800 shadow-sm hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 disabled:opacity-50"><X size={20}/><span>Cerrar y volver</span></button></header>
       <p className="my-3 text-sm text-slate-600">Fuente: INEGI, Directorio Estadístico Nacional de Unidades Económicas. Campos normalizados por ENCARMEN; no implica aval del INEGI. Sin fotografías, horarios ni WhatsApp inferidos.</p>
       <div className="my-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <p className="text-sm font-semibold mb-2">Configuración privada del token INEGI DENUE · {tokenConfigured===true?'Configurado':tokenConfigured===false?'No configurado':'Estado no disponible'}</p>
