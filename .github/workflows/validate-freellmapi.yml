@@ -29,7 +29,9 @@ jobs:
           npm run test:bootstrap
           npm run test:hooks
           npm run test -w server
-          npm run test -w cli
+          # The CLI has no Vitest config; prevent Vitest from loading ENCARMEN's root vite.config.ts.
+          printf 'export default { test: { root: "." } };\n' > cli/vitest.isolated.config.mjs
+          (cd cli && npx vitest run --config vitest.isolated.config.mjs)
           cd client
           npx vitest run --config vite.config.ts
           npm run check:i18n
