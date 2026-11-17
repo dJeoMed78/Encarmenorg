@@ -17,8 +17,12 @@ export default {async fetch(req){
  try{
   let r,j,provider;
   const primaryOrders={ 'auto-groq':['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025','@cf/zai-org/glm-4.7-flash'], 'auto-gemini':['gemini-3.5-flash-lite','openai/gpt-oss-20b','cohere/command-a-03-2025','@cf/zai-org/glm-4.7-flash'], 'auto-cohere':['cohere/command-a-03-2025','openai/gpt-oss-20b','gemini-3.5-flash-lite','@cf/zai-org/glm-4.7-flash'], 'auto-cloudflare':['@cf/zai-org/glm-4.7-flash','openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025'], 'auto':['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025','@cf/zai-org/glm-4.7-flash']};
-  const automatic=Object.prototype.hasOwnProperty.call(primaryOrders,model);
-  const order=automatic?primaryOrders[model]:[model];
+  const allowed=['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025','@cf/zai-org/glm-4.7-flash'];
+  const custom=model==='auto-custom';
+  const requested=body.provider_order;
+  if(custom&&(!Array.isArray(requested)||requested.length!==4||new Set(requested).size!==4||requested.some(x=>!allowed.includes(x))))return json({error:{message:'Orden de proveedores inválido'}},400);
+  const automatic=custom||Object.prototype.hasOwnProperty.call(primaryOrders,model);
+  const order=custom?requested:automatic?primaryOrders[model]:[model];
   const failures=[];
   for(const selected of order){
    try{
