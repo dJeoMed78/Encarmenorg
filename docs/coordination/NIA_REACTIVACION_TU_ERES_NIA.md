@@ -129,3 +129,12 @@ Referencia: [HOSTINGER_API_STAGING_EVIDENCE_2026-11-17.md](HOSTINGER_API_STAGING
 - `encarmen.org` (producción) permanece protegida; no modificarla sin autorización expresa.
 
 Referencia de evidencia: [HOSTINGER_API_STAGING_EVIDENCE_2026-11-17.md](HOSTINGER_API_STAGING_EVIDENCE_2026-11-17.md).
+
+
+## Investigación ampliada de capacidades Hostinger API (2026-11-17)
+
+NIA debe leer la sección **“Investigación ampliada: capacidades de la API pública Hostinger”** en [HOSTINGER_API_STAGING_EVIDENCE_2026-11-17.md](HOSTINGER_API_STAGING_EVIDENCE_2026-11-17.md). Incluye las capacidades documentadas de Hosting/Sitios, Node.js (builds, configuración, variables, logs, restart, análisis de fallos y vulnerabilidades), flujo de carga de ZIP, categorías de Domains/DNS/Email/VPS/WordPress/ecommerce/billing, SDK/CLI/MCP, límites y advertencias de operaciones destructivas.
+
+Puntos críticos: el POST de build puede sobrescribir todo el contenido del sitio; PUT de variables reemplaza el conjunto completo y elimina variables omitidas; PUT de build settings puede poner campos omitidos en null; DELETE de runtime logs es irreversible; restart reinicia el proceso sin reconstruir. No explorar con escrituras. Las capacidades documentadas no equivalen a pruebas realizadas ni a permisos efectivos de la cuenta.
+
+Separación obligatoria: `HOSTINGER` es exclusiva de IA para TODOS / FreeLLMAPI; `HOSTINGERENCARMEN` es exclusiva de ENCARMEN Staging. Usar esta última solo para `staging.encarmen.org`; producción `encarmen.org` queda protegida. Seguir la secuencia de diagnóstico y pruebas seguras de la sección H del documento de evidencia.
