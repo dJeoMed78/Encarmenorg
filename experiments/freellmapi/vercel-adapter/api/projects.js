@@ -4,12 +4,12 @@ const safe=(a,b)=>{const x=Buffer.from(a||''),y=Buffer.from(b||'');return x.leng
 const slugify=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,48);
 const root='experiments/freellmapi/workspace-memory/projects';
 async function gh(path,init={}){const token=process.env.GITHUB_MEMORY_TOKEN;if(!token)throw Object.assign(new Error('Falta configurar GITHUB_MEMORY_TOKEN en Vercel'),{status:503});const r=await fetch('https://api.github.com/repos/dJeoMed78/Encarmenorg/contents/'+path,{...init,headers:{accept:'application/vnd.github+json',authorization:'Bearer '+token,'x-github-api-version':'2022-11-28','content-type':'application/json',...(init.headers||{})}});const j=await r.json();if(!r.ok)throw Object.assign(new Error(j.message||'GitHub API error'),{status:r.status});return j}
-function auth(req){const token=process.env.PROXY_ACCESS_TOKEN;if(!token)return false;const c=(req.headers.get('cookie')||'').split('; ').find(x=>x.startsWith('ff_session='))?.slice(11)||'';const [exp,sig]=c.split('.');return !!(exp&&Number(exp)>Date.now()&&safe(sig,createHmac('sha256',token).update(exp).digest('hex')))}
+function auth(req){const token=process.env.PROXY_ACCESS_TOKEN;if(!token)return false;const c=(req.headers.cookie||'').split('; ').find(x=>x.startsWith('ff_session='))?.slice(11)||'';const [exp,sig]=c.split('.');return !!(exp&&Number(exp)>Date.now()&&safe(sig,createHmac('sha256',token).update(exp).digest('hex')))}
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');if(req.method!=='GET'&&req.method!=='POST')return res.status(405).json({error:'Method not allowed'});if(!auth(req))return res.status(401).json({error:'Unauthorized'});
  try{
   const body=req.method==='POST'?req.body||{}:{};const action=req.method==='GET'?'list':body.action;
-  if(action==='list'){const items=await gh(root);return res.status(200).json({projects:items.filter(x=>x.type==='file'&&x.name.endsWith('.md')).map(x=>({id:x.name.slice(0,-3),name:x.name.slice(0,-3).replace(/-/g,' '),path:x.path,sha:x.sha}))})}
+  if(action==='list'){const items=await gh(root);return res.status(200).json({projects:items.filter(x=>x.type==='file'&&x.name.endsWith('.md')&&x.name!=='README.md').map(x=>({id:x.name.slice(0,-3),name:x.name.slice(0,-3).replace(/-/g,' '),path:x.path,sha:x.sha}))})}
   if(action==='create'){
    const name=String(body.name||'').trim();if(name.length<2||name.length>80)return res.status(400).json({error:'Nombre de proyecto inválido'});const id=slugify(name);if(!id)return res.status(400).json({error:'Nombre inválido'});const path=root+'/'+id+'.md';
    const content='# '+name+'\n\n- ID: '+id+'\n- Creado: '+new Date().toISOString()+'\n- Estado: EN CURSO\n\n## Objetivo\nPor definir.\n\n## Historial de trabajo\n\n## Decisiones\n\n## Pendientes\n\n## Siguiente acción\n\n';
