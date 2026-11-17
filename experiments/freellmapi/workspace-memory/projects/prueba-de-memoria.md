@@ -50,3 +50,41 @@ Aquí tienes tres opciones de IA que ofrecen APIs gratuitas (con límites razona
 ### 2026-11-17T16:35:24.598Z · user
 
 DAME OTROS 5 MAS
+
+### 2026-11-17T16:35:27.847Z · assistant
+
+### 5 APIs adicionales con **tarifas gratuitas** (y con límites razonables que suelen cubrir proyectos de pruebas, prototipos o pequeñas aplicaciones)
+
+| # | Plataforma | Tipo de IA | Límite gratuito (aprox.) | Enlace |
+|---|------------|------------|--------------------------|--------|
+| 1 | **OpenAI (ChatGPT 4 / GPT‑3.5)** | Modelos de lenguaje generativo | 18 USD en créditos de prueba (≈ 5 000 $‑tokens) + 3 000 $‑tokens mensuales gratis tras la prueba | <https://platform.openai.com/docs> |
+| 2 | **AlephAlpha (LLaMA‑2, LLaMA‑2‑Chat, etc.)** | Modelos de lenguaje de código abierto | 1 000 $‑tokens/día en el plan “Free” (más 200 $‑tokens en la capa “Free Plus”) | <https://aleph-alpha.com> |
+| 3 | **Replicate** | Modelos de generación de texto, imagen, audio, etc. (Stable Diffusion, GPT‑J, etc.) | 100 peticiones gratuitas por mes (o 1 000 $‑tokens por mes en el plan “Basic”) | <https://replicate.com> |
+| 4 | **DeepAI** | APIs de texto‑a‑imagen, clasificación, resumen, etc. | 100 llamadas/día sin límite de tokens (para cada endpoint) | <https://deepai.org> |
+| 5 | **ModelScope (Alibaba Cloud)** | Modelos de visión, lenguaje y audio (BERT, GPT‑2, etc.) | 10 000 peticiones gratuitas al mes, 5 000 $‑tokens por día en el plan “Free” | <https://www.modelscope.cn> |
+
+---
+
+## Cómo sacarle el máximo provecho a estas APIs
+
+| Paso | Qué hacer | Por qué |
+|------|-----------|---------|
+| 1 | **Regístrate** y crea una cuenta en la plataforma elegida. | Necesitas una API key para autenticarte. |
+| 2 | **Lee la documentación** de cada endpoint: parámetros, formatos, límites exactos y mejores prácticas. | Evita sobrepasar límites y obtener errores inesperados. |
+| 3 | **Implementa la llamada** con tu stack favorito (Python `requests`, JavaScript `fetch`, etc.). | Prueba el flujo completo antes de integrar en producción. |
+| 4 | **Gestión de tokens/peticiones**: usa variables como `max_tokens`, `max_length`, o limita el tamaño del prompt. | Reduce costos y evita llegar a los límites. |
+| 5 | **Almacena logs y métricas**: guarda cada request/response, métrica de tokens consumidos. | Te ayuda a monitorizar el uso y planificar actualizaciones de plan. |
+| 6 | **Cacheo**: implementa una caché local (Redis, memcached, etc.) para respuestas repetidas. | Ahorra tokens y mejora la velocidad de respuesta. |
+
+---
+
+## Tips para proyectos más grandes
+
+1. **Cambia de modelo según la tarea**: por ejemplo, usa `gpt‑4o-mini` para preguntas breves y `gpt‑4o` solo cuando necesites más contexto.  
+2. **Batching**: muchos modelos aceptan peticiones en lote; agrupar prompts reduce la sobrecarga de conexión.  
+3. **Fusión de resultados**: combina la respuesta de varias APIs para mejorar la precisión (ej. usar DeepAI para generación de imagen y luego OpenAI para descripción).  
+
+> **Advertencia**: aunque cada API ofrece un plan “gratuito”, siempre existen límites. Si tu uso aumenta, considera:
+> - Actualizar a un plan de pago.
+> - Alternar a otra API con límites superiores.
+> -
