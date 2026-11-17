@@ -1,8 +1,1 @@
-{
-  "name": "freellmapi-vercel-adapter",
-  "private": true,
-  "type": "module",
-  "engines": {
-    "node": ">=20 <25"
-  }
-}
+{"name":"freellmapi-gemini-chat","private":true,"type":"module","engines":{"node":">=20 <25"}}
