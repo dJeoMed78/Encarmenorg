@@ -119,3 +119,13 @@ Regla: usar Hostinger como complemento de GitHub. Las pruebas de escritura futur
 El propietario confirmó que configuró directamente en Hostinger, para `staging.encarmen.org`, la variable de entorno con clave exacta `HOSTINGERENCARMEN`. La captura sólo muestra el valor enmascarado; nunca solicitar, revelar ni copiar el secreto. No confundir esta variable con `HOSTINGER` de Vercel Preview/FreeLLMAPI: son variables distintas y están en ubicaciones distintas. Verificar de forma segura si el runtime Node.js de Staging la reconoce, sin exponer su valor; no recrearla ni modificarla si ya existe. La configuración en el panel no demuestra aún que el runtime la haya cargado ni que la API pueda ejecutar operaciones.
 
 Referencia: [HOSTINGER_API_STAGING_EVIDENCE_2026-11-17.md](HOSTINGER_API_STAGING_EVIDENCE_2026-11-17.md).
+
+
+## Regla del propietario: separación de credenciales Hostinger (2026-11-17)
+
+- `HOSTINGER` es exclusiva del proyecto IA para TODOS / FreeLLMAPI.
+- `HOSTINGERENCARMEN` es exclusiva de ENCARMEN y se utiliza para las operaciones autorizadas sobre `staging.encarmen.org`.
+- Nunca intercambiar ni reutilizar una credencial en el otro proyecto. No exponer los secretos.
+- `encarmen.org` (producción) permanece protegida; no modificarla sin autorización expresa.
+
+Referencia de evidencia: [HOSTINGER_API_STAGING_EVIDENCE_2026-11-17.md](HOSTINGER_API_STAGING_EVIDENCE_2026-11-17.md).
