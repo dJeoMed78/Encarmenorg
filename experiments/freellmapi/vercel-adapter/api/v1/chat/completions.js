@@ -12,7 +12,7 @@ export default {async fetch(req){
  const raw=await req.text();if(Buffer.byteLength(raw)>65536)return json({error:{message:'Request too large'}},413);let body;try{body=JSON.parse(raw)}catch{return json({error:{message:'Invalid JSON'}},400)}
  const model=body?.model||'gemini-3.5-flash-lite';if(body.stream===true)return json({error:{message:'Streaming not implemented'}},400);
  if(!Array.isArray(body.messages)||!body.messages.length||body.messages.length>40||body.messages.some(m=>!['system','user','assistant'].includes(m?.role)||typeof m.content!=='string'))return json({error:{message:'Invalid messages'}},400);
- const key=cacheKey(body);try{const hit=await redis(['GET',key]);if(hit){const cached=JSON.parse(hit);return json({...cached,cache:'HIT'});}}catch(e){console.error('redis_cache_read_failed',e.message)}
+ const responseCacheKey=cacheKey(body);try{const hit=await redis(['GET',responseCacheKey]);if(hit){const cached=JSON.parse(hit);return json({...cached,cache:'HIT'});}}catch(e){console.error('redis_cache_read_failed',e.message)}
  const system=body.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');const messages=body.messages.filter(m=>m.role!=='system');if(!messages.length)return json({error:{message:'Message required'}},400);
  try{
   let r,j,provider;
@@ -29,7 +29,7 @@ export default {async fetch(req){
      j=await r.json();provider='Gemini';
      if(!r.ok){const status=r.status;failures.push({provider,status,message:j.error?.message||'Gemini request failed'});if(automatic&&(status===429||status===500||status===502||status===503||status===504))continue;return json({error:{message:j.error?.message||'Gemini request failed',provider}},status===429?429:502)}
      const content=(j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
-     return await cachedResponse(key,{id:'chatcmpl-gemini',object:'chat.completion',created:Math.floor(Date.now()/1000),model:selected,provider,failover:failures.length>0,choices:[{index:0,message:{role:'assistant',content},finish_reason:'stop'}],usage:j.usageMetadata||{},cache:'MISS'});
+     return await cachedResponse(responseCacheKey,{id:'chatcmpl-gemini',object:'chat.completion',created:Math.floor(Date.now()/1000),model:selected,provider,failover:failures.length>0,choices:[{index:0,message:{role:'assistant',content},finish_reason:'stop'}],usage:j.usageMetadata||{},cache:'MISS'});
     }
     if(selected==='cohere/command-a-03-2025'){
      const key=process.env.COHERE;if(!key){failures.push({provider:'Cohere',status:503,message:'Cohere no está configurado'});if(automatic)continue;return json({error:{message:'Cohere no está configurado'}},503)}
