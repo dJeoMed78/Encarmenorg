@@ -19,8 +19,8 @@ export default {
     if (Buffer.byteLength(raw) > maxBytes) return json({ error: { message: 'Request too large' } }, 413);
     let body;
     try { body = JSON.parse(raw); } catch { return json({ error: { message: 'Invalid JSON' } }, 400); }
-    const model = body?.model || 'gemini-2.5-flash';
-    if (model !== 'gemini-2.5-flash') return json({ error: { message: 'Only configured free-tier model is allowed' } }, 400);
+    const model = body?.model || 'gemini-3.5-flash-lite';
+    if (model !== 'gemini-3.5-flash-lite') return json({ error: { message: 'Only configured free-tier model is allowed' } }, 400);
     if (body?.stream === true) return json({ error: { message: 'Streaming is not implemented' } }, 400);
     if (!Array.isArray(body?.messages) || !body.messages.length || body.messages.length > 40) return json({ error: { message: 'Invalid messages' } }, 400);
     if (body.messages.some(m => !['system','user','assistant'].includes(m?.role) || typeof m.content !== 'string')) return json({ error: { message: 'Text-only messages supported' } }, 400);
@@ -29,7 +29,7 @@ export default {
     if (!contents.length) return json({ error: { message: 'User or assistant message required' } }, 400);
     const payload = { contents, ...(systemInstruction ? { systemInstruction: { parts: [{ text: systemInstruction }] } } : {}), generationConfig: { maxOutputTokens: Math.min(Math.max(Number(body.max_tokens) || 512, 1), 2048), ...(typeof body.temperature === 'number' ? { temperature: Math.min(Math.max(body.temperature, 0), 2) } : {}) } };
     try {
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(payload), signal: AbortSignal.timeout(25000) });
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent', { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(payload), signal: AbortSignal.timeout(25000) });
       if (!response.ok) return json({ error: { message: response.status === 429 ? 'Provider quota exceeded' : 'Provider request failed', type: 'provider_error' } }, response.status === 429 ? 429 : 502);
       const result = await response.json();
       const content = (result.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
