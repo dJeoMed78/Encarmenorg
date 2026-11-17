@@ -16,7 +16,7 @@ export default {async fetch(req){
  const system=body.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');const messages=body.messages.filter(m=>m.role!=='system');if(!messages.length)return json({error:{message:'Message required'}},400);
  try{
   let r,j,provider;
-  const primaryOrders={ 'auto-groq':['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025'], 'auto-gemini':['gemini-3.5-flash-lite','openai/gpt-oss-20b','cohere/command-a-03-2025'], 'auto-cohere':['cohere/command-a-03-2025','openai/gpt-oss-20b','gemini-3.5-flash-lite'], 'auto':['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025']};
+  const primaryOrders={ 'auto-groq':['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025','@cf/zai-org/glm-4.7-flash'], 'auto-gemini':['gemini-3.5-flash-lite','openai/gpt-oss-20b','cohere/command-a-03-2025'], 'auto-cohere':['cohere/command-a-03-2025','openai/gpt-oss-20b','gemini-3.5-flash-lite','@cf/zai-org/glm-4.7-flash'], 'auto-cloudflare':['@cf/zai-org/glm-4.7-flash','openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025'], 'auto':['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025']};
   const automatic=Object.prototype.hasOwnProperty.call(primaryOrders,model);
   const order=automatic?primaryOrders[model]:[model];
   const failures=[];
@@ -38,7 +38,18 @@ export default {async fetch(req){
      j=await r.json();provider='Cohere';
      if(!r.ok){const status=r.status;failures.push({provider,status,message:j.message||j.error?.message||'Cohere request failed'});if(automatic&&(status===429||status===500||status===502||status===503||status===504))continue;return json({error:{message:j.message||j.error?.message||'Cohere request failed',provider}},status===429?429:502)}
      const content=(j.message?.content||[]).filter(p=>p.type==='text').map(p=>p.text||'').join('');
-     return await cachedResponse(key,{id:j.id||'chatcmpl-cohere',object:'chat.completion',created:Math.floor(Date.now()/1000),model:selected,provider,failover:failures.length>0,choices:[{index:0,message:{role:'assistant',content},finish_reason:'stop'}],usage:j.usage||{},cache:'MISS'});
+     return await cachedResponse(responseCacheKey,{id:j.id||'chatcmpl-cohere',object:'chat.completion',created:Math.floor(Date.now()/1000),model:selected,provider,failover:failures.length>0,choices:[{index:0,message:{role:'assistant',content},finish_reason:'stop'}],usage:j.usage||{},cache:'MISS'});
+    }
+    if(selected==='@cf/zai-org/glm-4.7-flash'){
+     const key=process.env.CLOUDFAREWORKINGIA,accountId=process.env.CLOUDFLARE_ACCOUNT_ID;
+     if(!key||!accountId){failures.push({provider:'Cloudflare',status:503,message:'Cloudflare no está configurado'});if(automatic)continue;return json({error:{message:'Cloudflare no está configurado'}},503)}
+     const cfMessages=[...(system?[{role:'system',content:system}]:[]),...messages];
+     r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+encodeURIComponent(accountId)+'/ai/run/@cf/zai-org/glm-4.7-flash',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+key},body:JSON.stringify({messages:cfMessages,max_tokens:Math.min(Math.max(Number(body.max_tokens)||512,1),2048)}),signal:AbortSignal.timeout(25000)});
+     j=await r.json();provider='Cloudflare';
+     if(!r.ok||j.success===false){const status=r.status;failures.push({provider,status,message:'Cloudflare request failed'});if(automatic&&[429,500,502,503,504].includes(status))continue;return json({error:{message:'Cloudflare request failed',provider}},status===429?429:502)}
+     const content=typeof j.result?.response==='string'?j.result.response:(j.result?.choices?.[0]?.message?.content||'');
+     if(!content){failures.push({provider,status:502,message:'Cloudflare empty response'});if(automatic)continue;return json({error:{message:'Cloudflare empty response'}},502)}
+     return await cachedResponse(responseCacheKey,{id:'chatcmpl-cloudflare',object:'chat.completion',created:Math.floor(Date.now()/1000),model:selected,provider,failover:failures.length>0,choices:[{index:0,message:{role:'assistant',content},finish_reason:'stop'}],usage:j.result?.usage||{},cache:'MISS'});
     }
     if(selected==='openai/gpt-oss-20b'){
      const key=process.env.GROQ_API_KEY;if(!key){failures.push({provider:'Groq',status:503,message:'Groq no está configurado'});if(automatic)continue;return json({error:{message:'Groq no está configurado'}},503)}
@@ -49,7 +60,7 @@ export default {async fetch(req){
      return await cachedResponse(responseCacheKey,{...j,provider,failover:failures.length>0,cache:'MISS'});
     }
     return json({error:{message:'Modelo no habilitado'}},400);
-   }catch(e){failures.push({provider:selected==='gemini-3.5-flash-lite'?'Gemini':selected==='openai/gpt-oss-20b'?'Groq':'Cohere',status:504,message:'Proveedor no disponible o timeout'});if(automatic)continue;return json({error:{message:'Provider unavailable or timed out'}},502)}
+   }catch(e){failures.push({provider:selected==='gemini-3.5-flash-lite'?'Gemini':selected==='openai/gpt-oss-20b'?'Groq':selected==='@cf/zai-org/glm-4.7-flash'?'Cloudflare':'Cohere',status:504,message:'Proveedor no disponible o timeout'});if(automatic)continue;return json({error:{message:'Provider unavailable or timed out'}},502)}
   }
   return json({error:{message:'Todos los proveedores disponibles agotaron cuota o no respondieron',failures,provider:'none'}},503);
 
