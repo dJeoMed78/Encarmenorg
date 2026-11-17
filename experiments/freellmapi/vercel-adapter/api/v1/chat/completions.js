@@ -16,7 +16,7 @@ export default {async fetch(req){
  const system=body.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');const messages=body.messages.filter(m=>m.role!=='system');if(!messages.length)return json({error:{message:'Message required'}},400);
  try{
   let r,j,provider;
-  const primaryOrders={ 'auto-groq':['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025','@cf/zai-org/glm-4.7-flash'], 'auto-gemini':['gemini-3.5-flash-lite','openai/gpt-oss-20b','cohere/command-a-03-2025'], 'auto-cohere':['cohere/command-a-03-2025','openai/gpt-oss-20b','gemini-3.5-flash-lite','@cf/zai-org/glm-4.7-flash'], 'auto-cloudflare':['@cf/zai-org/glm-4.7-flash','openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025'], 'auto':['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025']};
+  const primaryOrders={ 'auto-groq':['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025','@cf/zai-org/glm-4.7-flash'], 'auto-gemini':['gemini-3.5-flash-lite','openai/gpt-oss-20b','cohere/command-a-03-2025','@cf/zai-org/glm-4.7-flash'], 'auto-cohere':['cohere/command-a-03-2025','openai/gpt-oss-20b','gemini-3.5-flash-lite','@cf/zai-org/glm-4.7-flash'], 'auto-cloudflare':['@cf/zai-org/glm-4.7-flash','openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025'], 'auto':['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025','@cf/zai-org/glm-4.7-flash']};
   const automatic=Object.prototype.hasOwnProperty.call(primaryOrders,model);
   const order=automatic?primaryOrders[model]:[model];
   const failures=[];
