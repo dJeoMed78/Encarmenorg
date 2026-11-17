@@ -1,0 +1,25 @@
+name: Import full FreeLLMAPI snapshot
+on:
+  push:
+    branches:
+      - experiment/freellmapi-evaluation-20261116
+    paths:
+      - .github/workflows/import-freellmapi.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Configure commit identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Import entire upstream
+        run: bash experiments/freellmapi/import-full-upstream.sh
+      - name: Push import
+        run: git push origin HEAD:experiment/freellmapi-evaluation-20261116
