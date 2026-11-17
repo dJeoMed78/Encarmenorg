@@ -44,7 +44,7 @@ export default {async fetch(req){
      const key=process.env.CLOUDFAREWORKINGIA,accountId=process.env.CLOUDFLARE_ACCOUNT_ID;
      if(!key||!accountId){failures.push({provider:'Cloudflare',status:503,message:'Cloudflare no está configurado'});if(automatic)continue;return json({error:{message:'Cloudflare no está configurado'}},503)}
      const cfMessages=[...(system?[{role:'system',content:system}]:[]),...messages];
-     r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+encodeURIComponent(accountId)+'/ai/run/@cf/zai-org/glm-4.7-flash',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+key},body:JSON.stringify({messages:cfMessages,max_tokens:Math.min(Math.max(Number(body.max_tokens)||512,1),2048)}),signal:AbortSignal.timeout(25000)});
+     r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+encodeURIComponent(accountId)+'/ai/run/@cf/zai-org/glm-4.7-flash',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+key},body:JSON.stringify({messages:cfMessages,max_tokens:Math.min(Math.max(Number(body.max_tokens)||512,512),2048),reasoning_effort:'low'}),signal:AbortSignal.timeout(25000)});
      j=await r.json();provider='Cloudflare';
      if(!r.ok||j.success===false){const status=r.status;failures.push({provider,status,message:'Cloudflare request failed'});if(automatic&&[429,500,502,503,504].includes(status))continue;return json({error:{message:'Cloudflare request failed',provider}},status===429?429:502)}
      const content=typeof j.result?.response==='string'?j.result.response:(j.result?.choices?.[0]?.message?.content||'');
