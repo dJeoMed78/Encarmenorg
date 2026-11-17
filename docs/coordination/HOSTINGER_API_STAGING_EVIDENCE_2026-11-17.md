@@ -122,3 +122,12 @@ Preparar una matriz de operaciones de escritura documentadas de Hostinger y sele
 El propietario confirma que ya agregó en el panel de variables de entorno de Hostinger para `staging.encarmen.org` la clave exacta `HOSTINGERENCARMEN`. La captura compartida muestra el nombre de la clave y el valor enmascarado; no se recibió ni debe solicitarse o copiarse el valor secreto.
 
 **Instrucción para NIA:** reconocer `HOSTINGERENCARMEN` como la variable que el propietario acaba de configurar directamente en el entorno de Hostinger de Staging. No confundirla con la variable `HOSTINGER` previamente utilizada en Vercel para la prueba Preview de FreeLLMAPI: son nombres y ubicaciones distintos. Antes de usarla desde la aplicación, verificar de forma segura que el runtime de Staging la reconoce (sin imprimir ni devolver su valor). No modificarla ni recrearla si ya existe. La presencia en el panel no demuestra por sí sola que el proceso Node.js la haya cargado ni que una operación de la API funcione.
+
+
+## Aclaración expresa del propietario: separación de credenciales (2026-11-17)
+
+La separación de uso queda definida así:
+- `HOSTINGER`: exclusiva del proyecto IA para TODOS / FreeLLMAPI. No utilizarla para operaciones de ENCARMEN ni para administrar Staging.
+- `HOSTINGERENCARMEN`: exclusiva para las operaciones del proyecto ENCARMEN sobre `staging.encarmen.org`. Es la credencial que debe usar NIA para las pruebas y administración autorizadas de Staging.
+
+No intercambiar, reutilizar ni asumir equivalencia entre ambas variables. Producción `encarmen.org` permanece protegida y no se modifica sin autorización expresa. Mantener los valores secretos ocultos.
