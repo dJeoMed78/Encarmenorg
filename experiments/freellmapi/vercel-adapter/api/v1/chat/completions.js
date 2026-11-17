@@ -13,7 +13,7 @@ export default {async fetch(req){
  try{
   let r,j,provider;
   const automatic=model==='auto';
-  const order=automatic?['gemini-3.5-flash-lite','openai/gpt-oss-20b']:[model];
+  const order=automatic?['gemini-3.5-flash-lite','openai/gpt-oss-20b','cohere/command-a-03-2025']:[model];
   const failures=[];
   for(const selected of order){
    try{
@@ -26,6 +26,15 @@ export default {async fetch(req){
      const content=(j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
      return json({id:'chatcmpl-gemini',object:'chat.completion',created:Math.floor(Date.now()/1000),model:selected,provider,failover:failures.length>0,choices:[{index:0,message:{role:'assistant',content},finish_reason:'stop'}],usage:j.usageMetadata||{}});
     }
+    if(selected==='cohere/command-a-03-2025'){
+     const key=process.env.COHERE;if(!key){failures.push({provider:'Cohere',status:503,message:'Cohere no está configurado'});if(automatic)continue;return json({error:{message:'Cohere no está configurado'}},503)}
+     const cohereMessages=[...(system?[{role:'system',content:system}]:[]),...messages];
+     r=await fetch('https://api.cohere.com/v2/chat',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+key},body:JSON.stringify({model:'command-a-03-2025',messages:cohereMessages,max_tokens:Math.min(Math.max(Number(body.max_tokens)||512,1),4096)}),signal:AbortSignal.timeout(25000)});
+     j=await r.json();provider='Cohere';
+     if(!r.ok){const status=r.status;failures.push({provider,status,message:j.message||j.error?.message||'Cohere request failed'});if(automatic&&(status===429||status===500||status===502||status===503||status===504))continue;return json({error:{message:j.message||j.error?.message||'Cohere request failed',provider}},status===429?429:502)}
+     const content=(j.message?.content||[]).filter(p=>p.type==='text').map(p=>p.text||'').join('');
+     return json({id:j.id||'chatcmpl-cohere',object:'chat.completion',created:Math.floor(Date.now()/1000),model:selected,provider,failover:failures.length>0,choices:[{index:0,message:{role:'assistant',content},finish_reason:'stop'}],usage:j.usage||{}});
+    }
     if(selected==='openai/gpt-oss-20b'){
      const key=process.env.GROQ_API_KEY;if(!key){failures.push({provider:'Groq',status:503,message:'Groq no está configurado'});if(automatic)continue;return json({error:{message:'Groq no está configurado'}},503)}
      const groqMessages=[...(system?[{role:'system',content:system}]:[]),...messages];
@@ -35,7 +44,7 @@ export default {async fetch(req){
      return json({...j,provider,failover:failures.length>0});
     }
     return json({error:{message:'Modelo no habilitado'}},400);
-   }catch(e){failures.push({provider:selected==='gemini-3.5-flash-lite'?'Gemini':'Groq',status:504,message:'Proveedor no disponible o timeout'});if(automatic)continue;return json({error:{message:'Provider unavailable or timed out'}},502)}
+   }catch(e){failures.push({provider:selected==='gemini-3.5-flash-lite'?'Gemini':selected==='openai/gpt-oss-20b'?'Groq':'Cohere',status:504,message:'Proveedor no disponible o timeout'});if(automatic)continue;return json({error:{message:'Provider unavailable or timed out'}},502)}
   }
   return json({error:{message:'Todos los proveedores disponibles agotaron cuota o no respondieron',failures,provider:'none'}},503);
 
