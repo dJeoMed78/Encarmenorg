@@ -46,7 +46,7 @@ export default {async fetch(req){
      r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+key},body:JSON.stringify({model:selected,messages:groqMessages,max_tokens:Math.min(Math.max(Number(body.max_tokens)||512,1),4096)}),signal:AbortSignal.timeout(25000)});
      j=await r.json();provider='Groq';
      if(!r.ok){const status=r.status;failures.push({provider,status,message:j.error?.message||'Groq request failed'});if(automatic&&(status===429||status===500||status===502||status===503||status===504))continue;return json({error:{message:j.error?.message||'Groq request failed',provider}},status===429?429:502)}
-     return await cachedResponse(key,{...j,provider,failover:failures.length>0,cache:'MISS'});
+     return await cachedResponse(responseCacheKey,{...j,provider,failover:failures.length>0,cache:'MISS'});
     }
     return json({error:{message:'Modelo no habilitado'}},400);
    }catch(e){failures.push({provider:selected==='gemini-3.5-flash-lite'?'Gemini':selected==='openai/gpt-oss-20b'?'Groq':'Cohere',status:504,message:'Proveedor no disponible o timeout'});if(automatic)continue;return json({error:{message:'Provider unavailable or timed out'}},502)}
