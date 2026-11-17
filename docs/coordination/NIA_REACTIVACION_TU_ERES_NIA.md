@@ -112,3 +112,10 @@ Consultar obligatoriamente como referencia técnica complementaria: [HOSTINGER_A
 Hallazgos clave: la variable HOSTINGER está habilitada en Vercel para Production, Preview y Development; su token fue aceptado desde Preview. La API confirmó acceso de solo lectura al inventario de sitios, builds, configuración Node.js, nombres de variables enmascarados y endpoint de logs para staging.encarmen.org y encarmen.org. Staging usa la rama ia-desarrollo y producción main. No se ejecutaron escrituras en Hostinger.
 
 Regla: usar Hostinger como complemento de GitHub. Las pruebas de escritura futuras serán exclusivamente en Staging, después de revisar endpoint, método, impacto, respaldo y reversibilidad, con lectura posterior para verificar. No modificar producción sin autorización expresa. Nunca exponer secretos. La evidencia separa operaciones probadas de capacidades documentadas pero aún no ejecutadas.
+
+
+## Actualización del propietario: variable Hostinger Staging (2026-11-17)
+
+El propietario confirmó que configuró directamente en Hostinger, para `staging.encarmen.org`, la variable de entorno con clave exacta `HOSTINGERENCARMEN`. La captura sólo muestra el valor enmascarado; nunca solicitar, revelar ni copiar el secreto. No confundir esta variable con `HOSTINGER` de Vercel Preview/FreeLLMAPI: son variables distintas y están en ubicaciones distintas. Verificar de forma segura si el runtime Node.js de Staging la reconoce, sin exponer su valor; no recrearla ni modificarla si ya existe. La configuración en el panel no demuestra aún que el runtime la haya cargado ni que la API pueda ejecutar operaciones.
+
+Referencia: [HOSTINGER_API_STAGING_EVIDENCE_2026-11-17.md](HOSTINGER_API_STAGING_EVIDENCE_2026-11-17.md).
