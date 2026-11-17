@@ -131,3 +131,79 @@ La separación de uso queda definida así:
 - `HOSTINGERENCARMEN`: exclusiva para las operaciones del proyecto ENCARMEN sobre `staging.encarmen.org`. Es la credencial que debe usar NIA para las pruebas y administración autorizadas de Staging.
 
 No intercambiar, reutilizar ni asumir equivalencia entre ambas variables. Producción `encarmen.org` permanece protegida y no se modifica sin autorización expresa. Mantener los valores secretos ocultos.
+
+
+## Investigación ampliada: capacidades de la API pública Hostinger (documentación consultada 2026-11-17)
+
+**Fuente principal:** [Referencia oficial de Hostinger API](https://developers.hostinger.com/) y [visión general de API](https://docs.hostinger.com/api-reference/overview). La referencia se genera desde la especificación OpenAPI que también alimenta CLI, SDK y MCP. La documentación enumera productos de hosting, dominios, DNS, email, VPS, WordPress, ecommerce y billing. La existencia de una categoría no significa que todas sus operaciones estén incluidas en este plan, habilitadas para este token o probadas en nuestra cuenta.
+
+### A. Hosting y sitios web — operaciones documentadas
+- Listar sitios web accesibles al token; filtrar por tipo detectado (por ejemplo Node.js o WordPress).
+- Crear sitios web (endpoint POST documentado).
+- Eliminar sitios web (endpoint DELETE documentado; operación destructiva).
+- Desplegar archivos estáticos desde un archivo ZIP ya cargado.
+- Consultar inventario, tipo de sitio y datos de hosting.
+- En nuestra cuenta se ejecutó la consulta de inventario y se encontraron los sitios indicados en la sección de resultados reales.
+
+### B. Aplicaciones Node.js — operaciones documentadas
+- Listar historial de builds y filtrar por estado (pending, running, completed, failed).
+- Iniciar un build mediante POST usando un archivo comprimido que ya debe existir en el almacenamiento del sitio.
+- Consultar configuración de build: versión Node, framework/tipo, directorios, script, entry file y package manager.
+- Reemplazar configuración de build mediante PUT. El endpoint sustituye el conjunto de configuración; los campos omitidos pueden quedar como null.
+- Detectar configuración a partir de un archivo comprimido ya cargado.
+- Listar nombres de variables de entorno; la API devuelve valores enmascarados y no permite leerlos.
+- Reemplazar el conjunto completo de variables de entorno mediante PUT. **Peligro crítico:** es reemplazo total, elimina cualquier variable omitida y un array vacío las elimina todas; guardar reinicia el proceso Node.js.
+- Consultar detalle de un build por UUID.
+- Consultar logs de build y seguirlos por líneas mientras se ejecuta.
+- Consultar logs de runtime con periodos, niveles y paginación incremental.
+- Borrar logs de runtime mediante DELETE. Es irreversible y requiere confirmación explícita del usuario.
+- Reiniciar el proceso Node.js mediante POST. No recompila ni redespliega; solo aplica a aplicaciones con proceso servidor.
+- Solicitar análisis automático de un build fallido (solo builds en estado failed; límite documentado de 5 llamadas por minuto por cliente).
+- Consultar vulnerabilidades Node.js y solicitar parcheo de vulnerabilidades mediante endpoint específico.
+
+### C. Subida y archivos — alcance real documentado
+- El flujo de build de Node.js requiere que el archivo ZIP esté previamente en el almacenamiento del sitio.
+- La documentación menciona un endpoint para generar una URL/credenciales de carga (Generate Upload URL), con la que se sube el archivo antes del build.
+- La API permite usar archivos comprimidos como fuente de despliegue; el endpoint de build advierte que el resultado sobrescribe el contenido existente del sitio y no se puede deshacer.
+- **No afirmar que existe un administrador API genérico para listar, leer, editar o borrar cualquier archivo/carpeta** sin identificar un endpoint específico de la referencia. En esta auditoría no se probó CRUD arbitrario de archivos.
+
+### D. Dominios, DNS, email, VPS, WordPress, ecommerce y billing
+La referencia oficial agrupa endpoints para estas áreas. En la prueba de nuestra cuenta se obtuvieron HTTP 200 para el inventario de portfolio de dominios y para las consultas de datacenters/VPS indicadas arriba. No se han ejecutado operaciones de escritura en estas áreas. Antes de anunciar una capacidad concreta (por ejemplo crear/modificar registros DNS, administrar buzones, comprar/renovar dominios, operar WordPress, facturar o crear VPS), NIA debe consultar el endpoint exacto, verificar permisos y plan, y probar solo lectura primero. La lista de categorías no equivale a permiso ilimitado.
+
+### E. Herramientas oficiales alrededor de la API
+- Hostinger CLI.
+- SDK oficiales para PHP, Python y TypeScript.
+- Hostinger Connector y servidores MCP para asistentes IA.
+- Integraciones mencionadas en documentación: Terraform, Ansible, n8n y WHMCS.
+- La API es REST sobre HTTPS con bearer token. La documentación general indica límite estándar de 90 solicitudes por minuto, sujeto a límites personalizados; manejar HTTP 429, cabeceras X-RateLimit y Retry-After.
+
+### F. Riesgos y reglas de seguridad que NIA debe aplicar
+1. **Nunca llamar POST/PUT/DELETE por exploración.** Primero consultar el endpoint y su esquema exacto; no inferir el body.
+2. El POST de Node.js build puede sobrescribir el contenido actual del sitio y no es reversible. Antes requiere respaldo comprobado, ZIP verificado, destino inequívoco y autorización explícita para esa publicación.
+3. El PUT de variables Node.js es reemplazo completo, no actualización parcial. Nunca ejecutarlo usando el listado enmascarado como fuente. Requiere inventario completo y valores reales de una fuente autorizada; no pedir ni registrar secretos en logs.
+4. El PUT de configuración de build reemplaza campos y puede convertir campos omitidos en null.
+5. DELETE de runtime logs borra historial sin recuperación; no usar en auditoría rutinaria.
+6. Restart interrumpe/reinicia el proceso; no equivale a deploy y debe verificarse después.
+7. Build analysis consume cuota y solo aplica a builds fallidos.
+8. Respetar rate limit, paginación y errores 401/403/422/429/5xx.
+9. Aplicar separación de credenciales indicada por el propietario: `HOSTINGER` solo IA para TODOS / FreeLLMAPI; `HOSTINGERENCARMEN` solo ENCARMEN Staging.
+10. `encarmen.org` producción permanece de solo lectura; ninguna escritura sin autorización expresa del propietario.
+
+### G. Qué puede hacer NIA con Hostinger para ENCARMEN
+Con la credencial `HOSTINGERENCARMEN`, y limitándose inicialmente a `staging.encarmen.org`, la API puede convertirse en un canal para:
+- Inspeccionar sitios, builds, configuración, variables (solo nombres), logs y estado de runtime.
+- Diagnosticar builds fallidos y consultar análisis automático.
+- Preparar despliegues de Node.js mediante ZIP y build API, cuando el artefacto esté validado y respaldado.
+- Aplicar configuración o variables con un procedimiento de reemplazo completo y controlado.
+- Reiniciar el servidor después de cambios autorizados.
+- Consultar vulnerabilidades y evaluar parches.
+
+**Estado:** estas últimas acciones son capacidades documentadas, no pruebas ejecutadas en nuestra cuenta. La autenticación y los endpoints de lectura señalados en secciones anteriores sí fueron probados.
+
+### H. Siguiente secuencia recomendada
+1. Confirmar que el runtime de Staging reconoce la variable `HOSTINGERENCARMEN` sin mostrar su valor.
+2. Añadir una ruta de diagnóstico interna protegida que devuelva solo estado de presencia (booleano), nunca el secreto.
+3. Construir cliente Hostinger separado para ENCARMEN, usando exclusivamente `HOSTINGERENCARMEN`; nunca fallback a `HOSTINGER`.
+4. Implementar primero herramientas GET de inventario, builds, settings, variables enmascaradas y logs de build/runtime.
+5. Añadir operaciones de escritura solo como acciones explícitas con confirmación, alcance fijado a `staging.encarmen.org`, respaldo y verificación posterior.
+6. No permitir desde esta integración destinos arbitrarios ni acceso de escritura a `encarmen.org`.
