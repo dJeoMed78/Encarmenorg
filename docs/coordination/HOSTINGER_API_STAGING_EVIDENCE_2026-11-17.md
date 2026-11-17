@@ -115,3 +115,10 @@ La documentación de endpoints no debe confundirse con ejecución comprobada. No
 ## 8. Siguiente acción
 
 Preparar una matriz de operaciones de escritura documentadas de Hostinger y seleccionar una prueba reversible de bajo riesgo en Staging. No realizarla hasta revisar el endpoint, el impacto y el mecanismo de verificación. Mantener producción en modo de solo lectura.
+
+
+## Actualización del propietario: variable configurada en Hostinger Staging (2026-11-17)
+
+El propietario confirma que ya agregó en el panel de variables de entorno de Hostinger para `staging.encarmen.org` la clave exacta `HOSTINGERENCARMEN`. La captura compartida muestra el nombre de la clave y el valor enmascarado; no se recibió ni debe solicitarse o copiarse el valor secreto.
+
+**Instrucción para NIA:** reconocer `HOSTINGERENCARMEN` como la variable que el propietario acaba de configurar directamente en el entorno de Hostinger de Staging. No confundirla con la variable `HOSTINGER` previamente utilizada en Vercel para la prueba Preview de FreeLLMAPI: son nombres y ubicaciones distintos. Antes de usarla desde la aplicación, verificar de forma segura que el runtime de Staging la reconoce (sin imprimir ni devolver su valor). No modificarla ni recrearla si ya existe. La presencia en el panel no demuestra por sí sola que el proceso Node.js la haya cargado ni que una operación de la API funcione.
