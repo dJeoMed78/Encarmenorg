@@ -4,7 +4,7 @@ const sign=(v,k)=>createHmac('sha256',k).update(v).digest('hex');
 const safe=(a,b)=>{const x=Buffer.from(a||''),y=Buffer.from(b||'');return x.length===y.length&&timingSafeEqual(x,y)};
 const redis=async(command)=>{const url=process.env.UPSTASH_REDIS_REST_URL,token=process.env.UPSTASH_REDIS_REST_TOKEN;if(!url||!token)throw new Error('Redis not configured');const r=await fetch(url,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(command),signal:AbortSignal.timeout(4000)});if(!r.ok)throw new Error('Redis HTTP '+r.status);const j=await r.json();if(j.error)throw new Error(j.error);return j.result;};
 const cacheKey=(body)=>'ffcache:v1:'+createHash('sha256').update(JSON.stringify(body)).digest('hex');
-const cachedResponse=async(key,payload)=>{const out=json(payload);try{await redis(['SET',key,JSON.stringify(payload),'EX',120]);}catch(e){console.error('redis_cache_write_failed',e.message)}return out;};
+const usageDay=()=>new Date().toISOString().slice(0,10);const track=async(provider,kind,usage={})=>{try{const k='ffusage:v1:'+usageDay()+':'+provider;await redis(['HINCRBY',k,kind,1]);if(kind==='requests'){const n=Number(usage.total_tokens||usage.totalTokens||usage.output_tokens||0);if(n>0)await redis(['HINCRBY',k,'tokens',Math.round(n)])}await redis(['EXPIRE',k,259200])}catch(e){console.error('usage_tracking_failed',e.message)}};const cachedResponse=async(key,payload)=>{const out=json(payload);if(payload.provider)await track(payload.provider,'requests',payload.usage);try{await redis(['SET',key,JSON.stringify(payload),'EX',120]);}catch(e){console.error('redis_cache_write_failed',e.message)}return out;};
 export default {async fetch(req){
  if(req.method!=='POST')return json({error:{message:'Method not allowed'}},405);
  const token=process.env.PROXY_ACCESS_TOKEN;if(!token)return json({error:{message:'Gateway not configured'}},503);
@@ -12,17 +12,19 @@ export default {async fetch(req){
  const raw=await req.text();if(Buffer.byteLength(raw)>65536)return json({error:{message:'Request too large'}},413);let body;try{body=JSON.parse(raw)}catch{return json({error:{message:'Invalid JSON'}},400)}
  const model=body?.model||'gemini-3.5-flash-lite';if(body.stream===true)return json({error:{message:'Streaming not implemented'}},400);
  if(!Array.isArray(body.messages)||!body.messages.length||body.messages.length>40||body.messages.some(m=>!['system','user','assistant'].includes(m?.role)||typeof m.content!=='string'))return json({error:{message:'Invalid messages'}},400);
- const responseCacheKey=cacheKey(body);try{const hit=await redis(['GET',responseCacheKey]);if(hit){const cached=JSON.parse(hit);return json({...cached,cache:'HIT'});}}catch(e){console.error('redis_cache_read_failed',e.message)}
+ const responseCacheKey=cacheKey(body);try{const hit=await redis(['GET',responseCacheKey]);if(hit){const cached=JSON.parse(hit);if(cached.provider)await track(cached.provider,'cache_hits');return json({...cached,cache:'HIT'});}}catch(e){console.error('redis_cache_read_failed',e.message)}
  const system=body.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');const messages=body.messages.filter(m=>m.role!=='system');if(!messages.length)return json({error:{message:'Message required'}},400);
  try{
   let r,j,provider;
   const primaryOrders={ 'auto-groq':['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025','@cf/zai-org/glm-4.7-flash'], 'auto-gemini':['gemini-3.5-flash-lite','openai/gpt-oss-20b','cohere/command-a-03-2025','@cf/zai-org/glm-4.7-flash'], 'auto-cohere':['cohere/command-a-03-2025','openai/gpt-oss-20b','gemini-3.5-flash-lite','@cf/zai-org/glm-4.7-flash'], 'auto-cloudflare':['@cf/zai-org/glm-4.7-flash','openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025'], 'auto':['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025','@cf/zai-org/glm-4.7-flash']};
   const allowed=['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025','@cf/zai-org/glm-4.7-flash'];
-  const custom=model==='auto-custom';
+  const smart=model==='auto-smart';const custom=model==='auto-custom';
   const requested=body.provider_order;
   if(custom&&(!Array.isArray(requested)||requested.length!==4||new Set(requested).size!==4||requested.some(x=>!allowed.includes(x))))return json({error:{message:'Orden de proveedores inválido'}},400);
-  const automatic=custom||Object.prototype.hasOwnProperty.call(primaryOrders,model);
-  const order=custom?requested:automatic?primaryOrders[model]:[model];
+  const automatic=smart||custom||Object.prototype.hasOwnProperty.call(primaryOrders,model);
+  const last=messages.at(-1)?.content||'';const coding=/\b(code|coding|program|script|function|typescript|javascript|python|bug|debug|github|commit|pull request|api|código|programar|función|error de compilación)\b/i.test(last);const analysis=/\b(analiza|analizar|razona|compara|investiga|demuestra|matemática|research|reason|compare|analyze)\b/i.test(last);const objective=['economy','balanced','quality'].includes(body.optimization)?body.optimization:'balanced';
+  const smartOrder=coding?['openai/gpt-oss-20b','@cf/zai-org/glm-4.7-flash','gemini-3.5-flash-lite','cohere/command-a-03-2025']:analysis&&objective==='quality'?['@cf/zai-org/glm-4.7-flash','openai/gpt-oss-20b','cohere/command-a-03-2025','gemini-3.5-flash-lite']:objective==='economy'?['gemini-3.5-flash-lite','openai/gpt-oss-20b','@cf/zai-org/glm-4.7-flash','cohere/command-a-03-2025']:primaryOrders['auto-groq'];
+  const order=smart?smartOrder:custom?requested:automatic?primaryOrders[model]:[model];
   const failures=[];
   for(const selected of order){
    try{
