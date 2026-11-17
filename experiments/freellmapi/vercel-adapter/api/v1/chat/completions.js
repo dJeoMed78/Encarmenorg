@@ -12,8 +12,9 @@ export default {async fetch(req){
  const system=body.messages.filter(m=>m.role==='system').map(m=>m.content).join('\n');const messages=body.messages.filter(m=>m.role!=='system');if(!messages.length)return json({error:{message:'Message required'}},400);
  try{
   let r,j,provider;
-  const automatic=model==='auto';
-  const order=automatic?['gemini-3.5-flash-lite','openai/gpt-oss-20b','cohere/command-a-03-2025']:[model];
+  const primaryOrders={ 'auto-groq':['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025'], 'auto-gemini':['gemini-3.5-flash-lite','openai/gpt-oss-20b','cohere/command-a-03-2025'], 'auto-cohere':['cohere/command-a-03-2025','openai/gpt-oss-20b','gemini-3.5-flash-lite'], 'auto':['openai/gpt-oss-20b','gemini-3.5-flash-lite','cohere/command-a-03-2025']};
+  const automatic=Object.prototype.hasOwnProperty.call(primaryOrders,model);
+  const order=automatic?primaryOrders[model]:[model];
   const failures=[];
   for(const selected of order){
    try{
