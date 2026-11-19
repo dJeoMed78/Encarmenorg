@@ -7304,6 +7304,7 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
 
             return res.json({
               success: true,
+              publishedToWordPress: false,
               business: created.business,
               message: `Empresa "${created.business.name}" aprobada y persistida en MariaDB Staging.`
             });
