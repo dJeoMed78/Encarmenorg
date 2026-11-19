@@ -7,7 +7,7 @@
     "dev": "tsx server.ts",
     "prebuild": "node scripts/update_version.cjs",
     "build:server": "vite build && esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=server.js && cp server.js api/server.bundle.js",
-    "build": "node scripts/update_version.cjs && npm run build:server && vite build",
+    "build": "node scripts/update_version.cjs && npm run build:server",
     "build:zip": "node scripts/create_release_zip.js",
     "start": "node server.js",
     "preview": "vite preview",
@@ -40,7 +40,11 @@
   },
   "overrides": {
     "@grpc/grpc-js": "^1.13.6",
-    "body-parser": "^1.20.9"
+    "body-parser": "^1.20.9",
+    "readdir-glob": {
+      "minimatch": "11.0.1"
+    },
+    "qs": "6.16.1"
   },
   "devDependencies": {}
 }
