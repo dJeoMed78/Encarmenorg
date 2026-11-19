@@ -1351,7 +1351,6 @@ export default function App() {
           setIsAdminLoggedIn(isSessionAdminAuthenticated());
         }}
         stats={null}
-        health={null}
         businesses={businesses as any}
         onTriggerSync={async () => {}}
         isSyncing={false}

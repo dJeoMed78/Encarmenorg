@@ -7304,8 +7304,8 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
 
             return res.json({
               success: true,
-              business: created.business,
               publishedToWordPress: false,
+              business: created.business,
               message: `Empresa "${created.business.name}" aprobada y persistida en MariaDB Staging.`
             });
           } catch (stagingErr: any) {
@@ -7429,8 +7429,8 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
 
         return res.json({
           success: true,
-          business: verified,
           publishedToWordPress: false,
+          business: verified,
           message: `Empresa "${verified.name}" verificada y publicada con éxito en MariaDB (ID: ${verified.id}).`
         });
         });
@@ -7663,7 +7663,6 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
           published: confirmed,
           rejected,
           failed: rejected,
-          publishedToWordPress: false,
           message: confirmed.length === candidates.length
             ? `Se aprobaron y confirmaron ${confirmed.length} empresas en MariaDB con éxito.`
             : `Se confirmaron ${confirmed.length} de ${candidates.length} empresas en MariaDB. ${rejected.length} no se pudieron guardar o fueron rechazadas.`

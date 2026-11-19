@@ -15,3 +15,17 @@ test('retired cache purge reports failure and health does not perform remote req
  assert.match(source,/app\.post\('\/api\/admin\/purge-cache',[\s\S]{0,250}res\.status\(410\)/);
  assert.match(source,/app\.get\('\/api\/health-wp',[\s\S]{0,300}status:'retired'/);
 });
+
+test('legacy publication metadata and API functions are absent',()=>{
+ const api=readFileSync(new URL('../src/services/api.ts',import.meta.url),'utf8');
+ const admin=readFileSync(new URL('../src/components/BusinessAdminModal.tsx',import.meta.url),'utf8');
+ const menu=readFileSync(new URL('../src/components/AdminWindowsMobileMenu.tsx',import.meta.url),'utf8');
+ for(const name of ['syncWordPress','syncSingleBusinessToWordPress','checkWpHealth','publishedToWordPress','wpPermalink','wpProductId']) assert.ok(!api.includes(name),name);
+ assert.ok(!/WordPress|WooCommerce|wp-admin|wp-json\/wc/.test(admin));
+ assert.doesNotMatch(menu,/WooCommerce|WordPress|Sincronización WP/);
+});
+test('database administration remains available after retiring the external status panel',()=>{
+ const admin=readFileSync(new URL('../src/components/BusinessAdminModal.tsx',import.meta.url),'utf8');
+ assert.match(admin,/Estado real de persistencia MariaDB/);
+ assert.ok(admin.includes('dbStatus?.mariadb?.connected'));
+});

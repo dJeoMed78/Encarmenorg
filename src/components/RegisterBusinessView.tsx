@@ -143,8 +143,6 @@ export const RegisterBusinessView: React.FC<RegisterBusinessViewProps> = ({
   const registrationBusy = useRef(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [registeredBusiness, setRegisteredBusiness] = useState<Business | null>(null);
-  const [wpPermalink, setWpPermalink] = useState<string | null>(null);
-  const [isWpPublished, setIsWpPublished] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<any>(null);
 

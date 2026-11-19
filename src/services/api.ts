@@ -1,6 +1,6 @@
 import {adminFetch} from '../utils/adminAuth';
 import seedBusinesses from '../data/businesses_seed.json';
-import { Business, Category, DirectoryStats, WpHealth, AutoBusinessCandidate } from '../types';
+import { Business, Category, DirectoryStats, AutoBusinessCandidate } from '../types';
 import seedCategories from '../data/categories_seed.json';
 import {PUBLIC_REGISTRATION_FIELDS} from '../constants/publicRegistration';
 import {contactDigits, prepareContactPatch, contactsMatchReadback} from '../utils/businessContacts';
@@ -107,52 +107,6 @@ export async function fetchStats(): Promise<DirectoryStats> {
       withDelivery: list.filter(b => Boolean(b.delivery && !b.delivery.toLowerCase().includes('no'))).length,
       lastSyncTimestamp: new Date().toISOString(),
       lastSyncStatus: 'success',
-      wpSiteUrl: typeof window !== 'undefined' ? window.location.origin : 'https://empresasencarmen.com'
-    };
-  }
-}
-
-export async function syncWordPress(): Promise<{
-  success: boolean;
-  message: string;
-  count?: number;
-  newCount?: number;
-  pushedToWpCount?: number;
-  categoriesCount?: number;
-  timestamp?: string;
-}> {
-  const res = await adminFetch(`${API_BASE}/sync`, {
-    method: 'POST'
-  });
-  return await res.json();
-}
-
-export async function syncSingleBusinessToWordPress(id: number): Promise<{
-  success: boolean;
-  message: string;
-  permalink?: string;
-  wpId?: number;
-}> {
-  try {
-    const res = await adminFetch(`${API_BASE}/businesses/${id}/sync-wp`, {
-      method: 'POST'
-    });
-    return await res.json();
-  } catch (err: any) {
-    return { success: false, message: err.message };
-  }
-}
-
-export async function checkWpHealth(): Promise<WpHealth> {
-  try {
-    const res = await adminFetch(`${API_BASE}/health-wp`);
-    return await res.json();
-  } catch (err: any) {
-    return {
-      connected: false,
-      status: 'unreachable',
-      error: err.message,
-      siteUrl: typeof window !== 'undefined' ? window.location.origin : 'https://empresasencarmen.com'
     };
   }
 }
@@ -228,9 +182,6 @@ export async function submitAdministrativeBusinessRegistration(data: import('../
   existingBusiness?: import('../types').Business;
   submission?: import('../types').BusinessSubmission;
   business?: import('../types').Business;
-  publishedToWordPress?: boolean;
-  wpPermalink?: string | null;
-  wpProductId?: number | null;
 }> {
   try {
     const res = await adminFetch(`${API_BASE}/submit-business`, {
@@ -1105,7 +1056,6 @@ export interface ApproveCandidateResult {
   message: string;
   business?: Business;
   duplicate?: boolean;
-  publishedToWordPress?: boolean;
   code?: string;
 }
 
@@ -1118,7 +1068,6 @@ export interface ApproveMultipleCandidatesResult {
   published?: Business[];
   rejected?: { candidate: AutoBusinessCandidate; reason: string; code?: string }[];
   failed?: { candidate: AutoBusinessCandidate; reason: string; code?: string }[];
-  publishedToWordPress?: boolean;
 }
 
 export async function approveAutoBusinessCandidate(
@@ -1142,7 +1091,6 @@ export async function approveAutoBusinessCandidate(
     return {
       success: true,
       business: data.business,
-      publishedToWordPress: false,
       message: data.message || 'Negocio aprobado y guardado en MariaDB'
     };
   } catch (err: any) {
@@ -1182,7 +1130,6 @@ export async function approveMultipleAutoBusinessCandidates(
       published: data.confirmed || data.published || [],
       rejected: data.rejected || [],
       failed: data.failed || [],
-      publishedToWordPress: false,
       message: data.message || 'Procesamiento completado'
     };
   } catch (err: any) {
