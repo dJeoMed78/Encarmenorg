@@ -13,5 +13,10 @@ test('retired WooCommerce POST endpoints fail closed before business handlers',(
 test('legacy destructive webhook is removed and MariaDB ownership retained',()=>{
  assert.doesNotMatch(source,/x-wc-webhook-topic/);
  assert.doesNotMatch(source,/Producto \$\{id\} eliminado en Hostinger MariaDB/);
- assert.match(source,/WordPress\/WooCommerce is retired\. Never propagate Staging edits/);
+ assert.doesNotMatch(source,/x-wc-webhook-topic|syncAllWooCommerceProducts|exportBusinessToWooCommerce|WC_CONSUMER_KEY|WC_CONSUMER_SECRET/);
+});
+
+test('legacy image compatibility remains local and does not fetch WordPress assets',()=>{
+ assert.match(source,/rutas históricas de WordPress se resuelven localmente/);
+ assert.match(source,/Compatibilidad con imágenes históricas de WordPress guardadas localmente/);
 });
