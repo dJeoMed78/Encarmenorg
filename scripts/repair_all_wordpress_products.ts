@@ -3,8 +3,8 @@ dotenv.config();
 import fs from 'fs';
 import path from 'path';
 
-const wcKey = process.env.WC_CONSUMER_KEY || 'ck_7f3b649cc2607e06f9101d21758485185d4c823a';
-const wcSecret = process.env.WC_CONSUMER_SECRET || 'cs_09d158f8fb9fa6728f27ef718f21c7503429b0f7';
+const wcKey = process.env.WC_CONSUMER_KEY || '';
+const wcSecret = process.env.WC_CONSUMER_SECRET || '';
 
 if (!wcKey || !wcSecret) {
   console.error('Error: WC_CONSUMER_KEY or WC_CONSUMER_SECRET missing.');
