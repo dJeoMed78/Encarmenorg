@@ -163,9 +163,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   return res.redirect(301, redirectUrl);
 });
 
-// Retire legacy WordPress/WooCommerce routes after alias consolidation.
+// Retire obsolete external-platform routes after alias consolidation.
 // Keep individual /wp-content/uploads/<file> assets available through the existing handler;
-// never expose a directory listing or a legacy WordPress admin endpoint.
+// never expose a directory listing or a retired external admin endpoint.
 app.use((req: Request, res: Response, next: NextFunction) => {
   const retired = getLegacyWordPressRetirement(req.path);
   if (!retired) return next();
@@ -466,7 +466,7 @@ app.use('/media', express.static(path.resolve(__dirname, 'public/wp-content/uplo
   }
 }));
 
-// Serve WordPress uploads directly from public if present, with caching
+// Serve locally stored historical media directly from public, with caching
 app.use('/wp-content', express.static(path.resolve(__dirname, 'public/wp-content'), {
   maxAge: 7 * 24 * 60 * 60 * 1000,
   setHeaders: (res) => {
@@ -595,7 +595,7 @@ app.get('/uploads/:filename', async (req: Request, res: Response) => {
   return sendImagePlaceholder(res, filename);
 });
 
-// Autonomous WordPress uploads handler: serves 1,000+ local assets with zero external dependency
+// Autonomous local media handler: serves historical assets with zero external dependency
 app.get('/wp-content/uploads/*', async (req: Request, res: Response) => {
   const rawSubpath = req.params[0] || '';
   const decodedSubpath = decodeURIComponent(rawSubpath).replace(/^\/+/, '');
@@ -1855,9 +1855,9 @@ app.post('/api/mariadb/reconnect', async (_req: Request, res: Response) => {
   }
 });
 
-// WordPress is retired. Block legacy imports before any historical handlers.
+// External catalog imports are retired. Keep historical routes fail-closed.
 app.post(['/api/sync', '/api/webhook/woocommerce', '/api/businesses/:id/sync-wp'], (_req: Request, res: Response) => {
-  return res.status(410).json({success:false, message:'Sincronización WooCommerce retirada. Los contactos se administran en MariaDB.'});
+  return res.status(410).json({success:false, message:'Integración externa retirada. Los contactos se administran en MariaDB.'});
 });
 
 // Retired seed/cache-to-database import. No stale catalog may overwrite restored contacts.
@@ -2550,7 +2550,7 @@ app.patch(['/api/businesses/:id', '/businesses/:id'], async (req: Request, res: 
 
     
 
-    // WordPress/WooCommerce is retired. Never propagate Staging edits to legacy systems.
+    // External catalog propagation is retired. MariaDB remains the sole authorized source.
     return res.json({ success: true, message: 'Empresa actualizada con éxito', business: updated });
   } catch (err: any) {
     if (err instanceof ContactPatchError) return res.status(err.status).json({success:false, message:err.message});
