@@ -152,7 +152,7 @@ test('unknown category routes return a real 404 instead of the generic directory
   assert.deepEqual(getMissingCategoryRoute('/categoria/no-existe?utm_source=google', false), { status: 404, reason: 'category-not-found' });
   assert.equal(getMissingCategoryRoute('/categoria/automotriz-y-motocicletas', true), null);
   assert.equal(getMissingCategoryRoute('/empresa/empresa-3235', false), null);
-  assert.ok(server.includes('getMissingCategoryRoute(req.path, categoryExists)'));
+  assert.ok(server.includes('getMissingCategoryRoute(req.path, Boolean(resolvedCategory))'));
   assert.ok(server.includes('Number(category.parent) === 0'));
   assert.ok(server.includes('categoryTitle'));
   assert.ok(server.includes('categoryDescription'));
