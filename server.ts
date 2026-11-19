@@ -7429,6 +7429,7 @@ export function createBusinessApprovalHandlers(customDeps?: Partial<BusinessAppr
 
         return res.json({
           success: true,
+          publishedToWordPress: false,
           business: verified,
           message: `Empresa "${verified.name}" verificada y publicada con éxito en MariaDB (ID: ${verified.id}).`
         });
