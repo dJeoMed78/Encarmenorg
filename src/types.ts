@@ -82,17 +82,6 @@ export interface DirectoryStats {
   coloniasCount?: number;
   lastSyncTimestamp?: string | number;
   lastSyncStatus?: string;
-  wpSiteUrl?: string;
-}
-
-export interface WpHealth {
-  connected: boolean;
-  url?: string;
-  siteUrl?: string;
-  status: string;
-  latency?: number;
-  productCount?: number;
-  error?: string;
 }
 
 export interface BusinessReport {
