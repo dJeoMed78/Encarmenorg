@@ -32,9 +32,6 @@ DB_USER=u293982346_appuser
 DB_PASSWORD="TU_PASSWORD_AQUI"
 DB_NAME=u293982346_encarmenapp
 
-# Credenciales de WordPress / WooCommerce (Opcional)
-WC_CONSUMER_KEY=tu_consumer_key
-WC_CONSUMER_SECRET=tu_consumer_secret
 ```
 
 ---
