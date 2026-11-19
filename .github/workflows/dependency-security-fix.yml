@@ -1,0 +1,59 @@
+name: Dependency security patch validation
+
+on:
+  push:
+    branches:
+      - fix/security-cve-2026-118764-110816-20261119
+    paths:
+      - package.json
+      - package-lock.json
+      - bun.lock
+      - .github/workflows/dependency-security-fix.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - package.json
+      - package-lock.json
+      - bun.lock
+      - .github/workflows/dependency-security-fix.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install committed npm lockfile
+        run: npm ci --no-fund
+      - name: Verify every locked copy is patched
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          for (const [name, expected] of [['minimatch', '11.0.1'], ['qs', '6.16.1']]) {
+            const entries = Object.entries(lock.packages).filter(([path]) =>
+              path === 'node_modules/' + name || path.endsWith('/node_modules/' + name)
+            );
+            if (!entries.length) throw new Error(name + ': no locked package entries');
+            const wrong = entries.filter(([, pkg]) => pkg.version !== expected);
+            if (wrong.length) throw new Error(name + ': vulnerable or inconsistent copies: ' + JSON.stringify(wrong));
+            console.log(name + ' ' + expected + ': ' + entries.length + ' locked copy/copies');
+          }
+          JS
+      - name: Confirm installed dependency tree
+        run: npm ls minimatch qs
+      - name: Audit npm dependency tree
+        run: npm audit --audit-level=moderate
+      - uses: oven-sh/setup-bun@v2
+      - name: Validate Bun lockfile without changing it
+        run: bun install --frozen-lockfile
+      - name: Build application
+        run: npm run build --if-present
