@@ -1,6 +1,6 @@
 import {adminFetch} from '../utils/adminAuth';
 import seedBusinesses from '../data/businesses_seed.json';
-import { Business, Category, DirectoryStats, WpHealth, AutoBusinessCandidate } from '../types';
+import { Business, Category, DirectoryStats, AutoBusinessCandidate } from '../types';
 import seedCategories from '../data/categories_seed.json';
 import {PUBLIC_REGISTRATION_FIELDS} from '../constants/publicRegistration';
 import {contactDigits, prepareContactPatch, contactsMatchReadback} from '../utils/businessContacts';
@@ -183,9 +183,6 @@ export async function submitAdministrativeBusinessRegistration(data: import('../
   existingBusiness?: import('../types').Business;
   submission?: import('../types').BusinessSubmission;
   business?: import('../types').Business;
-  publishedToWordPress?: boolean;
-  wpPermalink?: string | null;
-  wpProductId?: number | null;
 }> {
   try {
     const res = await adminFetch(`${API_BASE}/submit-business`, {
@@ -1060,7 +1057,6 @@ export interface ApproveCandidateResult {
   message: string;
   business?: Business;
   duplicate?: boolean;
-  publishedToWordPress?: boolean;
   code?: string;
 }
 
@@ -1073,7 +1069,6 @@ export interface ApproveMultipleCandidatesResult {
   published?: Business[];
   rejected?: { candidate: AutoBusinessCandidate; reason: string; code?: string }[];
   failed?: { candidate: AutoBusinessCandidate; reason: string; code?: string }[];
-  publishedToWordPress?: boolean;
 }
 
 export async function approveAutoBusinessCandidate(
@@ -1097,7 +1092,6 @@ export async function approveAutoBusinessCandidate(
     return {
       success: true,
       business: data.business,
-      publishedToWordPress: false,
       message: data.message || 'Negocio aprobado y guardado en MariaDB'
     };
   } catch (err: any) {
@@ -1137,7 +1131,6 @@ export async function approveMultipleAutoBusinessCandidates(
       published: data.confirmed || data.published || [],
       rejected: data.rejected || [],
       failed: data.failed || [],
-      publishedToWordPress: false,
       message: data.message || 'Procesamiento completado'
     };
   } catch (err: any) {
