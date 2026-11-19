@@ -107,52 +107,7 @@ export async function fetchStats(): Promise<DirectoryStats> {
       withDelivery: list.filter(b => Boolean(b.delivery && !b.delivery.toLowerCase().includes('no'))).length,
       lastSyncTimestamp: new Date().toISOString(),
       lastSyncStatus: 'success',
-      wpSiteUrl: typeof window !== 'undefined' ? window.location.origin : 'https://empresasencarmen.com'
-    };
-  }
-}
-
-export async function syncWordPress(): Promise<{
-  success: boolean;
-  message: string;
-  count?: number;
-  newCount?: number;
-  pushedToWpCount?: number;
-  categoriesCount?: number;
-  timestamp?: string;
-}> {
-  const res = await adminFetch(`${API_BASE}/sync`, {
-    method: 'POST'
-  });
-  return await res.json();
-}
-
-export async function syncSingleBusinessToWordPress(id: number): Promise<{
-  success: boolean;
-  message: string;
-  permalink?: string;
-  wpId?: number;
-}> {
-  try {
-    const res = await adminFetch(`${API_BASE}/businesses/${id}/sync-wp`, {
-      method: 'POST'
-    });
-    return await res.json();
-  } catch (err: any) {
-    return { success: false, message: err.message };
-  }
-}
-
-export async function checkWpHealth(): Promise<WpHealth> {
-  try {
-    const res = await adminFetch(`${API_BASE}/health-wp`);
-    return await res.json();
-  } catch (err: any) {
-    return {
-      connected: false,
-      status: 'unreachable',
-      error: err.message,
-      siteUrl: typeof window !== 'undefined' ? window.location.origin : 'https://empresasencarmen.com'
+      siteUrl: typeof window !== 'undefined' ? window.location.origin : ''
     };
   }
 }
