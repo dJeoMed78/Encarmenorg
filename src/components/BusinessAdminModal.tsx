@@ -71,7 +71,7 @@ import {
   DEFAULT_ADMIN_ACCOUNTS,
   AdminAccountInfo
 } from '../utils/adminAuth';
-import { DirectoryStats, WpHealth, Business, BusinessReport, SiteAnalytics, BusinessSubmission, ClassifiedAd } from '../types';
+import { DirectoryStats, Business, BusinessReport, SiteAnalytics, BusinessSubmission, ClassifiedAd } from '../types';
 import { AdminClassifiedsTab } from './AdminClassifiedsTab';
 import { AdminPromotionsTab } from './AdminPromotionsTab';
 import { AdminBusinessesTab } from './AdminBusinessesTab';
@@ -115,7 +115,6 @@ interface BusinessAdminModalProps {
   isOpen: boolean;
   onClose: () => void;
   stats: DirectoryStats | null;
-  health: WpHealth | null;
   businesses?: Business[];
   onTriggerSync: () => Promise<void>;
   isSyncing: boolean;
@@ -137,7 +136,6 @@ export const BusinessAdminModal: React.FC<BusinessAdminModalProps> = ({
   isOpen,
   onClose,
   stats,
-  health,
   businesses = [],
   onTriggerSync,
   isSyncing,
