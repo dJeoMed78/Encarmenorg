@@ -11,8 +11,8 @@ const seedFile = path.resolve(rootDir, 'src/data/businesses_seed.json');
 const publicWpUploads = path.resolve(rootDir, 'public/wp-content/uploads');
 const rootWpUploads = path.resolve(rootDir, 'wp-content/uploads');
 
-const WC_KEY = process.env.WC_CONSUMER_KEY || 'ck_c4b9fbcece06a5839b2ae14d593e981da95bda6e';
-const WC_SECRET = process.env.WC_CONSUMER_SECRET || 'cs_09d158f8fb9fa6728f27ef718f21c7503429b0f7';
+const WC_KEY = process.env.WC_CONSUMER_KEY || '';
+const WC_SECRET = process.env.WC_CONSUMER_SECRET || '';
 const WC_BASE = 'https://www.empresasencarmen.com';
 
 function getLocalRelativePath(rawUrl) {
