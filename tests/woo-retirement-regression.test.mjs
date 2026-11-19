@@ -21,11 +21,11 @@ test('legacy publication metadata and API functions are absent',()=>{
  const admin=readFileSync(new URL('../src/components/BusinessAdminModal.tsx',import.meta.url),'utf8');
  const menu=readFileSync(new URL('../src/components/AdminWindowsMobileMenu.tsx',import.meta.url),'utf8');
  for(const name of ['syncWordPress','syncSingleBusinessToWordPress','checkWpHealth','publishedToWordPress','wpPermalink','wpProductId']) assert.ok(!api.includes(name),name);
- assert.doesNotMatch(admin,/WooCommerce|WordPress|wp-admin|wp-json\\/wc/);
+ assert.ok(!/WordPress|WooCommerce|wp-admin|wp-json\/wc/.test(admin));
  assert.doesNotMatch(menu,/WooCommerce|WordPress|Sincronización WP/);
 });
 test('database administration remains available after retiring the external status panel',()=>{
  const admin=readFileSync(new URL('../src/components/BusinessAdminModal.tsx',import.meta.url),'utf8');
  assert.match(admin,/Estado real de persistencia MariaDB/);
- assert.match(admin,/dbStatus\\?\\.mariadb\\?\\.connected/);
+ assert.ok(admin.includes('dbStatus?.mariadb?.connected'));
 });
