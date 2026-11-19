@@ -106,7 +106,7 @@ export const AdminWindowsMobileMenu: React.FC<AdminWindowsMobileMenuProps> = ({
     {
       id: 'new_business' as const,
       name: 'Nueva Compañía (Manual)',
-      keywords: 'nueva empresa compania formulario directo woocommerce registrar'
+      keywords: 'nueva empresa compania formulario directo registrar'
     },
     {
       id: 'brand_media' as const,
@@ -120,8 +120,8 @@ export const AdminWindowsMobileMenu: React.FC<AdminWindowsMobileMenuProps> = ({
     },
     {
       id: 'status' as const,
-      name: 'Conexión & Sincronización WP',
-      keywords: 'conexion wordpress hostinger woocommerce rest api sincronizar'
+      name: 'Estado del Servidor y Base de Datos',
+      keywords: 'estado servidor base de datos mariadb hostinger conexion'
     }
   ];
 
@@ -420,7 +420,7 @@ export const AdminWindowsMobileMenu: React.FC<AdminWindowsMobileMenuProps> = ({
               <div className="text-xl sm:text-2xl font-light text-white tracking-tight leading-tight">
                 Alta Manual
               </div>
-              <p className="text-[11px] text-emerald-100 font-medium">Directo a WooCommerce</p>
+              <p className="text-[11px] text-emerald-100 font-medium">Registro en ENCARMEN</p>
               <p className="text-[10px] text-emerald-200/80">
                 Formulario con logo y mapa
               </p>
