@@ -105,7 +105,7 @@ import {
 import { getEventsData, fetchEventsFromAPI } from '../services/eventsService';
 import { uploadRegistrationImage, MEDIA_MAX_GALLERY } from '../services/publicMediaClient';
 
-interface WordPressSyncModalProps {
+interface AdminControlPanelProps {
   classifieds?: ClassifiedAd[];
   onOpenCreateClassified?: () => void;
   onOpenEditClassified?: (ad: ClassifiedAd) => void;
@@ -133,7 +133,7 @@ interface WordPressSyncModalProps {
   initialTab?: 'start' | 'businesses' | 'ai_assistant' | 'analytics' | 'reports' | 'classifieds' | 'new_business' | 'promotions' | 'status' | 'emergency' | 'events' | 'admins' | 'brand_media' | 'links' | 'publicidad';
 }
 
-export const WordPressSyncModal: React.FC<WordPressSyncModalProps> = ({
+export const AdminControlPanel: React.FC<AdminControlPanelProps> = ({
   isOpen,
   onClose,
   stats,
