@@ -318,3 +318,62 @@ Los valores son conteos de commits de comparación, no una afirmación de que to
 
 ### Siguiente acción exacta
 Continuar el inventario de ramas históricas desde la lista de 165 del apartado 7. Para cada rama, consultar PR/Issue y comparación; identificar cambios equivalentes con main/ia-desarrollo. No borrar respaldos sólo por antigüedad. Retirar únicamente referencias con evidencia concluyente de sustitución y ausencia de valor de recuperación; verificar 404 individual y actualizar este documento y memoria Drive.
+
+ 
+### Revisión adicional de ramas coord y PRs — 2026-11-20
+
+Se compararon contra ia-desarrollo otras 29 ramas coord (además de las 6 anteriores) y ramas auxiliares. Todas las coord siguientes muestran ahead > 0 y estado diverged; por ello NO se eliminaron:
+
+- coord/enc-staging-005-diagnostic-20261030: ahead 73 / behind 335
+- coord/enc-staging-005-e2e-20261030: 10 / 332
+- coord/enc-staging-005-live-permanent-20261030: 10 / 332
+- coord/enc-upload-honest-result-001: 7 / 355
+- coord/encarmen-classifieds-backend-fixes-001: 6 / 359
+- coord/encarmen-classifieds-integration-001: 27 / 359
+- coord/encarmen-gas-client-fixes-001: 6 / 359
+- coord/encarmen-staging-candidate-001: 40 / 359
+- coord/nia6-staging-delete-gate-20261031: 5 / 283
+- coord/prod-hostinger-proof-20261030: 110 / 394
+- coord/prod-whatsapp-verify-readonly-20261030: 108 / 394
+- coord/radar-classifieds-fix-001: 3 / 394
+- coord/staging-admin-env-origin-fix-20261030: 6 / 335
+- coord/staging-admin-login-window-20261030: 169 / 394
+- coord/staging-business-enable-20261030: 145 / 394
+- coord/staging-db-preflight-20261030: 113 / 394
+- coord/staging-env-guard-fix-20261030: 115 / 394
+- coord/staging-env-source-check-20261030: 130 / 394
+- coord/staging-functional-audit-20261030: 123 / 394
+- coord/staging-hair-contact-fix-20261030: 121 / 394
+- coord/staging-http-persistence-test-20261030: 145 / 394
+- coord/staging-http-readonly-diagnostics-20261030: 152 / 394
+- coord/staging-marker-init-20261030: 124 / 394
+- coord/staging-origin-deploy-20261030: 36 / 335
+- coord/staging-postrestart-e2e-20261030: 128 / 394
+- coord/staging-public-browser-validation-20261030: 153 / 394
+- coord/staging-public-e2e-20261030: 181 / 394
+- coord/staging-registration-write-safety-20261030: 135 / 394
+- coord/staging-runtime-map-20261030: 139 / 394
+- coord/staging-safety-readonly-20261030: 184 / 394
+- coord/staging-unix-http-e2e-fix-20261030: 148 / 394
+- coord/staging-write-go-no-go-20261030: 131 / 394
+- coord/staging-write-readiness-20261030: 123 / 394
+
+Comparación de ramas auxiliares contra ia-desarrollo:
+- copilot/check-github-storage-usage: ahead 0 / behind 429 (no código exclusivo respecto a ia-desarrollo); aun así se conserva por no confirmar que pertenezca al alcance ENCARMEN.
+- copilot/enc-staging-write-gate-005-resolver-http-503: ahead 37 / behind 335; conservar.
+- experiment/copilot-eval-001: ahead 2 / behind 355; conservar por commits exclusivos y confirmar alcance antes de actuar.
+- experiment/copilot-sdk-hostinger-20261117: ahead 73 / behind 2; conservar como experimento de integración Hostinger, sin mezclarlo con runtime.
+- experiment/freellmapi-evaluation-20261116: fuera del alcance ENCARMEN; no tocar.
+- google-ai-studio-limpieza: ahead 2 / behind 429; conservar hasta revisar destino/PR y commits.
+- hotfix/prod-whatsapp-duplicate-52-20261030: ahead 2 / behind 429; conservar hasta verificar equivalencia de parche de PR #8 y despliegue correspondiente.
+
+### Estado actual de PRs contrastado
+La búsqueda de PRs en estado all confirmó las PR abiertas del expediente #55, #56, #65, #68, #72, #88, #90, #93 y #111. Sus ramas quedan protegidas de eliminación. PRs cerradas sin merge (p. ej. #89, #104, #116, #115, #79, #76, #75, #66, #59, #58, #39, #14, #13, #11) no se consideran automáticamente prescindibles: pueden contener trabajo exclusivo, por lo que sus ramas requieren comparación y decisión individual. PRs merged son candidatas sólo si se confirma que la rama no conserva evidencia/commits exclusivos y no está ligada a Issue abierto.
+
+### Dictamen de segunda fase a este checkpoint
+- Inventario actual: 165 ramas.
+- Comparaciones históricas hechas: 16 ramas (8 backup, 2 audit, 6 coord) + 33 ramas coord adicionales y 7 ramas auxiliares indicadas arriba.
+- Eliminaciones en segunda fase: 0.
+- Motivo: ramas examinadas muestran divergencia/commits ahead o son respaldos/evidencia; no se ha acreditado sustitución completa y segura. Los conteos ahead/behind son señal de historial divergente, no prueba por sí solos de patch único; se requiere patch equivalence y revisar PR/Issue antes de borrar.
+- No se modificaron refs protegidas, commits, tags, archivos de aplicación, Staging ni producción.
+- Siguiente lote: clasificar work/* históricos sin PR abierta, cotejar Issues abiertos y closed-unmerged PRs; después revisar ramas coord aún no comparadas. Mantener cualquier rama de alcance incierto.
