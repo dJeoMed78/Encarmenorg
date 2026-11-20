@@ -102,7 +102,7 @@ Las siguientes categorías no se eliminaron por tratarse de trabajo activo, resp
 ## 7. Inventario final completo de ramas conservadas
 
 ```text
-enc-github-cleanup-audit-enc001	9dedb26
+enc-github-cleanup-audit-enc001	added-for-audit-report
 audit/enc-prod-ssrf-readonly-20261112	2415601e34f5b1b97861bafc0dc3a0eaf5a2f697
 audit/staging-runtime-readonly-20261112	8d9c87d764064a642bbd68c748768078f79c9450
 backup/coord-before-staging-deploy-pr53-20261103	eb17861a261dbf211e80f9593f7bf1039dd41ac5
