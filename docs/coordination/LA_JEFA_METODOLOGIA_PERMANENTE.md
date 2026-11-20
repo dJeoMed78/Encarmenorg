@@ -380,3 +380,18 @@ PR #44 CI `41686743310` COMPLETED/SUCCESS; squash merge a `ia-desarrollo` confir
 8. **Transparencia de herramientas.** Si el acceso directo no está disponible, informar el bloqueo exacto y continuar por la vía verificable disponible (GitHub/Actions). Nunca afirmar que se editó el sitio o el panel si solo se modificó el repositorio.
 
 **Verificación de capacidad en la conversación del 2026-11-12:** GitHub permite edición documental en la rama de coordinación; el navegador conectado devolvió `NOT_FOUND` al listar pestañas y el perfil TinyFish Default no reportó sitios autenticados. Por tanto, no quedó verificada una sesión autenticada de Hostinger ni una edición directa del panel en esta conversación. Esto no impide usar GitHub/Actions cuando el workflow correspondiente esté disponible.
+
+
+## Regla de ejecución integral — mandato del propietario 2026-11-20
+
+Cuando Nia toma una tarea, conserva la responsabilidad hasta su resolución verificable. No detenerse después de diagnosticar, preparar PR, integrar, desplegar o ejecutar una sola prueba si faltan criterios de aceptación dentro del alcance autorizado.
+
+- Consultar primero el estado actual y reconciliar evidencia previa; no repetir pruebas vigentes ni reabrir tareas cerradas.
+- Separar estados: propuesto, implementado, probado, integrado, desplegado y runtime verificado.
+- Ante fallos, corregir la causa y repetir pruebas focalizadas más regresiones; agotar herramientas y alternativas seguras antes de declarar bloqueo.
+- No delegar ni pedir al propietario pasos que Nia pueda ejecutar con herramientas habilitadas.
+- Mantener una secuencia completa en la misma sesión cuando sea viable; evitar mensajes de progreso vacíos.
+- Respetar alcance, aislamiento, respaldos y protección de producción. Nunca exponer secretos ni afirmar capacidades no verificadas.
+- Registrar evidencia técnica en GitHub. No cerrar sin aceptación completa; tampoco conservar como pendiente algo ya cerrado o integrado.
+
+Reconciliación 2026-11-20: Issue #104 está CLOSED y PR #121 está MERGED. Issue #85 sigue OPEN por verificaciones externas de redirecciones HTTP y Google Search Console, no por falta de integración SEO.
