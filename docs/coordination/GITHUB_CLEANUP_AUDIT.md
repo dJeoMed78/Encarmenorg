@@ -377,3 +377,32 @@ La búsqueda de PRs en estado all confirmó las PR abiertas del expediente #55, 
 - Motivo: ramas examinadas muestran divergencia/commits ahead o son respaldos/evidencia; no se ha acreditado sustitución completa y segura. Los conteos ahead/behind son señal de historial divergente, no prueba por sí solos de patch único; se requiere patch equivalence y revisar PR/Issue antes de borrar.
 - No se modificaron refs protegidas, commits, tags, archivos de aplicación, Staging ni producción.
 - Siguiente lote: clasificar work/* históricos sin PR abierta, cotejar Issues abiertos y closed-unmerged PRs; después revisar ramas coord aún no comparadas. Mantener cualquier rama de alcance incierto.
+
+
+## Cierre de revisión Fase 2 — 2026-11-20 (reconciliación PR)
+
+Se volvió a consultar GitHub Pull Requests en estado all. Se verificó que las PR #120, #117, #114, #110, #109, #108, #107, #106, #105 y #103 están merged, pero sus bases son ia-desarrollo, no main. Por tanto, NO satisfacen el criterio mecánico merged en main y no se borraron bajo ese criterio.
+
+Ramas y PR verificadas:
+- work/enc-woocommerce-retirement-104-rebased — PR #120 merged a ia-desarrollo (2026-11-19). Conservar; el body de la PR declara validación CI/Staging pendiente y seguimiento de credenciales históricas.
+- work/enc-gas-004-contact-filters — PR #117 merged a ia-desarrollo; Issue #6 sigue abierto. Conservar.
+- work/enc-radar-empresas-043-w1-denue-001 — PR #114 merged a ia-desarrollo; Issue #43 sigue abierto. Conservar.
+- work/enc-media-canonical-20261113 — PR #110 merged a ia-desarrollo; Issue #85 sigue abierto. Conservar.
+- work/enc-remove-wp-woo-references-20261113 — PR #109 merged a ia-desarrollo. Conservar; la PR declara que fue primera tranche y que imágenes históricas se preservan.
+- work/enc-security-legacy-credential-removal-20261113 — PR #108 merged a ia-desarrollo. Conservar como evidencia de seguridad; no revoca credenciales ni elimina secretos del historial.
+- work/enc-build-server-artifact-fix-20261113 — PR #107 merged a ia-desarrollo. Conservar; la PR pide verificación de despliegue/runtime.
+- work/enc-woo-retirement-cleanup-20261113 — PR #106 merged a ia-desarrollo. Conservar como evidencia de retiro de código heredado.
+- work/enc-sec-ai-auth-20261113 — PR #105 merged a ia-desarrollo; el cuerpo indica que no cierra todo el issue de seguridad. Conservar.
+- work/enc-control-table-clarity-103 — PR #103 merged a ia-desarrollo. Conservar como evidencia del tablero.
+
+Issues abiertos verificados en la revisión: #85, #43, #42, #41, #6. Issue #119 (FreeLLMAPI) está fuera del ámbito ENCARMEN y no se toca.
+
+### Dictamen y limitación operativa
+- Fase 2: no se eliminaron ramas ni se crearon tags archive en esta ejecución.
+- Las PR anteriores fueron merged a ia-desarrollo, no a main. No clasificarlas como integradas en main.
+- Las 105 ramas históricas requieren criterio de antigüedad y relación con Issues/PR, además de SHA verificable. La automatización de navegador completó inventario/PR review, pero no ejecutó cambios.
+- El conector GitHub disponible expone create_branch/update_ref, pero no operación delete-ref/tag directa. No se debe afirmar que el lote de 105 quedó depurado.
+- No se modificaron main, ia-desarrollo, producción, Staging, tags, PR, Issues ni commits.
+- Inventario de referencia anterior: 165 ramas. Debe volver a consultarse después de una operación real de archive/delete.
+
+Estado final: Fase 1 documentada (39 ramas según expediente Copilot). Fase 2 auditada parcialmente; cero eliminaciones y cero tags nuevos. Para cerrar la Fase 2 falta ejecutar creación de tags y eliminación de refs con credencial Contents: write, por CLI o GitHub REST, después de completar el filtro de seguridad. No usar force ni reescribir historial.
