@@ -162,3 +162,14 @@ Toda nueva Nia activada mediante TU ERES NIA debe leer NIA_REACTIVACION_TU_ERES_
 **Depuración sin riesgo:** inventario detectó **107 ramas**. Diez ramas antiguas asociadas a PR fusionados fueron comparadas contra `ia-desarrollo` y presentan `ahead_by=0` (sin commits únicos): `coord/enc-sec-deps-20261031-001`, `coord/enc-staging-business-delete-20261030`, `coord/enc-public-registration-gate-20261030`, `coord/enc-staging-admin-login-ui-20261030`, `coord/enc-staging-005-gate-audit-20261030`, `coord/enc-staging-005-integration-20261030`, `coord/enc-w5-node22-validation-001`, `coord/enc-c4-final-001`, `work/enc-glass-business-detail-001`, `work/enc-reviews-006`. **Candidatas a eliminar sólo sus referencias de rama** una vez disponible una herramienta autorizada de borrado. No borrar archivos, commits, Issues, PR ni ramas protegidas; no se ha eliminado ninguna de estas ramas desde esta conexión. PR abiertos #1, #3, #11, #13 y sus ramas continúan preservados; igual `main`, `ia-desarrollo`, `coord/encarmen-work-control-001` y ramas activas de Work.
 
 No se logró una comprobación HTTP directa de `staging.encarmen.org` desde esta sesión por limitación de acceso; no suponer estado runtime actual sin evidencia nueva. Resolver primero acceso administrativo, luego borrado SQL y medios. **NO volver a restaurar teléfonos/WhatsApp**: el Registro Maestro de esta rama señala que Jefa 2 y el propietario verificaron la recuperación de 174 negocios por base y posteriormente 206/207 con contacto en Staging; el Issue #5 estaba desactualizado y se añadió nota correctiva el 31-oct-2026. Proteger datos, evitar pruebas generales redundantes.
+
+
+## Regla operativa prioritaria — terminar lo que se inicia (2026-11-20)
+
+Nia debe ejecutar cada trabajo de principio a fin dentro del alcance y autorizaciones vigentes. Antes de reportar pendientes, consultar GitHub y reconciliar Issues, PR, commits, Actions y evidencia de Staging/producción. No volver a listar Issues cerrados ni integraciones completadas. No repetir pruebas con evidencia vigente.
+
+Si inicia una tarea, debe completar diagnóstico, corrección, pruebas, integración, despliegue autorizado, verificación de runtime y documentación según corresponda. Ante fallos, corregir y repetir pruebas; no detenerse en un informe parcial ni trasladar al propietario tareas que Nia pueda ejecutar. Si existe bloqueo real, agotar alternativas seguras y especificar qué intervención externa falta.
+
+Separar siempre: implementado / probado / integrado / desplegado / runtime verificado. Producción sigue protegida salvo autorización expresa. Nunca simular acceso ni resultados.
+
+Reconciliación verificada 2026-11-20: Issue #104 está CLOSED (sustituido por PR #120); PR #121 está integrada en main mediante e1dc08d11344e526a1f01ab73f9a443fb534059f; Issue #85 sigue OPEN solo por verificaciones HTTP 301/308 y Search Console que requieren evidencia externa autenticada. Continuar desde la evidencia registrada.
