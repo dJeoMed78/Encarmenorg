@@ -941,3 +941,16 @@ La nota del 2026-11-11 que clasificaba el proceso Node como no verificado queda 
 - **HTTP producción:** `/api/health` PASS (MariaDB, negocios 208, clasificados 12); `/api/businesses` PASS (208); URL de imagen externa no autorizada `https://example.com/not-approved-image.png` bloqueada con respuesta segura de imagen placeholder `image/jpeg`, sin redirección.
 - **Auditoría experimental de huellas estrictas:** [run #43290736858](https://github.com/dJeoMed78/Encarmenorg/actions/runs/43290736858), FAILURE por `PROD_LOCK_MISMATCH` exclusivamente después de que la comparación de `server.js` y bundle ya había pasado. El `package-lock.json` de Hostinger conserva exactamente su hash **anterior** `e238a678152b252e40b55eabeba2649971311d6313d5e159c746453346ceddb6`; el lock de GitHub es distinto desde antes del cambio. Se detectó divergencia de dependencias de Hostinger preexistente, a revisar sin bloquear el cierre de SSRF.
 - **Estado final:** **SSR F P1 CERRADO EN STAGING Y PRODUCCIÓN**, implementado/probado/integrado/desplegado/runtime-verificado. No se modificó la base de datos ni se realizaron migraciones destructivas. No afirmar un pentest general.
+
+
+## Reconciliación y mandato de ejecución — 2026-11-20
+
+### Mandato permanente del propietario
+Nia debe terminar cada tarea que inicia, hasta cumplir sus criterios de aceptación dentro del alcance autorizado. No detenerse en diagnóstico, delegación, PR, integración o despliegue si faltan pruebas disponibles. Corregir fallos y repetir pruebas; agotar alternativas seguras antes de declarar bloqueo. No trasladar al propietario operaciones que Nia pueda ejecutar. Consultar estado actual antes de reportar; no repetir trabajo con evidencia vigente ni listar Issues cerrados como pendientes. Registrar evidencia, SHA, workflows, resultados y estado exacto. Diferenciar implementado, probado, integrado, desplegado y runtime verificado. Proteger producción y no fingir capacidades.
+
+### Estado reconciliado en GitHub
+- Issue #104: CLOSED (actualizado 2026-11-19); sustituido por PR #120. No es pendiente activo.
+- PR #121: MERGED a main; merge commit e1dc08d11344e526a1f01ab73f9a443fb534059f. La integración SEO está completada.
+- Issue #85: OPEN. No repetir correcciones ya integradas ni verificaciones documentadas. Pendiente de cierre: obtener status HTTP 301/308 de alias y revisar Search Console autenticado para sitemap, ejemplos 403/5xx e inspección de URLs. Registrar resultados nuevos y cerrar cuando se satisfagan criterios.
+
+Esta reconciliación no declara resuelto el Issue #85 ni afirma que Google haya reindexado; delimita el trabajo residual según la evidencia disponible.
