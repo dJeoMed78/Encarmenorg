@@ -277,3 +277,44 @@ work/verificacion-acceso-001	d48a3367805b21e1e49cb1aac05fe835dbe5748f
 - Inventario final documentado: sí.
 - SHAs de ramas eliminadas documentados: sí.
 - SHAs finales de ramas protegidas comprobados: sí.
+
+ 
+## Segunda fase — revisión de ramas históricas (2026-11-20)
+
+**Estado: revisión parcial en curso; no se eliminaron ramas en esta fase.**
+
+Inventario actual consultado directamente por paginación: 165 ramas (100 + 65). Se confirmó que las dos ramas mencionadas en una sesión previa de navegador no se habían eliminado entonces; no usar ese reporte anterior como prueba. La primera depuración de 39 ramas sigue sustentada por el expediente Copilot y conteo actual.
+
+### Comparaciones de historial ejecutadas
+Comparaciones realizadas contra main e ia-desarrollo:
+
+| Rama | main ahead/behind | ia-desarrollo ahead/behind | Decisión |
+|---|---:|---:|---|
+| backup/coord-before-staging-deploy-pr53-20261103 | 305/13 | 270/394 | CONSERVAR; respaldo divergente |
+| backup/coord-before-staging-inspection-20261103 | 303/13 | 268/394 | CONSERVAR; respaldo divergente |
+| backup/ia-desarrollo-before-auto-maps-20261103 | 201/13 | 0/228 | CONSERVAR; snapshot histórico de ia |
+| backup/ia-desarrollo-before-cover-019-20261103 | 204/13 | 0/225 | CONSERVAR; snapshot histórico de ia |
+| backup/ia-desarrollo-before-maps-032-20261103 | 191/13 | 0/238 | CONSERVAR; snapshot histórico de ia |
+| backup/ia-desarrollo-before-pr52-20261103-02 | 205/13 | 0/224 | CONSERVAR; snapshot histórico de ia |
+| backup/ia-desarrollo-before-release-stamp-20261103 | 206/13 | 0/223 | CONSERVAR; snapshot histórico de ia |
+| backup/pr52-head-before-admin-cover-20261103 | 218/13 | 14/225 | CONSERVAR; respaldo divergente |
+| audit/enc-prod-ssrf-readonly-20261112 | 7/9 | 11/429 | CONSERVAR; evidencia de auditoría con commits exclusivos |
+| audit/staging-runtime-readonly-20261112 | 376/13 | 4/57 | CONSERVAR; evidencia runtime divergente |
+| coord/enc-hostinger-readonly-inspection-001 | 135/13 | 100/394 | CONSERVAR; evidencia Hostinger exclusiva |
+| coord/enc-media-regression-guard-20261031 | 154/13 | 4/279 | CONSERVAR; guard de regresión exclusivo |
+| coord/enc-consolidation-fixes-002-review-001 | 76/13 | 2/355 | CONSERVAR; revisión técnica exclusiva |
+| coord/enc-f007a-completion-001 | 81/13 | 7/355 | CONSERVAR; trabajo de finalización exclusivo |
+| coord/enc-promo-image-integrity-review-001 | 81/13 | 7/355 | CONSERVAR; evidencia integridad imágenes exclusiva |
+| coord/enc-report-persistence-001 | 79/13 | 5/355 | CONSERVAR; evidencia persistencia exclusiva |
+
+Los valores son conteos de commits de comparación, no una afirmación de que todos sean cambios funcionales únicos. Divergencia y commits ahead obligan a revisar patch equivalence/PR/Issue antes de decidir. No son por sí solos motivo para borrar.
+
+### Decisión de seguridad
+- Cero ramas eliminadas en segunda fase.
+- Se conservaron los 8 backups, 2 audit y 6 ramas coord examinadas arriba porque muestran divergencia/commits exclusivos o valor probatorio no sustituido.
+- No se modificaron main, ia-desarrollo, producción, Staging, tags, commits, PR ni Issues.
+- Pendiente: revisión individual de las restantes ramas coord, copilot, experiment, hotfix, google-ai-studio-limpieza y work históricas sin PR abierta. Verificar Issue/PR, patch equivalence y respaldos antes de cualquier baja.
+- La rama de auditoría permanece fuera de la aplicación; no confundirla con código desplegable.
+
+### Siguiente acción exacta
+Continuar el inventario de ramas históricas desde la lista de 165 del apartado 7. Para cada rama, consultar PR/Issue y comparación; identificar cambios equivalentes con main/ia-desarrollo. No borrar respaldos sólo por antigüedad. Retirar únicamente referencias con evidencia concluyente de sustitución y ausencia de valor de recuperación; verificar 404 individual y actualizar este documento y memoria Drive.
