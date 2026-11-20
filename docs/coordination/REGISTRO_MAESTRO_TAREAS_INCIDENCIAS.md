@@ -954,3 +954,40 @@ Nia debe terminar cada tarea que inicia, hasta cumplir sus criterios de aceptaci
 - Issue #85: OPEN. No repetir correcciones ya integradas ni verificaciones documentadas. Pendiente de cierre: obtener status HTTP 301/308 de alias y revisar Search Console autenticado para sitemap, ejemplos 403/5xx e inspección de URLs. Registrar resultados nuevos y cerrar cuando se satisfagan criterios.
 
 Esta reconciliación no declara resuelto el Issue #85 ni afirma que Google haya reindexado; delimita el trabajo residual según la evidencia disponible.
+
+ 
+## Tablero de pendientes reconciliado — 2026-11-20 (consulta GitHub)
+
+Esta sección sustituye cualquier lista anterior de pendientes que contradiga los estados actuales de Issues/PR consultados el 2026-11-20. Los estados de Issue/PR se comprobaron directamente en GitHub; las descripciones de trabajo pendiente conservan el último alcance conocido y no equivalen a una prueba funcional nueva.
+
+### Issues abiertos confirmados
+| Issue | Trabajo | Estado comprobado | Trabajo residual / criterio de cierre |
+|---|---|---|---|
+| #43 | Radar Empresas DENUE — Staging | OPEN | Resolver el bloqueo de despliegue/identidad Staging si sigue vigente; verificar token sin exponerlo, consultas DENUE reales para Ciudad del Carmen, fichas e interfaz administrativa; antes de persistir, comprobar aislamiento y respaldo de MariaDB Staging; ejecutar escritura controlada, COMMIT y lectura independiente; cerrar ventana de escritura y demostrar bloqueo posterior. No publicar negocios automáticamente. |
+| #6 | Filtros y monitoreo teléfonos/WhatsApp | OPEN | Pruebas reales de all, phone, no-phone, whatsapp, no-whatsapp y none; búsqueda combinada, categorías, paginación y contadores globales; comprobar que no se pierdan teléfonos/WhatsApp. Verificar UI y datos en Staging; documentar evidencia antes de cerrar. |
+| #85 | SEO, canonical, Googlebot e indexación | OPEN | PR #121 ya está integrada en main. No repetir implementación. Completar solo evidencia residual: cabeceras HTTP 301/308 de alias y revisión autenticada de Search Console (estado de sitemap, URLs 403/5xx concretas e inspección de URL). Distinguir errores históricos de actuales; cerrar con evidencia. |
+| #93 | INT-007 — persistencia SQL-first | OPEN | Revisar el borrador PR #93 contra HEAD actual, conflictos y rutas CRUD; completar pruebas de persistencia/readback y regresiones. No integrar sin revisión independiente y CI. |
+| #111 | GAS-001 — documentación Google AI Studio en README | OPEN | Revisar README contra arquitectura actual, corregir documentación desactualizada y referencias heredadas, ejecutar validaciones documentales y revisar PR antes de integrar. |
+
+### PR abiertas que requieren decisión técnica (no integrar automáticamente)
+| PR | Trabajo | Estado comprobado | Acción |
+|---|---|---|---|
+| #55 | Radar Empresas antiguo | OPEN, no merged | Comparar diff con implementación actual integrada; identificar cambios obsoletos y regresiones. |
+| #68 | Cierre GAS Radar Empresas | OPEN, no merged | Revisar junto con #55; no sobrescribir la implementación DENUE actual. |
+| #65 | Borrador de observación | OPEN, no merged | Mantener sin integración; solo revisar si aporta evidencia necesaria. |
+| #72 | Borrador de observación | OPEN, no merged | Mantener sin integración; solo revisar si aporta evidencia necesaria. |
+| #88 | SEO dirigido a main | OPEN, no merged | Revisar solapamiento con PR #121 ya integrada y determinar si queda algún cambio único; no fusionar sin revisión y autorización productiva aplicable. |
+| #90 | SEO dirigido a main | OPEN, no merged | Revisar solapamiento con PR #121 ya integrada y determinar si queda algún cambio único; no fusionar sin revisión y autorización productiva aplicable. |
+
+### Trabajos que NO deben volver a listarse como pendientes activos
+- **Issue #104:** CLOSED (GitHub actualizado 2026-11-19). PR #104 está cerrada sin merge; el trabajo fue reemplazado por PR #120, que está MERGED. No reabrir ni repetir el retiro de WordPress/WooCommerce sin nueva evidencia.
+- **Issue #110:** CLOSED (GitHub actualizado 2026-11-16). PR #110 está cerrada y MERGED. No volver a marcar la integración de rutas de imágenes como pendiente. Cualquier defecto nuevo debe abrirse como hallazgo separado, con URL/imagen concreta y evidencia.
+- **PR #120:** CLOSED y MERGED.
+- **PR #121:** CLOSED y MERGED en main mediante `e1dc08d11344e526a1f01ab73f9a443fb534059f`. La integración SEO está hecha; #85 sigue abierto solo por verificaciones externas descritas arriba.
+
+### Infraestructura / capacidad operativa
+- **Puente ChatGPT–Hostinger:** no implementado ni conectado como herramienta invocable desde esta conversación. El propietario compartió una respuesta de la API que enumera cuatro sitios, incluidos `staging.encarmen.org` y `encarmen.org`; eso confirma que una solicitud autenticada desde su lado respondió, pero no prueba que ChatGPT pueda invocar Hostinger ni que el secreto de GitHub sea accesible desde el chat. Pendiente diseñar e implementar un mecanismo seguro ejecutable y recuperable, sin exponer el token.
+- **Staging:** cualquier operación de escritura DENUE requiere confirmar aislamiento, respaldo y reversión antes de ejecutar. Producción permanece protegida salvo autorización expresa.
+
+### Regla de mantenimiento del tablero
+Antes de mostrar pendientes, volver a consultar estados actuales en GitHub. No presentar como pendiente un Issue CLOSED o una PR MERGED; no confundir PR integrada con despliegue o validación runtime. Al cerrar cada tarea, actualizar esta sección y enlazar evidencia concreta.
