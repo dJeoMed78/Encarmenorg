@@ -2728,6 +2728,26 @@ app.get('/api/events', async (_req: Request, res: Response) => {
   res.json({ success: true, events: eventsWithImages });
 });
 
+
+type Int007Table = 'events' | 'promotions' | 'classifieds' | 'claimed_coupons';
+async function int007Readback(table: Int007Table, id: string): Promise<any | null> {
+  const pool = getPool();
+  if (!isMariaDbActive() || !isWritePermitted() || !pool) throw new Error('PERSISTENCE_UNAVAILABLE');
+  const [rows]: any = await pool.query(`SELECT raw_data FROM \`${table}\` WHERE id = ? LIMIT 1`, [id]);
+  if (!Array.isArray(rows)) throw new Error('PERSISTENCE_READBACK_INVALID');
+  if (!rows.length) return null;
+  if (typeof rows[0].raw_data !== 'string') throw new Error('PERSISTENCE_READBACK_INVALID');
+  return JSON.parse(rows[0].raw_data);
+}
+function int007Error(res: Response, error: unknown) {
+  console.warn('[ENC-INT-007] SQL no confirmado:', error instanceof Error ? error.message : String(error));
+  return res.status(503).json({success:false,error:'PERSISTENCE_NOT_CONFIRMED',message:'No se pudo confirmar la operación en MariaDB. Verifique el estado antes de reintentar.'});
+}
+function int007WriteJson(filename: string, data: unknown) {
+  try { fs.writeFileSync(path.resolve(__dirname, filename), JSON.stringify(data, null, 2), 'utf8'); }
+  catch (error) { console.warn('[ENC-INT-007] Error sincronizando JSON:', error); }
+}
+
 app.post('/api/events', async (req: Request, res: Response) => {
   try {
     const newEvent = {
@@ -2747,22 +2767,16 @@ app.post('/api/events', async (req: Request, res: Response) => {
       updatedAt: new Date().toISOString()
     };
 
-    eventsCache = [newEvent, ...eventsCache.filter(e => e.id !== newEvent.id)];
-    fs.writeFileSync(path.resolve(__dirname, 'events_db.json'), JSON.stringify(eventsCache, null, 2), 'utf8');
-
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveEvent(newEvent);
-      } catch (mErr: any) {
-        console.warn('Error saving event to MariaDB:', mErr.message);
-      }
-    }
-
+ 
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await dbSaveEvent(newEvent)) return int007Error(res, 'SQL_WRITE_FAILED');
+    const confirmed = await int007Readback('events', String(newEvent.id));
+    if (!confirmed || String(confirmed.id) !== String(newEvent.id) || String(confirmed.title) !== String(newEvent.title)) return int007Error(res, 'SQL_READBACK_FAILED');
+    eventsCache = [confirmed, ...eventsCache.filter(x => x.id !== confirmed.id)];
+    int007WriteJson('events_db.json', eventsCache);
     res.json({ success: true, event: newEvent });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
@@ -2784,22 +2798,16 @@ app.put('/api/events/:id', async (req: Request, res: Response) => {
       id,
       updatedAt: new Date().toISOString()
     };
-    eventsCache[idx] = updated;
-    fs.writeFileSync(path.resolve(__dirname, 'events_db.json'), JSON.stringify(eventsCache, null, 2), 'utf8');
-
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveEvent(updated);
-      } catch (mErr: any) {
-        console.warn('Error updating event in MariaDB:', mErr.message);
-      }
-    }
-
+ 
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await dbSaveEvent(updated)) return int007Error(res, 'SQL_WRITE_FAILED');
+    const confirmed = await int007Readback('events', String(id));
+    if (!confirmed || String(confirmed.id) !== String(id) || String(confirmed.title) !== String(updated.title)) return int007Error(res, 'SQL_READBACK_FAILED');
+    eventsCache[idx] = confirmed;
+    int007WriteJson('events_db.json', eventsCache);
     res.json({ success: true, event: updated });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
@@ -2810,47 +2818,23 @@ app.delete('/api/events/:id', async (req: Request, res: Response) => {
     if (['radar-search','reset','publish-candidates','radar-scan','radar-status'].includes(String(id).toLowerCase())) {
       return res.status(405).json({success:false,error:'RESERVED_RESOURCE_ID',message:'Identificador reservado para una operación del servicio.'});
     }
-    eventsCache = eventsCache.filter(e => e.id !== id);
-    fs.writeFileSync(path.resolve(__dirname, 'events_db.json'), JSON.stringify(eventsCache, null, 2), 'utf8');
 
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbDeleteEvent(id);
-      } catch (mErr: any) {
-        console.warn('Error deleting event from MariaDB:', mErr.message);
-      }
-    }
-
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await int007Readback('events', id)) return res.status(404).json({success:false,message:'Registro no encontrado'});
+    if (!await dbDeleteEvent(id)) return int007Error(res, 'SQL_DELETE_FAILED');
+    if (await int007Readback('events', id)) return int007Error(res, 'SQL_DELETE_READBACK_FAILED');
+    eventsCache = eventsCache.filter(x => x.id !== id);
+    int007WriteJson('events_db.json', eventsCache);
     res.json({ success: true, message: 'Evento eliminado' });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
-app.post('/api/events/reset', async (_req: Request, res: Response) => {
-  try {
-    const defaultEventsPath = path.resolve(__dirname, 'src/data/events_carmen.json');
-    if (fs.existsSync(defaultEventsPath)) {
-      eventsCache = JSON.parse(fs.readFileSync(defaultEventsPath, 'utf8'));
-    } else {
-      const evPath = path.resolve(__dirname, 'events_db.json');
-      if (fs.existsSync(evPath)) {
-        eventsCache = JSON.parse(fs.readFileSync(evPath, 'utf8'));
-      }
-    }
-    fs.writeFileSync(path.resolve(__dirname, 'events_db.json'), JSON.stringify(eventsCache, null, 2), 'utf8');
-    if (isMariaDbActive()) {
-      for (const evt of eventsCache) {
-        try { await dbSaveEvent(evt); } catch (_) {}
-      }
-    }
-    res.json({ success: true, count: eventsCache.length, events: eventsCache });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
+// Reset is deliberately blocked until it can be made transactional and verified.
+app.post('/api/events/reset', (_req: Request, res: Response) =>
+  res.status(503).json({success:false,error:'RESET_REQUIRES_SQL_TRANSACTION',message:'Restablecimiento suspendido para evitar pérdida o divergencia de datos.'})
+);
 
 // ==========================================
 // PROMOCIONES Y CUPONES FLASH (Endpoints API)
@@ -2884,64 +2868,11 @@ app.get('/api/promotions/business/:businessId', (req: Request, res: Response) =>
 });
 
 // Reclamar cupón con nombre y teléfono del cliente
-app.post('/api/promotions/:promotionId/claim', async (req: Request, res: Response) => {
-  try {
-    const promoId = req.params.promotionId;
-    const { customerName, customerPhone } = req.body;
-    const promoIdx = promotionsCache.findIndex(p => p.id === promoId);
-    if (promoIdx === -1) {
-      return res.status(404).json({ success: false, message: 'Promoción no encontrada' });
-    }
-
-    const promo = promotionsCache[promoIdx];
-    const code = `CPN-${Math.random().toString(36).substring(2, 7).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newCoupon = {
-      id: `cpn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      promotionId: promo.id,
-      promotionTitle: promo.title,
-      businessId: promo.businessId,
-      businessName: promo.businessName,
-      businessWhatsapp: promo.businessWhatsapp || '',
-      businessPhone: promo.businessPhone || '',
-      discount: promo.discount,
-      code,
-      claimedAt: new Date().toISOString(),
-      customerName: (customerName || 'Cliente').trim(),
-      customerPhone: (customerPhone || '').trim(),
-      status: 'active'
-    };
-
-    claimedCouponsCache.unshift(newCoupon);
-    promo.claimedCount = (promo.claimedCount || 0) + 1;
-    promotionsCache[promoIdx] = promo;
-
-    fs.writeFileSync(path.resolve(__dirname, 'promotions_db.json'), JSON.stringify(promotionsCache, null, 2), 'utf8');
-    fs.writeFileSync(path.resolve(__dirname, 'coupons_db.json'), JSON.stringify(claimedCouponsCache, null, 2), 'utf8');
-
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveCoupon(newCoupon);
-        await dbSavePromotion(promo);
-      } catch (mErr: any) {
-        console.warn('Error saving coupon to MariaDB:', mErr.message);
-      }
-    }
-
-    const max = promo.totalCoupons || promo.maxClaims || 50;
-    const remaining = Math.max(0, max - promo.claimedCount);
-
-    res.json({
-      success: true,
-      message: '¡Cupón reclamado con éxito!',
-      coupon: newCoupon,
-      remainingCoupons: remaining
-    });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
+// Claim must be atomic across promotions and claimed_coupons. Never report a
+// successful claim from cache or JSON while that transaction is unavailable.
+app.post('/api/promotions/:promotionId/claim', (_req: Request, res: Response) =>
+  res.status(503).json({success:false,error:'COUPON_CLAIM_REQUIRES_SQL_TRANSACTION',message:'Emisión temporalmente suspendida hasta verificar transacción MariaDB.'})
+);
 
 // Admin: Obtener lista completa de promociones
 app.get('/api/admin/promotions', (_req: Request, res: Response) => {
@@ -2972,32 +2903,20 @@ app.post('/api/admin/promotions', async (req: Request, res: Response) => {
       updatedAt: new Date().toISOString()
     };
 
-    const idx = promotionsCache.findIndex(p => p.id === id);
-    if (idx >= 0) {
-      promotionsCache[idx] = savedPromo;
-    } else {
-      promotionsCache.unshift(savedPromo);
-    }
-
-    fs.writeFileSync(path.resolve(__dirname, 'promotions_db.json'), JSON.stringify(promotionsCache, null, 2), 'utf8');
-
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSavePromotion(savedPromo);
-      } catch (mErr: any) {
-        console.warn('Error saving promo to MariaDB:', mErr.message);
-      }
-    }
-
+ 
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await dbSavePromotion(savedPromo)) return int007Error(res, 'SQL_WRITE_FAILED');
+    const confirmed = await int007Readback('promotions', String(savedPromo.id));
+    if (!confirmed || String(confirmed.id) !== String(savedPromo.id) || String(confirmed.title) !== String(savedPromo.title)) return int007Error(res, 'SQL_READBACK_FAILED');
+    promotionsCache = [confirmed, ...promotionsCache.filter(x => x.id !== confirmed.id)];
+    int007WriteJson('promotions_db.json', promotionsCache);
     res.json({
       success: true,
       message: 'Promoción guardada con éxito',
       promotion: savedPromo
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
@@ -3005,22 +2924,16 @@ app.post('/api/admin/promotions', async (req: Request, res: Response) => {
 app.delete('/api/admin/promotions/:id', async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
-    promotionsCache = promotionsCache.filter(p => p.id !== id);
-    fs.writeFileSync(path.resolve(__dirname, 'promotions_db.json'), JSON.stringify(promotionsCache, null, 2), 'utf8');
 
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbDeletePromotion(id);
-      } catch (mErr: any) {
-        console.warn('Error deleting promo from MariaDB:', mErr.message);
-      }
-    }
-
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await int007Readback('promotions', id)) return res.status(404).json({success:false,message:'Registro no encontrado'});
+    if (!await dbDeletePromotion(id)) return int007Error(res, 'SQL_DELETE_FAILED');
+    if (await int007Readback('promotions', id)) return int007Error(res, 'SQL_DELETE_READBACK_FAILED');
+    promotionsCache = promotionsCache.filter(x => x.id !== id);
+    int007WriteJson('promotions_db.json', promotionsCache);
     res.json({ success: true, message: 'Promoción eliminada con éxito' });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
@@ -3036,84 +2949,38 @@ app.get('/api/admin/coupons', (_req: Request, res: Response) => {
 });
 
 // Admin: Cambiar estado de cupón (canjeado, activo, cancelado)
-app.post('/api/admin/coupons/:couponId/status', async (req: Request, res: Response) => {
+// SQL-first coupon mutations: never publish a success before database readback.
+async function int007CouponMutation(req: Request, res: Response, mode: 'status'|'redeem'|'delete') {
   try {
-    const couponId = req.params.couponId;
-    const { status } = req.body;
-    const idx = claimedCouponsCache.findIndex(c => c.id === couponId || c.code === couponId);
-    if (idx === -1) {
-      return res.status(404).json({ success: false, message: 'Cupón no encontrado' });
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    const key = String(mode === 'redeem' ? req.params.code : req.params.couponId);
+    const idx = claimedCouponsCache.findIndex(c => c.id === key || c.code === key);
+    if (idx < 0) return res.status(404).json({success:false,message:'Cupón no encontrado'});
+    const current = claimedCouponsCache[idx];
+    const id = String(current.id);
+    const before = await int007Readback('claimed_coupons', id);
+    if (!before) return res.status(404).json({success:false,message:'Cupón no encontrado en MariaDB'});
+    if (mode === 'delete') {
+      if (!await dbDeleteCoupon(id)) return int007Error(res, 'SQL_DELETE_FAILED');
+      if (await int007Readback('claimed_coupons', id)) return int007Error(res, 'SQL_DELETE_READBACK_FAILED');
+      claimedCouponsCache = claimedCouponsCache.filter(c => c.id !== id);
+      int007WriteJson('coupons_db.json', claimedCouponsCache);
+      return res.json({success:true,message:'Cupón eliminado'});
     }
-
-    claimedCouponsCache[idx].status = status;
-    fs.writeFileSync(path.resolve(__dirname, 'coupons_db.json'), JSON.stringify(claimedCouponsCache, null, 2), 'utf8');
-
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbUpdateCouponStatus(claimedCouponsCache[idx].id, status);
-      } catch (mErr: any) {
-        console.warn('Error updating coupon in MariaDB:', mErr.message);
-      }
-    }
-
-    res.json({ success: true, message: 'Estado del cupón actualizado', coupon: claimedCouponsCache[idx] });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// Admin: Canjear cupón por código
-app.post('/api/admin/coupons/:code/redeem', async (req: Request, res: Response) => {
-  try {
-    const code = req.params.code;
-    const idx = claimedCouponsCache.findIndex(c => c.code === code || c.id === code);
-    if (idx === -1) {
-      return res.status(404).json({ success: false, message: 'Cupón no encontrado con ese código' });
-    }
-
-    claimedCouponsCache[idx].status = 'redeemed';
-    fs.writeFileSync(path.resolve(__dirname, 'coupons_db.json'), JSON.stringify(claimedCouponsCache, null, 2), 'utf8');
-
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbUpdateCouponStatus(claimedCouponsCache[idx].id, 'redeemed');
-      } catch (mErr: any) {
-        console.warn('Error redeeming coupon in MariaDB:', mErr.message);
-      }
-    }
-
-    res.json({ success: true, message: 'Cupón canjeado con éxito', coupon: claimedCouponsCache[idx] });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// Admin: Eliminar cupón
-app.delete('/api/admin/coupons/:couponId', async (req: Request, res: Response) => {
-  try {
-    const couponId = req.params.couponId;
-    claimedCouponsCache = claimedCouponsCache.filter(c => c.id !== couponId && c.code !== couponId);
-    fs.writeFileSync(path.resolve(__dirname, 'coupons_db.json'), JSON.stringify(claimedCouponsCache, null, 2), 'utf8');
-
-    
-
-    if (isMariaDbActive()) {
-      try {
-        await dbDeleteCoupon(couponId);
-      } catch (mErr: any) {
-        console.warn('Error deleting coupon from MariaDB:', mErr.message);
-      }
-    }
-
-    res.json({ success: true, message: 'Cupón eliminado' });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
+    const status = mode === 'redeem' ? 'redeemed' : req.body?.status;
+    if (!['active','redeemed','cancelled'].includes(status)) return res.status(400).json({success:false,error:'INVALID_COUPON_STATUS'});
+    const updated = {...before,status};
+    if (!await dbSaveCoupon(updated)) return int007Error(res, 'SQL_UPDATE_FAILED');
+    const confirmed = await int007Readback('claimed_coupons', id);
+    if (!confirmed || confirmed.status !== status || confirmed.id !== id) return int007Error(res, 'SQL_READBACK_FAILED');
+    claimedCouponsCache[idx] = confirmed;
+    int007WriteJson('coupons_db.json', claimedCouponsCache);
+    return res.json({success:true,message:mode==='redeem'?'Cupón canjeado con éxito':'Estado del cupón actualizado',coupon:confirmed});
+  } catch (error) { return int007Error(res,error); }
+}
+app.post('/api/admin/coupons/:couponId/status', (req: Request,res: Response) => int007CouponMutation(req,res,'status'));
+app.post('/api/admin/coupons/:code/redeem', (req: Request,res: Response) => int007CouponMutation(req,res,'redeem'));
+app.delete('/api/admin/coupons/:couponId', (req: Request,res: Response) => int007CouponMutation(req,res,'delete'));
 
 // ==========================================
 // AVISOS DE OCASIÓN (CLASIFICADOS)
@@ -3223,26 +3090,20 @@ app.post('/api/classifieds', async (req: Request, res: Response) => {
       createdAt: req.body.createdAt || new Date().toISOString()
     };
 
-    classifiedsCache.unshift(newAd);
-    try {
-      fs.writeFileSync(path.resolve(__dirname, 'classifieds_db.json'), JSON.stringify(classifiedsCache, null, 2), 'utf8');
-    } catch (_) {}
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveClassified(newAd);
-      } catch (mErr: any) {
-        console.warn('Error saving classified to MariaDB:', mErr.message);
-      }
-    }
-
+ 
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await dbSaveClassified(newAd)) return int007Error(res, 'SQL_WRITE_FAILED');
+    const confirmed = await int007Readback('classifieds', String(newAd.id));
+    if (!confirmed || String(confirmed.id) !== String(newAd.id) || String(confirmed.title) !== String(newAd.title)) return int007Error(res, 'SQL_READBACK_FAILED');
+    classifiedsCache = [confirmed, ...classifiedsCache.filter(x => x.id !== confirmed.id)];
+    int007WriteJson('classifieds_db.json', classifiedsCache);
     res.json({
       success: true,
       message: 'Aviso clasificado publicado exitosamente',
       classified: newAd
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
@@ -3263,26 +3124,20 @@ app.patch('/api/classifieds/:id', async (req: Request, res: Response) => {
       ...req.body,
       id
     };
-    classifiedsCache[idx] = updated;
-    try {
-      fs.writeFileSync(path.resolve(__dirname, 'classifieds_db.json'), JSON.stringify(classifiedsCache, null, 2), 'utf8');
-    } catch (_) {}
-
-    if (isMariaDbActive()) {
-      try {
-        await dbSaveClassified(updated);
-      } catch (mErr: any) {
-        console.warn('Error updating classified in MariaDB:', mErr.message);
-      }
-    }
-
+ 
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await dbSaveClassified(updated)) return int007Error(res, 'SQL_WRITE_FAILED');
+    const confirmed = await int007Readback('classifieds', String(id));
+    if (!confirmed || String(confirmed.id) !== String(id) || String(confirmed.title) !== String(updated.title)) return int007Error(res, 'SQL_READBACK_FAILED');
+    classifiedsCache[idx] = confirmed;
+    int007WriteJson('classifieds_db.json', classifiedsCache);
     res.json({
       success: true,
       message: 'Aviso clasificado actualizado',
       classified: updated
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
@@ -3293,22 +3148,16 @@ app.delete('/api/classifieds/:id', async (req: Request, res: Response) => {
     if (['radar-search','reset','publish-candidates','radar-scan','radar-status'].includes(String(id).toLowerCase())) {
       return res.status(405).json({success:false,error:'RESERVED_RESOURCE_ID',message:'Identificador reservado para una operación del servicio.'});
     }
-    classifiedsCache = classifiedsCache.filter(c => c.id !== id);
-    try {
-      fs.writeFileSync(path.resolve(__dirname, 'classifieds_db.json'), JSON.stringify(classifiedsCache, null, 2), 'utf8');
-    } catch (_) {}
 
-    if (isMariaDbActive()) {
-      try {
-        await dbDeleteClassified(id);
-      } catch (mErr: any) {
-        console.warn('Error deleting classified from MariaDB:', mErr.message);
-      }
-    }
-
+    if (!isMariaDbActive() || !isWritePermitted()) return int007Error(res, 'PERSISTENCE_UNAVAILABLE');
+    if (!await int007Readback('classifieds', id)) return res.status(404).json({success:false,message:'Registro no encontrado'});
+    if (!await dbDeleteClassified(id)) return int007Error(res, 'SQL_DELETE_FAILED');
+    if (await int007Readback('classifieds', id)) return int007Error(res, 'SQL_DELETE_READBACK_FAILED');
+    classifiedsCache = classifiedsCache.filter(x => x.id !== id);
+    int007WriteJson('classifieds_db.json', classifiedsCache);
     res.json({ success: true, message: 'Aviso clasificado eliminado' });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    return int007Error(res, err);
   }
 });
 
