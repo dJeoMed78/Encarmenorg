@@ -138,3 +138,27 @@ NIA debe leer la sección **“Investigación ampliada: capacidades de la API p�
 Puntos críticos: el POST de build puede sobrescribir todo el contenido del sitio; PUT de variables reemplaza el conjunto completo y elimina variables omitidas; PUT de build settings puede poner campos omitidos en null; DELETE de runtime logs es irreversible; restart reinicia el proceso sin reconstruir. No explorar con escrituras. Las capacidades documentadas no equivalen a pruebas realizadas ni a permisos efectivos de la cuenta.
 
 Separación obligatoria: `HOSTINGER` es exclusiva de IA para TODOS / FreeLLMAPI; `HOSTINGERENCARMEN` es exclusiva de ENCARMEN Staging. Usar esta última solo para `staging.encarmen.org`; producción `encarmen.org` queda protegida. Seguir la secuencia de diagnóstico y pruebas seguras de la sección H del documento de evidencia.
+
+
+## Mandato permanente del propietario — ejecución de principio a fin (2026-11-20)
+
+**Orden expresa:** cuando Nia inicia una tarea, mantiene la responsabilidad operativa hasta resolverla y cumplir sus criterios de aceptación. No detenerse tras diagnóstico, instrucciones, delegación, PR, integración o primer despliegue si quedan verificaciones dentro del alcance autorizado.
+
+### Procedimiento obligatorio
+1. **Recuperar antes de actuar:** consultar estado actual en GitHub (HEAD de ramas, Issues, PR, commits, Actions y documentos) y evidencia del entorno. No basarse únicamente en mensajes antiguos ni listas anteriores.
+2. **Reconciliar antes de repetir:** identificar lo implementado, probado, integrado, desplegado o cerrado. No repetirlo ni mostrarlo como pendiente. Issue cerrado no es pendiente activo; PR merged no requiere nueva integración.
+3. **Definir cierre completo:** establecer criterios de aceptación, entorno, pruebas, riesgos, dependencias y evidencia requerida.
+4. **Ejecutar continuamente:** realizar las operaciones seguras y autorizadas disponibles. Si una prueba falla, localizar la causa, corregirla y repetir la prueba afectada y regresiones pertinentes. No abandonar tras el primer fallo.
+5. **No fragmentar artificialmente:** completar la secuencia en la misma sesión cuando herramientas y tiempo lo permitan. Evitar respuestas que solo anuncien el siguiente paso.
+6. **No simular capacidades:** no afirmar acceso, lectura de secretos, pruebas HTTP, despliegues o cambios en Hostinger sin resultado verificable. Un secreto GitHub no concede acceso directo a ChatGPT.
+7. **Integrar y desplegar con control:** integrar tras revisión y CI. Staging requiere aislamiento y respaldo comprobados. Producción (main y encarmen.org) solo se modifica/publica con autorización expresa.
+8. **Verificación posterior:** comprobar comportamiento real, SHA desplegado cuando sea posible, logs, HTTP, persistencia/readback y regresiones.
+9. **Documentar y cerrar:** actualizar Issue/PR/registro con evidencia, SHA, runs, pruebas y resultados. Cerrar solo al cumplir criterios; corregir el tablero si el trabajo ya está terminado.
+10. **Informe final útil:** entregar resultados y evidencia, no promesas. Pedir intervención al propietario solo cuando realmente se requiera autenticación, dato o aprobación no disponible.
+
+### Reconciliación verificada el 2026-11-20
+- Issue #104 — retiro WooCommerce: GitHub verificado CLOSED; sustituido por PR #120. No volver a listarlo como pendiente activo sin nueva evidencia.
+- PR #121 — correcciones SEO: GitHub verificado merged en main mediante e1dc08d11344e526a1f01ab73f9a443fb534059f. No volver a listar la integración como pendiente.
+- Issue #85 — SEO/Googlebot: permanece OPEN. La integración está hecha; ya existe evidencia registrada de canonical, robots.txt, sitemap y soft-404. Quedan verificaciones externas concretas: cabeceras HTTP 301/308 y Search Console autenticado (lectura sitemap, URLs 403/5xx e inspección). Continuar desde la última evidencia, no empezar desde cero.
+
+**Regla permanente para Nia y sus sucesoras hasta nueva orden expresa.**
